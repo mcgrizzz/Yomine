@@ -1,0 +1,424 @@
+pos:
+[
+  {
+    "key": "連体詞",
+    "english_name": "Attributive Adjective",
+    "hint": "Words used to modify nouns.",
+    "examples": ["この", "いろんな", "おっきな", "堂々たる"]
+  },
+  {
+    "key": "接頭詞 -> 形容詞接続",
+    "english_name": "Adjective Prefix",
+    "hint": "Prefix that attaches to adjectives.",
+    "examples": ["お", "まっ", "クソ"]
+  },
+  {
+    "key": "接頭詞 -> 数接続",
+    "english_name": "Numeral Prefix",
+    "hint": "Prefix that attaches to numbers.",
+    "examples": ["No.", "計", "毎分"]
+  },
+  {
+    "key": "接頭詞 -> 動詞接続",
+    "english_name": "Verb Prefix",
+    "hint": "Prefix that attaches to verbs.",
+    "examples": ["ぶっ", "引き"]
+  },
+  {
+    "key": "接頭詞 -> 名詞接続",
+    "english_name": "Noun Prefix",
+    "hint": "Prefix that attaches to nouns.",
+    "examples": ["もと", "アンチ", "最", "総"]
+  },
+  {
+    "key": "名詞 -> 引用文字列",
+    "english_name": "Quoted String Noun",
+    "hint": "Used for quoted speech or statements.",
+    "examples": ["いわく"]
+  },
+  {
+    "key": "名詞 -> サ変接続",
+    "english_name": "Suru Verb Noun",
+    "hint": "Nouns that can combine with the verb 'suru' (to do).",
+    "examples": ["苦労", "終了", "アピール", "くしゃみ"]
+  },
+  {
+    "key": "名詞 -> ナイ形容詞語幹",
+    "english_name": "Na-adjective Stem Noun",
+    "hint": "Nouns that can be turned into negative adjectives.",
+    "examples": ["申し訳", "とんでも", "おとなげ"]
+  },
+  {
+    "key": "名詞 -> 形容動詞語幹",
+    "english_name": "Adjectival Noun Stem",
+    "hint": "Nouns that can be modified with the adjective 'na'.",
+    "examples": ["あからさま", "ミステリアス", "決定的", "無人"]
+  },
+  {
+    "key": "名詞 -> 動詞非自立的",
+    "english_name": "Non-independent Verb Noun",
+    "hint": "Nouns that cannot stand alone as verbs but are used with verb expressions.",
+    "examples": ["ごらん", "ちょうだい"]
+  },
+  {
+    "key": "名詞 -> 副詞可能",
+    "english_name": "Adverbial Noun",
+    "hint": "Nouns that function as adverbs.",
+    "examples": ["１０月", "せんだって", "当分"]
+  },
+  {
+    "key": "名詞 -> 一般",
+    "english_name": "General Noun",
+    "hint": "Common nouns.",
+    "examples": ["大根", "シエスタ", "加速度", "ありさま"]
+  },
+  {
+    "key": "名詞 -> 数",
+    "english_name": "Numeral Noun",
+    "hint": "Nouns that represent numbers.",
+    "examples": ["ゼロ", "億"]
+  },
+  {
+    "key": "名詞 -> 接続詞的",
+    "english_name": "Conjunction-like Noun",
+    "hint": "Nouns that function like conjunctions.",
+    "examples": ["VS", "対", "兼"]
+  },
+  {
+    "key": "固有名詞 -> 一般",
+    "english_name": "Proper Noun (General)",
+    "hint": "Proper nouns that don't fit other categories (e.g., names of places, products).",
+    "examples": ["北穂高岳", "電通銀座ビル", "Ｇ１"]
+  },
+  {
+    "key": "固有名詞 -> 人名 -> 一般",
+    "english_name": "Person's Name (General)",
+    "hint": "General person's names.",
+    "examples": ["グッチ裕三", "紫式部"]
+  },
+  {
+    "key": "固有名詞 -> 人名 -> 姓",
+    "english_name": "Family Name",
+    "hint": "Family or last names.",
+    "examples": ["山田", "ビスコンティ"]
+  },
+  {
+    "key": "固有名詞 -> 人名 -> 名",
+    "english_name": "Given Name",
+    "hint": "Given or first names.",
+    "examples": ["Ｂ作", "アントニオ", "右京太夫"]
+  },
+  {
+    "key": "固有名詞 -> 組織",
+    "english_name": "Organization Name",
+    "hint": "Names of organizations.",
+    "examples": ["いすゞ自動車", "ニチレイ", "統一アイルランド党"]
+  },
+  {
+    "key": "固有名詞 -> 地域 -> 一般",
+    "english_name": "Region Name (General)",
+    "hint": "General region names.",
+    "examples": ["北海道", "やながわ工業団地", "ラムサール"]
+  },
+  {
+    "key": "固有名詞 -> 地域 -> 国",
+    "english_name": "Country Name",
+    "hint": "Names of countries.",
+    "examples": ["露西亜", "バングラデシュ"]
+  },
+  {
+    "key": "接尾 -> サ変接続",
+    "english_name": "Suru Verb Suffix",
+    "hint": "Suffixes that combine with nouns to form suru verbs.",
+    "examples": ["化", "入り"]
+  },
+  {
+    "key": "接尾 -> 一般",
+    "english_name": "General Suffix",
+    "hint": "Common suffixes used with nouns.",
+    "examples": ["ぎみ", "ゆかり", "枚", "不可"]
+  },
+  {
+    "key": "接尾 -> 形容動詞語幹",
+    "english_name": "Adjectival Noun Suffix",
+    "hint": "Suffixes that modify nouns into adjectives.",
+    "examples": ["がち", "的", "同然"]
+  },
+  {
+    "key": "接尾 -> 助数詞",
+    "english_name": "Counter Suffix",
+    "hint": "Suffixes used for counting or quantifying.",
+    "examples": ["オクターブ", "％", "ヶ国"]
+  },
+  {
+    "key": "接尾 -> 助動詞語幹",
+    "english_name": "Auxiliary Verb Suffix",
+    "hint": "Suffixes that form auxiliary verbs.",
+    "examples": ["そ", "そう"]
+  },
+  {
+    "key": "接尾 -> 人名",
+    "english_name": "Name Suffix",
+    "hint": "Suffixes added to names.",
+    "examples": ["君", "はん"]
+  },
+  {
+    "key": "接尾 -> 地域",
+    "english_name": "Region Suffix",
+    "hint": "Suffixes related to geographic areas.",
+    "examples": ["州", "市内", "港"]
+  },
+  {
+    "key": "接尾 -> 特殊",
+    "english_name": "Special Suffix",
+    "hint": "Special-purpose suffixes.",
+    "examples": ["ぶり", "み", "方"]
+  },
+  {
+    "key": "接尾 -> 副詞可能",
+    "english_name": "Adverbial Suffix",
+    "hint": "Suffixes that create adverbs.",
+    "examples": ["いっぱい", "前後", "次第"]
+  },
+  {
+    "key": "代名詞 -> 一般",
+    "english_name": "Pronoun (General)",
+    "hint": "General pronouns used for substitution.",
+    "examples": ["そこ", "俺", "こんちくしょう"]
+  },
+  {
+    "key": "代名詞 -> 縮約",
+    "english_name": "Pronoun (Contraction)",
+    "hint": "Contracted forms of pronouns.",
+    "examples": ["わたしゃ", "そりゃあ"]
+  },
+  {
+    "key": "非自立 -> 一般",
+    "english_name": "Non-independent (General)",
+    "hint": "Non-independent words that rely on other elements.",
+    "examples": ["こと", "きらい", "くせ", "もの"]
+  },
+  {
+    "key": "非自立 -> 形容動詞語幹",
+    "english_name": "Non-independent Adjectival Noun Stem",
+    "hint": "Non-independent forms of adjectival noun stems.",
+    "examples": ["ふう", "み"]
+  },
+  {
+    "key": "非自立 -> 助動詞語幹",
+    "english_name": "Non-independent Auxiliary Verb Stem",
+    "hint": "Auxiliary verbs that rely on other words.",
+    "examples": ["よ", "よう"]
+  },
+  {
+    "key": "非自立 -> 副詞可能",
+    "english_name": "Non-independent Adverbial",
+    "hint": "Adverbial forms that rely on other elements.",
+    "examples": ["限り", "さなか", "うち"]
+  },
+  {
+    "key": "特殊 -> 助動詞語幹",
+    "english_name": "Special Auxiliary Verb Stem",
+    "hint": "Special-purpose auxiliary verbs.",
+    "examples": ["そ", "そう"]
+  },
+  {
+    "key": "動詞 -> 自立",
+    "english_name": "Independent Verb",
+    "hint": "Verbs that can stand alone as predicates.",
+    "examples": ["いがみ合う", "たてつく", "垢抜ける"]
+  },
+  {
+    "key": "動詞 -> 接尾",
+    "english_name": "Verb Suffix",
+    "hint": "Suffixes that modify verbs.",
+    "examples": ["する", "られる", "させる"]
+  },
+  {
+    "key": "動詞 -> 非自立",
+    "english_name": "Non-independent Verb",
+    "hint": "Verbs that depend on additional elements for meaning.",
+    "examples": ["しまう", "ちゃう", "願う"]
+  },
+  {
+    "key": "形容詞 -> 自立",
+    "english_name": "Independent Adjective",
+    "hint": "Adjectives that can stand alone.",
+    "examples": ["けたたましい", "分別臭い", "めでたい"]
+  },
+  {
+    "key": "形容詞 -> 接尾",
+    "english_name": "Adjective Suffix",
+    "hint": "Suffixes that modify adjectives.",
+    "examples": ["っぽい", "ったらしい"]
+  },
+  {
+    "key": "形容詞 -> 非自立",
+    "english_name": "Non-independent Adjective",
+    "hint": "Adjectives that depend on other elements.",
+    "examples": ["づらい", "がたい", "よい"]
+  },
+  {
+    "key": "副詞 -> 一般",
+    "english_name": "General Adverb",
+    "hint": "Adverbs used to modify verbs, adjectives, or other adverbs.",
+    "examples": ["たいそう", "人一倍", "いけしゃあしゃあ"]
+  },
+  {
+    "key": "副詞 -> 助詞類接続",
+    "english_name": "Adverb with Particle-like Connection",
+    "hint": "Adverbs that connect with particle-like elements.",
+    "examples": ["あまり", "いつも", "ぱさぱさ"]
+  },
+  {
+    "key": "接続詞",
+    "english_name": "Conjunction",
+    "hint": "Words that connect clauses or sentences.",
+    "examples": ["けれども", "たとえば", "反面"]
+  },
+  {
+    "key": "助詞 -> 格助詞 -> 一般",
+    "english_name": "General Case Particle",
+    "hint": "Case-marking particles.",
+    "examples": ["の", "から", "を"]
+  },
+  {
+    "key": "助詞 -> 格助詞 -> 引用",
+    "english_name": "Quotation Particle",
+    "hint": "Particles that mark quotations.",
+    "examples": ["と"]
+  },
+  {
+    "key": "助詞 -> 格助詞 -> 連語",
+    "english_name": "Compound Case Particle",
+    "hint": "Compound particles used for specific cases.",
+    "examples": ["について", "とかいう"]
+  },
+  {
+    "key": "助詞 -> 係助詞",
+    "english_name": "Binding Particle",
+    "hint": "Particles that emphasize or link phrases.",
+    "examples": ["は", "こそ", "も", "や"]
+  },
+  {
+    "key": "助詞 -> 終助詞",
+    "english_name": "Sentence-ending Particle",
+    "hint": "Particles that end sentences.",
+    "examples": ["かしら", "ぞ", "っけ"]
+  },
+  {
+    "key": "助詞 -> 接続助詞",
+    "english_name": "Conjunctive Particle",
+    "hint": "Particles that connect clauses.",
+    "examples": ["て", "つつ", "および", "ので"]
+  },
+  {
+    "key": "助詞 -> 特殊",
+    "english_name": "Special Particle",
+    "hint": "Special-purpose particles.",
+    "examples": ["かな", "けむ", "にゃ"]
+  },
+  {
+    "key": "助詞 -> 副詞化",
+    "english_name": "Adverbial Particle",
+    "hint": "Particles that create adverbial phrases.",
+    "examples": ["と", "に"]
+  },
+  {
+    "key": "助詞 -> 副助詞",
+    "english_name": "Adverbial Auxiliary Particle",
+    "hint": "Particles that add adverbial nuance.",
+    "examples": ["くらい", "なんか", "ばっかり"]
+  },
+  {
+    "key": "助詞 -> 副助詞/並立助詞/終助詞",
+    "english_name": "Multi-purpose Particle",
+    "hint": "Special particles with multiple functions.",
+    "examples": ["か"]
+  },
+  {
+    "key": "助詞 -> 並立助詞",
+    "english_name": "Parallel Marker Particle",
+    "hint": "Particles used to list or parallel items.",
+    "examples": ["とか", "だの", "やら"]
+  },
+  {
+    "key": "助詞 -> 連体化",
+    "english_name": "Nominalizing Particle",
+    "hint": "Particles that nominalize clauses.",
+    "examples": ["の"]
+  },
+  {
+    "key": "助動詞",
+    "english_name": "Auxiliary Verb",
+    "hint": "Auxiliary verbs that modify the meaning of other verbs.",
+    "examples": ["らしい", "っす", "ござる", "じゃん"]
+  },
+  {
+    "key": "感動詞",
+    "english_name": "Interjection",
+    "hint": "Words used to express emotions or reactions.",
+    "examples": ["うむ", "お疲れさま", "トホホ"]
+  },
+  {
+    "key": "記号 -> 句点",
+    "english_name": "Sentence-ending Punctuation",
+    "hint": "Punctuation that ends a sentence.",
+    "examples": ["。", "．"]
+  },
+  {
+    "key": "記号 -> 読点",
+    "english_name": "Comma Punctuation",
+    "hint": "Punctuation used to separate elements within a sentence.",
+    "examples": ["、", "，"]
+  },
+  {
+    "key": "記号 -> 空白",
+    "english_name": "Whitespace",
+    "hint": "Whitespace used in text.",
+    "examples": ["　"]
+  },
+  {
+    "key": "記号 -> アルファベット",
+    "english_name": "Alphabet Symbol",
+    "hint": "Symbols or letters from the alphabet.",
+    "examples": ["A"]
+  },
+  {
+    "key": "記号 -> 一般",
+    "english_name": "General Symbol",
+    "hint": "Common symbols.",
+    "examples": ["？", "！", "￥"]
+  },
+  {
+    "key": "記号 -> 括弧開",
+    "english_name": "Opening Bracket",
+    "hint": "Symbols used for opening brackets.",
+    "examples": ["（", "【"]
+  },
+  {
+    "key": "記号 -> 括弧閉",
+    "english_name": "Closing Bracket",
+    "hint": "Symbols used for closing brackets.",
+    "examples": ["）", "】"]
+  },
+  {
+    "key": "フィラー",
+    "english_name": "Filler Words",
+    "hint": "Words used to fill gaps in speech or buy time.",
+    "examples": ["えーと", "なんか"]
+  },
+  {
+    "key": "その他 -> 間投",
+    "english_name": "Interjectory Word",
+    "hint": "Words expressing emotion or exclamation.",
+    "examples": ["あ", "ア"]
+  },
+  {
+    "key": "未知語",
+    "english_name": "Unknown Word",
+    "hint": "Words that are unclassified or unknown.",
+    "examples": ["オマエモナー", "ＮＵＬＬＰＯ"]
+  }
+]
+

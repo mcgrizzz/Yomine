@@ -1,0 +1,12 @@
+[package]
+name = "yomine"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+lindera = { version = "0.38.1", features = ["ipadic"] }
+ratatui = "0.29.0"
+reqwest = "0.12.9"
+serde = { version = "1.0", features = ["derive"] }
+serde-hjson = "1.1.0"
+
