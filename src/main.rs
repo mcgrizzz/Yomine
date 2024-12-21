@@ -1,11 +1,12 @@
 use core::panic;
+use std::fs::File;
+use std::io::BufReader;
+use std::time::Instant;
 use std::{fs, io, path::Path};
 
-use lindera::dictionary::{load_dictionary_from_kind, DictionaryKind};
-use lindera::error::LinderaError;
-use lindera::mode::Mode;
-use lindera::segmenter::Segmenter;
-use lindera::tokenizer::{Tokenizer, TokenizerBuilder};
+use yomine::DictType;
+use vibrato::tokenizer::worker::Worker;
+use vibrato::{Dictionary, Tokenizer};
 
 mod pos;
 
@@ -60,21 +61,6 @@ impl Phrase for Sentence {
     }
 }
 
-fn init_lindera() -> Result<Tokenizer, LinderaError> {
-    let mut config_builder = TokenizerBuilder::new()?;
-    config_builder.set_segmenter_dictionary_kind(&DictionaryKind::IPADIC);
-    config_builder.set_segmenter_mode(&Mode::Normal);
-
-    let dictionary = load_dictionary_from_kind(DictionaryKind::IPADIC)?;
-    let segmenter = Segmenter::new(
-        Mode::Normal,
-        dictionary,
-        None, // Assuming no user dictionary is provided
-    );
-    
-    Ok(Tokenizer::new(segmenter))
-}
-
 fn main() {
     
     let pos_tree = match pos::load_tree() {
@@ -82,7 +68,7 @@ fn main() {
         Err(e) => panic!("{e}")
     };
 
-    pos_tree.print_tree(0);
+    //pos_tree.print_tree(0);
 
     let parsed_file = match read_srt("input/youtube.srt") {
         Ok(parsed) => parsed,
@@ -94,26 +80,38 @@ fn main() {
     //     Err(e) => panic!("{e}")
     // };
 
-    let tokenizer = match init_lindera() {
+    let mut start = Instant::now();
+
+    let tokenizer = match yomine::init_vibrato(DictType::Ipadic) {
         Ok(tokenizer) => tokenizer,
         Err(e) => panic!("{e}") 
     };
 
-    // let extracted_words = extract_words(tokenizer, parsed_file);
+    let mut worker = tokenizer.new_worker();
+    
+    println!("Ready to tokenize: {:?}", start.elapsed());
+
+    start = Instant::now();
+
+    let extracted_words = extract_words(worker, parsed_file);
+
+    println!("Tokenized: {:?}", start.elapsed());
 }
 
-fn extract_words(tokenizer: Tokenizer, parsed_file: ParsedFile<impl Phrase>) -> Result<Vec<Word>, LinderaError> {
+fn extract_words(mut worker: Worker<'_>, parsed_file: ParsedFile<impl Phrase>) -> Vec<Word> {
     let words = Vec::<Word>::new();
     for phrase in &parsed_file.phrases {
-        let mut tokens = tokenizer.tokenize(phrase.get_phrase())?;
+        worker.reset_sentence(&phrase.get_phrase());
+        worker.tokenize();
+
         println!("\ntext:\t{}", phrase.get_phrase());
-        for token in tokens.iter_mut() {
-            let details = token.details().join(",");
-            println!("token:\t{}\t{}", token.text.as_ref(), details);
+        for token in worker.token_iter() {
+            let details = token.feature();
+            println!("token:\t{}\t{}", token.surface(), details);
         }
     }
 
-    Ok(words)
+    words
 }
 
 fn read_srt(path: &str)  -> Result<ParsedFile<Subtitle>, io::Error> {
