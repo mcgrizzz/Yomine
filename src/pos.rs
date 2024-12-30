@@ -3,6 +3,8 @@ use serde_hjson::{from_str, Value};
 use serde::Deserialize;
 use std::fmt;
 
+use crate::YomineError;
+
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct PartOfSpeech {
     key: String,
@@ -65,11 +67,10 @@ impl TreeNode {
     }
 }
 
-pub fn load_tree() -> Result<TreeNode, String> {
-    let pos_file = fs::read_to_string("lib/pos.hjson")
-        .map_err(|err| format!("Error opening file: {}", err))?;
+pub fn load_tree() -> Result<TreeNode, YomineError> {
+    let pos_file = fs::read_to_string("lib/pos.hjson")?;
 
-    let pos_data: PosData = from_str(&pos_file).map_err(|err| format!("Invalid pos.hjson: {}", err))?;
+    let pos_data: PosData = from_str(&pos_file)?;
 
     let mut root = TreeNode::new(None);
 
