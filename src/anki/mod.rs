@@ -1,7 +1,7 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
-use api::{get_deck_ids, get_field_names, get_model_ids, get_note_ids, get_notes, Note};
-use tokio::task::{self};
+use api::{get_deck_ids, get_field_names, get_model_ids, get_note_ids, get_notes, get_version, Note};
+use tokio::{task::{self}, time::sleep};
 
 pub mod api;
 
@@ -23,7 +23,6 @@ pub struct Vocab {
     pub term: String,
     pub reading: String,
 }
-
 
 
 pub async fn get_models() -> Result<Vec<Model>, reqwest::Error> {
@@ -104,4 +103,27 @@ pub async fn get_total_vocab() -> Result<Vec<Vocab>, reqwest::Error> {
         .collect();
 
     Ok(vocab)
+}
+
+pub async fn wait_awake(wait_time: u64, max_attempts: u32) -> Result<bool, reqwest::Error> {
+    for attempt in 1..=max_attempts {
+        match get_version().await {
+            Ok(version) => {
+                println!("AnkiConnect is online. Version: {}", version);
+                return Ok(true);
+            }
+            Err(err) => {
+                println!(
+                    "AnkiConnect attempt {} of {} failed. Retrying in {} seconds... Error: {}",
+                    attempt, max_attempts, wait_time, err
+                );
+                if attempt < max_attempts {
+                    sleep(Duration::from_secs(wait_time)).await;
+                }
+            }
+        }
+    }
+
+    println!("AnkiConnect did not respond after {} attempts.", max_attempts);
+    Ok(false)
 }

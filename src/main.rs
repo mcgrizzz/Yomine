@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use yomine::{anki::{get_models, get_total_vocab}, core::SourceFile, dictionary::DictType, frequency_dict, gui::YomineApp, parser::read_srt, pos, tokenizer::{extract_words, init_vibrato}};
+use yomine::{anki::{api::get_version, get_models, get_total_vocab, wait_awake}, core::SourceFile, dictionary::DictType, frequency_dict, gui::YomineApp, parser::read_srt, pos, tokenizer::{extract_words, init_vibrato}};
 
 
 #[tokio::main]
@@ -22,79 +22,24 @@ async fn main() {
     // let frequency_manager = frequency_dict::process_frequency_dictionaries().expect("Failed to load Frequency Manager");
     // let terms = extract_words(tokenizer.new_worker(), &sentences, &pos_lookup, &dict_type, &frequency_manager);
     
-    // let deck = Deck {
-    //     name: "1: Daily Various".to_string(),
-    //     id: 1706468857487,
-    // };
 
-    // let note_ids = match get_note_ids(deck).await {
-    //     Err(err) => {
-    //         Vec::new()
-    //     },  
-    //     Ok(note_ids) => {
-    //         note_ids.get_ids()
-    //     }
-    // };
-
-    // let notes = match get_notes(note_ids).await {
-    //     Err(err) => {
-    //         Vec::new()
-    //     },  
-    //     Ok(notes) => {
-    //         notes.get_notes()
-    //     }
-    // };
-
-    // let card_ids: Vec<u64> = notes.into_iter().map(|x| x.cards).flatten().collect();
-
-    // let cards = match get_cards(card_ids).await {
-    //     Err(err) => {
-    //         println!("ERROR: {err}");
-    //         Vec::new()
-    //     },  
-    //     Ok(cards) => {
-    //         println!("Great success: {:?}", cards);
-    //         cards.get_cards()
-    //     }
-    // };
-
-    // let model_ids = match get_model_ids().await {
-    //     Err(err) => {
-    //         HashMap::new()
-    //     },  
-    //     Ok(models) => {
-    //         models.get_model_ids()
-    //     }
-    // };
-
-    // match get_field_names("Kaishi 1.5k".to_string()).await {
+    // match get_total_vocab().await {
     //     Err(err) => {
     //         println!("ERROR: {err}");
     //     },  
-    //     Ok(models) => {
-    //         println!("Great success: {:?}", models);
+    //     Ok(vocabs) => {
+    //         println!("Great success: {:?}", vocabs.into_iter().map(|vocab| vocab.term).collect::<Vec<String>>());
     //     }
     // };
 
-    match get_total_vocab().await {
+    match wait_awake(5, 5).await {
         Err(err) => {
             println!("ERROR: {err}");
         },  
-        Ok(vocabs) => {
-            println!("Great success: {:?}", vocabs.into_iter().map(|vocab| vocab.term).collect::<Vec<String>>());
+        Ok(online) => {
+            println!("Great success: {:?}", online);
         }
     };
-
-
-
-    // match get_decks().await {
-    //     Err(err) => {
-    //         println!("ERROR: {err}");
-    //     }, 
-    //     Ok(decks) => {
-    //         println!("Great success: {:?}", decks);
-    //     }
-    // };
 
     // let native_options = eframe::NativeOptions::default();
     // let _ = eframe::run_native("Yomine App", native_options, Box::new(|cc| Ok(Box::new(YomineApp::new(cc, terms)))));

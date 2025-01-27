@@ -92,6 +92,13 @@ async fn make_request<T: for<'de> Deserialize<'de>>(
     Ok(response)
 }
 
+//Will just use to check if ankiconnect is online
+pub async fn get_version() -> Result<u32, reqwest::Error> {
+    let response: ApiResponse<u32> = make_request("version", None).await?;
+
+    Ok(response.unwrap_result().unwrap_or_default())
+}
+
 pub async fn get_deck_ids() -> Result<Vec<Deck>, reqwest::Error> {
     let response: ApiResponse<HashMap<String, u64>> =
         make_request("deckNamesAndIds", None).await?;
