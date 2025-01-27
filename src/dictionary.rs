@@ -6,7 +6,9 @@ use vibrato::Dictionary;
 use xz2::bufread::XzDecoder;
 use zstd::stream::copy_decode;
 
-use crate::YomineError;
+use crate::core::YomineError;
+
+
 
 const DICT_DIR: &str = "dictionaries";
 
@@ -31,6 +33,18 @@ impl DictType {
         match self {
             DictType::Unidic => "bccwj-suw+unidic-cwj-3_1_1",
             DictType::Ipadic => "ipadic-mecab-2_7_0",
+        }
+    }
+
+    // lemma_form index, lemma_reading index
+    pub fn lemma_indices(&self) -> (usize, usize) {
+        match self {
+            DictType::Unidic => {
+                (10, 11)
+            },
+            DictType::Ipadic => {
+                (6, 8) //8 is the surface form reading.. sometimes? Let's use unidic for now
+            }
         }
     }
 }
@@ -60,7 +74,7 @@ fn cleanup_files(folder_path: &Path, keep_file: &Path) -> Result<(), YomineError
     Ok(())
 }
 
-pub fn ensure_dictionary(dict_type: DictType) -> Result<PathBuf, YomineError> {
+pub fn ensure_dictionary(dict_type: &DictType) -> Result<PathBuf, YomineError> {
     let url = dict_type.url();
     let folder_name = dict_type.folder_name();
     let extract_path = Path::new(DICT_DIR).join(folder_name);

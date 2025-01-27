@@ -1,105 +1,51 @@
-use std::{fs, io, path::Path};
+use std::fs;
 
-use crate::YomineError;
+use crate::core::{Sentence, SourceFile, YomineError};
 
-#[derive(Debug)]
-enum InputType {
-    Text,
-    Srt,
-    Epub,
-}
-
-pub trait Phrase {
-    fn get_phrase(&self) -> &str;
-}
-
-pub struct Subtitle {
-    index: u32, 
-    time_stamp: String,
-    line: String,
-}
-
-impl Phrase for Subtitle {
-    fn get_phrase(&self) -> &str {
-        &self.line
-    }
-}
-
-
-pub struct ParsedFile<P: Phrase> {
-    path: String,
-    name: String,
-    input_type: InputType,
-    pub phrases: Vec<P>,
-}
-
-pub struct Word {
-    word: String,
-    base_form: String,
-    reading: String,
-    morphene_idx: u16,
-
-}
-
-pub struct Sentence {
-    content: String,
-}
-
-impl Phrase for Sentence {
-    fn get_phrase(&self) -> &str {
-        &self.content
-    }
-}
-
-pub fn read_srt(path: &str)  -> Result<ParsedFile<Subtitle>, YomineError> {
-    let subs: Vec<Subtitle> = fs::read_to_string(path)?
+pub fn read_srt(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
+    let sentences: Vec<Sentence> = fs::read_to_string(&source_file.original_file)?
         .split("\n\n")
         .filter(|s| !s.is_empty())
-        .map(|s| s.trim().split("\n").collect::<Vec<&str>>())
-        .filter(|s| s.len() == 3)
-        .map(|s| Subtitle {
-            index: s[0].parse::<u32>().expect("Expected valid index"),
-            time_stamp: s[1].to_string(), 
-            line: s[2].to_string()}
-        )
-        .collect();
+        .enumerate()
+        .map(|(id, entry)| {
+            let lines: Vec<&str> = entry.trim().split("\n").collect();
+            if lines.len() != 3 {
+                return Err(YomineError::Custom("Invalid subtitle format".to_string()));
+            }
 
-    if subs.len() == 0 {
-        panic!("No subs");
+            Ok(Sentence {
+                id: id as u32,
+                source_id: source_file.id, // Reference to the SourceFile ID
+                text: lines[2].to_string(),
+                timestamp: Some(lines[1].to_string()),
+            })
+        })
+        .collect::<Result<Vec<_>, YomineError>>()?;
+
+    if sentences.is_empty() {
+        return Err(YomineError::Custom("No subtitles found in the file.".to_string()));
     }
-    let file_path = Path::new(path);
-    let file_name = file_path.file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("Unknown File");
 
-    Ok(ParsedFile {
-        path: path.to_string(),
-        name: file_name.to_string(),
-        input_type: InputType::Srt,
-        phrases: subs,
-    })
+    Ok(sentences)
 }
 
-pub fn read_txt(path: &str) -> Result<ParsedFile<Sentence>, YomineError> {
-    let sentences: Vec<Sentence> = fs::read_to_string(path)?
-        .split_terminator(['。', '！', '？', '「', '」', '\n'])
+pub fn read_txt(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
+    let sentences: Vec<Sentence> = fs::read_to_string(&source_file.original_file)?
+        .split_terminator(['。', '！', '？', '\n'])
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
-        .map(|s| Sentence {content: s.to_string()})
+        .enumerate()
+        .map(|(id, s)| Sentence {
+            id: id as u32,
+            source_id: source_file.id, // Reference to the SourceFile ID
+            text: s.to_string(),
+            timestamp: None, // Text files don’t have timestamps
+        })
         .collect();
 
-    if sentences.len() == 0 {
-        panic!("No sentences");
+    if sentences.is_empty() {
+        return Err(YomineError::Custom("No sentences found in the file.".to_string()));
     }
-    let file_path = Path::new(path);
-    let file_name = file_path.file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("Unknown File");
 
-    Ok(ParsedFile {
-        path: path.to_string(),
-        name: file_name.to_string(),
-        input_type: InputType::Text,
-        phrases: sentences,
-    })
+    Ok(sentences)
 }

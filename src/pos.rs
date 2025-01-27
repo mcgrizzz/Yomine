@@ -1,82 +1,76 @@
-use std::{collections::HashMap, fs};
-use serde_hjson::{from_str, Value};
+use std::{collections::HashMap, fmt, fs};
 use serde::Deserialize;
-use std::fmt;
+use serde_hjson::from_str;
 
-use crate::YomineError;
-
-#[derive(Debug, Deserialize, Clone, PartialEq, Eq, Hash)]
-pub struct PartOfSpeech {
-    key: String,
-    english_name: String,
-    hint: String,         
-    examples: Vec<String>, 
-}
-
-impl fmt::Display for PartOfSpeech {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "[{} - {}]",
-            self.key, self.english_name
-        )
-    }
-}
+use crate::core::{models::PartOfSpeech, YomineError};
 
 #[derive(Debug, Deserialize)]
 struct PosData {
     pos: Vec<PartOfSpeech>,
 }
 
+impl fmt::Display for PartOfSpeech {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[{} - {}]", self.key, self.english_name)
+    }
+}
+
 #[derive(Debug)]
-pub struct TreeNode {
-    pub value: Option<PartOfSpeech>,
-    pub children: HashMap<String, TreeNode>,
+pub struct PosLookup {
+    data: HashMap<String, PartOfSpeech>, // Hash map for fast lookups
 }
 
-impl TreeNode {
-    pub fn new(value: Option<PartOfSpeech>) -> Self {
+impl PosLookup {
+    /// Create a new empty PosLookup
+    pub fn new() -> Self {
         Self {
-            value,
-            children: HashMap::new(),
+            data: HashMap::new(),
         }
     }
 
-    /// Insert a path into the tree
-    pub fn insert(&mut self, path: &str, value: &PartOfSpeech) {
-        let mut current_node = self;
-        for part in path.split("->") {
-            current_node = current_node
-                .children
-                .entry(part.to_string())
-                .or_insert_with(|| TreeNode::new(Some(value.clone())));
+    /// Insert a PartOfSpeech into the lookup
+    pub fn insert(&mut self, key: &str, value: PartOfSpeech) {
+        self.data.insert(key.to_string(), value);
+    }
+
+    /// Resolve a PartOfSpeech by its key, with fallback
+    pub fn resolve(&self, pos_key: &str) -> PartOfSpeech {
+        let parts: Vec<&str> = pos_key.split(" -> ").collect();
+
+        // Try progressively shorter keys
+        for i in (1..=parts.len()).rev() {
+            let truncated_key = parts[..i].join(" -> ");
+
+            if let Some(value) = self.data.get(&truncated_key) {
+                return value.clone();
+            }
+        }
+
+        // Fallback to "Unknown"
+        let mut english_name = pos_key.to_string();
+
+        print!("\nCould not find: {}", pos_key);
+
+        english_name.insert_str(0, "Unknown: ");
+
+        PartOfSpeech {
+            key: pos_key.to_string(),
+            english_name,
+            hint: "".to_string(),
+            examples: vec![],
         }
     }
 
-    /// Print the tree structure (for debugging)
-    pub fn print_tree(&self, depth: usize) {
-        let indent = " ".repeat(depth * 2);
-        if let Some(ref value) = self.value {
-            println!("{}{}", indent, value);
-        } else {
-            println!("{}Root", indent);
-        }
-        for child in self.children.values() {
-            child.print_tree(depth + 1);
-        }
-    }
 }
 
-pub fn load_tree() -> Result<TreeNode, YomineError> {
+pub fn load_pos_lookup() -> Result<PosLookup, YomineError> {
     let pos_file = fs::read_to_string("lib/pos.hjson")?;
-
     let pos_data: PosData = from_str(&pos_file)?;
 
-    let mut root = TreeNode::new(None);
-
+    let mut pos_lookup = PosLookup::new();
     for p in pos_data.pos {
-        root.insert(&p.key, &p);
+        pos_lookup.insert(&p.key, p.clone());
     }
 
-    Ok(root)
+    Ok(pos_lookup)
 }
