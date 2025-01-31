@@ -43,6 +43,10 @@ impl Theme {
         return RichText::new(content).color(self.dark().unwrap().purple);
     }
 
+    pub fn red(&self) -> Color32 {
+        return self.dark().unwrap().red;
+    }
+
     pub fn tokyo() -> Self {
         Theme {
             dark: Some(ThemeDetails::tokyo_night_storm()),

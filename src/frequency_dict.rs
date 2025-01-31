@@ -90,6 +90,19 @@ impl FrequencyManager {
             u32::MAX
         }
     }
+
+    pub fn get_kanji_frequency(&self, kanji: &str) -> Vec<&FrequencyData> {
+        let mut freqs = Vec::new();
+        for (dict_name, dictionary) in &self.dictionaries {
+            if *self.toggled_states.get(dict_name).unwrap_or(&false) {
+                if let Some(freq_data) = dictionary.get_frequencies_by_kanji(kanji) {
+                    freqs.extend(freq_data);
+                }
+            }
+        }
+
+        freqs
+    }
 }
 
 
@@ -275,6 +288,11 @@ impl FrequencyDictionary {
                 entries.iter().find(|entry| entry.reading().is_none())
             }
         })
+    }
+
+    //Grab all the matching frequencies by kanji
+    fn get_frequencies_by_kanji(&self, kana: &str) -> Option<&Vec<FrequencyData>> {
+        self.terms.get(kana)
     }
 }
 

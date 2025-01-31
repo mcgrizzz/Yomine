@@ -12,7 +12,7 @@ pub fn extract_words(mut worker: Worker<'_>, sentences: &[Sentence], pos_lookup:
     let mut terms = Vec::<Term>::new();
     let mut term_id_counter = 1;
 
-    for sentence in sentences.iter().take(50) {
+    for sentence in sentences.iter() {
         worker.reset_sentence(&sentence.text);
         worker.tokenize();
 

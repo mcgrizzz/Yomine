@@ -752,8 +752,13 @@ pos:
     "english_name": "Suffix - Adjectival Word-like",
     "hint": "Used for suffixes that behave like adjectival words.",
     "examples": ["だ", "的"]
+  },
+  {
+    "key": "空白",
+    "english_name": "Space",
+    "hint": "Represents an empty or blank space",
+    "examples": ["' '", "'　'"]
   }
-
 
 
 ]

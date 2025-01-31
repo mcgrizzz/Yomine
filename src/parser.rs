@@ -4,20 +4,25 @@ use crate::core::{Sentence, SourceFile, YomineError};
 
 pub fn read_srt(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
     let sentences: Vec<Sentence> = fs::read_to_string(&source_file.original_file)?
+        .replace("\r", "")
         .split("\n\n")
         .filter(|s| !s.is_empty())
         .enumerate()
         .map(|(id, entry)| {
-            let lines: Vec<&str> = entry.trim().split("\n").collect();
+            let lines: Vec<&str> = entry.trim().trim_start_matches("\n").splitn(3, "\n").collect();
+            
             if lines.len() != 3 {
                 return Err(YomineError::Custom("Invalid subtitle format".to_string()));
             }
 
+            let timestamp = lines[1].to_string();
+            let text = lines[2].to_string();
+
             Ok(Sentence {
                 id: id as u32,
                 source_id: source_file.id, // Reference to the SourceFile ID
-                text: lines[2].to_string(),
-                timestamp: Some(lines[1].to_string()),
+                text: text,
+                timestamp: Some(timestamp),
             })
         })
         .collect::<Result<Vec<_>, YomineError>>()?;

@@ -27,6 +27,12 @@ pub struct PartOfSpeech {
     pub examples: Vec<String>,
 }
 
+impl PartOfSpeech {
+    pub fn is_verb(&self) -> bool {
+        return self.key.starts_with("動詞");
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Term {
     pub id: u32,

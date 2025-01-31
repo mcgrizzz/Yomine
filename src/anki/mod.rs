@@ -1,9 +1,171 @@
-use std::{collections::HashMap, time::Duration};
+use std::{collections::{HashMap, HashSet}, sync::Arc, time::Duration};
 
 use api::{get_deck_ids, get_field_names, get_model_ids, get_note_ids, get_notes, get_version, Note};
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use tokio::{task::{self}, time::sleep};
+use wana_kana::{ConvertJapanese, IsJapaneseStr};
+
+use crate::{core::{utils::SwapLongVowel, Term}, frequency_dict::FrequencyManager};
 
 pub mod api;
+
+pub struct AnkiState {
+    models: Vec<Model>,
+    model_mapping: HashMap<String, FieldMapping>, //<ModelName, FieldMapping>
+    vocab: Vec<Vocab>,
+    frequency_manager: Arc<FrequencyManager>,
+}
+
+impl AnkiState {
+
+    pub async fn new(model_mapping: HashMap<String, FieldMapping>, frequency_manager: Arc<FrequencyManager>) -> Result<Self, reqwest::Error> {
+        let models = get_models().await?;
+        let vocab = get_total_vocab(&model_mapping).await?;
+
+        Ok(Self {
+            models,
+            model_mapping,
+            vocab,
+            frequency_manager,
+        })
+    }
+
+    fn inclusivity_score(&self, term: &str, reading: &str, vocab: &Vocab) -> f32 {
+        let normalized_reading = reading.to_hiragana(); 
+        let alternate_reading = normalized_reading.swap_long_vowel();
+        let vocab_reading = vocab.reading.to_hiragana();
+        let frequencies = self.frequency_manager.get_kanji_frequency(&vocab.term);
+
+        if vocab.term.eq(term) {
+            if (vocab_reading == normalized_reading) || (vocab_reading == alternate_reading) {
+                return 1.0;
+            }
+
+            //We cannot trust tokenizer readings as ground truth readings but... For for now we will say this counts
+            return 1.0
+        }
+
+        //This is the case if (いただく, いただく) is matched against (いただく, いただく)... we have to assume they're the same
+        //There's no way for us to gain confidence otherwise
+        if vocab.term.as_str().is_kana() && term.is_kana() {
+            let alternate_term = term.to_hiragana().swap_long_vowel();
+            if alternate_term == vocab.term.to_hiragana() { 
+                return 1.0
+            }
+        }
+
+        //This is potentially the same word: For example in Anki (頂く, いただく) but in the tokenizer you get (いただく, いただく)
+        if term.is_kana() && !vocab.term.as_str().is_kana(){
+            if vocab_reading.eq(&normalized_reading) || vocab_reading.eq(&alternate_reading) {
+                //Reading is the same, how do we quantify how likely the words are the same. 
+                //Get the most likely kana reading value that has a kanji associated with it. Check to see its the same kanji as we have. 
+
+                let mut grouped_frequencies: HashMap<String, Vec<f32>> = HashMap::new();
+                for freq in frequencies {
+                    if let Some(reading) = freq.reading() {
+                        grouped_frequencies
+                        .entry(reading.to_string()) // Group by reading
+                        .or_insert_with(Vec::new)
+                        .push(freq.value() as f32);
+                    }
+                    
+                }
+                
+                let average_frequencies: Vec<(String, f32)> = grouped_frequencies
+                .into_iter()
+                .map(|(reading, values)| {
+                    let avg_freq = values.iter().sum::<f32>() / values.len() as f32;
+                    (reading, avg_freq)
+                })
+                .collect();
+
+                let (min_freq, max_freq) = average_frequencies
+                .iter()
+                .fold((f32::MAX, f32::MIN), |(min, max), (_, freq)| {
+                    (min.min(*freq), max.max(*freq))
+                });
+
+                if let Some((_, matched_freq)) = average_frequencies
+                    .iter()
+                    .find(|(reading, _)| reading == &vocab_reading)
+                {
+                    if max_freq > min_freq {
+                        let normalized = (*matched_freq - min_freq) / (max_freq - min_freq);
+                        let probability = 0.1 + (normalized * 0.8); 
+                        return probability;
+                    } else {
+                        return 0.9; 
+                    }
+                }
+
+            }
+        }
+
+        return 0.0;
+    }
+
+    // How likely is it that the given term and reading is already in our anki decks.
+    // Exact matches will give a score of 1.0, anything less than exact will have some degree of uncertainty
+    fn highest_inclusivity_score(&self, term: &str, reading: &str) -> f32 {
+        let normalized_reading = reading.to_hiragana();
+        let alternate_reading = normalized_reading.swap_long_vowel();
+
+        let mut relevance_map: HashMap<String, Vec<&Vocab>> = HashMap::new();
+
+        for vocab in &self.vocab {
+            relevance_map.entry(vocab.reading.to_hiragana())
+                .or_insert_with(Vec::new)
+                .push(vocab);
+            
+            relevance_map.entry(vocab.term.clone())
+            .or_insert_with(Vec::new)
+            .push(vocab);
+        }
+
+        let mut highest_score = 0.0;
+
+        for key in [&normalized_reading, &alternate_reading, term] {
+            if let Some(vocab_list) = relevance_map.get(key) {
+                for vocab in vocab_list {
+                    let score = self.inclusivity_score(term, reading, vocab);
+                    if score == 1.0 {
+                        return 1.0; 
+                    }
+                    if score > highest_score {
+                        highest_score = score;
+                    }
+                }
+            }
+        }
+
+        highest_score
+    }
+
+    pub fn filter_existing_terms(&self, mut terms: Vec<Term>, surface_form: bool) -> Vec<Term> {
+        let mut vocab_set: HashSet<(String, String)> = HashSet::new();
+        let filtered_terms: Vec<Term> = terms
+        .into_par_iter()
+        .filter(|term| {
+
+            let score = match surface_form {
+                true => {
+                    self.highest_inclusivity_score(&term.surface_form, &term.get_surface_reading())
+                },
+                false => {
+                    self.highest_inclusivity_score(&term.lemma_form, &term.lemma_reading)
+                }
+            };
+
+            !(score > 0.75)
+           
+
+        })
+        .collect();
+
+        filtered_terms
+    }
+ 
+}
 
 #[derive(Debug)]
 pub struct Model {
@@ -53,24 +215,7 @@ pub async fn get_models() -> Result<Vec<Model>, reqwest::Error> {
 }
 
 
-pub async fn get_total_vocab() -> Result<Vec<Vocab>, reqwest::Error> {
-
-    //temporary manually define models
-    let mut model_mapping: HashMap<String, FieldMapping> = HashMap::new();
-    model_mapping.insert(
-        "Lapis".to_string(), 
-        FieldMapping {
-            term_field: "Expression".to_string(),
-            reading_field: "ExpressionReading".to_string(),
-        });
-
-        model_mapping.insert(
-            "Kaishi 1.5k".to_string(), 
-            FieldMapping {
-                term_field: "Word".to_string(),
-                reading_field: "Word Reading".to_string(),
-            });
-
+pub async fn get_total_vocab(model_mapping: &HashMap<String, FieldMapping>) -> Result<Vec<Vocab>, reqwest::Error> {        
     let decks = get_deck_ids().await?;
     let deck_names: Vec<String> = decks
         .into_iter()
@@ -81,7 +226,6 @@ pub async fn get_total_vocab() -> Result<Vec<Vocab>, reqwest::Error> {
         .collect();
 
     let deck_query = deck_names.join(" OR ");
-    println!("{deck_query}");
 
     let note_ids = get_note_ids(&deck_query).await?;
     let notes = get_notes(note_ids).await?;
