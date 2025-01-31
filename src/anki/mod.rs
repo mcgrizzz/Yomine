@@ -31,14 +31,16 @@ impl AnkiState {
         })
     }
 
-    fn inclusivity_score(&self, term: &str, reading: &str, anki_vocab: &Vocab) -> f32 {
-        let normalized_reading = reading.to_hiragana(); 
-        let alternate_reading = normalized_reading.swap_long_vowel();
-        let vocab_reading = anki_vocab.reading.to_hiragana();
-        let frequencies = self.frequency_manager.get_kanji_frequency(&anki_vocab.term);
+    fn inclusivity_score(&self, word: &str, word_reading: &str, anki_card: &Vocab) -> f32 {
+        let hiragana_reading = word_reading.to_hiragana(); 
+        let alternate_reading = hiragana_reading.swap_long_vowel();
 
-        if anki_vocab.term.eq(term) {
-            if (vocab_reading == normalized_reading) || (vocab_reading == alternate_reading) {
+        let anki_word = &anki_card.term;
+        let anki_reading = anki_card.reading.to_hiragana();
+        let frequencies = self.frequency_manager.get_kanji_frequency(anki_word);
+
+        if anki_word.eq(word) {
+            if (anki_reading == hiragana_reading) || (anki_reading == alternate_reading) {
                 return 1.0;
             }
 
@@ -48,16 +50,16 @@ impl AnkiState {
 
         //This is the case if (いただく, いただく) is matched against (いただく, いただく)... we have to assume they're the same
         //There's no way for us to gain confidence otherwise
-        if anki_vocab.term.as_str().is_kana() && term.is_kana() {
-            let alternate_term = term.to_hiragana().swap_long_vowel();
-            if alternate_term == anki_vocab.term.to_hiragana() || term.to_hiragana() == anki_vocab.term.to_hiragana() { 
+        if anki_word.as_str().is_kana() && word.is_kana() {
+            let alternate_term = word.to_hiragana().swap_long_vowel();
+            if alternate_term == anki_word.to_hiragana() || word.to_hiragana() == anki_word.to_hiragana() { 
                 return 1.0
             }
         }
 
         //This is potentially the same word: For example in Anki (頂く, いただく) but in the tokenizer you get (いただく, いただく)
-        if term.is_kana() && !anki_vocab.term.as_str().is_kana(){
-            if vocab_reading.eq(&normalized_reading) || vocab_reading.eq(&alternate_reading) {
+        if word.is_kana() && !anki_word.as_str().is_kana(){
+            if anki_reading.eq(&hiragana_reading) || anki_reading.eq(&alternate_reading) {
                 //Reading is the same, how do we quantify how likely the words are the same. 
                 //Get the most likely kana reading value that has a kanji associated with it. Check to see its the same kanji as we have. 
                 let mut grouped_frequencies: HashMap<String, Vec<f32>> = HashMap::new();
@@ -90,7 +92,7 @@ impl AnkiState {
                 //If there is a frequency for this reading...
                 if let Some((_, matched_freq)) = average_frequencies
                     .iter()
-                    .find(|(reading, _)| reading == &vocab_reading)
+                    .find(|(reading, _)| reading == &anki_reading)
                 {  
                     if max_freq > min_freq {
                         let normalized = (*matched_freq - min_freq) / (max_freq - min_freq); //scale frequency into the range between min and max
@@ -144,8 +146,7 @@ impl AnkiState {
         highest_score
     }
 
-    pub fn filter_existing_terms(&self, mut terms: Vec<Term>, surface_form: bool) -> Vec<Term> {
-        let mut vocab_set: HashSet<(String, String)> = HashSet::new();
+    pub fn filter_existing_terms(&self, terms: Vec<Term>, surface_form: bool) -> Vec<Term> {
         let filtered_terms: Vec<Term> = terms
         .into_par_iter()
         .filter(|term| {
