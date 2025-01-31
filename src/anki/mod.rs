@@ -2,6 +2,7 @@ use std::{collections::{HashMap, HashSet}, sync::Arc, time::Duration};
 
 use api::{get_deck_ids, get_field_names, get_model_ids, get_note_ids, get_notes, get_version, Note};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use regex::Replacer;
 use tokio::{task::{self}, time::sleep};
 use wana_kana::{ConvertJapanese, IsJapaneseStr};
 
@@ -30,13 +31,13 @@ impl AnkiState {
         })
     }
 
-    fn inclusivity_score(&self, term: &str, reading: &str, vocab: &Vocab) -> f32 {
+    fn inclusivity_score(&self, term: &str, reading: &str, anki_vocab: &Vocab) -> f32 {
         let normalized_reading = reading.to_hiragana(); 
         let alternate_reading = normalized_reading.swap_long_vowel();
-        let vocab_reading = vocab.reading.to_hiragana();
-        let frequencies = self.frequency_manager.get_kanji_frequency(&vocab.term);
+        let vocab_reading = anki_vocab.reading.to_hiragana();
+        let frequencies = self.frequency_manager.get_kanji_frequency(&anki_vocab.term);
 
-        if vocab.term.eq(term) {
+        if anki_vocab.term.eq(term) {
             if (vocab_reading == normalized_reading) || (vocab_reading == alternate_reading) {
                 return 1.0;
             }
@@ -47,19 +48,18 @@ impl AnkiState {
 
         //This is the case if (いただく, いただく) is matched against (いただく, いただく)... we have to assume they're the same
         //There's no way for us to gain confidence otherwise
-        if vocab.term.as_str().is_kana() && term.is_kana() {
+        if anki_vocab.term.as_str().is_kana() && term.is_kana() {
             let alternate_term = term.to_hiragana().swap_long_vowel();
-            if alternate_term == vocab.term.to_hiragana() { 
+            if alternate_term == anki_vocab.term.to_hiragana() || term.to_hiragana() == anki_vocab.term.to_hiragana() { 
                 return 1.0
             }
         }
 
         //This is potentially the same word: For example in Anki (頂く, いただく) but in the tokenizer you get (いただく, いただく)
-        if term.is_kana() && !vocab.term.as_str().is_kana(){
+        if term.is_kana() && !anki_vocab.term.as_str().is_kana(){
             if vocab_reading.eq(&normalized_reading) || vocab_reading.eq(&alternate_reading) {
                 //Reading is the same, how do we quantify how likely the words are the same. 
                 //Get the most likely kana reading value that has a kanji associated with it. Check to see its the same kanji as we have. 
-
                 let mut grouped_frequencies: HashMap<String, Vec<f32>> = HashMap::new();
                 for freq in frequencies {
                     if let Some(reading) = freq.reading() {
@@ -71,6 +71,7 @@ impl AnkiState {
                     
                 }
                 
+                //Frequencies averaged by reading...
                 let average_frequencies: Vec<(String, f32)> = grouped_frequencies
                 .into_iter()
                 .map(|(reading, values)| {
@@ -78,22 +79,24 @@ impl AnkiState {
                     (reading, avg_freq)
                 })
                 .collect();
-
+                
+                //Get the min and max freqeuncy 
                 let (min_freq, max_freq) = average_frequencies
                 .iter()
                 .fold((f32::MAX, f32::MIN), |(min, max), (_, freq)| {
                     (min.min(*freq), max.max(*freq))
                 });
-
+               
+                //If there is a frequency for this reading...
                 if let Some((_, matched_freq)) = average_frequencies
                     .iter()
                     .find(|(reading, _)| reading == &vocab_reading)
-                {
+                {  
                     if max_freq > min_freq {
-                        let normalized = (*matched_freq - min_freq) / (max_freq - min_freq);
-                        let probability = 0.1 + (normalized * 0.8); 
+                        let normalized = (*matched_freq - min_freq) / (max_freq - min_freq); //scale frequency into the range between min and max
+                        let probability = 1.0 - (0.1 + (normalized * 0.8)); 
                         return probability;
-                    } else {
+                    } else { //In this case they're equal and there is only one reading
                         return 0.9; 
                     }
                 }

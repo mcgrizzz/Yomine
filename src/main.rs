@@ -69,12 +69,15 @@ async fn main() {
 
 
     if let Some(state) = anki_state {
+        println!("Prefiltered: {}", terms.len());
         terms = state.filter_existing_terms(terms, false);
+        println!("Filtered: {}", terms.len());
         // terms.iter().filter(|term| term.part_of_speech.is_verb()).take(50).for_each(|term| {
         //     println!("{}|{} ---- {}|{}", term.lemma_form, term.lemma_reading.to_hiragana(), term.surface_form, term.get_surface_reading().to_hiragana())
         // });
         
         terms = state.filter_existing_terms(terms, true);
+        println!("Filtered surface form: {}", terms.len());
     }
 
 
