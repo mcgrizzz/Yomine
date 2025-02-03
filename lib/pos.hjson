@@ -758,6 +758,36 @@ pos:
     "english_name": "Space",
     "hint": "Represents an empty or blank space",
     "examples": ["' '", "'　'"]
+  },
+    {
+    "key": "形状詞 -> タリ",
+    "english_name": "Adjectival Noun (Tari-form)",
+    "hint": "A conjugated form of な-adjectives (形容動詞) used in classical Japanese. It functions similarly to modern だ/だった.",
+    "examples": [
+      "静かたり (しずかたり)",
+      "便利たり (べんりたり)",
+      "有名たり (ゆうめいたり)"
+    ]
+  }
+  {
+    "key": "接尾辞 -> 動詞的",
+    "english_name": "Verbal Suffix",
+    "hint": "A suffix that turns a word into a verb-like form, often forming new verbs.",
+    "examples": [
+      "生きる (いきる) → 生かす (いかす)",
+      "終わる (おわる) → 終える (おえる)",
+      "広い (ひろい) → 広がる (ひろがる)"
+    ]
+  },
+  {
+    "key": "接尾辞 -> 名詞的 -> サ変可能",
+    "english_name": "Nominal Suffix (Suru-convertible)",
+    "hint": "A noun-forming suffix that can take する to form a verbal expression.",
+    "examples": [
+      "勉強 (べんきょう) → 勉強する",
+      "確認 (かくにん) → 確認する",
+      "発見 (はっけん) → 発見する"
+    ]
   }
 
 

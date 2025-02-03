@@ -50,7 +50,7 @@ impl Default for TableSort {
 fn col_term(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &YomineApp) {
     row.col(|ui| {
         ui.label(app.theme.bold(&term.lemma_form).size(22.0))
-        .on_hover_ui(|ui| {
+        .on_hover_ui_at_pointer(|ui| {
             ui.label(app.theme.heading(&term.lemma_reading.to_hiragana()));
             ui.label(app.theme.heading(&term.lemma_reading.to_katakana()));
         });
@@ -84,7 +84,10 @@ fn col_sentence(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &Yomi
         job.append(preslice, 0.0, normal_format.clone());
         job.append(&term.surface_form, 0.0, highlighted_format);
         job.append(endslice, 0.0, normal_format);
-        ui.label(job);
+        ui.label(job)
+            .on_hover_ui_at_pointer(|ui| {
+                ui.label(app.theme.heading(&&term.get_surface_reading().to_hiragana()));
+            });
 
     });
 }
@@ -118,7 +121,7 @@ fn col_pos(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &YomineApp
 
     row.col(|ui| {
         ui.label(pos)
-            .on_hover_ui(|ui| {
+            .on_hover_ui_at_pointer(|ui| {
                 ui.label(app.theme.heading(&pos_english));
                 ui.label(pos_hint);
                 ui.label(pos_examples.join(" 、"));

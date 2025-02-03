@@ -37,7 +37,7 @@ impl AnkiState {
 
         let anki_word = &anki_card.term;
         let anki_reading = anki_card.reading.to_hiragana();
-        let frequencies = self.frequency_manager.get_kanji_frequency(anki_word);
+        let frequencies = self.frequency_manager.get_exact_frequency(anki_word);
 
         if anki_word.eq(word) {
             if (anki_reading == hiragana_reading) || (anki_reading == alternate_reading) {

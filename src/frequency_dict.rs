@@ -68,7 +68,7 @@ impl FrequencyManager {
         freq_map
     }
 
-    pub fn harmonic_frequency(&self, lemma_form: &str, lemma_reading: &str, is_kana: bool) -> u32 {
+    fn harmonic_frequency(&self, lemma_form: &str, lemma_reading: &str, is_kana: bool) -> u32 {
         let mut sum_of_reciprocals = 0.0;
         let mut count = 0;
 
@@ -77,7 +77,7 @@ impl FrequencyManager {
                 if let Some(freq_data) = dictionary.get_frequency(lemma_form, lemma_reading, is_kana) {
                     let frequency = freq_data.value();
                     if frequency > 0 {
-                        sum_of_reciprocals += 1.0 / frequency as f64;
+                        sum_of_reciprocals += 1.0 / frequency as f32;
                         count += 1;
                     }
                 }
@@ -85,18 +85,26 @@ impl FrequencyManager {
         }
 
         if count > 0 {
-            (count as f64 / sum_of_reciprocals).round() as u32
+            (count as f32 / sum_of_reciprocals).round() as u32
         } else {
             u32::MAX
         }
     }
 
-    pub fn get_kanji_frequency(&self, kanji: &str) -> Vec<&FrequencyData> {
+    //We do not care about readings
+    pub fn get_exact_frequency(&self, input: &str) -> Vec<&FrequencyData> {
         let mut freqs = Vec::new();
         for (dict_name, dictionary) in &self.dictionaries {
             if *self.toggled_states.get(dict_name).unwrap_or(&false) {
-                if let Some(freq_data) = dictionary.get_frequencies_by_kanji(kanji) {
-                    freqs.extend(freq_data);
+                if let Some(freq_data) = dictionary.get_frequencies_by_key(input) {
+                    if !input.is_kana() {
+                        //Filter the kana specific frequencies
+                        freqs.extend(freq_data.iter().filter(|f| !f.has_special_marker()).collect::<Vec<&FrequencyData>>());
+                    } else {
+                        //Don't filter otherwise since we matched on a kana key...
+                        freqs.extend(freq_data);
+                    }
+                    
                 }
             }
         }
@@ -290,9 +298,9 @@ impl FrequencyDictionary {
         })
     }
 
-    //Grab all the matching frequencies by kanji
-    fn get_frequencies_by_kanji(&self, kana: &str) -> Option<&Vec<FrequencyData>> {
-        self.terms.get(kana)
+    //Grab all the matching frequencies by key (just directly look up the key we want)
+    fn get_frequencies_by_key(&self, key: &str) -> Option<&Vec<FrequencyData>> {
+        self.terms.get(key)
     }
 }
 

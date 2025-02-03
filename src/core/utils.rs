@@ -40,12 +40,13 @@ impl SwapLongVowel for String {
 
 impl Term {
     pub fn get_surface_reading(&self) -> String {
-        if self.surface_form == self.lemma_form {
-            return self.lemma_reading.clone();
-        }
 
         if self.surface_form.as_str().is_kana() {
             return self.surface_form.clone();
+        }
+
+        if self.surface_form == self.lemma_form {
+            return self.lemma_reading.clone();
         }
         
         let mut reading = self.lemma_reading.clone();
@@ -57,8 +58,16 @@ impl Term {
                     reading.pop();
                 }
             }
+        //Adjectives, should be the same basic logic. Grab everything before い
+        } else if self.part_of_speech.is_i_adjective() {
+            if let Some(last_char) = reading.chars().last() {
+                if 'い' == last_char {
+                    reading.pop();
+                }
+            }
         }
 
+        
         let mut buffer = String::new();
         let mut reading_chars = reading.chars();
         
@@ -73,5 +82,23 @@ impl Term {
         }
 
         buffer
+    }
+}
+
+pub fn harmonic_frequency(nums: &Vec<u32>) -> Option<u32> {
+    let mut sum_of_reciprocals = 0.0;
+    let mut count = 0;
+
+    nums.iter().for_each(|num| {
+        if num > &0 {
+            sum_of_reciprocals += 1.0 / *num as f32;
+            count += 1;
+        }
+    });
+
+    if count > 0 {
+        Some((count as f32 / sum_of_reciprocals).round() as u32)
+    } else {
+        None
     }
 }

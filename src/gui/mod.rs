@@ -2,17 +2,34 @@ pub mod theme;
 pub mod table;
 
 use std::collections::HashSet;
-use eframe::{egui, epaint::text::{FontInsert, InsertFontFamily}};
+use eframe::{egui::{self, Button, TextEdit}, epaint::text::{FontInsert, InsertFontFamily}};
+use rfd::FileDialog;
 use table::{term_table, TableState};
 use theme::{set_theme, Theme};
 
-use crate::core::{Sentence, Term};
+use crate::core::{Sentence, SourceFile, Term};
+
+
+struct FileModal {
+    pub open: bool,
+    pub file_title: String,
+    pub file_creator: String,
+    pub file_path: String,
+    pub source_file: Option<SourceFile>,
+}
+
+impl Default for FileModal {
+    fn default() -> Self {
+        Self { open: Default::default(), file_title: Default::default(), file_creator: Default::default(), file_path: Default::default(), source_file: Default::default() }
+    }
+}
 
 #[derive(Default)]
 pub struct YomineApp {
     terms: Vec<Term>,
     sentences: Vec<Sentence>,
     table_state: TableState,
+    file_modal: FileModal,
     zoom: f32,
     theme: Theme,
 }
@@ -68,6 +85,9 @@ impl YomineApp {
 
         set_theme(&cc.egui_ctx, Theme::dracula());
         cc.egui_ctx.set_zoom_factor(cc.egui_ctx.zoom_factor() + 0.5);
+        cc.egui_ctx.style_mut(|style| {
+            style.interaction.tooltip_delay = 0.0;
+        });
 
         terms.sort_unstable_by(|a, b| {
             let freq_a = a.frequencies.get("HARMONIC").unwrap();
@@ -79,6 +99,7 @@ impl YomineApp {
             terms,
             sentences,
             table_state: TableState::default(),
+            file_modal: FileModal::default(),
             zoom: cc.egui_ctx.zoom_factor(),
             theme: Theme::dracula(),
         }
@@ -90,6 +111,11 @@ impl eframe::App for YomineApp {
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.top_bar(ctx);
+
+        if self.file_modal.open {
+            open_new_file_dialog(ctx, &mut self.file_modal);
+        }
+
         term_table(ctx, self);
     }
     
@@ -97,13 +123,16 @@ impl eframe::App for YomineApp {
 
 impl YomineApp {
 
-    fn top_bar(&self, ctx: &egui::Context) {
+    fn top_bar(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             // The top panel is often a good place for a menu bar:
     
             egui::menu::bar(ui, |ui| {
                 // NOTE: no File->Quit on web pages!
                 ui.menu_button("File", |ui| {
+                    if ui.button("Open New File").clicked() {
+                        self.file_modal.open = true;
+                    }
                     if ui.button("Quit").clicked() {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
@@ -113,6 +142,59 @@ impl YomineApp {
                 egui::widgets::global_theme_preference_buttons(ui);
             });
         });
+        
     }
+}
+
+fn open_new_file_dialog(ctx: &egui::Context, file_modal: &mut FileModal) {
+    egui::Window::new("Open New File")
+        .collapsible(false)
+        .resizable(false)
+        .show(ctx, |ui| {
+            ui.label("Enter Title:");
+            ui.add(TextEdit::singleline(&mut file_modal.file_title).hint_text("E.g., Dan Da Dan - S01E08"));
+
+            ui.label("Enter Creator (optional):");
+            ui.add(TextEdit::singleline(&mut file_modal.file_creator).hint_text("E.g., Netflix"));
+
+            if ui.button("Browse for File").clicked() {
+                if let Some(path) = FileDialog::new().pick_file() {
+                    file_modal.file_path = path.display().to_string();
+                }
+            }
+
+            if !file_modal.file_path.is_empty() {
+                ui.label(format!("Selected File: {}", file_modal.file_path));
+            }
+
+            ui.horizontal(|ui| {
+                if ui.add(Button::new("Confirm")).clicked() {
+                    if !file_modal.file_title.is_empty() && !file_modal.file_path.is_empty() {
+                        file_modal.source_file = Some(SourceFile {
+                            id: 3,
+                            source: "SRT".to_string(),
+                            title: file_modal.file_title.clone(),
+                            creator: if file_modal.file_creator.is_empty() {
+                                None
+                            } else {
+                                Some(file_modal.file_creator.clone())
+                            },
+                            original_file: file_modal.file_path.clone(),
+                        });
+
+                        // Reset form fields
+                        file_modal.file_title.clear();
+                        file_modal.file_creator.clear();
+                        file_modal.file_path.clear();
+                        file_modal.open = false; // Close modal
+                    }
+                    file_modal.open = false; // Close modal
+                }
+
+                if ui.button("Cancel").clicked() {
+                    file_modal.open = false; // Close modal
+                }
+            });
+        });
 }
 

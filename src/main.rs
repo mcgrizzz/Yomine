@@ -1,7 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use wana_kana::ConvertJapanese;
-use yomine::{anki::{api::get_version, get_models, get_total_vocab, wait_awake, AnkiState, FieldMapping}, core::{SourceFile}, dictionary::DictType, frequency_dict, gui::YomineApp, parser::read_srt, pos, tokenizer::{extract_words, init_vibrato}};
+use yomine::{anki::{AnkiState, FieldMapping}, core::SourceFile, dictionary::DictType, frequency_dict, gui::YomineApp, parser::read_srt, pos, segmentation::{segmentator::{segment, SegmentationCache}, tokenizer::{extract_words, init_vibrato}}};
 
 
 #[tokio::main]
@@ -24,12 +23,29 @@ async fn main() {
     // };
 
     //ダンダダン.S01E08.なんかモヤモヤするじゃんよ.WEBRip.Netflix.ja[cc].srt
+
+    //temporary blacklist while I test and use application
+    let blacklist = vec![
+        "の",
+        "を",
+        "が",
+        "と",
+        "で",
+        "だ",
+        "も",
+        "か",
+        "れる",
+        "です",
+        "られる",
+        "せる",
+    ];
+
     let source_file = SourceFile {
         id: 3,
         source: "SRT".to_string(),
         title: "Dan Da Dan - S01E08".to_string(),
         creator: None,
-        original_file: "input/ダンダダン.S01E08.なんかモヤモヤするじゃんよ.WEBRip.Netflix.ja[cc].srt".to_string(),
+        original_file: "input/[erai-raws-timed]-sousou-no-frieren-S1E20.srt".to_string(),
     };
 
     let dict_type = DictType::Unidic;
@@ -38,8 +54,21 @@ async fn main() {
     let pos_lookup = pos::load_pos_lookup().expect("Failed to load POS");
     let tokenizer = init_vibrato(&dict_type).expect("Failed to initialize tokenizer");
     let frequency_manager = frequency_dict::process_frequency_dictionaries().expect("Failed to load Frequency Manager");
+
+    // let mut cache = SegmentationCache::new();
+    // for sentence in &sentences {
+    //     let segs = segment(&sentence.text, &frequency_manager, &mut cache);
+    //     let best_segs = segs.get_n_best_segments(1);
+
+    //     for (i, segmentation) in best_segs.iter().enumerate() {
+    //         let seg_strings: Vec<String> = segmentation.iter().map(|s| s.token.surface_form.clone()).collect();
+    //         //println!("{}. {}", i + 1, seg_strings.join(" | "));
+    //     }
+    // }
+    
     let mut terms = extract_words(tokenizer.new_worker(), &sentences, &pos_lookup, &dict_type, &frequency_manager);
     
+    terms = terms.into_iter().filter(|term| !blacklist.contains(&term.lemma_form.as_str())).collect();
  
     let mut model_mapping: HashMap<String, FieldMapping> = HashMap::new();
     model_mapping.insert(

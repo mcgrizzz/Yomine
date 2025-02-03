@@ -31,6 +31,10 @@ impl PartOfSpeech {
     pub fn is_verb(&self) -> bool {
         return self.key.starts_with("動詞");
     }
+
+    pub fn is_i_adjective(&self) -> bool {
+        return self.key.starts_with("形容詞");
+    }
 }
 
 #[derive(Debug, Clone)]

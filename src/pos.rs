@@ -49,7 +49,7 @@ impl PosLookup {
         // Fallback to "Unknown"
         let mut english_name = pos_key.to_string();
 
-        print!("\nCould not find: POS{}", pos_key);
+        println!("Could not find: POS{}", pos_key);
 
         english_name.insert_str(0, "Unknown: ");
 
