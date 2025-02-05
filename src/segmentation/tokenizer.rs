@@ -1,11 +1,14 @@
 use std::collections::HashMap;
 
+use eframe::egui::Pos2;
 use vibrato::{tokenizer::worker::Worker, Tokenizer};
 use crate::core::{Sentence, Term, YomineError};
 use crate::dictionary::{ensure_dictionary, load_dictionary, DictType};
 use crate::frequency_dict::FrequencyManager;
 use crate::pos::PosLookup;
 use wana_kana::IsJapaneseStr;
+
+use super::token::UnidicTag;
 
 
 pub fn extract_words(mut worker: Worker<'_>, sentences: &[Sentence], pos_lookup: &PosLookup, dict_type: &DictType, frequency_manager: &FrequencyManager) -> Vec<Term> {
@@ -24,7 +27,16 @@ pub fn extract_words(mut worker: Worker<'_>, sentences: &[Sentence], pos_lookup:
             let indices = dict_type.lemma_indices();
             let lemma_form = details.split(',').nth(indices.0).unwrap_or("").to_string();
             let lemma_reading = details.split(',').nth(indices.1).unwrap_or("").to_string();
-            
+
+            let pos1: UnidicTag = details.split(',').nth(0).unwrap_or("").into();
+            let pos2: UnidicTag = details.split(',').nth(1).unwrap_or("").into();
+            let pos3: UnidicTag = details.split(',').nth(2).unwrap_or("").into();
+            let pos4: UnidicTag = details.split(',').nth(3).unwrap_or("").into();
+            let inflection_type: UnidicTag = details.split(',').nth(4).unwrap_or("").into(); //Called cType in unidic
+            if inflection_type != UnidicTag::Unknown && inflection_type != UnidicTag::Unset{
+                println!("\n {} \n {:?} | {} \n {} \n", sentence.text, inflection_type, surface_form, details);
+            }
+
             let pos_key = details
                 .split(',')
                 .take(4) //Only four degrees of specification, otherwise the POS file grows too much
@@ -50,7 +62,7 @@ pub fn extract_words(mut worker: Worker<'_>, sentences: &[Sentence], pos_lookup:
             let freq_map: HashMap<String, u32> = frequency_manager.build_freq_map(&lemma_form, &lemma_reading, is_kana);
             
             let term = Term {
-                id: term_id_counter,
+                id: 0,
                 lemma_form,
                 lemma_reading,
                 surface_form,
@@ -61,7 +73,6 @@ pub fn extract_words(mut worker: Worker<'_>, sentences: &[Sentence], pos_lookup:
             };
             
             terms.push(term);
-            term_id_counter += 1;
         }
     }
 

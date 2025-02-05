@@ -28,6 +28,16 @@ pub struct PartOfSpeech {
 }
 
 impl PartOfSpeech {
+    
+    pub fn new(key: String) -> Self {
+        PartOfSpeech {
+            key: key.clone(),
+            english_name: key,
+            hint: "".to_string(),
+            examples: Vec::new(),
+        }
+    }
+
     pub fn is_verb(&self) -> bool {
         return self.key.starts_with("動詞");
     }

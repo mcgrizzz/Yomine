@@ -1,6 +1,6 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::{HashMap, HashSet}, sync::Arc};
 
-use yomine::{anki::{AnkiState, FieldMapping}, core::SourceFile, dictionary::DictType, frequency_dict, gui::YomineApp, parser::read_srt, pos, segmentation::{segmentator::{segment, SegmentationCache}, tokenizer::{extract_words, init_vibrato}}};
+use yomine::{anki::{AnkiState, FieldMapping}, core::{SourceFile, Term}, dictionary::DictType, frequency_dict, gui::YomineApp, parser::read_srt, pos, segmentation::{segmentator::{segment, SegmentationCache, Token}, tokenizer::{extract_words, init_vibrato}}};
 
 
 #[tokio::main]
@@ -33,6 +33,9 @@ async fn main() {
         "で",
         "だ",
         "も",
+        "な",
+        "お",
+        "ん",
         "か",
         "れる",
         "です",
@@ -43,9 +46,9 @@ async fn main() {
     let source_file = SourceFile {
         id: 3,
         source: "SRT".to_string(),
-        title: "Dan Da Dan - S01E08".to_string(),
+        title: "".to_string(),
         creator: None,
-        original_file: "input/[erai-raws-timed]-sousou-no-frieren-S1E20.srt".to_string(),
+        original_file: "input/[erai-raws-timed]-sousou-no-frieren-S1E21.srt".to_string(),
     };
 
     let dict_type = DictType::Unidic;
@@ -56,18 +59,33 @@ async fn main() {
     let frequency_manager = frequency_dict::process_frequency_dictionaries().expect("Failed to load Frequency Manager");
 
     // let mut cache = SegmentationCache::new();
+    // let mut segment_terms: Vec<Term> = Vec::new();
     // for sentence in &sentences {
     //     let segs = segment(&sentence.text, &frequency_manager, &mut cache);
     //     let best_segs = segs.get_n_best_segments(1);
 
-    //     for (i, segmentation) in best_segs.iter().enumerate() {
-    //         let seg_strings: Vec<String> = segmentation.iter().map(|s| s.token.surface_form.clone()).collect();
-    //         //println!("{}. {}", i + 1, seg_strings.join(" | "));
+    //     for (_, segmentation) in best_segs.iter().enumerate() {
+    //         let mut seg_tokens: Vec<Term> = segmentation.iter()
+    //             .map(|s| {
+    //                 let mut t = Term::from(s.token.clone());
+    //                 let index_in_sentence = sentence
+    //                     .text
+    //                     .match_indices(&t.surface_form)
+    //                     .next()
+    //                     .map(|(idx, _)| idx)
+    //                     .unwrap_or(0);
+    //                 t.sentence_references = vec![(sentence.id, index_in_sentence)];
+    //                 t
+    //             }).collect();
+    //         segment_terms.append(&mut seg_tokens);
     //     }
     // }
     
     let mut terms = extract_words(tokenizer.new_worker(), &sentences, &pos_lookup, &dict_type, &frequency_manager);
-    
+
+    // let found_terms: HashSet<String> = terms.iter().map(|t| t.lemma_form.clone()).collect();
+    // terms.extend(segment_terms.into_iter().filter(|t| t.lemma_form.chars().count() > 3 && t.surface_form.chars().count() > 3 && !found_terms.contains(&t.lemma_form)));
+
     terms = terms.into_iter().filter(|term| !blacklist.contains(&term.lemma_form.as_str())).collect();
  
     let mut model_mapping: HashMap<String, FieldMapping> = HashMap::new();

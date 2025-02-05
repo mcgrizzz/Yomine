@@ -3,14 +3,49 @@
 use std::{collections::{HashMap, HashSet}, u32};
 
 use jp_deinflector::deinflect;
+use vibrato::token;
+use wana_kana::IsJapaneseStr;
 
-use crate::{core::utils::harmonic_frequency, frequency_dict::{self, FrequencyManager}};
+use crate::{core::{utils::harmonic_frequency, PartOfSpeech, Term}, frequency_dict::{self, FrequencyManager}};
 
 #[derive(Clone)]
 pub struct Token {
     pub surface_form: String, //How it is found in the sentence
     frequency: Option<u32>, //Frequency for the surface form
+    harmonic_frequency: u32, //harmonic frequency between the surface form and any deinflected_forms
     deinflected_forms: Vec<(String, u32)>, //(deinflected_form, frequency)
+}
+
+impl From<Token> for Term {
+    fn from(value: Token) -> Self {
+        let mut freq_map: HashMap<String, u32> = HashMap::new();
+        freq_map.insert("HARMONIC".to_string(), value.harmonic_frequency);
+
+        if value.deinflected_forms.len() > 0 {
+            Term {
+                id: 0,
+                lemma_form: value.deinflected_forms.get(0).unwrap().0.clone(),
+                surface_form: value.surface_form.clone(),
+                lemma_reading: "".to_string(),
+                is_kana: value.surface_form.as_str().is_kana(),
+                part_of_speech: PartOfSpeech::new("Unknown".to_string()),
+                frequencies: freq_map,
+                sentence_references: Vec::new(),
+            }
+        } else {
+            Term {
+                id: 0,
+                lemma_form: value.surface_form.clone(),
+                surface_form: value.surface_form.clone(),
+                lemma_reading: "".to_string(),
+                is_kana: value.surface_form.as_str().is_kana(),
+                part_of_speech: PartOfSpeech::new("Unknown".to_string()),
+                frequencies: freq_map,
+                sentence_references: Vec::new(),
+            }
+        }
+        
+    }
 }
 
 impl Token {
@@ -18,6 +53,7 @@ impl Token {
         Token {
             surface_form,
             frequency: None,
+            harmonic_frequency: u32::MAX,
             deinflected_forms: Vec::new(),
         }
     }
@@ -239,6 +275,7 @@ fn build_segmentation(search_txt: &str, node: &mut SegmentationNode, frequency_m
     }
 
     let token_frequency = harmonic_frequency(&freqs).unwrap_or(u32::MAX);
+    node.token.harmonic_frequency = token_frequency;
 
     let alpha = 1.1; //Weight longer segments
     let beta = 0.9; //Weight frequency (lower = more weight)

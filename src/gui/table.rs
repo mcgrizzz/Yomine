@@ -59,6 +59,11 @@ fn col_term(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &YomineAp
 
 fn col_sentence(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &YomineApp) {
     row.col(|ui| {
+
+        if let None = term.sentence_references.get(0){
+            return;
+        }
+
         let sentence = term.sentence_references.get(0).unwrap();
         let sentence_content = app.sentences.get(sentence.0 as usize).unwrap();
         let surface_index = sentence.1;
@@ -94,6 +99,11 @@ fn col_sentence(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &Yomi
 
 fn col_timestamp(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &YomineApp) {
     row.col(|ui| {
+
+        if let None = term.sentence_references.get(0){
+            return;
+        }
+        
         let sentence = term.sentence_references.get(0).unwrap();
         let sentence_content = app.sentences.get(sentence.0 as usize).unwrap();
         ui.label(&sentence_content.timestamp.clone().unwrap());
@@ -148,6 +158,11 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
             .body(|mut body| {
                 let row_height = |i: usize| {
                     let t = &app.terms[i];
+
+                    if let None = t.sentence_references.get(0){
+                        return 36.0;
+                    }
+
                     let sentence = t.sentence_references.get(0).unwrap();
                     let sentence_content = app.sentences.get(sentence.0 as usize).unwrap();
                     let lines: Vec<&str> = sentence_content.text.trim().split("\n").collect();
