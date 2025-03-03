@@ -48,7 +48,7 @@ async fn main() {
         source: "SRT".to_string(),
         title: "".to_string(),
         creator: None,
-        original_file: "input/[erai-raws-timed]-sousou-no-frieren-S1E21.srt".to_string(),
+        original_file: "input/[Japanese] 【別府温泉】1泊5500円の別府最安旅館に宿泊、これはさすがに... [DownSub.com].srt".to_string(),
     };
 
     let dict_type = DictType::Unidic;

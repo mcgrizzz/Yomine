@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use eframe::egui::Pos2;
 use vibrato::{tokenizer::worker::Worker, Tokenizer};
 use crate::core::{Sentence, Term, YomineError};
 use crate::dictionary::{ensure_dictionary, load_dictionary, DictType};
@@ -8,7 +7,8 @@ use crate::frequency_dict::FrequencyManager;
 use crate::pos::PosLookup;
 use wana_kana::IsJapaneseStr;
 
-use super::token::UnidicTag;
+use super::token_models::{RawToken, UnidicToken, VibratoToken};
+use super::unidic_tags::UnidicTag;
 
 
 pub fn extract_words(mut worker: Worker<'_>, sentences: &[Sentence], pos_lookup: &PosLookup, dict_type: &DictType, frequency_manager: &FrequencyManager) -> Vec<Term> {
@@ -28,14 +28,17 @@ pub fn extract_words(mut worker: Worker<'_>, sentences: &[Sentence], pos_lookup:
             let lemma_form = details.split(',').nth(indices.0).unwrap_or("").to_string();
             let lemma_reading = details.split(',').nth(indices.1).unwrap_or("").to_string();
 
-            let pos1: UnidicTag = details.split(',').nth(0).unwrap_or("").into();
-            let pos2: UnidicTag = details.split(',').nth(1).unwrap_or("").into();
-            let pos3: UnidicTag = details.split(',').nth(2).unwrap_or("").into();
-            let pos4: UnidicTag = details.split(',').nth(3).unwrap_or("").into();
-            let inflection_type: UnidicTag = details.split(',').nth(4).unwrap_or("").into(); //Called cType in unidic
-            if inflection_type != UnidicTag::Unknown && inflection_type != UnidicTag::Unset{
-                println!("\n {} \n {:?} | {} \n {} \n", sentence.text, inflection_type, surface_form, details);
-            }
+            // Convert the details into UnidicTag enums
+            // let pos1: UnidicTag = details.split(',').nth(0).unwrap_or("").into();
+            // let pos2: UnidicTag = details.split(',').nth(1).unwrap_or("").into();
+            // let pos3: UnidicTag = details.split(',').nth(2).unwrap_or("").into();
+            // let pos4: UnidicTag = details.split(',').nth(3).unwrap_or("").into();
+            // let inflection_type: UnidicTag = details.split(',').nth(4).unwrap_or("").into(); //Called cType in unidic
+            
+            // Debugging output - can be removed or conditionally enabled
+            // if inflection_type != UnidicTag::Unknown && inflection_type != UnidicTag::Unset {
+                println!("{},{}", surface_form, details);
+            // }
 
             let pos_key = details
                 .split(',')
