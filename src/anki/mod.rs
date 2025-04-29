@@ -6,7 +6,7 @@ use regex::Replacer;
 use tokio::{task::{self}, time::sleep};
 use wana_kana::{ConvertJapanese, IsJapaneseStr};
 
-use crate::{core::{utils::SwapLongVowel, Term}, frequency_dict::FrequencyManager};
+use crate::{core::{utils::NormalizeLongVowel, Term}, frequency_dict::FrequencyManager};
 
 pub mod api;
 
@@ -33,11 +33,11 @@ impl AnkiState {
 
     fn inclusivity_score(&self, word: &str, word_reading: &str, anki_card: &Vocab) -> f32 {
         let hiragana_reading = word_reading.to_hiragana(); 
-        let alternate_reading = hiragana_reading.swap_long_vowel();
+        let alternate_reading = hiragana_reading.normalize_long_vowel();
 
         let anki_word = &anki_card.term;
         let anki_reading = anki_card.reading.to_hiragana();
-        let frequencies = self.frequency_manager.get_exact_frequency(anki_word);
+        let frequencies = self.frequency_manager.get_frequency_data_by_term(anki_word);
 
         if anki_word.eq(word) {
             if (anki_reading == hiragana_reading) || (anki_reading == alternate_reading) {
@@ -51,7 +51,7 @@ impl AnkiState {
         //This is the case if (いただく, いただく) is matched against (いただく, いただく)... we have to assume they're the same
         //There's no way for us to gain confidence otherwise
         if anki_word.as_str().is_kana() && word.is_kana() {
-            let alternate_term = word.to_hiragana().swap_long_vowel();
+            let alternate_term = word.to_hiragana().normalize_long_vowel();
             if alternate_term == anki_word.to_hiragana() || word.to_hiragana() == anki_word.to_hiragana() { 
                 return 1.0
             }
@@ -113,7 +113,7 @@ impl AnkiState {
     // Exact matches will give a score of 1.0, anything less than exact will have some degree of uncertainty
     fn highest_inclusivity_score(&self, term: &str, reading: &str) -> f32 {
         let normalized_reading = reading.to_hiragana();
-        let alternate_reading = normalized_reading.swap_long_vowel();
+        let alternate_reading = normalized_reading.normalize_long_vowel();
 
         let mut relevance_map: HashMap<String, Vec<&Vocab>> = HashMap::new();
 

@@ -1,4 +1,4 @@
-use eframe::egui::{self, text::LayoutJob, TextFormat, TextStyle};
+use eframe::egui::{self, text::LayoutJob, Color32, TextFormat, TextStyle};
 use egui_extras::{Column, TableBuilder, TableRow};
 use wana_kana::ConvertJapanese;
 
@@ -57,41 +57,60 @@ fn col_term(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &YomineAp
 
 fn col_sentence(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &YomineApp) {
     row.col(|ui| {
-
-        if let None = term.sentence_references.get(0){
+        // Early return if no sentence reference exists
+        if term.sentence_references.get(0).is_none() {
             return;
         }
 
+        // Get sentence content and surface index
         let sentence = term.sentence_references.get(0).unwrap();
         let sentence_content = app.sentences.get(sentence.0 as usize).unwrap();
         let surface_index = sentence.1;
-        
-        let preslice = &sentence_content.text[..surface_index];
-        let endslice = &sentence_content.text[surface_index + &term.full_segment.len()..];
 
+        // Initialize LayoutJob for text formatting
         let mut job = LayoutJob::default();
 
-        // Define text formats
-        let normal_format = TextFormat {
-            font_id: ctx.style().text_styles.get(&TextStyle::Body).unwrap().clone(),
-            color: ctx.style().visuals.widgets.noninteractive.fg_stroke.color,
-            ..Default::default()
+        // Define base colors
+        let normal_color = ctx.style().visuals.widgets.noninteractive.fg_stroke.color;
+        let highlighted_color = app.theme.red();
+
+        // Closure to get alternating background colors
+        let get_background_color = |index: usize| -> Color32 {
+            if index % 2 == 0 {
+                normal_color // Light gray for even-indexed segments
+            } else  {
+                Color32::from_gray(180) // Slightly darker gray for odd-indexed segments
+            }
         };
 
-        let highlighted_format = TextFormat {
-            font_id: ctx.style().text_styles.get(&TextStyle::Body).unwrap().clone(),
-            color: app.theme.red(), // Highlighted color
-            ..Default::default()
-        };
+        // Iterate over segments
+        for (index, &(start, stop)) in sentence_content.segments.iter().enumerate() {
+            let segment_text = &sentence_content.text[start..stop];
+            let is_term = start == surface_index && segment_text == term.full_segment;
 
-        job.append(preslice, 0.0, normal_format.clone());
-        job.append(&term.surface_form, 0.0, highlighted_format);
-        job.append(endslice, 0.0, normal_format);
+            // Determine text and background colors
+            let text_color = if is_term {
+                highlighted_color
+            } else {
+                get_background_color(index)
+            };
+
+            // Create text format for this segment
+            let format = TextFormat {
+                font_id: ctx.style().text_styles.get(&TextStyle::Body).unwrap().clone(),
+                color: text_color,
+                ..Default::default()
+            };
+
+            // Append segment to LayoutJob
+            job.append(segment_text, 0.0, format);
+        }
+
+        // Add the formatted text to the UI with hover effect
         ui.label(job)
             .on_hover_ui_at_pointer(|ui| {
-                ui.label(app.theme.heading(&&term.surface_reading.to_hiragana()));
+                ui.label(app.theme.heading(&term.surface_reading.to_hiragana()));
             });
-
     });
 }
 

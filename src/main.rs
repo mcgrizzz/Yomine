@@ -34,12 +34,12 @@ async fn main() {
 
     let dict_type = DictType::Unidic;
 
-    let sentences = read_srt(&source_file).expect("Failed to parse subtitles");
+    let mut sentences = read_srt(&source_file).expect("Failed to parse subtitles");
     let pos_lookup = pos::load_pos_lookup().expect("Failed to load POS");
     let tokenizer = init_vibrato(&dict_type).expect("Failed to initialize tokenizer");
     let frequency_manager = frequency_dict::process_frequency_dictionaries().expect("Failed to load Frequency Manager");
 
-    let mut terms = extract_words(tokenizer.new_worker(), &sentences, &pos_lookup, &dict_type, &frequency_manager);
+    let mut terms = extract_words(tokenizer.new_worker(), &mut sentences, &pos_lookup, &dict_type, &frequency_manager);
 
     // let found_terms: HashSet<String> = terms.iter().map(|t| t.lemma_form.clone()).collect();
     // terms.extend(segment_terms.into_iter().filter(|t| t.lemma_form.chars().count() > 3 && t.surface_form.chars().count() > 3 && !found_terms.contains(&t.lemma_form)));

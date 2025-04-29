@@ -19,7 +19,7 @@ pub enum POS {
     Adverb,
     Determiner,
     Preposition, 
-    Postposition, //Like auxillary verbs
+    Postposition, // Like auxiliary verbs
     Verb,
     SuruVerb,
     Copula,
@@ -36,9 +36,39 @@ pub enum POS {
 
 impl fmt::Display for POS {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self) // Use Debug formatting as a placeholder
+        let readable = match self {
+            POS::Noun => "Noun",
+            POS::ProperNoun => "Proper Noun",
+            POS::CompoundNoun => "Compound Noun",
+            POS::Pronoun => "Pronoun",
+            POS::Adjective => "Adjective",
+            POS::AdjectivalNoun => "Adjectival Noun",
+            POS::Adverb => "Adverb",
+            POS::Determiner => "Determiner",
+            POS::Preposition => "Preposition",
+            POS::Postposition => "Particle",
+            POS::Verb => "Verb",
+            POS::SuruVerb => "Suru Verb",
+            POS::Copula => "Copula",
+            POS::Suffix => "Suffix",
+            POS::Prefix => "Prefix",
+            POS::Conjunction => "Conjunction",
+            POS::Interjection => "Interjection",
+            POS::Number => "Number",
+            POS::Counter => "Counter",
+            POS::Symbol => "Symbol",
+            POS::Other => "Other",
+            POS::Unknown => "Unknown",
+        };
+        write!(f, "{}", readable)
     }
 }
+
+// impl fmt::Display for POS {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         write!(f, "{:?}", self) // Use Debug formatting as a placeholder
+//     }
+// }
 
 pub struct Word {
     pub surface_form: String, 

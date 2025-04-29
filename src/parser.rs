@@ -21,6 +21,7 @@ pub fn read_srt(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> 
             Ok(Sentence {
                 id: id as u32,
                 source_id: source_file.id, // Reference to the SourceFile ID
+                segments: vec![], // segments are generated after tokenization
                 text: text,
                 timestamp: Some(timestamp),
             })
@@ -43,6 +44,7 @@ pub fn read_txt(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> 
         .map(|(id, s)| Sentence {
             id: id as u32,
             source_id: source_file.id, // Reference to the SourceFile ID
+            segments: vec![], // segments are generated after tokenization
             text: s.to_string(),
             timestamp: None, // Text files don’t have timestamps
         })

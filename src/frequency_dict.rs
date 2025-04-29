@@ -9,6 +9,7 @@ use serde::Deserialize;
 use wana_kana::IsJapaneseStr;
 use wana_kana::ConvertJapanese;
 
+use crate::core::utils::{harmonic_frequency, NormalizeLongVowel};
 use crate::core::YomineError;
 
 pub struct FrequencyManager {
@@ -91,8 +92,9 @@ impl FrequencyManager {
         }
     }
 
-    //We do not care about readings
-    pub fn get_exact_frequency(&self, input: &str) -> Vec<&FrequencyData> {
+    /// Retrieves all frequency data entries for the exact term from enabled dictionaries,
+    /// without requiring a reading. For non-kana terms, excludes kana-specific frequencies.
+    pub fn get_frequency_data_by_term(&self, input: &str) -> Vec<&FrequencyData> {
         let mut freqs = Vec::new();
         for (dict_name, dictionary) in &self.dictionaries {
             if *self.toggled_states.get(dict_name).unwrap_or(&false) {
@@ -110,6 +112,86 @@ impl FrequencyManager {
         }
 
         freqs
+    }
+
+    pub fn get_harmonic_frequency_for_pair(&self, word: &str, reading: &str) -> Option<u32> {
+        let is_kana = word.is_kana();
+
+        // Helper closure to get frequency for exact word/reading pair from a dictionary
+        let get_exact_freq = |d: &FrequencyDictionary| -> Option<u32> {
+            if let Some(entries) = d.get_frequencies_by_key(word) {
+                let matching_entries: Vec<&FrequencyData> = entries.iter().filter(|e| {
+                    if let FrequencyData::Nested { reading: entry_reading, .. } = e {
+                        let entry_script = if entry_reading.as_str().is_hiragana() { "hiragana" } else { "katakana" };
+                        let normalized_reading = if entry_script == "hiragana" {
+                            reading.to_hiragana().normalize_long_vowel()
+                        } else {
+                            reading.to_katakana()
+                        };
+                        let marker_condition = if is_kana { e.has_special_marker() } else { !e.has_special_marker() };
+                        marker_condition && normalized_reading == *entry_reading.normalize_long_vowel()
+                    } else {
+                        false
+                    }
+                }).collect();
+                if !matching_entries.is_empty() {
+                    // Select the smallest frequency among matching entries, consistent with existing logic
+                    matching_entries.into_iter().map(|e| e.value()).min()
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        };
+
+        // Helper closure to check if a dictionary has Nested entries with different readings
+        let has_other = |d: &FrequencyDictionary| -> bool {
+            if let Some(entries) = d.get_frequencies_by_key(word) {
+                entries.iter().any(|e| {
+                    if let FrequencyData::Nested { reading: entry_reading, .. } = e {
+                        let entry_script = if entry_reading.as_str().is_hiragana() { "hiragana" } else { "katakana" };
+                        let normalized_reading = if entry_script == "hiragana" {
+                            reading.to_hiragana().normalize_long_vowel()
+                        } else {
+                            reading.to_katakana()
+                        };
+                        let marker_condition = if is_kana { e.has_special_marker() } else { !e.has_special_marker() };
+                        marker_condition && normalized_reading != *entry_reading.normalize_long_vowel()
+                    } else {
+                        false
+                    }
+                })
+            } else {
+                false
+            }
+        };
+
+        // Helper closure to get Simple frequency from a dictionary
+        let get_simple = |d: &FrequencyDictionary| -> Option<u32> {
+            if let Some(entries) = d.get_frequencies_by_key(word) {
+                entries.iter().find(|e| matches!(e, FrequencyData::Simple(_))).map(|e| e.value())
+            } else {
+                None
+            }
+        };
+
+        let enabled_dicts = self.get_enabled_dictionaries();
+
+        // Collect frequencies for exact word/reading pairs
+        let exact_freqs: Vec<u32> = enabled_dicts.iter().filter_map(|d| get_exact_freq(d)).collect();
+
+        if !exact_freqs.is_empty() {
+            // Case 1: Exact matches found, calculate harmonic mean
+            harmonic_frequency(&exact_freqs)
+        } else if enabled_dicts.iter().any(|d| has_other(d)) {
+            // Case 2: No exact match, but other readings exist, return None
+            None
+        } else {
+            // Case 3 & 4: No Nested frequencies, use Simple frequencies or return None
+            let simple_freqs: Vec<u32> = enabled_dicts.iter().filter_map(|d| get_simple(d)).collect();
+            harmonic_frequency(&simple_freqs)
+        }
     }
 }
 

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use vibrato::{tokenizer::worker::Worker, Tokenizer};
+use crate::core::utils::pairwise_deinflection;
 use crate::core::{Sentence, Term, YomineError};
 use crate::dictionary::{ensure_dictionary, load_dictionary, DictType};
 use crate::frequency_dict::FrequencyManager;
@@ -10,14 +11,14 @@ use wana_kana::IsJapaneseStr;
 
 use super::rule_matcher::parse_into_words;
 use super::token_models::{RawToken, UnidicToken, VibratoToken};
-use super::word::Word;
+use super::word::{Word, POS};
 
 
-pub fn extract_words(mut worker: Worker<'_>, sentences: &[Sentence], pos_lookup: &PosLookup, dict_type: &DictType, frequency_manager: &FrequencyManager) -> Vec<Term> {
+pub fn extract_words(mut worker: Worker<'_>, sentences: &mut [Sentence], pos_lookup: &PosLookup, dict_type: &DictType, frequency_manager: &FrequencyManager) -> Vec<Term> {
     let mut terms = Vec::<Term>::new();
     //let mut term_id_counter = 1;
 
-    for sentence in sentences.iter() {
+    for sentence in sentences.iter_mut() {
         worker.reset_sentence(&sentence.text);
         worker.tokenize();
         
@@ -44,7 +45,36 @@ pub fn extract_words(mut worker: Worker<'_>, sentences: &[Sentence], pos_lookup:
         let mut sentence_terms: Vec<Term> = words.into_iter()
             .map(|word| {
                 let mut term: Term = word.into();
-                let freq_map: HashMap<String, u32> = frequency_manager.build_freq_map(&term.lemma_form, &term.lemma_form, term.is_kana);
+                if term.surface_form.as_str().is_japanese() {
+                    match term.part_of_speech {
+                        POS::Verb | POS::SuruVerb | POS::AdjectivalNoun | POS::Adjective | POS::Noun => {
+                            let deinflections: Vec<(String, String)> = pairwise_deinflection(&term.surface_form, &term.surface_reading);
+    
+                            // println!("\nOriginal form: {}/{}", term.surface_form, term.surface_reading);
+                            // println!("Before filter -- Deinflections = {:?}", deinflections);
+
+                            let mut sorted_deinflections: Vec<(String, String)> = deinflections
+                                .into_iter()
+                                .filter(|(word, reading)| frequency_manager.get_harmonic_frequency_for_pair(word, reading).is_some())
+                                .collect();
+
+                            sorted_deinflections.sort_by_key(|(word, reading)| frequency_manager.get_harmonic_frequency_for_pair(word, reading));
+
+                            if sorted_deinflections.len() > 0 {
+                                term.lemma_form = sorted_deinflections[0].0.clone();
+                                term.lemma_reading = sorted_deinflections[0].1.clone();
+                            }
+                            // Debug output
+                            
+                            // for (word, reading) in &sorted_deinflections {
+                            //     println!("Deinflected Pair: Word = {}, Reading = {}, Harmonic Frequency = {:?}", word, reading, frequency_manager.get_harmonic_frequency_for_pair(word, reading));
+                            // }
+                        },
+                        _ => {}
+                    }
+                }
+                
+                let freq_map: HashMap<String, u32> = frequency_manager.build_freq_map(&term.lemma_form, &term.lemma_reading, term.is_kana);
                 term.frequencies = freq_map;
 
                 let index_in_sentence = sentence
@@ -59,56 +89,20 @@ pub fn extract_words(mut worker: Worker<'_>, sentences: &[Sentence], pos_lookup:
                 term 
             })
             .collect();
-        
-        // for token in worker.token_iter() {
-        
-        //     let indices = dict_type.lemma_indices();
-        //     let lemma_form = details.split(',').nth(indices.0).unwrap_or("").to_string();
-        //     let lemma_reading = details.split(',').nth(indices.1).unwrap_or("").to_string();
 
-        //     // Convert the details into UnidicTag enums
-        //     // let pos1: UnidicTag = details.split(',').nth(0).unwrap_or("").into();
-        //     // let pos2: UnidicTag = details.split(',').nth(1).unwrap_or("").into();
-        //     // let pos3: UnidicTag = details.split(',').nth(2).unwrap_or("").into();
-        //     // let pos4: UnidicTag = details.split(',').nth(3).unwrap_or("").into();
-        //     // let inflection_type: UnidicTag = details.split(',').nth(4).unwrap_or("").into(); //Called cType in unidic
-            
-        //     // Debugging output - can be removed or conditionally enabled
-        //     // if inflection_type != UnidicTag::Unknown && inflection_type != UnidicTag::Unset {
-        //         //println!("{},{}", surface_form, details);
-        //     // }
+        sentence.segments.extend(
+            sentence_terms.iter().map(|term| {
+                let start_index = sentence
+                    .text
+                    .match_indices(&term.surface_form)
+                    .next()
+                    .map(|(idx, _)| idx)
+                    .unwrap_or(0);
+                let end_index = start_index + term.surface_form.len();
+                (start_index, end_index)
+            })
+        );
 
-        //     let pos_key = details
-        //         .split(',')
-        //         .take(4) //Only four degrees of specification, otherwise the POS file grows too much
-        //         .filter(|s| !(s.to_string() == "*")) 
-        //         .collect::<Vec<_>>()
-        //         .join(" -> "); // Combine with "->"
-
-
-        //     // Determine if the surface form is written entirely in Kana
-        //     let is_kana = surface_form.as_str().is_kana();
-
-        //     // Find the position of the surface form in the sentence
-
-                
-        //     let part_of_speech = pos_lookup.resolve(&pos_key);
-
-        //     let freq_map: HashMap<String, u32> = frequency_manager.build_freq_map(&lemma_form, &lemma_reading, is_kana);
-            
-        //     let term = Term {
-        //         id: 0,
-        //         lemma_form,
-        //         lemma_reading,
-        //         surface_form,
-        //         is_kana,
-        //         part_of_speech,
-        //         frequencies: freq_map, // Will be populated later
-        //         sentence_references: vec![(sentence.id, index_in_sentence)],
-        //     };
-            
-        //     terms.push(term);
-        // }
         terms.append(&mut sentence_terms);
     }
 
