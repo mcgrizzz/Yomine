@@ -153,7 +153,7 @@ impl AnkiState {
 
             let score = match surface_form {
                 true => {
-                    self.highest_inclusivity_score(&term.surface_form, &term.get_surface_reading())
+                    self.highest_inclusivity_score(&term.surface_form, &term.surface_reading)
                 },
                 false => {
                     self.highest_inclusivity_score(&term.lemma_form, &term.lemma_reading)

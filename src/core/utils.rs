@@ -38,52 +38,52 @@ impl SwapLongVowel for String {
     }
 }
 
-impl Term {
-    pub fn get_surface_reading(&self) -> String {
+// impl Term {
+//     pub fn get_surface_reading(&self) -> String {
 
-        if self.surface_form.as_str().is_kana() {
-            return self.surface_form.clone();
-        }
+//         if self.surface_form.as_str().is_kana() {
+//             return self.surface_form.clone();
+//         }
 
-        if self.surface_form == self.lemma_form {
-            return self.lemma_reading.clone();
-        }
+//         if self.surface_form == self.lemma_form {
+//             return self.lemma_reading.clone();
+//         }
         
-        let mut reading = self.lemma_reading.clone();
+//         let mut reading = self.lemma_reading.clone();
 
-        // If it's a verb, remove the last u-row kana
-        if self.part_of_speech.is_verb() {
-            if let Some(last_char) = reading.chars().last() {
-                if "うくすつぬふぶむる".contains(last_char) {
-                    reading.pop();
-                }
-            }
-        //Adjectives, should be the same basic logic. Grab everything before い
-        } else if self.part_of_speech.is_i_adjective() {
-            if let Some(last_char) = reading.chars().last() {
-                if 'い' == last_char {
-                    reading.pop();
-                }
-            }
-        }
+//         // If it's a verb, remove the last u-row kana
+//         if self.part_of_speech.is_verb() {
+//             if let Some(last_char) = reading.chars().last() {
+//                 if "うくすつぬふぶむる".contains(last_char) {
+//                     reading.pop();
+//                 }
+//             }
+//         //Adjectives, should be the same basic logic. Grab everything before い
+//         } else if self.part_of_speech.is_i_adjective() {
+//             if let Some(last_char) = reading.chars().last() {
+//                 if 'い' == last_char {
+//                     reading.pop();
+//                 }
+//             }
+//         }
 
         
-        let mut buffer = String::new();
-        let mut reading_chars = reading.chars();
+//         let mut buffer = String::new();
+//         let mut reading_chars = reading.chars();
         
-        for surface_char in self.surface_form.chars() {
-            if self.lemma_form.contains(surface_char) {
-                if let Some(reading_char) = reading_chars.next() {
-                    buffer.push(reading_char);
-                }
-            } else {
-                buffer.push(surface_char);
-            }
-        }
+//         for surface_char in self.surface_form.chars() {
+//             if self.lemma_form.contains(surface_char) {
+//                 if let Some(reading_char) = reading_chars.next() {
+//                     buffer.push(reading_char);
+//                 }
+//             } else {
+//                 buffer.push(surface_char);
+//             }
+//         }
 
-        buffer
-    }
-}
+//         buffer
+//     }
+// }
 
 pub fn harmonic_frequency(nums: &Vec<u32>) -> Option<u32> {
     let mut sum_of_reciprocals = 0.0;

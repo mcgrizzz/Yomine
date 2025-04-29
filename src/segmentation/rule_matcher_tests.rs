@@ -1,5 +1,7 @@
 #[cfg(test)]
 mod tests {
+    use std::fs::File;
+
     use vibrato::Tokenizer;
 
     use crate::{
@@ -32,56 +34,59 @@ mod tests {
                 // Step 1: Convert to VibratoToken
                 let vibrato_token = VibratoToken {
                     surface: token.surface().to_string(),
-                    feature: token.feature().to_string(),
+                    features: token.feature().to_string(),
                 };
                 
                 // Step 2: Convert to RawToken
-                let raw_token = create_raw_token_from_vibrato(&vibrato_token);
+                let surface = vibrato_token.surface.clone();
+                let raw_token = vibrato_token.into();
                 //println!("{:?}", raw_token);
                 
                 // Step 3: Convert to UnidicToken
-                (vibrato_token.surface, raw_token).into()
+                (surface, raw_token).into()
             })
             .collect()
     }
     
     // Helper to create a RawToken from a VibratoToken
-    fn create_raw_token_from_vibrato(vt: &VibratoToken) -> RawToken {
-        let fields: Vec<&str> = vt.feature.split(',').collect();
-        
-        // Helper to get field with default value if missing
-        let get_field = |idx: usize| fields.get(idx).unwrap_or(&"*").to_string();
-        
-        RawToken {
-            pos1: get_field(0),
-            pos2: get_field(1),
-            pos3: get_field(2),
-            pos4: get_field(3),
-            c_type: get_field(4),
-            c_form: get_field(5),
-            l_form: get_field(6),
-            lemma: get_field(7),
-            orth: get_field(8),
-            pron: get_field(9),
-            orth_base: get_field(10),
-            pron_base: get_field(11),
-            goshu: get_field(12),
-            i_type: get_field(13),
-            i_form: get_field(14),
-            f_type: get_field(15),
-            f_form: get_field(16),
-            i_con_type: get_field(17),
-            f_con_type: get_field(18),
-            _type: get_field(19),
-            kana: get_field(20),
-            kana_base: get_field(21),
-            form: get_field(22),
-            form_base: get_field(23),
-            a_type: get_field(24),
-            a_con_type: get_field(25),
-            a_mod_type: get_field(26),
-            lid: get_field(27),
-            lemma_id: get_field(28),
+    impl From<&VibratoToken> for RawToken {
+        fn from(vt: &VibratoToken) -> Self {
+            let fields: Vec<&str> = vt.features.split(',').collect();
+            
+            // Helper to get field with default value if missing
+            let get_field = |idx: usize| fields.get(idx).unwrap_or(&"*").to_string();
+            
+            RawToken {
+                pos1: get_field(0),
+                pos2: get_field(1),
+                pos3: get_field(2),
+                pos4: get_field(3),
+                c_type: get_field(4),
+                c_form: get_field(5),
+                l_form: get_field(6),
+                lemma: get_field(7),
+                orth: get_field(8),
+                pron: get_field(9),
+                orth_base: get_field(10),
+                pron_base: get_field(11),
+                goshu: get_field(12),
+                i_type: get_field(13),
+                i_form: get_field(14),
+                f_type: get_field(15),
+                f_form: get_field(16),
+                i_con_type: get_field(17),
+                f_con_type: get_field(18),
+                _type: get_field(19),
+                kana: get_field(20),
+                kana_base: get_field(21),
+                form: get_field(22),
+                form_base: get_field(23),
+                a_type: get_field(24),
+                a_con_type: get_field(25),
+                a_mod_type: get_field(26),
+                lid: get_field(27),
+                lemma_id: get_field(28),
+            }
         }
     }
 
@@ -125,7 +130,7 @@ mod tests {
             result.iter().zip(expected_words.iter()).enumerate() {
             
             let main_word_matches = match (&word.main_word, expected_main_word) {
-                (Some(main), Some(expected)) => main == expected,
+                (Some(main), Some(expected)) => main.lemma_form == *expected,
                 (None, None) => true,
                 _ => false,
             };
@@ -165,19 +170,63 @@ mod tests {
     #[test]
     fn inspect_tokens() {
         let test_phrases = vec![
-            "1万円だ。", //Join numbers
-            "綺麗な花だ。", //Na-adj possible + na
-            "勉強する。", //suru possible noun + suru
-            "勉強します。", //last case + masu
-            "生徒たちが笑う", //suffix noun
-            "お昼ご飯です", //prefix noun
-            "お飲みになります", //prefix verb
-            "昨日は早かったです", //past adjective
-            "今日は旅館も紹介してみようと思いました。", //test
-        ];
+             // Basic noun and particle
+            // "犬がいます。",  // There is a dog.
 
+            // // Verb with polite form
+            // "食べます。",  // I eat.
+
+            // // Verb with negative form
+            // "食べません。",  // I do not eat.
+
+            // // Adjective with copula
+            //"高いです。",  // It is expensive.
+
+            // // Adjective with past tense
+            //"高かったです。",  // It was expensive.
+
+            // // Noun with suffix
+            //"先生です。",  // It is a teacher.
+
+            // // Verb with multiple auxiliaries
+            //"食べられません。",  // I cannot eat.
+
+            // // Adjective with negative form
+            // "高くありません。",  // It is not expensive. (polite)
+            // "高くない",  // It is not expensive.
+
+            // // Adverb modifying a verb
+            //"早く走ります。",  // I run quickly.
+
+            // // Compound noun
+            //"日本語教師",  // Japanese language teacher
+
+            // // Verb with prefix
+            //"再確認します。",  // I will reconfirm.
+
+            // // Compound proper noun + past tense verb
+            //"東京タワーに行きました。",  // I went to Tokyo Tower.
+
+            // // Verb with causative-passive auxiliaries
+            //"食べさせられました。",  // I was made to eat.
+
+            // // Number with counter (books)
+            //"三冊の本を買いました。",  // I bought three books.
+
+            // Numbers (like 3 thousand 5 hundred) 
+            // "三千五百円",  // 3500 yen
+            // "50百円",  
+
+            //Extract suru verbs and na adjectives for proper sentences highlighting
+            // "勉強することが好きです。",  // should extract 勉強, but highlight 勉強する as one unit. 
+            "彼は元気な人です。",  // should extract 元気, but highlight 元気な as one unit.
+
+            // // Large text.
+            //"東京に住んでいる日本語教師の田中さんは、毎朝早く起きて、朝ごはんを食べますが、今日は特別に早く起きました。電車に乗って、学校へ行く途中、友達に会って、一緒に学校まで行きました。授業で、学生に日本語を教える時、田中さんはいつも熱心に説明します。田中さんが教えている学生は、とても優秀です。お昼に、同僚とラーメンを食べに行きましたが、あまり美味しくなかったです。午後、東京タワーに登りましたが、田中さんは高いところが苦手なので、すぐに降りました。夕方、家に帰って、疲れていたので、早く寝ました。田中さんは三冊の本を買いましたが、猫を好きです。田中さんは、教えることが好きです。東京タワーは高いですか？"
+        ];
+    
         let tokenizer = init_vibrato(&DictType::Unidic);
-        
+    
         for sentence in test_phrases {
             println!("\n===== Analyzing sentence: \"{}\" =====", sentence);
             let tokens = tokenize_text(sentence, &tokenizer);
@@ -187,34 +236,30 @@ mod tests {
                 continue;
             }
             
-            println!("Raw tokens ({}):", tokens.len());
-            for (i, token) in tokens.iter().enumerate() {
-                println!("  {}. \"{}\" (POS: {:?}, {:?}, {:?}, {:?}, conjugation_type: {:?}, conjugation_form: {:?})", 
-                         i+1, token.surface, token.pos1, token.pos2, token.pos3, token.pos4, 
-                         token.conjugation_type, token.conjugation_form);
-            }
-            
             let words = parse_into_words(tokens.clone()).expect("Failed to process tokens");
             println!("Processed words ({}):", words.len());
             for (i, word) in words.iter().enumerate() {
-                println!("  {}. \"{}\" (POS: {:?}, token count: {}, main_word: {:?})", 
-                         i+1, word.surface_form, word.part_of_speech, word.tokens.len(), word.main_word);
-                
-                if word.tokens.len() > 1 {
-                    println!("     Tokens in word:");
-                    for (j, token) in word.tokens.iter().enumerate() {
-                        println!("       {}. \"{}\" (POS: {:?}, {:?}, {:?}, {:?}, conjugation_type: {:?}, conjugation_form: {:?})", 
-                                j+1, token.surface, token.pos1, token.pos2, token.pos3, token.pos4,
-                                token.conjugation_type, token.conjugation_form);
-                    }
+                match &word.main_word {
+                    Some(mw) => println!("  {}. \"{}[{}]\" (POS: {:?}, token count: {}, main_word: {:?})", 
+                    i+1, word.surface_form, word.surface_hatsuon, word.part_of_speech, word.tokens.len(), mw.lemma_form),
+                    None => println!("  {}. \"{}[{}]\" (POS: {:?}, token count: {}, main_word: None)", 
+                            i+1, word.surface_form, word.surface_hatsuon, word.part_of_speech, word.tokens.len()),
                 }
+                
+                
+                for (j, token) in word.tokens.iter().enumerate() {
+                    println!("       \"{}[{}]\" (POS: {:?}, {:?}, {:?}, {:?}, conjugation_type: {:?}, conjugation_form: {:?})", 
+                            token.surface, token.surface_hatsuon, token.pos1, token.pos2, token.pos3, token.pos4,
+                            token.conjugation_type, token.conjugation_form);
+                }
+                
             }
             
             println!("\nTest assertion format:");
             println!("vec![");
             for word in words.iter() {
                 let main_word_str = match &word.main_word {
-                    Some(mw) => format!("Some(\"{}\")", mw),
+                    Some(mw) => format!("Some(\"{}\")", mw.lemma_form),
                     None => "None".to_string()
                 };
                 println!("    (\"{}\", POS::{:?}, {}, {}),", 

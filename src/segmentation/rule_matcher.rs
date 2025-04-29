@@ -9,30 +9,49 @@ use super::word_rules::create_default_rules;
  * 
  */
 
+#[derive(Clone)]
+pub enum Matcher<T> {
+    None,               // Always matches (default)
+    Any(Vec<T>),        // Matches if any of the contained values match
+    Not(Vec<T>),        // Matches if none of the contained values match
+}
+
+impl<T: PartialEq> Matcher<T> {
+    pub fn matches(&self, value: &T) -> bool {
+        match self {
+            Matcher::None => true,
+            Matcher::Any(values) => values.iter().any(|v| v == value),
+            Matcher::Not(values) => values.iter().all(|v| v != value),
+        }
+    }
+}
+
+impl<T> Default for Matcher<T> {
+    fn default() -> Self {
+        Matcher::None
+    }
+}
+
 #[derive(Default)]
 pub struct TokenMatcher {
-    pub pos1: Option<UnidicTag>,
-    pub pos2: Option<UnidicTag>,
-    pub pos3: Option<UnidicTag>,
-    pub pos4: Option<UnidicTag>,
-    pub surface: Option<String>,
-    pub conjugation_type: Option<UnidicTag>,
-    pub conjugation_form: Option<UnidicTag>,
-    pub pos2_fn: Option<fn(&UnidicTag) -> bool>,
-    pub conjugation_type_fn: Option<fn(&UnidicTag) -> bool>,
+    pub pos1: Matcher<UnidicTag>,
+    pub pos2: Matcher<UnidicTag>,
+    pub pos3: Matcher<UnidicTag>,
+    pub pos4: Matcher<UnidicTag>,
+    pub surface: Matcher<String>,
+    pub conjugation_type: Matcher<UnidicTag>,
+    pub conjugation_form: Matcher<UnidicTag>,
 }
 
 impl TokenMatcher {
     pub fn matches(&self, token: &UnidicToken) -> bool {
-        self.pos1.as_ref().map_or(true, |tag| *tag == token.pos1) &&
-        (self.pos2.as_ref().map_or(true, |tag| *tag == token.pos2) && 
-         self.pos2_fn.map_or(true, |f| f(&token.pos2))) &&
-        self.pos3.as_ref().map_or(true, |tag| *tag == token.pos3) &&
-        self.pos4.as_ref().map_or(true, |tag| *tag == token.pos4) &&
-        self.surface.as_ref().map_or(true, |s| s == &token.surface) &&
-        (self.conjugation_type.as_ref().map_or(true, |tag| *tag == token.conjugation_type) &&
-         self.conjugation_type_fn.map_or(true, |f| f(&token.conjugation_type))) &&
-        self.conjugation_form.as_ref().map_or(true, |tag| *tag == token.conjugation_form)
+        self.pos1.matches(&token.pos1) &&
+        self.pos2.matches(&token.pos2) &&
+        self.pos3.matches(&token.pos3) &&
+        self.pos4.matches(&token.pos4) &&
+        self.surface.matches(&token.surface) &&
+        self.conjugation_type.matches(&token.conjugation_type) &&
+        self.conjugation_form.matches(&token.conjugation_form)
     }
 }
 
@@ -64,7 +83,7 @@ pub struct Rule {
     pub current: TokenMatcher,
     pub next: Option<TokenMatcher>,
     pub prev: Option<TokenMatcher>,
-    pub prev_word_pos: Option<POS>,
+    pub prev_word_pos: Matcher<POS>,
     pub action: RuleAction,
 }
 
@@ -95,10 +114,9 @@ pub fn process_tokens(tokens: Vec<UnidicToken>, rules: &[Rule]) -> Result<Vec<Wo
                 (None, _) => true,
             };
             
-            let prev_word_matches = match (&rule.prev_word_pos, prev_word_pos) {
-                (Some(required_pos), Some(word_pos)) => required_pos == word_pos,
-                (Some(_), None) => false,
-                (None, _) => true,
+            let prev_word_matches = match prev_word_pos {
+                Some(word_pos) => rule.prev_word_pos.matches(word_pos),
+                None => matches!(rule.prev_word_pos, Matcher::None),
             };
 
             // If all conditions match, apply the rule
@@ -117,7 +135,7 @@ pub fn process_tokens(tokens: Vec<UnidicToken>, rules: &[Rule]) -> Result<Vec<Wo
 
                         // Set main word based on policy if this is a single-token word
                         if let Some(MainWordPolicy::UseFirstToken) = main_word_policy {
-                            word.main_word = Some(current_token.lemma_form.clone());
+                            word.main_word = Some(current_token.clone());
                         }
 
                         if *eat_next && next_token.is_some() {
@@ -128,7 +146,7 @@ pub fn process_tokens(tokens: Vec<UnidicToken>, rules: &[Rule]) -> Result<Vec<Wo
                                         // Already set above
                                     },
                                     Some(MainWordPolicy::UseSecondToken) => {
-                                        word.main_word = Some(next.lemma_form.clone());
+                                        word.main_word = Some(next.clone());
                                     },
                                     None => {
                                         // No main word policy
@@ -160,12 +178,12 @@ pub fn process_tokens(tokens: Vec<UnidicToken>, rules: &[Rule]) -> Result<Vec<Wo
                                     MainWordPolicy::UseFirstToken => {
                                         // In a merge, the first token is from the previous word
                                         if prev_word.main_word.is_none() && !prev_word.tokens.is_empty() {
-                                            prev_word.main_word = Some(prev_word.tokens[0].lemma_form.clone());
+                                            prev_word.main_word = Some(prev_word.tokens[0].clone());
                                         }
                                     },
                                     MainWordPolicy::UseSecondToken => {
                                         // In a merge, the second token is the current token
-                                        prev_word.main_word = Some(current_token.lemma_form.clone());
+                                        prev_word.main_word = Some(current_token.clone());
                                     },
                                 }
                             }

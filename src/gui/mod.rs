@@ -2,12 +2,15 @@ pub mod theme;
 pub mod table;
 
 use std::collections::HashSet;
+use std::sync::Arc;
 use eframe::{egui::{self, Button, TextEdit}, epaint::text::{FontInsert, InsertFontFamily}};
 use rfd::FileDialog;
 use table::{term_table, TableState};
 use theme::{set_theme, Theme};
+use tokio::runtime::Runtime;
 
 use crate::core::{Sentence, SourceFile, Term};
+use crate::websocket::WebSocketServer;
 
 
 struct FileModal {
@@ -25,6 +28,12 @@ impl Default for FileModal {
 }
 
 #[derive(Default)]
+pub struct WebSocketState {
+    has_clients: bool,
+    confirmed_timestamps: Vec<String>,  // Store timestamps that have been confirmed
+}
+
+#[derive(Default)]
 pub struct YomineApp {
     terms: Vec<Term>,
     sentences: Vec<Sentence>,
@@ -32,12 +41,16 @@ pub struct YomineApp {
     file_modal: FileModal,
     zoom: f32,
     theme: Theme,
+    websocket_state: WebSocketState,
+    websocket_server: Option<Arc<WebSocketServer>>,
 }
 
 
 
 impl YomineApp {
     pub fn new(cc: &eframe::CreationContext<'_>, terms: Vec<Term>, sentences: Vec<Sentence>) -> Self {
+        // Start the WebSocket server at startup
+        let websocket_server = WebSocketServer::start_server();
         // Customize egui here with cc.egui_ctx.set_fonts and cc.egui_ctx.set_visuals.
         // Restore app state using cc.storage (requires the "persistence" feature).
         // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
@@ -102,6 +115,11 @@ impl YomineApp {
             file_modal: FileModal::default(),
             zoom: cc.egui_ctx.zoom_factor(),
             theme: Theme::dracula(),
+            websocket_state: WebSocketState { 
+                has_clients: false, // Will update in the update method
+                confirmed_timestamps: Vec::new(),
+            },
+            websocket_server,
         }
     }
     
@@ -110,6 +128,21 @@ impl YomineApp {
 impl eframe::App for YomineApp {
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Update WebSocket status and confirmed timestamps
+        if let Some(server) = &self.websocket_server {
+            self.websocket_state.has_clients = server.has_clients();
+            
+            // Process any new confirmations from ASBPlayer
+            // This is now a quick single-channel operation without internal broadcasts
+            server.process_pending_confirmations();
+            
+            // Update our list of confirmed timestamps
+            if self.websocket_state.has_clients {
+                // Get the latest confirmed timestamps from the server
+                self.websocket_state.confirmed_timestamps = server.get_confirmed_timestamps();
+            }
+        }
+        
         self.top_bar(ctx);
 
         if self.file_modal.open {

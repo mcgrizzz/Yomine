@@ -1,29 +1,10 @@
 use std::{collections::{HashMap, HashSet}, sync::Arc};
 
-use yomine::{anki::{AnkiState, FieldMapping}, core::{SourceFile, Term}, dictionary::DictType, frequency_dict, gui::YomineApp, parser::read_srt, pos, segmentation::{segmentator::{segment, SegmentationCache, Token}, tokenizer::{extract_words, init_vibrato}}};
+use yomine::{anki::{AnkiState, FieldMapping}, core::SourceFile, dictionary::DictType, frequency_dict, gui::YomineApp, parser::read_srt, pos, segmentation::tokenizer::{extract_words, init_vibrato}};
 
 
 #[tokio::main]
 async fn main() {
-    //Load subtitles and tokenize terms
-    // let source_file = SourceFile {
-    //     id: 1,
-    //     source: "SRT".to_string(),
-    //     title: "Example Subtitle".to_string(),
-    //     creator: None,
-    //     original_file: "input/youtube.srt".to_string(),
-    // };
-
-    // let source_file = SourceFile {
-    //     id: 2,
-    //     source: "SRT".to_string(),
-    //     title: "【Japanese Talk ＃6】私が転職した理由について話します".to_string(),
-    //     creator: Some("あかね的日本語教室".to_string()),
-    //     original_file: "input/【Japanese Talk ＃6】私が転職した理由について話します.srt".to_string(),
-    // };
-
-    //ダンダダン.S01E08.なんかモヤモヤするじゃんよ.WEBRip.Netflix.ja[cc].srt
-
     //temporary blacklist while I test and use application
     let blacklist = vec![
         "の",
@@ -48,7 +29,7 @@ async fn main() {
         source: "SRT".to_string(),
         title: "".to_string(),
         creator: None,
-        original_file: "input/[Japanese] 【別府温泉】1泊5500円の別府最安旅館に宿泊、これはさすがに... [DownSub.com].srt".to_string(),
+        original_file: "input/[Japanese] 空港直結の最高級カプセルホテルに宿泊、一泊12,000円はさすがに... [DownSub.com].srt".to_string(),
     };
 
     let dict_type = DictType::Unidic;
@@ -58,29 +39,6 @@ async fn main() {
     let tokenizer = init_vibrato(&dict_type).expect("Failed to initialize tokenizer");
     let frequency_manager = frequency_dict::process_frequency_dictionaries().expect("Failed to load Frequency Manager");
 
-    // let mut cache = SegmentationCache::new();
-    // let mut segment_terms: Vec<Term> = Vec::new();
-    // for sentence in &sentences {
-    //     let segs = segment(&sentence.text, &frequency_manager, &mut cache);
-    //     let best_segs = segs.get_n_best_segments(1);
-
-    //     for (_, segmentation) in best_segs.iter().enumerate() {
-    //         let mut seg_tokens: Vec<Term> = segmentation.iter()
-    //             .map(|s| {
-    //                 let mut t = Term::from(s.token.clone());
-    //                 let index_in_sentence = sentence
-    //                     .text
-    //                     .match_indices(&t.surface_form)
-    //                     .next()
-    //                     .map(|(idx, _)| idx)
-    //                     .unwrap_or(0);
-    //                 t.sentence_references = vec![(sentence.id, index_in_sentence)];
-    //                 t
-    //             }).collect();
-    //         segment_terms.append(&mut seg_tokens);
-    //     }
-    // }
-    
     let mut terms = extract_words(tokenizer.new_worker(), &sentences, &pos_lookup, &dict_type, &frequency_manager);
 
     // let found_terms: HashSet<String> = terms.iter().map(|t| t.lemma_form.clone()).collect();
@@ -96,12 +54,12 @@ async fn main() {
             reading_field: "ExpressionReading".to_string(),
         });
 
-        model_mapping.insert(
-            "Kaishi 1.5k".to_string(), 
-            FieldMapping {
-                term_field: "Word".to_string(),
-                reading_field: "Word Reading".to_string(),
-            });
+    model_mapping.insert(
+        "Kaishi 1.5k".to_string(), 
+        FieldMapping {
+            term_field: "Word".to_string(),
+            reading_field: "Word Reading".to_string(),
+        });
 
     let anki_state = match AnkiState::new(model_mapping, Arc::new(frequency_manager)).await {
         Err(err) => {

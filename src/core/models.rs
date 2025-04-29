@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use crate::segmentation::word::POS;
+
 
 #[derive(Debug, Clone)]
 pub struct SourceFile {
@@ -53,8 +55,11 @@ pub struct Term {
     pub lemma_form: String,               // Base form of the term aka lemma form.. what is found in a dictionary
     pub lemma_reading: String,           // Lemma form reading in hiragana (we will have convert from katakana)
     pub surface_form: String,            // How it is found in the sentence
+    pub surface_reading: String,
     pub is_kana: bool,
-    pub part_of_speech: PartOfSpeech,          // Grammatical category
+    pub part_of_speech: POS,          // Grammatical category
     pub frequencies: HashMap<String, u32>,    // <(dictionary_id, frequency)>
-    pub sentence_references: Vec<(u32, usize)>, // Vec<(sentence_id, index)>
+    pub full_segment: String, //If we have main word, this includes the non-main part of the segment, otherwise it is the same as lemma_form
+    pub full_segment_reading: String, //If we have main word, this includes the non-main part of the segment, otherwise it is the same as lemma_reading
+    pub sentence_references: Vec<(u32, usize)>, // Vec<(sentence_id, start_index)>
 }

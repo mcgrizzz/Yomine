@@ -6,3 +6,4 @@ pub mod pos;
 pub mod segmentation;
 pub mod parser;
 pub mod anki;
+pub mod websocket;

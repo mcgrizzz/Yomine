@@ -1,4 +1,6 @@
 use thiserror::Error;
+use tokio::sync::mpsc::error::SendError;
+use tokio_tungstenite::tungstenite;
 
 #[derive(Error, Debug)]
 pub enum YomineError {
@@ -22,10 +24,25 @@ pub enum YomineError {
     
     #[error("Bincode error: {0}")]
     Bincode(#[from] bincode::Error),
+    
+    #[error("WebSocket error: {0}")]
+    WebSocket(#[from] tungstenite::Error),
+    
+    #[error("WebSocket send error: {0}")]
+    WebSocketSend(String),
+    
+    #[error("Invalid timestamp format")]
+    InvalidTimestamp,
 
     #[error("index.json must have either 'format' or 'version'")]
     MissingVersion,
 
     #[error("YomineError: {0}")]
     Custom(String),
+}
+
+impl<T> From<SendError<T>> for YomineError {
+    fn from(error: SendError<T>) -> Self {
+        YomineError::WebSocketSend(error.to_string())
+    }
 }

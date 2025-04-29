@@ -5,14 +5,14 @@ use super::unidic_tags::UnidicTag;
 
 pub struct VibratoToken {
     pub surface: String,
-    pub feature: String,
+    pub features: String,
 }
 
 impl From<vibrato::token::Token<'_, '_>> for VibratoToken {
     fn from(value: vibrato::token::Token) -> Self {
         Self {
             surface: value.surface().into(),
-            feature: value.feature().into(),
+            features: value.feature().into(),
         }
     }
 }
@@ -49,6 +49,47 @@ pub struct RawToken {
     pub a_mod_type: String,  // Column 27: Accent modification type
     pub lid: String,         // Column 28: Lexicon ID
     pub lemma_id: String,    // Column 29: Lemma ID
+}
+
+impl From<VibratoToken> for RawToken {
+    fn from(vt: VibratoToken) -> Self {
+        let fields: Vec<&str> = vt.features.split(',').collect();
+        
+        // Helper to get field with default value if missing
+        let get_field = |idx: usize| fields.get(idx).unwrap_or(&"*").to_string();
+        
+        RawToken {
+            pos1: get_field(0),
+            pos2: get_field(1),
+            pos3: get_field(2),
+            pos4: get_field(3),
+            c_type: get_field(4),
+            c_form: get_field(5),
+            l_form: get_field(6),
+            lemma: get_field(7),
+            orth: get_field(8),
+            pron: get_field(9),
+            orth_base: get_field(10),
+            pron_base: get_field(11),
+            goshu: get_field(12),
+            i_type: get_field(13),
+            i_form: get_field(14),
+            f_type: get_field(15),
+            f_form: get_field(16),
+            i_con_type: get_field(17),
+            f_con_type: get_field(18),
+            _type: get_field(19),
+            kana: get_field(20),
+            kana_base: get_field(21),
+            form: get_field(22),
+            form_base: get_field(23),
+            a_type: get_field(24),
+            a_con_type: get_field(25),
+            a_mod_type: get_field(26),
+            lid: get_field(27),
+            lemma_id: get_field(28),
+        }
+    }
 }
 
 
