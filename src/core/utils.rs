@@ -232,6 +232,7 @@ pub fn pairwise_deinflection(word: &str, reading: &str) -> Vec<(String, String)>
     results
 }
 
+//TODO:  This is wrong if we have a compound verblike (振り返る) since this will only get the first kanji
 // Helper function to get the initial kanji stem
 fn initial_kanji_stem(word: &str) -> String {
     word.chars().take_while(|&c| is_char_kanji(c)).collect()

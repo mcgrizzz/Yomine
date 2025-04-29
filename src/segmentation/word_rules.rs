@@ -65,7 +65,7 @@ pub fn create_default_rules() -> Vec<Rule> {
             },
             next: None,
             prev: None,
-            prev_word_pos: Matcher::Any(vec![POS::Verb]),
+            prev_word_pos: Matcher::Any(vec![POS::Verb, POS::SuruVerb]),
             action: RuleAction::MergeWithPrevious {
                 attach_prev: true,
                 attach_prev_lemma: true,
@@ -288,23 +288,23 @@ pub fn create_default_rules() -> Vec<Rule> {
         },
 
         //
-        Rule {
-            name: "Hijiritsukanou keiyoushi",
-            current: TokenMatcher {
-                pos1: Matcher::Any(vec![UnidicTag::Keiyoushi]),
-                pos2: Matcher::Any(vec![UnidicTag::Hijiritsukanou]),
-                ..Default::default()
-            },
-            next: None,
-            prev: None,
-            prev_word_pos: Matcher::None,
-            action: RuleAction::MergeWithPrevious {
-                attach_prev: true,
-                attach_prev_lemma: true,
-                update_prev_pos: None,
-                main_word_policy: None,
-            },
-        },
+        // Rule {
+        //     name: "Hijiritsukanou keiyoushi",
+        //     current: TokenMatcher {
+        //         pos1: Matcher::Any(vec![UnidicTag::Keiyoushi]),
+        //         pos2: Matcher::Any(vec![UnidicTag::Hijiritsukanou]),
+        //         ..Default::default()
+        //     },
+        //     next: None,
+        //     prev: None,
+        //     prev_word_pos: Matcher::None,
+        //     action: RuleAction::MergeWithPrevious {
+        //         attach_prev: true,
+        //         attach_prev_lemma: true,
+        //         update_prev_pos: None,
+        //         main_word_policy: None,
+        //     },
+        // },
 
 
 

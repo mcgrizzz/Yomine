@@ -1,8 +1,8 @@
-use eframe::egui::{self, text::LayoutJob, Color32, TextFormat, TextStyle};
+use eframe::egui::{self, pos2, text::LayoutJob, Color32, Context, Rgba, RichText, TextFormat, TextStyle, Ui};
 use egui_extras::{Column, TableBuilder, TableRow};
 use wana_kana::ConvertJapanese;
 
-use crate::core::Term;
+use crate::{core::Term, segmentation::word::POS};
 
 use super::YomineApp;
 
@@ -47,7 +47,7 @@ impl Default for TableSort {
 
 fn col_term(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &YomineApp) {
     row.col(|ui| {
-        ui.label(app.theme.bold(&term.lemma_form).size(22.0))
+        ui.label(RichText::new(&term.lemma_form).color(app.theme.red()).size(22.0))
         .on_hover_ui_at_pointer(|ui| {
             ui.label(app.theme.heading(&term.lemma_reading.to_hiragana()));
             ui.label(app.theme.heading(&term.lemma_reading.to_katakana()));
@@ -55,7 +55,75 @@ fn col_term(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &YomineAp
     });
 }
 
-fn col_sentence(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &YomineApp) {
+fn segment_ui(
+    ui: &mut Ui,
+    text: &str,
+    text_color: Color32,
+    underline_color: Option<Color32>,
+    highlight: bool,
+    hover_text: Option<RichText>,
+) {
+    // Create a label with the specified text and color
+    let label = egui::Label::new(RichText::new(text).color(text_color));
+    let response = ui.add(label);
+
+    // Draw the underline beneath the text
+    if let Some(underline_color) = underline_color {
+        let rect = response.rect;
+        let thickness = match highlight {
+            true => 1.5,
+            false => 1.0,
+        };
+
+        // Calculate the y-position and x-range for the underline
+        let y = rect.left_bottom().y + (thickness/2.0 + 0.75);
+        let x_start = rect.left_bottom().x + 1.5;
+        let x_end = rect.right_bottom().x - 1.5;
+
+        if highlight {
+            // Draw a solid underline for highlighted segments
+            ui.painter().line_segment(
+                [pos2(x_start, y), pos2(x_end, y)],
+                (thickness, underline_color),
+            );
+        } else {
+            // Draw a dashed underline for non-highlighted segments
+            let dash_length = 2.0; // Length of each dash in points
+            let gap_length = 2.0;  // Length of each gap in points
+            let mut current_x = x_start;
+
+            while current_x < x_end {
+                let dash_start = current_x;
+                let mut dash_end = current_x + dash_length;
+                if dash_end > x_end {
+                    dash_end = x_end; // Truncate the last dash if it exceeds the end
+                }
+                ui.painter().line_segment(
+                    [pos2(dash_start, y), pos2(dash_end, y)],
+                    (thickness, underline_color),
+                );
+                current_x = dash_end + gap_length; // Move to the start of the next dash
+            }
+        }
+    }
+
+    // Add hover effect to display the specified hover text
+    if let Some(hover_text) = hover_text {
+        response.on_hover_text(hover_text);
+    }
+}
+
+fn blend_colors(color_a: Color32, color_b: Color32, t: f32) -> Color32 {
+    let blend_channel = |a: u8, b: u8| ((1.0 - t) * a as f32 + t * b as f32).round() as u8;
+    Color32::from_rgba_unmultiplied(
+        blend_channel(color_a.r(), color_b.r()),
+        blend_channel(color_a.g(), color_b.g()),
+        blend_channel(color_a.b(), color_b.b()),
+        blend_channel(color_a.a(), color_b.a()),
+    )
+}
+
+fn col_sentence(ctx: &Context, row: &mut TableRow, term: &Term, app: &YomineApp) {
     row.col(|ui| {
         // Early return if no sentence reference exists
         if term.sentence_references.get(0).is_none() {
@@ -67,50 +135,55 @@ fn col_sentence(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &Yomi
         let sentence_content = app.sentences.get(sentence.0 as usize).unwrap();
         let surface_index = sentence.1;
 
-        // Initialize LayoutJob for text formatting
-        let mut job = LayoutJob::default();
-
-        // Define base colors
-        let normal_color = ctx.style().visuals.widgets.noninteractive.fg_stroke.color;
+        // Define highlighted color
         let highlighted_color = app.theme.red();
+        let normal_color = ctx.style().visuals.widgets.noninteractive.fg_stroke.color;
+        // Use horizontal layout with no spacing between items
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
 
-        // Closure to get alternating background colors
-        let get_background_color = |index: usize| -> Color32 {
-            if index % 2 == 0 {
-                normal_color // Light gray for even-indexed segments
-            } else  {
-                Color32::from_gray(180) // Slightly darker gray for odd-indexed segments
+            // Iterate over segments
+            for (reading, pos, start, stop) in sentence_content.segments.iter() {
+                let segment_text = &sentence_content.text[*start..*stop];
+                let is_term = *start == surface_index;
+
+                // Determine colors
+                let color = if is_term {
+                    blend_colors(normal_color, highlighted_color, 0.95)
+                } else {
+                    match pos {
+                        POS::Verb | POS::SuruVerb=> blend_colors(normal_color, app.theme.blue(), 0.75),
+                        POS::Noun => blend_colors(normal_color, app.theme.green(), 0.75),
+                        POS::Adjective | POS::AdjectivalNoun => blend_colors(normal_color, app.theme.orange(), 0.75),
+                        POS::Adverb => blend_colors(normal_color, app.theme.purple(), 0.75),
+                        POS::Postposition => blend_colors(normal_color, Color32::BLACK, 0.25),
+                        _ => normal_color,
+                    }
+                };
+
+                let text_color = if is_term {
+                    highlighted_color
+                } else {
+                    blend_colors(normal_color, color, 0.8)
+                };
+
+                let hover_text = match reading.as_str() {
+                    "*" => None,
+                    _ => Some(RichText::new(&format!("{} [{}]", reading.to_hiragana(), pos)).color(color)),
+                };
+
+                match pos {
+                    POS::Symbol => {
+                        segment_ui(ui, segment_text, text_color, None, is_term, hover_text);
+                    },
+                    _ => {
+                        segment_ui(ui, segment_text, text_color, Some(color), is_term, hover_text);
+                    }
+                }
+
+               
             }
-        };
-
-        // Iterate over segments
-        for (index, &(start, stop)) in sentence_content.segments.iter().enumerate() {
-            let segment_text = &sentence_content.text[start..stop];
-            let is_term = start == surface_index && segment_text == term.full_segment;
-
-            // Determine text and background colors
-            let text_color = if is_term {
-                highlighted_color
-            } else {
-                get_background_color(index)
-            };
-
-            // Create text format for this segment
-            let format = TextFormat {
-                font_id: ctx.style().text_styles.get(&TextStyle::Body).unwrap().clone(),
-                color: text_color,
-                ..Default::default()
-            };
-
-            // Append segment to LayoutJob
-            job.append(segment_text, 0.0, format);
-        }
-
-        // Add the formatted text to the UI with hover effect
-        ui.label(job)
-            .on_hover_ui_at_pointer(|ui| {
-                ui.label(app.theme.heading(&term.surface_reading.to_hiragana()));
-            });
+        });
     });
 }
 

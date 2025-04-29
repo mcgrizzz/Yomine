@@ -97,9 +97,10 @@ impl YomineApp {
             .collect();
 
         set_theme(&cc.egui_ctx, Theme::dracula());
-        cc.egui_ctx.set_zoom_factor(cc.egui_ctx.zoom_factor() + 0.5);
+        cc.egui_ctx.set_zoom_factor(cc.egui_ctx.zoom_factor() + 0.7);
         cc.egui_ctx.style_mut(|style| {
             style.interaction.tooltip_delay = 0.0;
+            style.interaction.show_tooltips_only_when_still = false;
         });
 
         terms.sort_unstable_by(|a, b| {

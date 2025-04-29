@@ -94,12 +94,12 @@ pub fn extract_words(mut worker: Worker<'_>, sentences: &mut [Sentence], pos_loo
             sentence_terms.iter().map(|term| {
                 let start_index = sentence
                     .text
-                    .match_indices(&term.surface_form)
+                    .match_indices(&term.full_segment)
                     .next()
                     .map(|(idx, _)| idx)
                     .unwrap_or(0);
-                let end_index = start_index + term.surface_form.len();
-                (start_index, end_index)
+                let end_index = start_index + term.full_segment.len();
+                (term.surface_reading.clone(), term.part_of_speech.clone(), start_index, end_index)
             })
         );
 

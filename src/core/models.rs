@@ -17,7 +17,7 @@ pub struct Sentence {
     pub id: u32,                // Unique identifier
     pub source_id: u32,         // Reference to a SourceFile
     pub text: String,           // Sentence content
-    pub segments: Vec<(usize, usize)>, // List of segments (start, end) for the sentence
+    pub segments: Vec<(String, POS, usize, usize)>, // List of segments (reading, POS, start, end) for the sentence
     pub timestamp: Option<String>, // Include timestamp for SRT files
 }
 

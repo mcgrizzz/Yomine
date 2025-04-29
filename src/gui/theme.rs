@@ -47,6 +47,30 @@ impl Theme {
         return self.dark().unwrap().red;
     }
 
+    pub fn orange(&self) -> Color32 {
+        return self.dark().unwrap().orange;
+    }
+
+    pub fn yellow(&self) -> Color32 {
+        return self.dark().unwrap().yellow;
+    }
+
+    pub fn green(&self) -> Color32 {
+        return self.dark().unwrap().green;
+    }
+
+    pub fn purple(&self) -> Color32 {
+        return self.dark().unwrap().purple;
+    }
+
+    pub fn blue(&self) -> Color32 {
+        return self.dark().unwrap().cyan.linear_multiply(0.8);
+    }
+
+    pub fn cyan(&self) -> Color32 {
+        return self.dark().unwrap().cyan;
+    }
+
     pub fn tokyo() -> Self {
         Theme {
             dark: Some(ThemeDetails::tokyo_night_storm()),
