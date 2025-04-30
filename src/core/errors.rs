@@ -37,6 +37,12 @@ pub enum YomineError {
     #[error("index.json must have either 'format' or 'version'")]
     MissingVersion,
 
+    #[error("Failed to load file: {0}")]
+    FailedToLoadFile(String),
+    
+    #[error("Failed to load unsupported file type: {0}")]
+    UnsupportedFileType(String),
+
     #[error("YomineError: {0}")]
     Custom(String),
 }

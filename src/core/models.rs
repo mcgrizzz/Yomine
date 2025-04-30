@@ -2,11 +2,18 @@ use std::collections::HashMap;
 
 use crate::segmentation::word::POS;
 
+#[derive(Debug, Clone)]
+pub enum FileType {
+    SRT,
+    Other(String)
+}
+
 
 #[derive(Debug, Clone)]
 pub struct SourceFile {
     pub id: u32,                // Unique identifier
     pub source: String,         // Source type (e.g., "YouTube", "Jimaku", "TXT")
+    pub file_type: FileType,    // File type (e.g., SRT, TXT)
     pub title: String,          // File name or descriptive title
     pub creator: Option<String>,// Optional creator information
     pub original_file: String,  // Path to the file stored locally

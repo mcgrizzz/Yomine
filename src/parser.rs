@@ -16,7 +16,7 @@ pub fn read_srt(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> 
             }
 
             let timestamp = lines[1].to_string();
-            let text = lines[2].to_string();
+            let text = lines[2].to_string().replace("\n", ""); //Filter out newlines within the text.
 
             Ok(Sentence {
                 id: id as u32,

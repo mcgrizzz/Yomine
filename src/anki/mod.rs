@@ -1,8 +1,7 @@
 use std::{collections::{HashMap, HashSet}, sync::Arc, time::Duration};
 
-use api::{get_deck_ids, get_field_names, get_model_ids, get_note_ids, get_notes, get_version, Note};
+use api::{get_deck_ids, get_field_names, get_model_ids, get_note_ids, get_notes, get_version};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use regex::Replacer;
 use tokio::{task::{self}, time::sleep};
 use wana_kana::{ConvertJapanese, IsJapaneseStr};
 
@@ -20,14 +19,20 @@ pub struct AnkiState {
 impl AnkiState {
 
     pub async fn new(model_mapping: HashMap<String, FieldMapping>, frequency_manager: Arc<FrequencyManager>) -> Result<Self, reqwest::Error> {
-        let models = get_models().await?;
+
+        // let (models, vocab) = tokio::join!(
+        //     get_models(),
+        //     
+        // );
+
         let vocab = get_total_vocab(&model_mapping).await?;
 
         Ok(Self {
-            models,
+            models: Vec::new(),
             model_mapping,
             vocab,
             frequency_manager,
+            
         })
     }
 
@@ -178,7 +183,7 @@ pub struct Model {
     fields: Vec<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FieldMapping {
     pub term_field: String, //Expression
     pub reading_field: String, //ExpressionReading
@@ -220,30 +225,32 @@ pub async fn get_models() -> Result<Vec<Model>, reqwest::Error> {
 
 
 pub async fn get_total_vocab(model_mapping: &HashMap<String, FieldMapping>) -> Result<Vec<Vocab>, reqwest::Error> {        
-    let decks = get_deck_ids().await?;
-    let deck_names: Vec<String> = decks
-        .into_iter()
-        .map(|deck| {
-            let deck_name = deck.name;
-            format!("deck:\"{deck_name}\"")
-        })
-        .collect();
+    // let decks = get_deck_ids().await?;
+    // let deck_names: Vec<String> = decks
+    //     .into_iter()
+    //     .map(|deck| {
+    //         let deck_name = deck.name;
+    //         format!("deck:\"{deck_name}\"")
+    //     })
+    //     .collect();
 
-    let deck_query = deck_names.join(" OR ");
+    let deck_query = "deck:*";
 
     let note_ids = get_note_ids(&deck_query).await?;
     let notes = get_notes(note_ids).await?;
+
+    let relevant_models: HashSet<&String> = model_mapping.keys().collect();
     
     let vocab: Vec<Vocab> = notes
-        .into_iter()
+        .into_par_iter() 
         .filter_map(|note| {
-            if let Some(field_mapping) = model_mapping.get(&note.model_name) {
-
-                let term = note.fields.get(&field_mapping.term_field).map(|f| f.value.clone());
-                let reading = note.fields.get(&field_mapping.reading_field).map(|f| f.value.clone());
-
-                if let (Some(term), Some(reading)) = (term, reading) {
-                    return Some(Vocab { term, reading });
+            if relevant_models.contains(&note.model_name) {
+                if let Some(field_mapping) = model_mapping.get(&note.model_name) {
+                    let term = note.fields.get(&field_mapping.term_field).map(|f| f.value.clone());
+                    let reading = note.fields.get(&field_mapping.reading_field).map(|f| f.value.clone());
+                    if let (Some(term), Some(reading)) = (term, reading) {
+                        return Some(Vocab { term, reading });
+                    }
                 }
             }
             None

@@ -5,8 +5,6 @@ use crate::core::utils::pairwise_deinflection;
 use crate::core::{Sentence, Term, YomineError};
 use crate::dictionary::{ensure_dictionary, load_dictionary, DictType};
 use crate::frequency_dict::FrequencyManager;
-use crate::pos::PosLookup;
-use jp_deinflector::deinflect;
 use wana_kana::IsJapaneseStr;
 
 use super::rule_matcher::parse_into_words;
@@ -14,9 +12,8 @@ use super::token_models::{RawToken, UnidicToken, VibratoToken};
 use super::word::{Word, POS};
 
 
-pub fn extract_words(mut worker: Worker<'_>, sentences: &mut [Sentence], pos_lookup: &PosLookup, dict_type: &DictType, frequency_manager: &FrequencyManager) -> Vec<Term> {
+pub fn extract_words(mut worker: Worker<'_>, sentences: &mut [Sentence], frequency_manager: &FrequencyManager) -> Vec<Term> {
     let mut terms = Vec::<Term>::new();
-    //let mut term_id_counter = 1;
 
     for sentence in sentences.iter_mut() {
         worker.reset_sentence(&sentence.text);
@@ -104,6 +101,8 @@ pub fn extract_words(mut worker: Worker<'_>, sentences: &mut [Sentence], pos_loo
         );
 
         terms.append(&mut sentence_terms);
+
+        //TODO: Build phrases out of all contiguous words. Look up phrases in frequency dict. If they exist, get their frequency and compare to individual words. 
     }
 
     terms

@@ -1,51 +1,19 @@
-use std::{collections::{HashMap, HashSet}, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
-use yomine::{anki::{AnkiState, FieldMapping}, core::SourceFile, dictionary::DictType, frequency_dict, gui::YomineApp, parser::read_srt, pos, segmentation::tokenizer::{extract_words, init_vibrato}};
+use yomine::{anki::FieldMapping, core::{models::FileType, pipeline::process_source_file, SourceFile}, dictionary::DictType, frequency_dict, gui::{LanguageTools, YomineApp}, segmentation::tokenizer::init_vibrato};
 
 
 #[tokio::main]
 async fn main() {
-    //temporary blacklist while I test and use application
-    let blacklist = vec![
-        "の",
-        "を",
-        "が",
-        "と",
-        "で",
-        "だ",
-        "も",
-        "な",
-        "お",
-        "ん",
-        "か",
-        "れる",
-        "です",
-        "られる",
-        "せる",
-    ];
-
     let source_file = SourceFile {
         id: 3,
         source: "SRT".to_string(),
+        file_type: FileType::SRT,
         title: "".to_string(),
         creator: None,
         original_file: "input/[Japanese] 空港直結の最高級カプセルホテルに宿泊、一泊12,000円はさすがに... [DownSub.com].srt".to_string(),
     };
 
-    let dict_type = DictType::Unidic;
-
-    let mut sentences = read_srt(&source_file).expect("Failed to parse subtitles");
-    let pos_lookup = pos::load_pos_lookup().expect("Failed to load POS");
-    let tokenizer = init_vibrato(&dict_type).expect("Failed to initialize tokenizer");
-    let frequency_manager = frequency_dict::process_frequency_dictionaries().expect("Failed to load Frequency Manager");
-
-    let mut terms = extract_words(tokenizer.new_worker(), &mut sentences, &pos_lookup, &dict_type, &frequency_manager);
-
-    // let found_terms: HashSet<String> = terms.iter().map(|t| t.lemma_form.clone()).collect();
-    // terms.extend(segment_terms.into_iter().filter(|t| t.lemma_form.chars().count() > 3 && t.surface_form.chars().count() > 3 && !found_terms.contains(&t.lemma_form)));
-
-    terms = terms.into_iter().filter(|term| !blacklist.contains(&term.lemma_form.as_str())).collect();
- 
     let mut model_mapping: HashMap<String, FieldMapping> = HashMap::new();
     model_mapping.insert(
         "Lapis".to_string(), 
@@ -61,27 +29,27 @@ async fn main() {
             reading_field: "Word Reading".to_string(),
         });
 
-    let anki_state = match AnkiState::new(model_mapping, Arc::new(frequency_manager)).await {
-        Err(err) => {
-            println!("Unable to load AnkiState");
-            None
-        },  
-        Ok(state) => {
-            println!("Loaded AnkiState");
-            Some(state)
+    let dict_type = DictType::Unidic;
+    let tokenizer = Arc::new(init_vibrato(&dict_type).expect("Failed to initialize tokenizer"));
+    let frequency_manager = Arc::new(frequency_dict::process_frequency_dictionaries().expect("Failed to load Frequency Manager"));
+ 
+    let language_tools = LanguageTools {
+        tokenizer: tokenizer,
+        frequency_manager: frequency_manager,
+    };
+
+    let (terms, sentences) = match process_source_file(
+        &source_file,
+        model_mapping.clone(),
+        &language_tools,
+    ).await {
+        Ok(result) => result,
+        Err(_) => {
+            println!("Failed to process source file");
+            (Vec::new(), Vec::new())
         }
     };
 
-
-    if let Some(state) = anki_state {
-        println!("Prefiltered: {}", terms.len());
-        terms = state.filter_existing_terms(terms, false);
-        println!("Filtered: {}", terms.len());
-        terms = state.filter_existing_terms(terms, true);
-        println!("Filtered surface form: {}", terms.len());
-    }
-
-
     let native_options = eframe::NativeOptions::default();
-    let _ = eframe::run_native("Yomine App", native_options, Box::new(|cc| Ok(Box::new(YomineApp::new(cc, terms, sentences)))));
+    let _ = eframe::run_native("Yomine App", native_options, Box::new(|cc| Ok(Box::new(YomineApp::new(cc, terms, sentences, model_mapping, language_tools)))));
 }

@@ -219,8 +219,8 @@ mod tests {
 
             //Extract suru verbs and na adjectives for proper sentences highlighting
             // "勉強することが好きです。",  // should extract 勉強, but highlight 勉強する as one unit. 
-            "彼は元気な人です。",  // should extract 元気, but highlight 元気な as one unit.
-
+            //"彼は元気な人です。",  // should extract 元気, but highlight 元気な as one unit.
+            "ごちそうさまでした",
             // // Large text.
             //"東京に住んでいる日本語教師の田中さんは、毎朝早く起きて、朝ごはんを食べますが、今日は特別に早く起きました。電車に乗って、学校へ行く途中、友達に会って、一緒に学校まで行きました。授業で、学生に日本語を教える時、田中さんはいつも熱心に説明します。田中さんが教えている学生は、とても優秀です。お昼に、同僚とラーメンを食べに行きましたが、あまり美味しくなかったです。午後、東京タワーに登りましたが、田中さんは高いところが苦手なので、すぐに降りました。夕方、家に帰って、疲れていたので、早く寝ました。田中さんは三冊の本を買いましたが、猫を好きです。田中さんは、教えることが好きです。東京タワーは高いですか？"
         ];

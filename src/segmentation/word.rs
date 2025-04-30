@@ -8,7 +8,7 @@ use crate::core::Term;
 use super::token_models::UnidicToken;
 use super::unidic_tags::UnidicTag;
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Clone, Debug, Hash, Eq, )]
 pub enum POS {
     Noun,
     ProperNoun,
@@ -30,6 +30,7 @@ pub enum POS {
     Number,
     Counter,
     Symbol,
+    Expression,
     Other,
     Unknown,
 }
@@ -57,6 +58,7 @@ impl fmt::Display for POS {
             POS::Number => "Number",
             POS::Counter => "Counter",
             POS::Symbol => "Symbol",
+            POS::Expression => "Expression",
             POS::Other => "Other",
             POS::Unknown => "Unknown",
         };
@@ -145,5 +147,4 @@ pub fn get_default_pos(token: &UnidicToken) -> POS {
         UnidicTag::Hojokigou => POS::Symbol,
         _ => POS::Other,
     }
-
 }

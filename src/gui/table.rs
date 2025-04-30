@@ -4,7 +4,7 @@ use wana_kana::ConvertJapanese;
 
 use crate::{core::Term, segmentation::word::POS};
 
-use super::YomineApp;
+use super::{theme::blend_colors, YomineApp};
 
 pub struct TableState {
     sort: TableSort,
@@ -46,8 +46,11 @@ impl Default for TableSort {
 }
 
 fn col_term(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &YomineApp) {
+
+    let normal_color = ctx.style().visuals.widgets.noninteractive.fg_stroke.color;
+
     row.col(|ui| {
-        ui.label(RichText::new(&term.lemma_form).color(app.theme.red()).size(22.0))
+        ui.label(RichText::new(&term.lemma_form).color(blend_colors(normal_color, app.theme.red(), 0.8)).size(22.0))
         .on_hover_ui_at_pointer(|ui| {
             ui.label(app.theme.heading(&term.lemma_reading.to_hiragana()));
             ui.label(app.theme.heading(&term.lemma_reading.to_katakana()));
@@ -113,15 +116,6 @@ fn segment_ui(
     }
 }
 
-fn blend_colors(color_a: Color32, color_b: Color32, t: f32) -> Color32 {
-    let blend_channel = |a: u8, b: u8| ((1.0 - t) * a as f32 + t * b as f32).round() as u8;
-    Color32::from_rgba_unmultiplied(
-        blend_channel(color_a.r(), color_b.r()),
-        blend_channel(color_a.g(), color_b.g()),
-        blend_channel(color_a.b(), color_b.b()),
-        blend_channel(color_a.a(), color_b.a()),
-    )
-}
 
 fn col_sentence(ctx: &Context, row: &mut TableRow, term: &Term, app: &YomineApp) {
     row.col(|ui| {
@@ -162,14 +156,14 @@ fn col_sentence(ctx: &Context, row: &mut TableRow, term: &Term, app: &YomineApp)
                 };
 
                 let text_color = if is_term {
-                    highlighted_color
+                    blend_colors(normal_color, highlighted_color, 0.85)
                 } else {
-                    blend_colors(normal_color, color, 0.8)
+                    blend_colors(normal_color, color, 0.85)
                 };
 
                 let hover_text = match reading.as_str() {
                     "*" => None,
-                    _ => Some(RichText::new(&format!("{} [{}]", reading.to_hiragana(), pos)).color(color)),
+                    _ => Some(RichText::new(&format!("{}", reading.to_hiragana())).color(color)),
                 };
 
                 match pos {

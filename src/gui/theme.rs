@@ -1,4 +1,4 @@
-use eframe::egui::{self, RichText};
+use eframe::egui::{self, RichText, Style, Ui};
 use egui::epaint::Shadow;
 use egui::style::{Selection, WidgetVisuals, Widgets};
 use egui::{Color32, Stroke, Visuals};
@@ -199,6 +199,16 @@ pub fn set_theme(ctx: &egui::Context, theme: Theme) {
     }
 }
 
+pub fn blend_colors(color_a: Color32, color_b: Color32, t: f32) -> Color32 {
+    let blend_channel = |a: u8, b: u8| ((1.0 - t) * a as f32 + t * b as f32).round() as u8;
+    Color32::from_rgba_unmultiplied(
+        blend_channel(color_a.r(), color_b.r()),
+        blend_channel(color_a.g(), color_b.g()),
+        blend_channel(color_a.b(), color_b.b()),
+        blend_channel(color_a.a(), color_b.a()),
+    )
+}
+
 
 fn set_theme_variant(ctx: &egui::Context, theme: &ThemeDetails, is_dark: bool){
 
@@ -206,7 +216,7 @@ fn set_theme_variant(ctx: &egui::Context, theme: &ThemeDetails, is_dark: bool){
         true => (Visuals::dark(), egui::Theme::Dark),
         false => (Visuals::light(), egui::Theme::Light),
     };
-    
+
     ctx.set_visuals_of(variant, Visuals {
         dark_mode: is_dark,
         widgets: Widgets {
@@ -308,6 +318,11 @@ fn set_theme_variant(ctx: &egui::Context, theme: &ThemeDetails, is_dark: bool){
         },
         collapsing_header_frame: true,
         ..default
+    });
+
+    ctx.all_styles_mut(|style| {
+        style.interaction.tooltip_delay = 0.0;
+        style.interaction.show_tooltips_only_when_still = false;
     });
 }
 
