@@ -1,11 +1,11 @@
 use std::{collections::{HashMap, HashSet}, sync::Arc, time::Duration};
 
-use api::{get_deck_ids, get_field_names, get_model_ids, get_note_ids, get_notes, get_version};
+use api::{get_field_names, get_model_ids, get_note_ids, get_notes, get_version};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use tokio::{task::{self}, time::sleep};
 use wana_kana::{ConvertJapanese, IsJapaneseStr};
 
-use crate::{core::{utils::NormalizeLongVowel, Term}, frequency_dict::FrequencyManager};
+use crate::{core::{utils::NormalizeLongVowel, Term}, dictionary::frequency_manager::FrequencyManager};
 
 pub mod api;
 

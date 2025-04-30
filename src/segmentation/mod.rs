@@ -15,4 +15,3 @@ pub mod word_rules;
 #[cfg(test)]
 
 mod rule_matcher_tests;
-//mod segmentator;

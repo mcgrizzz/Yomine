@@ -11,7 +11,8 @@ use std::sync::mpsc::Receiver;
 use vibrato::Tokenizer;
 
 use crate::core::pipeline::process_source_file;
-use crate::{anki::FieldMapping, core::{models::FileType, Sentence, SourceFile, Term}, frequency_dict::FrequencyManager, parser::read_srt, segmentation::tokenizer::extract_words};
+use crate::dictionary::frequency_manager::FrequencyManager;
+use crate::{anki::FieldMapping, core::{models::FileType, Sentence, SourceFile, Term}};
 use crate::websocket::WebSocketServer;
 
 

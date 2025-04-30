@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use yomine::{anki::FieldMapping, core::{models::FileType, pipeline::process_source_file, SourceFile}, dictionary::DictType, frequency_dict, gui::{LanguageTools, YomineApp}, segmentation::tokenizer::init_vibrato};
+use yomine::{anki::FieldMapping, core::{models::FileType, pipeline::process_source_file, SourceFile}, dictionary::{frequency_manager, token_dictionary::DictType}, gui::{LanguageTools, YomineApp}, segmentation::tokenizer::init_vibrato};
 
 
 #[tokio::main]
@@ -31,7 +31,7 @@ async fn main() {
 
     let dict_type = DictType::Unidic;
     let tokenizer = Arc::new(init_vibrato(&dict_type).expect("Failed to initialize tokenizer"));
-    let frequency_manager = Arc::new(frequency_dict::process_frequency_dictionaries().expect("Failed to load Frequency Manager"));
+    let frequency_manager = Arc::new(frequency_manager::process_frequency_dictionaries().expect("Failed to load Frequency Manager"));
  
     let language_tools = LanguageTools {
         tokenizer: tokenizer,

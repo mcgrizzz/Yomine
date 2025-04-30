@@ -5,8 +5,8 @@ mod tests {
     use vibrato::Tokenizer;
 
     use crate::{
-        core::YomineError, dictionary::DictType, segmentation::{
-            rule_matcher::{parse_into_words, process_tokens}, token_models::{RawToken, UnidicToken, VibratoToken}, tokenizer::init_vibrato, word::{Word, POS}, word_rules::create_default_rules
+        core::YomineError, dictionary::token_dictionary::DictType, segmentation::{
+            rule_matcher::parse_into_words, token_models::{RawToken, UnidicToken, VibratoToken}, tokenizer::init_vibrato, word::POS
         }
     };
 

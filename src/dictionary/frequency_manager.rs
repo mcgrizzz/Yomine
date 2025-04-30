@@ -1,16 +1,14 @@
-use std::fs::File;
-use std::io;
-use std::sync::Mutex;
-use std::{collections::HashMap, fs, path::Path};
+use std::{collections::HashMap, fs::{self, File}, io::{BufReader, Read, Write}, path::Path, time::Instant};
 
+use std::sync::Mutex;
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use regex::Regex;
-use serde::Deserialize;
-use wana_kana::IsJapaneseStr;
-use wana_kana::ConvertJapanese;
+use wana_kana::{ConvertJapanese, IsJapaneseStr};
 
-use crate::core::utils::{harmonic_frequency, NormalizeLongVowel};
-use crate::core::YomineError;
+use crate::{core::{utils::{harmonic_frequency, NormalizeLongVowel}, YomineError}, dictionary::TermMetaBankV3};
+
+use super::{frequency_dict::FrequencyDictionary, DictionaryIndex, FrequencyData};
+
 
 pub struct FrequencyManager {
     dictionaries: HashMap<String, FrequencyDictionary>, 
@@ -195,197 +193,6 @@ impl FrequencyManager {
     }
 }
 
-
-//https://github.com/yomidevs/yomitan/tree/master/ext/data/schemas
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "kebab-case")] // Match the JSON naming convention
-enum FrequencyMode {
-    OccurrenceBased,
-    RankBased,
-}
-
-#[derive(Deserialize, Debug)]
-struct DictionaryIndex {
-    title: String,
-    revision: String,
-
-    format: Option<u8>, //Must have one 
-    version: Option<u8>
-}
-
-#[derive(Deserialize, Debug)]
-struct TermMetaBankV3 {
-    term: String, // The text for the term
-    #[serde(rename = "type")]
-    data_type: String, // "freq", "pitch", or "ipa"
-    data: Option<FrequencyData>, // Only populated for "freq" types
-}
-
-
-#[derive(serde::Serialize, Deserialize)]
-pub struct FrequencyDictionary {
-    pub title: String,
-    revision: String,
-    terms: HashMap<String, Vec<FrequencyData>>, // Map term -> multiple frequency entries
-}
-
-#[derive(serde::Serialize, Deserialize, Debug)]
-#[serde(untagged)]
-pub enum Frequency {
-    Number(u32),
-    Complex {
-        value: u32,
-
-        #[serde(rename = "displayValue")]
-        display_value: Option<String>,
-    }
-}
-
-#[derive(serde::Serialize, Deserialize, Debug)]
-#[serde(untagged)]
-pub enum FrequencyData {
-    Simple(Frequency),
-    Nested {
-        reading: String,
-        frequency: Frequency,
-    }
-}
-
-impl Frequency {
-    pub fn value(&self) -> u32 {
-        match self {
-            Frequency::Number(num) => *num,
-            Frequency::Complex {value, .. } => *value,
-        }
-    }
-
-    pub fn display_value(&self) -> Option<&str> {
-        match self {
-            Frequency::Number(_) => None,
-            Frequency::Complex { display_value, .. } => display_value.as_deref(),
-        }
-    }
-}
-
-
-impl FrequencyData {
-
-    pub fn value(&self) -> u32 {
-        match self {
-            FrequencyData::Simple(simple) => simple.value(),
-            FrequencyData::Nested { frequency, .. } => frequency.value(),
-        }
-    }
-
-    pub fn display_value(&self) -> Option<&str> {
-        match self {
-            FrequencyData::Simple(simple) => simple.display_value(),
-            FrequencyData::Nested { frequency, .. } => frequency.display_value(),
-        }
-    }
-
-    pub fn reading(&self) -> Option<&str> {
-        match self {
-            FrequencyData::Nested { reading, .. } => Some(reading.as_str()),
-            FrequencyData::Simple(_) => None,
-        }
-    }
-
-    pub fn has_special_marker(&self) -> bool {
-        self.display_value()
-            .map_or(false, |value| value.contains('㋕'))
-    }
-}
-
-impl FrequencyDictionary {
-
-    fn new(title: String, revision: String, term_meta_list: Vec<TermMetaBankV3>) -> Self {
-        let mut terms = HashMap::new();
-    
-        for term_meta in term_meta_list {
-            if let Some(freq_data) = term_meta.data {
-                terms
-                    .entry(term_meta.term.clone())
-                    .or_insert_with(Vec::new)
-                    .push(freq_data);
-            }
-        }
-    
-        FrequencyDictionary {
-            title,
-            revision,
-            terms,
-        }
-    }
-    
-    
-    //If dictionary form is in kana
-    pub fn get_frequency(&self, lemma_form: &str, lemma_reading: &str, is_kana: bool) -> Option<&FrequencyData> {
-        if is_kana {
-            self.get_kana_frequency(lemma_form, lemma_reading)
-                .or_else(|| self.get_normal_frequency(lemma_form, lemma_reading))
-        } else {
-            self.get_normal_frequency(lemma_form, lemma_reading)
-        }
-    }
-
-    fn get_kana_frequency(&self, lemma_form: &str, lemma_reading: &str) -> Option<&FrequencyData> {
-        self.terms.get(lemma_form).and_then(|entries| {
-
-            let matching_entry = entries.iter().find(|entry| {
-                if let Some(entry_reading) = entry.reading().as_deref() {
-                    let normalized_reading = if entry_reading.is_hiragana() {
-                        lemma_reading.to_hiragana()
-                    } else {
-                        lemma_reading.to_katakana()
-                    };
-                    entry.has_special_marker() && normalized_reading.eq(entry_reading)
-                } else {
-                    false
-                }
-            });
-            
-            matching_entry.or_else(|| entries.iter().find(|entry| entry.reading().is_none()))
-        })
-    }
-    
-    fn get_normal_frequency(&self, lemma_form: &str, lemma_reading: &str) -> Option<&FrequencyData> {
-        self.terms.get(lemma_form).and_then(|entries| {
-
-            let matching_entries: Vec<_> = entries
-                .iter()
-                .filter(|entry| {
-                    if let Some(entry_reading) = entry.reading().as_deref() {
-                        let normalized_reading = if entry_reading.is_hiragana() {
-                            lemma_reading.to_hiragana()
-                        } else {
-                            lemma_reading.to_katakana()
-                        };
-                        !entry.has_special_marker() && normalized_reading.eq(entry_reading)
-                    } else {
-                        false
-                    }
-                })
-                .collect();
-    
-            
-            if !matching_entries.is_empty() {
-                matching_entries
-                    .into_iter()
-                    .min_by(|a, b| a.value().partial_cmp(&b.value()).unwrap())
-            } else {
-                
-                entries.iter().find(|entry| entry.reading().is_none())
-            }
-        })
-    }
-
-    //Grab all the matching frequencies by key (just directly look up the key we want)
-    fn get_frequencies_by_key(&self, key: &str) -> Option<&Vec<FrequencyData>> {
-        self.terms.get(key)
-    }
-}
-
 fn parse_index_json(folder_path: &Path) -> Result<Option<DictionaryIndex>, YomineError> {
     let index_path = folder_path.join("index.json");
     let index_data = fs::read_to_string(index_path)?;
@@ -429,9 +236,38 @@ fn parse_term_meta_bank(folder_path: &Path) -> Result<Vec<TermMetaBankV3>, Yomin
     Ok(term_meta_list)
 }
 
-pub fn process_frequency_dictionaries() -> Result<FrequencyManager, YomineError> {
+fn load_cached_dict(cache_path: &Path) -> Result<FrequencyDictionary, String> {
+    let file = File::open(cache_path)
+        .map_err(|e| format!("Failed to open cache file at {:?}: {}", cache_path, e))?;
+    let mut reader = BufReader::new(file);
+    let mut buffer = Vec::new();
+    reader
+        .read_to_end(&mut buffer)
+        .map_err(|e| format!("Failed to read cache file: {}", e))?;
+    
+    // Replace bincode::deserialize with bincode::serde::decode_from_slice
+    let (dict, _): (FrequencyDictionary, usize) = bincode::serde::decode_from_slice(&buffer, bincode::config::standard())
+        .map_err(|e| format!("Failed to decode cache: {}", e))?;
+    
+    Ok(dict)
+}
 
+fn save_cached_dict(dict: &FrequencyDictionary, cache_path: &Path) -> Result<(), String> {
+    // Replace bincode::serialize with bincode::serde::encode_to_vec
+    let encoded = bincode::serde::encode_to_vec(dict, bincode::config::standard())
+        .map_err(|e| format!("Failed to encode dictionary: {}", e))?;
+    
+    let mut file = File::create(cache_path)
+        .map_err(|e| format!("Failed to create cache file at {:?}: {}", cache_path, e))?;
+    file.write_all(&encoded)
+        .map_err(|e| format!("Failed to write cache file: {}", e))?;
+    Ok(())
+}
+
+
+pub fn process_frequency_dictionaries() -> Result<FrequencyManager, YomineError> {
     let manager = Mutex::new(FrequencyManager::new());
+    let start = Instant::now();
 
     fs::read_dir("frequency_dict")?
         .filter_map(|e| e.ok())
@@ -442,23 +278,61 @@ pub fn process_frequency_dictionaries() -> Result<FrequencyManager, YomineError>
                 return;
             }
 
-            // Skip unknown index types
+            let cache_path = path.join("cache.bin");
+
+            // Parse index.json to get metadata
             if let Ok(Some(index)) = parse_index_json(&path) {
-                if let Ok(term_meta_list) = parse_term_meta_bank(&path) {
-                    let freq_dict = FrequencyDictionary::new(index.title.clone(), index.revision, term_meta_list);
+                let dict_name = index.title.clone();
 
-                    let mut manager_guard = manager.lock().unwrap();
-                    manager_guard.add_dictionary(index.title, freq_dict);
-
-                }else{
-                    println!("Failed to parse term meta bank at {:?}", path);
+                // Try loading from cache
+                let load_start = Instant::now();
+                match load_cached_dict(&cache_path) {
+                    Ok(cached_dict) => {
+                        if cached_dict.revision == index.revision {
+                            let duration = load_start.elapsed();
+                            println!("Loaded '{}' from cache in {:?}", dict_name, duration);
+                            let mut manager_guard = manager.lock().unwrap();
+                            manager_guard.add_dictionary(dict_name, cached_dict);
+                            return;
+                        } else {
+                            println!("Revision mismatch for '{}': cache={}, index={}", dict_name, cached_dict.revision, index.revision);
+                        }
+                    }
+                    Err(e) => {
+                        println!("Failed to load cache for '{}': {}, rebuilding from JSON", dict_name, e);
+                    }
                 }
-            }else{
+
+                // Cache miss or invalid, build from JSON
+                let build_start = Instant::now();
+                if let Ok(term_meta_list) = parse_term_meta_bank(&path) {
+                    let freq_dict = FrequencyDictionary::new(
+                        index.title.clone(),
+                        index.revision,
+                        term_meta_list,
+                    );
+                    let build_duration = build_start.elapsed();
+                    println!("Built '{}' from JSON in {:?}", dict_name, build_duration);
+
+                    // Add to manager
+                    let mut manager_guard = manager.lock().unwrap();
+                    manager_guard.add_dictionary(dict_name.clone(), freq_dict.clone());
+
+                    // Save to cache
+                    if let Err(e) = save_cached_dict(&freq_dict, &cache_path) {
+                        println!("Failed to save cache for '{}': {}", dict_name, e);
+                    }
+                } else {
+                    println!("Failed to parse term meta bank for '{}'", dict_name);
+                }
+            } else {
                 println!("Skipping {:?} due to unsupported format version.", path);
             }
         });
-        
-    
+
+    let total_duration = start.elapsed();
+    println!("Total processing time: {:?}", total_duration);
+
     Ok(manager.into_inner().unwrap())
 }
 

@@ -21,10 +21,7 @@ pub enum YomineError {
 
     #[error("Vibrato error: {0}")]
     Vibrato(#[from] vibrato::errors::VibratoError),
-    
-    #[error("Bincode error: {0}")]
-    Bincode(#[from] bincode::Error),
-    
+        
     #[error("WebSocket error: {0}")]
     WebSocket(#[from] tungstenite::Error),
     
@@ -39,7 +36,7 @@ pub enum YomineError {
 
     #[error("Failed to load file: {0}")]
     FailedToLoadFile(String),
-    
+
     #[error("Failed to load unsupported file type: {0}")]
     UnsupportedFileType(String),
 

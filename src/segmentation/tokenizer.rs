@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use vibrato::{tokenizer::worker::Worker, Tokenizer};
 use crate::core::utils::pairwise_deinflection;
 use crate::core::{Sentence, Term, YomineError};
-use crate::dictionary::{ensure_dictionary, load_dictionary, DictType};
-use crate::frequency_dict::FrequencyManager;
+use crate::dictionary::frequency_manager::FrequencyManager;
+use crate::dictionary::token_dictionary::{ensure_dictionary, load_dictionary, DictType};
 use wana_kana::IsJapaneseStr;
 
 use super::rule_matcher::parse_into_words;
