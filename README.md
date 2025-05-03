@@ -1,5 +1,5 @@
 # Yomine
-
+    Yomine’s name comes from a mix of 読み ("yomi" for reading) + "mine" (as in mining vocab)
 Yomine is an Japanese vocabulary mining tool designed to help language learners extract and study words from subtitle files. Written in Rust, it integrates with asbplayer for timestamp navigation, ranks terms by frequency, and supports Anki integration to filter out known words.
 
 ## Status
