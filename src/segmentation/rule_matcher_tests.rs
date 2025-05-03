@@ -1,7 +1,5 @@
 #[cfg(test)]
 mod tests {
-    use std::fs::File;
-
     use vibrato::Tokenizer;
 
     use crate::{

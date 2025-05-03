@@ -287,46 +287,5 @@ pub fn create_default_rules() -> Vec<Rule> {
             },
         },
 
-        //
-        // Rule {
-        //     name: "Hijiritsukanou keiyoushi",
-        //     current: TokenMatcher {
-        //         pos1: Matcher::Any(vec![UnidicTag::Keiyoushi]),
-        //         pos2: Matcher::Any(vec![UnidicTag::Hijiritsukanou]),
-        //         ..Default::default()
-        //     },
-        //     next: None,
-        //     prev: None,
-        //     prev_word_pos: Matcher::None,
-        //     action: RuleAction::MergeWithPrevious {
-        //         attach_prev: true,
-        //         attach_prev_lemma: true,
-        //         update_prev_pos: None,
-        //         main_word_policy: None,
-        //     },
-        // },
-
-
-
-        // Rule {
-        //     name: "Prefix Verb",
-        //     current: TokenMatcher {
-        //         pos1: Matcher::Any(vec![UnidicTag::Settouji]),
-        //         ..Default::default()
-        //     },
-        //     next: Some(TokenMatcher {
-        //         pos1: Matcher::Any(vec![UnidicTag::Doushi]),
-        //         ..Default::default()
-        //     }),
-        //     prev: None,
-        //     prev_word_pos: Matcher::None,
-        //     action: RuleAction::CreateWord {
-        //         eat_next: true,
-        //         eat_next_lemma: true,
-        //         pos: POS::Verb,
-        //         main_word_policy: Some(MainWordPolicy::UseSecondToken),
-        //     },
-        // },
-
     ]
 }
