@@ -1,10 +1,21 @@
-use eframe::egui::{self, pos2, text::LayoutJob, Color32, Context, Rgba, RichText, TextFormat, TextStyle, Ui};
-use egui_extras::{Column, TableBuilder, TableRow};
+use eframe::egui::{
+    self,
+    pos2,
+    text::LayoutJob,
+    Color32,
+    Context,
+    Rgba,
+    RichText,
+    TextFormat,
+    TextStyle,
+    Ui,
+};
+use egui_extras::{ Column, TableBuilder, TableRow };
 use wana_kana::ConvertJapanese;
 
-use crate::{core::Term, segmentation::word::POS};
+use crate::{ core::Term, segmentation::word::POS };
 
-use super::{theme::blend_colors, YomineApp};
+use super::{ theme::blend_colors, YomineApp };
 
 pub struct TableState {
     sort: TableSort,
@@ -13,7 +24,7 @@ pub struct TableState {
 impl Default for TableState {
     fn default() -> Self {
         Self {
-            sort: TableSort::FrequencyAscending
+            sort: TableSort::FrequencyAscending,
         }
     }
 }
@@ -46,12 +57,14 @@ impl Default for TableSort {
 }
 
 fn col_term(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &YomineApp) {
-
     let normal_color = ctx.style().visuals.widgets.noninteractive.fg_stroke.color;
 
     row.col(|ui| {
-        ui.label(RichText::new(&term.lemma_form).color(blend_colors(normal_color, app.theme.red(), 0.8)).size(22.0))
-        .on_hover_ui_at_pointer(|ui| {
+        ui.label(
+            RichText::new(&term.lemma_form)
+                .color(blend_colors(normal_color, app.theme.red(), 0.8))
+                .size(22.0)
+        ).on_hover_ui_at_pointer(|ui| {
             ui.label(app.theme.heading(&term.lemma_reading.to_hiragana()));
             ui.label(app.theme.heading(&term.lemma_reading.to_katakana()));
         });
@@ -64,7 +77,7 @@ fn segment_ui(
     text_color: Color32,
     underline_color: Option<Color32>,
     highlight: bool,
-    hover_text: Option<RichText>,
+    hover_text: Option<RichText>
 ) {
     // Create a label with the specified text and color
     let label = egui::Label::new(RichText::new(text).color(text_color));
@@ -79,20 +92,20 @@ fn segment_ui(
         };
 
         // Calculate the y-position and x-range for the underline
-        let y = rect.left_bottom().y + (thickness/2.0 + 0.75);
+        let y = rect.left_bottom().y + (thickness / 2.0 + 0.75);
         let x_start = rect.left_bottom().x + 1.5;
         let x_end = rect.right_bottom().x - 1.5;
 
         if highlight {
             // Draw a solid underline for highlighted segments
-            ui.painter().line_segment(
-                [pos2(x_start, y), pos2(x_end, y)],
-                (thickness, underline_color),
-            );
+            ui.painter().line_segment([pos2(x_start, y), pos2(x_end, y)], (
+                thickness,
+                underline_color,
+            ));
         } else {
             // Draw a dashed underline for non-highlighted segments
             let dash_length = 2.0; // Length of each dash in points
-            let gap_length = 2.0;  // Length of each gap in points
+            let gap_length = 2.0; // Length of each gap in points
             let mut current_x = x_start;
 
             while current_x < x_end {
@@ -101,10 +114,10 @@ fn segment_ui(
                 if dash_end > x_end {
                     dash_end = x_end; // Truncate the last dash if it exceeds the end
                 }
-                ui.painter().line_segment(
-                    [pos2(dash_start, y), pos2(dash_end, y)],
-                    (thickness, underline_color),
-                );
+                ui.painter().line_segment([pos2(dash_start, y), pos2(dash_end, y)], (
+                    thickness,
+                    underline_color,
+                ));
                 current_x = dash_end + gap_length; // Move to the start of the next dash
             }
         }
@@ -115,7 +128,6 @@ fn segment_ui(
         response.on_hover_text(hover_text);
     }
 }
-
 
 fn col_sentence(ctx: &Context, row: &mut TableRow, term: &Term, app: &YomineApp) {
     row.col(|ui| {
@@ -146,9 +158,11 @@ fn col_sentence(ctx: &Context, row: &mut TableRow, term: &Term, app: &YomineApp)
                     blend_colors(normal_color, highlighted_color, 0.95)
                 } else {
                     match pos {
-                        POS::Verb | POS::SuruVerb=> blend_colors(normal_color, app.theme.blue(), 0.75),
+                        POS::Verb | POS::SuruVerb =>
+                            blend_colors(normal_color, app.theme.blue(), 0.75),
                         POS::Noun => blend_colors(normal_color, app.theme.green(), 0.75),
-                        POS::Adjective | POS::AdjectivalNoun => blend_colors(normal_color, app.theme.orange(), 0.75),
+                        POS::Adjective | POS::AdjectivalNoun =>
+                            blend_colors(normal_color, app.theme.orange(), 0.75),
                         POS::Adverb => blend_colors(normal_color, app.theme.purple(), 0.75),
                         POS::Postposition => blend_colors(normal_color, Color32::BLACK, 0.25),
                         _ => normal_color,
@@ -169,25 +183,26 @@ fn col_sentence(ctx: &Context, row: &mut TableRow, term: &Term, app: &YomineApp)
                 match pos {
                     POS::Symbol => {
                         segment_ui(ui, segment_text, text_color, None, is_term, hover_text);
-                    },
+                    }
                     _ => {
                         segment_ui(ui, segment_text, text_color, Some(color), is_term, hover_text);
                     }
                 }
-
-               
             }
         });
     });
 }
 
 fn format_human_timestamp(timestamp: &str) -> String {
-    if let Ok(seconds) = crate::websocket::WebSocketServer::convert_srt_timestamp_to_seconds(timestamp) {
+    if
+        let Ok(seconds) =
+            crate::websocket::WebSocketServer::convert_srt_timestamp_to_seconds(timestamp)
+    {
         // Extract hours, minutes, seconds
         let hours = (seconds / 3600.0).floor() as u32;
         let minutes = ((seconds % 3600.0) / 60.0).floor() as u32;
         let secs = (seconds % 60.0).floor() as u32;
-        
+
         // Format based on components
         let formatted = if hours > 0 {
             format!("{}h {}m {}s", hours, minutes, secs)
@@ -196,7 +211,7 @@ fn format_human_timestamp(timestamp: &str) -> String {
         } else {
             format!("{}s", secs)
         };
-        
+
         format!("{:<11}", formatted)
     } else {
         format!("{:<11}", timestamp)
@@ -205,51 +220,58 @@ fn format_human_timestamp(timestamp: &str) -> String {
 
 fn col_timestamp(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &YomineApp) {
     row.col(|ui| {
-        if let None = term.sentence_references.get(0){
+        if let None = term.sentence_references.get(0) {
             return;
         }
-        
+
         let sentence = term.sentence_references.get(0).unwrap();
         let sentence_content = app.sentences.get(sentence.0 as usize).unwrap();
-        
+
         if let Some(timestamp) = &sentence_content.timestamp {
             if app.websocket_state.has_clients && app.websocket_server.is_some() {
                 // If we have connected clients, show a clickable button
                 // Check if this timestamp has been confirmed
-                
+
                 // Extract the first part of the timestamp if it contains an arrow
                 let clean_timestamp = timestamp.split(" --> ").next().unwrap_or(timestamp);
-                
+
                 // Format the timestamp in a more human-readable way
                 let human_timestamp = format_human_timestamp(clean_timestamp);
 
-                let is_confirmed = app.websocket_state.confirmed_timestamps.contains(&clean_timestamp.to_string());
-                
+                let is_confirmed = app.websocket_state.confirmed_timestamps.contains(
+                    &clean_timestamp.to_string()
+                );
+
                 // Color based on confirmation status
                 let button_text = if is_confirmed {
-                    format!("👁 {}", human_timestamp)  // Eye for confirmed
+                    format!("👁 {}", human_timestamp) // Eye for confirmed
                 } else {
-                    format!("▶ {}", human_timestamp)  // Play button for not confirmed
+                    format!("▶ {}", human_timestamp) // Play button for not confirmed
                 };
-                
+
                 // Use a visually distinct button for confirmed timestamps
                 let mut button = egui::Button::new(button_text);
                 if is_confirmed {
                     button = button.fill(egui::Color32::from_hex("#71778a").unwrap());
                 }
-                
+
                 let response = ui.add(button);
-                
+
                 // Show original timestamp on hover
-                
+
                 if response.clicked() {
                     if let Some(server) = &app.websocket_server {
-                        if let Ok(seconds) = crate::websocket::WebSocketServer::convert_srt_timestamp_to_seconds(clean_timestamp) {
+                        if
+                            let Ok(seconds) =
+                                crate::websocket::WebSocketServer::convert_srt_timestamp_to_seconds(
+                                    clean_timestamp
+                                )
+                        {
                             // Send the timestamp to all connected clients
                             match server.seek_timestamp(seconds, clean_timestamp) {
                                 Ok(_) => {
                                     println!("Sent seek command for timestamp: {}", clean_timestamp);
-                                },
+                                }
                                 Err(e) => {
                                     eprintln!("Error sending seek command: {:?}", e);
                                 }
@@ -265,7 +287,7 @@ fn col_timestamp(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &Yom
                 // If no clients connected, just show the timestamp in human-readable format
                 let timestamp_vec: Vec<&str> = timestamp.split(" --> ").collect();
                 let human_timestamp = format!("{}", format_human_timestamp(timestamp_vec[0]));
-                
+
                 // Display the human-readable timestamp with original as hover text
                 ui.label(&human_timestamp);
             }
@@ -289,47 +311,45 @@ fn col_pos(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &YomineApp
     });
 }
 
-
 pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
     egui::CentralPanel::default().show(ctx, |ui| {
         ui.heading("Term Table");
         egui::ScrollArea::vertical().show(ui, |ui| {
             TableBuilder::new(ui)
-            .striped(true)
-            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-            .column(Column::auto().at_least(100.0))
-            .column(Column::auto().at_least(150.0))
-            .column(Column::auto().at_least(40.0))
-            .column(Column::auto().at_least(40.0))
-            .column(Column::remainder())
-            .header(25.0, |mut header| {
-                header_cols(ctx, header, app);
-            })
-            .body(|mut body| {
-                let row_height = |i: usize| {
-                    let t = &app.terms[i];
+                .striped(true)
+                .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                .column(Column::auto().at_least(100.0))
+                .column(Column::auto().at_least(150.0))
+                .column(Column::auto().at_least(40.0))
+                .column(Column::auto().at_least(40.0))
+                .column(Column::remainder())
+                .header(25.0, |mut header| {
+                    header_cols(ctx, header, app);
+                })
+                .body(|mut body| {
+                    let row_height = |i: usize| {
+                        let t = &app.terms[i];
 
-                    if let None = t.sentence_references.get(0){
-                        return 36.0;
-                    }
+                        if let None = t.sentence_references.get(0) {
+                            return 36.0;
+                        }
 
-                    let sentence = t.sentence_references.get(0).unwrap();
-                    let sentence_content = app.sentences.get(sentence.0 as usize).unwrap();
-                    let lines: Vec<&str> = sentence_content.text.trim().split("\n").collect();
-                    36.0_f32.max(18.0 * (lines.len() as f32)) //Size 22.0 font is not 22 height.. 
-                };
+                        let sentence = t.sentence_references.get(0).unwrap();
+                        let sentence_content = app.sentences.get(sentence.0 as usize).unwrap();
+                        let lines: Vec<&str> = sentence_content.text.trim().split("\n").collect();
+                        (36.0_f32).max(18.0 * (lines.len() as f32)) //Size 22.0 font is not 22 height..
+                    };
 
-                body.heterogeneous_rows((0..app.terms.iter().len()).map(row_height), |mut row| {
-                    let t = &app.terms[row.index()];
-                    col_term(ctx, &mut row, t, app);
-                    col_sentence(ctx, &mut row, t, app);
-                    col_timestamp(ctx, &mut row, t, app);
-                    col_frequency(ctx, &mut row, t, app);
-                    col_pos(ctx, &mut row, t, app);
+                    body.heterogeneous_rows((0..app.terms.iter().len()).map(row_height), |mut row| {
+                        let t = &app.terms[row.index()];
+                        col_term(ctx, &mut row, t, app);
+                        col_sentence(ctx, &mut row, t, app);
+                        col_timestamp(ctx, &mut row, t, app);
+                        col_frequency(ctx, &mut row, t, app);
+                        col_pos(ctx, &mut row, t, app);
+                    });
                 });
-            });
         });
-        
     });
 }
 
@@ -344,30 +364,34 @@ pub fn header_cols(ctx: &egui::Context, mut header: TableRow<'_, '_>, app: &mut 
         ui.label(app.theme.heading("Timestamp"));
     });
     header.col(|ui| {
-        egui::Sides::new().height(25.0).show(
-            ui,
-            |ui| {
-                if ui.button(app.table_state.sort.text()).clicked() {
-                    app.table_state.sort = app.table_state.sort.click();
-                    app.terms.sort_unstable_by(|a, b| match app.table_state.sort {
-                    TableSort::FrequencyAscending => {
-                        let freq_a = a.frequencies.get("HARMONIC").unwrap();
-                        let freq_b = b.frequencies.get("HARMONIC").unwrap();
-                        freq_a.cmp(freq_b) // Ascending order
+        egui::Sides
+            ::new()
+            .height(25.0)
+            .show(
+                ui,
+                |ui| {
+                    if ui.button(app.table_state.sort.text()).clicked() {
+                        app.table_state.sort = app.table_state.sort.click();
+                        app.terms.sort_unstable_by(|a, b| {
+                            match app.table_state.sort {
+                                TableSort::FrequencyAscending => {
+                                    let freq_a = a.frequencies.get("HARMONIC").unwrap();
+                                    let freq_b = b.frequencies.get("HARMONIC").unwrap();
+                                    freq_a.cmp(freq_b) // Ascending order
+                                }
+                                TableSort::FrequencyDescending => {
+                                    let freq_a = a.frequencies.get("HARMONIC").unwrap();
+                                    let freq_b = b.frequencies.get("HARMONIC").unwrap();
+                                    freq_b.cmp(freq_a) // Descending order
+                                }
+                            }
+                        });
                     }
-                    TableSort::FrequencyDescending => {
-                        let freq_a = a.frequencies.get("HARMONIC").unwrap();
-                        let freq_b = b.frequencies.get("HARMONIC").unwrap();
-                        freq_b.cmp(freq_a) // Descending order
-                    }
-                });
+                },
+                |ui| {
+                    ui.label(app.theme.heading("Frequency"));
                 }
-            },
-            |ui| {
-                ui.label(app.theme.heading("Frequency"));
-            },
-        );
-        
+            );
     });
 
     header.col(|ui| {

@@ -31,7 +31,7 @@ There are currently no prebuilt binaries available. You'll need to build from so
 - **Prebuilt Binaries**
 ## Frequency Dictionaries for Yomine
 
-Yomine uses frequency dictionaries to rank Japanese vocabulary based on how commonly terms appear in various corpora. These dictionaries help prioritize terms for study by assigning frequency scores, with lower numbers indicating more common terms. Yomine supports frequency dictionaries in the Yomitan format (version 3), which are also compatible with the [Yomitan browser extension](https://github.com/themoeway/yomitan) for language learning.
+Yomine uses frequency dictionaries to show you more relevant words for your learning and to help with the segmentation process.
 
 ### How Yomine Loads Frequency Dictionaries
 
@@ -41,7 +41,7 @@ When you start Yomine, it loads all compatible dictionaries found in this direct
 
 ### Downloading Frequency Dictionaries
 
-Yomine uses frequency dictionaries to show you more relevant words for your learning and to help with the segmentation process. You can grab Yomitan-compatible frequency dictionaries and drop them into the `frequency_dict/` directory. Yomine will automatically unzip them and load them when you start the app. Here are some recommended ones to get you started:
+ You can grab Yomitan-compatible frequency dictionaries and drop them into the `frequency_dict/` directory. Yomine will automatically unzip them and load them when you start the app. Here are some recommended ones to get you started:
 
 - **[JPDB v2.2 Frequency Kana (Recommended)](https://github.com/Kuuuube/yomitan-dictionaries/?tab=readme-ov-file#jpdb-v22-frequency-kana-recommended)**: Great for Japanese media like anime and visual novels
 - **[BCCWJ (Recommended)](https://github.com/Kuuuube/yomitan-dictionaries/?tab=readme-ov-file#bccwj-suw-luw-combined)**: Based on the Balanced Corpus of Contemporary Written Japanese

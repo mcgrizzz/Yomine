@@ -1,7 +1,7 @@
-use eframe::egui::{self, RichText, Style, Ui};
+use eframe::egui::{ self, RichText, Style, Ui };
 use egui::epaint::Shadow;
-use egui::style::{Selection, WidgetVisuals, Widgets};
-use egui::{Color32, Stroke, Visuals};
+use egui::style::{ Selection, WidgetVisuals, Widgets };
+use egui::{ Color32, Stroke, Visuals };
 
 pub struct Theme {
     dark: Option<ThemeDetails>,
@@ -15,21 +15,16 @@ impl Default for Theme {
 }
 
 impl Theme {
-
     fn light(&self) -> Option<&ThemeDetails> {
         match &self.light {
-            Some(light) => {
-                Some(light)
-            },
+            Some(light) => { Some(light) }
             _ => None,
         }
     }
 
     fn dark(&self) -> Option<&ThemeDetails> {
         match &self.dark {
-            Some(dark) => {
-                Some(dark)
-            },
+            Some(dark) => { Some(dark) }
             _ => None,
         }
     }
@@ -109,14 +104,14 @@ impl ThemeDetails {
     //https://github.com/ShabbirHasan1/egui_dracula/blob/master/src/lib.rs
     fn dracula() -> Self {
         Self {
-            background: Color32::from_rgb(0x28, 0x2A, 0x36),
-            foreground: Color32::from_rgb(0xF8, 0xF8, 0xF2),
-            selection: Color32::from_rgb(0x44, 0x47, 0x5A),
-            comment: Color32::from_rgb(0x62, 0x72, 0xA4),
-            red: Color32::from_rgb(0xFF, 0x55, 0x55),
-            orange: Color32::from_rgb(0xFF, 0xB8, 0x6C),
-            yellow: Color32::from_rgb(0xF1, 0xFA, 0x8C),
-            green: Color32::from_rgb(0x50, 0xFA, 0x7B),
+            background: Color32::from_rgb(0x28, 0x2a, 0x36),
+            foreground: Color32::from_rgb(0xf8, 0xf8, 0xf2),
+            selection: Color32::from_rgb(0x44, 0x47, 0x5a),
+            comment: Color32::from_rgb(0x62, 0x72, 0xa4),
+            red: Color32::from_rgb(0xff, 0x55, 0x55),
+            orange: Color32::from_rgb(0xff, 0xb8, 0x6c),
+            yellow: Color32::from_rgb(0xf1, 0xfa, 0x8c),
+            green: Color32::from_rgb(0x50, 0xfa, 0x7b),
             purple: Color32::from_rgb(189, 147, 249),
             cyan: Color32::from_rgb(139, 233, 253),
             pink: Color32::from_rgb(255, 121, 198),
@@ -130,23 +125,22 @@ impl ThemeDetails {
     fn dracula_light() -> Self {
         Self {
             background: Color32::from_rgb(248, 248, 242), // Light base background
-            foreground: Color32::from_rgb(40, 42, 54),   // Darker text for contrast
+            foreground: Color32::from_rgb(40, 42, 54), // Darker text for contrast
             selection: Color32::from_rgb(200, 200, 220), // Light pastel for selection highlight
-            comment: Color32::from_rgb(120, 130, 160),   // Subdued blue-gray for comments
-            red: Color32::from_rgb(200, 80, 80),         // Softer red for warnings
-            orange: Color32::from_rgb(220, 150, 90),     // Muted orange for accents
-            yellow: Color32::from_rgb(220, 230, 120),    // Gentle yellow for highlights
-            green: Color32::from_rgb(80, 200, 120),      // Balanced green for success
-            purple: Color32::from_rgb(150, 120, 220),    // Softer purple for accents
-            cyan: Color32::from_rgb(80, 190, 230),       // Muted cyan for links or highlights
-            pink: Color32::from_rgb(230, 130, 200),      // Gentle pink for special highlights
+            comment: Color32::from_rgb(120, 130, 160), // Subdued blue-gray for comments
+            red: Color32::from_rgb(200, 80, 80), // Softer red for warnings
+            orange: Color32::from_rgb(220, 150, 90), // Muted orange for accents
+            yellow: Color32::from_rgb(220, 230, 120), // Gentle yellow for highlights
+            green: Color32::from_rgb(80, 200, 120), // Balanced green for success
+            purple: Color32::from_rgb(150, 120, 220), // Softer purple for accents
+            cyan: Color32::from_rgb(80, 190, 230), // Muted cyan for links or highlights
+            pink: Color32::from_rgb(230, 130, 200), // Gentle pink for special highlights
             background_darker: Color32::from_rgb(235, 235, 230), // Slightly darker light tone
-            background_dark: Color32::from_rgb(245, 245, 240),   // Darker base for depth
-            background_light: Color32::from_rgb(255, 255, 250),  // Brighter tone for elevated elements
-            background_lighter: Color32::from_rgb(255, 255, 255),// Lightest tone for highlights
+            background_dark: Color32::from_rgb(245, 245, 240), // Darker base for depth
+            background_light: Color32::from_rgb(255, 255, 250), // Brighter tone for elevated elements
+            background_lighter: Color32::from_rgb(255, 255, 255), // Lightest tone for highlights
         }
     }
-    
 
     fn tokyo_night_storm() -> Self {
         Self {
@@ -171,20 +165,20 @@ impl ThemeDetails {
     fn tokyo_night_light() -> Self {
         Self {
             background: Color32::from_rgb(240, 240, 250), // Light base background
-            foreground: Color32::from_rgb(40, 40, 40),   // Darker text for contrast
+            foreground: Color32::from_rgb(40, 40, 40), // Darker text for contrast
             selection: Color32::from_rgb(200, 200, 230), // Soft highlight color
-            comment: Color32::from_rgb(150, 160, 200),   // Muted blue for comments
-            red: Color32::from_rgb(200, 80, 80),         // Softer red for warnings
-            orange: Color32::from_rgb(220, 140, 60),     // Muted orange for highlights
-            yellow: Color32::from_rgb(220, 230, 100),    // Gentle yellow for emphasis
-            green: Color32::from_rgb(80, 180, 100),      // Balanced green for success
-            purple: Color32::from_rgb(150, 120, 200),    // Subdued purple for accents
-            cyan: Color32::from_rgb(80, 160, 200),       // Muted cyan for links or highlights
-            pink: Color32::from_rgb(200, 100, 200),      // Soft pink for special highlights
+            comment: Color32::from_rgb(150, 160, 200), // Muted blue for comments
+            red: Color32::from_rgb(200, 80, 80), // Softer red for warnings
+            orange: Color32::from_rgb(220, 140, 60), // Muted orange for highlights
+            yellow: Color32::from_rgb(220, 230, 100), // Gentle yellow for emphasis
+            green: Color32::from_rgb(80, 180, 100), // Balanced green for success
+            purple: Color32::from_rgb(150, 120, 200), // Subdued purple for accents
+            cyan: Color32::from_rgb(80, 160, 200), // Muted cyan for links or highlights
+            pink: Color32::from_rgb(200, 100, 200), // Soft pink for special highlights
             background_darker: Color32::from_rgb(220, 220, 240), // Darker light tone
-            background_dark: Color32::from_rgb(230, 230, 245),   // Slightly darker than main background
-            background_light: Color32::from_rgb(245, 245, 255),  // Lighter tone for raised elements
-            background_lighter: Color32::from_rgb(255, 255, 255),// Lightest tone for highlights
+            background_dark: Color32::from_rgb(230, 230, 245), // Slightly darker than main background
+            background_light: Color32::from_rgb(245, 245, 255), // Lighter tone for raised elements
+            background_lighter: Color32::from_rgb(255, 255, 255), // Lightest tone for highlights
         }
     }
 }
@@ -200,18 +194,16 @@ pub fn set_theme(ctx: &egui::Context, theme: Theme) {
 }
 
 pub fn blend_colors(color_a: Color32, color_b: Color32, t: f32) -> Color32 {
-    let blend_channel = |a: u8, b: u8| ((1.0 - t) * a as f32 + t * b as f32).round() as u8;
+    let blend_channel = |a: u8, b: u8| ((1.0 - t) * (a as f32) + t * (b as f32)).round() as u8;
     Color32::from_rgba_unmultiplied(
         blend_channel(color_a.r(), color_b.r()),
         blend_channel(color_a.g(), color_b.g()),
         blend_channel(color_a.b(), color_b.b()),
-        blend_channel(color_a.a(), color_b.a()),
+        blend_channel(color_a.a(), color_b.a())
     )
 }
 
-
-fn set_theme_variant(ctx: &egui::Context, theme: &ThemeDetails, is_dark: bool){
-
+fn set_theme_variant(ctx: &egui::Context, theme: &ThemeDetails, is_dark: bool) {
     let (default, variant) = match is_dark {
         true => (Visuals::dark(), egui::Theme::Dark),
         false => (Visuals::light(), egui::Theme::Light),
@@ -325,4 +317,3 @@ fn set_theme_variant(ctx: &egui::Context, theme: &ThemeDetails, is_dark: bool){
         style.interaction.show_tooltips_only_when_still = false;
     });
 }
-

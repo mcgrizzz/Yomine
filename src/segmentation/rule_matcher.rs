@@ -1,19 +1,19 @@
 use crate::core::YomineError;
-use super::word::{Word, POS, get_default_pos};
+use super::word::{ Word, POS, get_default_pos };
 use super::token_models::UnidicToken;
 use super::unidic_tags::UnidicTag;
 use super::word_rules::create_default_rules;
 
 /**
- * Allows us to write rules instead of lots of nested logic which can become unwieldy. 
- * 
+ * Allows us to write rules instead of lots of nested logic which can become unwieldy.
+ *
  */
 
 #[derive(Clone)]
 pub enum Matcher<T> {
-    None,               // Always matches (default)
-    Any(Vec<T>),        // Matches if any of the contained values match
-    Not(Vec<T>),        // Matches if none of the contained values match
+    None, // Always matches (default)
+    Any(Vec<T>), // Matches if any of the contained values match
+    Not(Vec<T>), // Matches if none of the contained values match
 }
 
 impl<T: PartialEq> Matcher<T> {
@@ -46,12 +46,12 @@ pub struct TokenMatcher {
 impl TokenMatcher {
     pub fn matches(&self, token: &UnidicToken) -> bool {
         self.pos1.matches(&token.pos1) &&
-        self.pos2.matches(&token.pos2) &&
-        self.pos3.matches(&token.pos3) &&
-        self.pos4.matches(&token.pos4) &&
-        self.surface.matches(&token.surface) &&
-        self.conjugation_type.matches(&token.conjugation_type) &&
-        self.conjugation_form.matches(&token.conjugation_form)
+            self.pos2.matches(&token.pos2) &&
+            self.pos3.matches(&token.pos3) &&
+            self.pos4.matches(&token.pos4) &&
+            self.surface.matches(&token.surface) &&
+            self.conjugation_type.matches(&token.conjugation_type) &&
+            self.conjugation_form.matches(&token.conjugation_form)
     }
 }
 
@@ -74,8 +74,8 @@ pub enum RuleAction {
 
 #[derive(Clone)]
 pub enum MainWordPolicy {
-    UseFirstToken,   // Use first token's lemma as main word
-    UseSecondToken,  // Use second token's lemma as main word
+    UseFirstToken, // Use first token's lemma as main word
+    UseSecondToken, // Use second token's lemma as main word
 }
 
 pub struct Rule {
@@ -95,25 +95,25 @@ pub fn process_tokens(tokens: Vec<UnidicToken>, rules: &[Rule]) -> Result<Vec<Wo
     while let Some(current_token) = tokens_iter.next() {
         let prev_word_pos = words.last().map(|w| &w.part_of_speech);
         let next_token = tokens_iter.peek();
-        
+
         // Try to find a matching rule
         let mut rule_applied = false;
         for rule in rules {
             // Check all rule conditions
             let current_matches = rule.current.matches(&current_token);
-            
+
             let next_matches = match (&rule.next, next_token) {
                 (Some(matcher), Some(token)) => matcher.matches(token),
                 (Some(_), None) => false,
                 (None, _) => true,
             };
-            
+
             let prev_token_matches = match (&rule.prev, &prev_token) {
                 (Some(matcher), Some(token)) => matcher.matches(token),
                 (Some(_), None) => false,
                 (None, _) => true,
             };
-            
+
             let prev_word_matches = match prev_word_pos {
                 Some(word_pos) => rule.prev_word_pos.matches(word_pos),
                 None => matches!(rule.prev_word_pos, Matcher::None),
@@ -144,75 +144,87 @@ pub fn process_tokens(tokens: Vec<UnidicToken>, rules: &[Rule]) -> Result<Vec<Wo
                                 match main_word_policy {
                                     Some(MainWordPolicy::UseFirstToken) => {
                                         // Already set above
-                                    },
+                                    }
                                     Some(MainWordPolicy::UseSecondToken) => {
                                         word.main_word = Some(next.clone());
-                                    },
+                                    }
                                     None => {
                                         // No main word policy
                                     }
                                 }
-                                
+
                                 word.surface_form.push_str(&next.surface);
                                 word.surface_hatsuon.push_str(&next.surface_hatsuon);
-                                
+
                                 if *eat_next_lemma {
                                     word.lemma_form.push_str(&next.lemma_form);
                                     word.lemma_hatsuon.push_str(&next.lemma_hatsuon);
                                 }
-                                
+
                                 word.tokens.push(next.clone());
-                                prev_token = Some(next); 
+                                prev_token = Some(next);
                             }
                         } else {
-                            prev_token = Some(current_token.clone()); 
+                            prev_token = Some(current_token.clone());
                         }
 
                         words.push(word);
-                    },
-                    RuleAction::MergeWithPrevious { attach_prev, attach_prev_lemma, update_prev_pos, main_word_policy } => {
+                    }
+                    RuleAction::MergeWithPrevious {
+                        attach_prev,
+                        attach_prev_lemma,
+                        update_prev_pos,
+                        main_word_policy,
+                    } => {
                         if let Some(prev_word) = words.last_mut() {
                             // Apply main word policy if specified
                             if let Some(policy) = main_word_policy {
                                 match policy {
                                     MainWordPolicy::UseFirstToken => {
                                         // In a merge, the first token is from the previous word
-                                        if prev_word.main_word.is_none() && !prev_word.tokens.is_empty() {
+                                        if
+                                            prev_word.main_word.is_none() &&
+                                            !prev_word.tokens.is_empty()
+                                        {
                                             prev_word.main_word = Some(prev_word.tokens[0].clone());
                                         }
-                                    },
+                                    }
                                     MainWordPolicy::UseSecondToken => {
                                         // In a merge, the second token is the current token
                                         prev_word.main_word = Some(current_token.clone());
-                                    },
+                                    }
                                 }
                             }
-                            
+
                             if *attach_prev {
                                 prev_word.surface_form.push_str(&current_token.surface);
                                 prev_word.surface_hatsuon.push_str(&current_token.surface_hatsuon);
                             }
-                            
+
                             if *attach_prev_lemma {
                                 prev_word.lemma_form.push_str(&current_token.lemma_form);
                                 prev_word.lemma_hatsuon.push_str(&current_token.lemma_hatsuon);
                             }
-                            
+
                             if let Some(pos) = update_prev_pos {
                                 prev_word.part_of_speech = pos.clone();
                             }
-                            
+
                             prev_word.tokens.push(current_token.clone());
                             prev_token = Some(current_token.clone());
                         } else {
-                            return Err(YomineError::Custom(format!(
-                                "Rule '{}' tried to merge with previous word, but no previous word exists",
-                                rule.name
-                            )));
+                            return Err(
+                                YomineError::Custom(
+                                    format!(
+                                        "Rule '{}' tried to merge with previous word, but no previous word exists",
+                                        rule.name
+                                    )
+                                )
+                            );
                         }
                     }
                 }
-                
+
                 rule_applied = true;
                 break;
             }
@@ -229,7 +241,7 @@ pub fn process_tokens(tokens: Vec<UnidicToken>, rules: &[Rule]) -> Result<Vec<Wo
                 tokens: vec![current_token.clone()],
                 main_word: None, // For single tokens, main_word is typically not needed
             };
-            
+
             words.push(word);
             prev_token = Some(current_token);
         }

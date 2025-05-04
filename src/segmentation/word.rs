@@ -8,7 +8,7 @@ use crate::core::Term;
 use super::token_models::UnidicToken;
 use super::unidic_tags::UnidicTag;
 
-#[derive(PartialEq, Clone, Debug, Hash, Eq, )]
+#[derive(PartialEq, Clone, Debug, Hash, Eq)]
 pub enum POS {
     Noun,
     ProperNoun,
@@ -18,7 +18,7 @@ pub enum POS {
     AdjectivalNoun,
     Adverb,
     Determiner,
-    Preposition, 
+    Preposition,
     Postposition, // Like auxiliary verbs
     Verb,
     SuruVerb,
@@ -26,7 +26,7 @@ pub enum POS {
     Suffix,
     Prefix,
     Conjunction,
-    Interjection, 
+    Interjection,
     Number,
     Counter,
     Symbol,
@@ -73,7 +73,7 @@ impl fmt::Display for POS {
 // }
 
 pub struct Word {
-    pub surface_form: String, 
+    pub surface_form: String,
     pub surface_hatsuon: String, //hatsuon is easier to type than pronunciation...
     pub lemma_form: String,
     pub lemma_hatsuon: String,
@@ -124,7 +124,7 @@ pub fn get_default_pos(token: &UnidicToken) -> POS {
                 UnidicTag::Suushi => POS::Number,
                 _ => POS::Noun,
             }
-        },
+        }
         UnidicTag::Doushi => POS::Verb,
         UnidicTag::Keiyoushi => POS::Adjective,
         UnidicTag::Keijoushi => POS::Adjective,
@@ -135,8 +135,7 @@ pub fn get_default_pos(token: &UnidicToken) -> POS {
                 UnidicTag::JodoushiDesu => POS::Copula,
                 _ => POS::Postposition,
             }
-            
-        },
+        }
         UnidicTag::Rentaishi => POS::Determiner,
         UnidicTag::Setsuzokushi => POS::Conjunction,
         UnidicTag::Settouji => POS::Prefix,

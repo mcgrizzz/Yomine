@@ -10,8 +10,5 @@ pub mod rule_matcher;
 
 pub mod word_rules;
 
-
-
 #[cfg(test)]
-
 mod rule_matcher_tests;

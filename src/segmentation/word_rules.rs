@@ -1,4 +1,4 @@
-use super::rule_matcher::{Rule, TokenMatcher, RuleAction, MainWordPolicy, Matcher};
+use super::rule_matcher::{ Rule, TokenMatcher, RuleAction, MainWordPolicy, Matcher };
 use super::word::POS;
 use super::unidic_tags::UnidicTag;
 
@@ -11,13 +11,15 @@ pub fn create_default_rules() -> Vec<Rule> {
             name: "Jodoushi to jodoushi binding",
             current: TokenMatcher {
                 pos1: Matcher::Any(vec![UnidicTag::Jodoushi]),
-                conjugation_type: Matcher::Any(vec![
-                    UnidicTag::JodoushiTa,
-                    UnidicTag::JodoushiNai,
-                    UnidicTag::JodoushiTai,
-                    UnidicTag::JodoushiMasu,
-                    UnidicTag::JodoushiNu
-                ]),
+                conjugation_type: Matcher::Any(
+                    vec![
+                        UnidicTag::JodoushiTa,
+                        UnidicTag::JodoushiNai,
+                        UnidicTag::JodoushiTai,
+                        UnidicTag::JodoushiMasu,
+                        UnidicTag::JodoushiNu
+                    ]
+                ),
                 ..Default::default()
             },
             next: None,
@@ -78,11 +80,9 @@ pub fn create_default_rules() -> Vec<Rule> {
             name: "Jodoushi to adjective binding",
             current: TokenMatcher {
                 pos1: Matcher::Any(vec![UnidicTag::Jodoushi]),
-                conjugation_type: Matcher::Any(vec![
-                    UnidicTag::JodoushiTa,
-                    UnidicTag::JodoushiNai,
-                    UnidicTag::JodoushiTai
-                ]),
+                conjugation_type: Matcher::Any(
+                    vec![UnidicTag::JodoushiTa, UnidicTag::JodoushiNai, UnidicTag::JodoushiTai]
+                ),
                 ..Default::default()
             },
             next: None,
@@ -200,7 +200,7 @@ pub fn create_default_rules() -> Vec<Rule> {
                 attach_prev: true,
                 attach_prev_lemma: true,
                 update_prev_pos: None,
-                main_word_policy: None, 
+                main_word_policy: None,
             },
         },
 
@@ -285,7 +285,6 @@ pub fn create_default_rules() -> Vec<Rule> {
                 pos: POS::AdjectivalNoun,
                 main_word_policy: Some(MainWordPolicy::UseFirstToken),
             },
-        },
-
+        }
     ]
 }

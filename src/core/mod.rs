@@ -4,4 +4,4 @@ pub mod utils;
 pub mod pipeline;
 
 pub use errors::YomineError;
-pub use models::{PartOfSpeech, Sentence, Term, SourceFile};
+pub use models::{ PartOfSpeech, Sentence, Term, SourceFile };

@@ -1,4 +1,8 @@
-use std::{fs::{self, File}, io::{self, BufReader, BufWriter, Cursor}, path::{Path, PathBuf}};
+use std::{
+    fs::{ self, File },
+    io::{ self, BufReader, BufWriter, Cursor },
+    path::{ Path, PathBuf },
+};
 
 use reqwest::blocking::get;
 use tar::Archive;
@@ -7,8 +11,6 @@ use xz2::bufread::XzDecoder;
 use zstd::stream::copy_decode;
 
 use crate::core::YomineError;
-
-
 
 const DICT_DIR: &str = "dictionaries";
 
@@ -39,9 +41,7 @@ impl DictType {
     // lemma_form index, lemma_reading index
     pub fn lemma_indices(&self) -> (usize, usize) {
         match self {
-            DictType::Unidic => {
-                (10, 11)
-            },
+            DictType::Unidic => { (10, 11) }
             DictType::Ipadic => {
                 (6, 8) //8 is the surface form reading.. sometimes? Let's use unidic for now
             }
@@ -122,7 +122,7 @@ pub fn ensure_dictionary(dict_type: &DictType) -> Result<PathBuf, YomineError> {
         copy_decode(BufReader::new(zst_file), BufWriter::new(dic_file))?;
         println!("Decompressed .dic file to {:?}", final_dic_path);
     }
-    
+
     //Clean up extra files
     cleanup_files(&extract_path, &final_dic_path)?;
     fs::remove_file(&download_path)?;
@@ -130,7 +130,6 @@ pub fn ensure_dictionary(dict_type: &DictType) -> Result<PathBuf, YomineError> {
 
     Ok(final_dic_path)
 }
-
 
 pub fn load_dictionary(path: &str) -> Result<Dictionary, YomineError> {
     let reader = BufReader::new(File::open(path)?);
@@ -141,6 +140,6 @@ pub fn load_dictionary(path: &str) -> Result<Dictionary, YomineError> {
 pub fn is_all_kana(word: &str) -> bool {
     word.chars().all(|c| {
         (c >= '\u{3040}' && c <= '\u{309F}') || //Hiragana
-        (c >= '\u{30A0}' && c <= '\u{30FF}') //Katakana
+            (c >= '\u{30A0}' && c <= '\u{30FF}') //Katakana
     })
 }

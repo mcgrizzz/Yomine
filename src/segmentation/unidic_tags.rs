@@ -26,7 +26,7 @@ pub enum UnidicTag {
 
     // Proper nouns (subtypes)
     Jinmei, // Person's name (人名) //pos3
-    Mei, // First name (名) //pos4 
+    Mei, // First name (名) //pos4
     Sei, // Family name (姓) //pos4
     Chimei, // Place name (地名) //pos3
     Kuni, // Country (国) //pos4
@@ -78,7 +78,7 @@ pub enum UnidicTag {
 
     //Inflection types 5.2 活用型 *That we care about*
     //Auxillary verbs
-    JodoushiDa, //da,na (助動詞-ダ) //conjugation_type 
+    JodoushiDa, //da,na (助動詞-ダ) //conjugation_type
     JodoushiTa, //ta (助動詞-タ) //conjugation_type
     JodoushiNu, //nu (助動詞-ヌ)
     JodoushiMai, //mai (助動詞-マイ) //
@@ -98,7 +98,6 @@ pub enum UnidicTag {
     Kagyouhenkaku, //カ行変格 //conjugation_type
     //Inflection forms 5.3 活用形
 
-
     //Non-unidic types
     Unset, // *
     Unknown, //Different than Michigo, if for some reason we get an unknown POS output we will match to this
@@ -107,95 +106,93 @@ pub enum UnidicTag {
 impl From<&str> for UnidicTag {
     fn from(value: &str) -> Self {
         match value {
-            "代名詞"        => Self::Daimeshi,
-            "副詞"          => Self::Fukushi,
-            "助動詞"        => Self::Jodoushi,
-            "動詞"          => Self::Doushi,
-            "助詞"          => Self::Joshi,
-            "名詞"          => Self::Meishi,
-            "形容詞"        => Self::Keiyoushi,
-            "形状詞"        => Self::Keijoushi,
-            "接続詞"        => Self::Setsuzokushi,
-            "感動詞"        => Self::Kandoushi,
-            "連体詞"        => Self::Rentaishi,
-            "記号"          => Self::Kigou,
+            "代名詞" => Self::Daimeshi,
+            "副詞" => Self::Fukushi,
+            "助動詞" => Self::Jodoushi,
+            "動詞" => Self::Doushi,
+            "助詞" => Self::Joshi,
+            "名詞" => Self::Meishi,
+            "形容詞" => Self::Keiyoushi,
+            "形状詞" => Self::Keijoushi,
+            "接続詞" => Self::Setsuzokushi,
+            "感動詞" => Self::Kandoushi,
+            "連体詞" => Self::Rentaishi,
+            "記号" => Self::Kigou,
 
-            "固有名詞"      => Self::Koyuumeishi,
-            "普通名詞"      => Self::Futsuumeishi,
-            "数詞"          => Self::Suushi,
+            "固有名詞" => Self::Koyuumeishi,
+            "普通名詞" => Self::Futsuumeishi,
+            "数詞" => Self::Suushi,
 
-            "人名"          => Self::Jinmei,
-            "名"            => Self::Mei,
-            "姓"            => Self::Sei,
-            "地名"          => Self::Chimei,
-            "国"            => Self::Kuni,
+            "人名" => Self::Jinmei,
+            "名" => Self::Mei,
+            "姓" => Self::Sei,
+            "地名" => Self::Chimei,
+            "国" => Self::Kuni,
 
-            "助動詞語幹"    => Self::Jodoushigokan,
-            "サ変可能"      => Self::Sahenkanou,
+            "助動詞語幹" => Self::Jodoushigokan,
+            "サ変可能" => Self::Sahenkanou,
             "サ変形状詞可能" => Self::Sahenkeijoushikanou,
 
-            "一般"          => Self::Ippan,
-            "非自立可能"    => Self::Hijiritsukanou,
-            "形状詞可能"    => Self::Keijoushikanou,
-            "助数詞可能"    => Self::Josuushikanou,
-            "副詞可能"      => Self::Fukushikanou,
+            "一般" => Self::Ippan,
+            "非自立可能" => Self::Hijiritsukanou,
+            "形状詞可能" => Self::Keijoushikanou,
+            "助数詞可能" => Self::Josuushikanou,
+            "副詞可能" => Self::Fukushikanou,
 
-            "係助詞"        => Self::Kakarijoshi,
-            "副助詞"        => Self::Fukujoshi,
-            "接続助詞"      => Self::Setsuzokujoshi,
-            "格助詞"        => Self::Kakujoshi,      
-            "準体助詞"      => Self::Juntaijoshi,    
-            "終助詞"        => Self::Shuujoshi,
+            "係助詞" => Self::Kakarijoshi,
+            "副助詞" => Self::Fukujoshi,
+            "接続助詞" => Self::Setsuzokujoshi,
+            "格助詞" => Self::Kakujoshi,
+            "準体助詞" => Self::Juntaijoshi,
+            "終助詞" => Self::Shuujoshi,
 
-            "補助記号"      => Self::Hojokigou,
-            "句点"          => Self::Kuten,         
-            "括弧開"        => Self::Kakkoaki,       
-            "括弧閉"        => Self::Kakkotoji,      
-            "読点"          => Self::Touten,
-            "ＡＡ"          => Self::Aa,
-            "顔文字"        => Self::Kaomoji,
+            "補助記号" => Self::Hojokigou,
+            "句点" => Self::Kuten,
+            "括弧開" => Self::Kakkoaki,
+            "括弧閉" => Self::Kakkotoji,
+            "読点" => Self::Touten,
+            "ＡＡ" => Self::Aa,
+            "顔文字" => Self::Kaomoji,
 
-            "接頭辞"        => Self::Settouji,        
-            "接尾辞"        => Self::Setsubiji,      
-            "名詞的"        => Self::Meishiteki,  
-            "動詞的"        => Self::Doushiteki,  
-            "形容詞的"      => Self::Keiyoushiteki, 
-            "形状詞的"      => Self::Keijoushiteki,
-            "助数詞"        => Self::Josuushi, 
+            "接頭辞" => Self::Settouji,
+            "接尾辞" => Self::Setsubiji,
+            "名詞的" => Self::Meishiteki,
+            "動詞的" => Self::Doushiteki,
+            "形容詞的" => Self::Keiyoushiteki,
+            "形状詞的" => Self::Keijoushiteki,
+            "助数詞" => Self::Josuushi,
 
-            "空白"          => Self::Kuuhaku,        
-            "web誤脱"       => Self::Webgodatsu,     
-            "方言"          => Self::Hougen,
-            "フィラー"      => Self::Firaa,         
-            "言いよどみ"    => Self::Gidai,         
-            "未知語"        => Self::Michigo,         
-            "新規未知語"    => Self::Shinkimichigo, 
-            "カタカナ文"    => Self::Katakanabun,    
-            "ローマ字文"    => Self::Roumajibun,     
-            "漢文"          => Self::Kanbun,
+            "空白" => Self::Kuuhaku,
+            "web誤脱" => Self::Webgodatsu,
+            "方言" => Self::Hougen,
+            "フィラー" => Self::Firaa,
+            "言いよどみ" => Self::Gidai,
+            "未知語" => Self::Michigo,
+            "新規未知語" => Self::Shinkimichigo,
+            "カタカナ文" => Self::Katakanabun,
+            "ローマ字文" => Self::Roumajibun,
+            "漢文" => Self::Kanbun,
 
-            "助動詞-ダ"     => Self::JodoushiDa,
-            "助動詞-タ"     => Self::JodoushiTa,
-            "助動詞-ヌ"     => Self::JodoushiNu,
-            "助動詞-マイ"   => Self::JodoushiMai,
-            "助動詞-ナイ"   => Self::JodoushiNai,
-            "助動詞-タイ"   => Self::JodoushiTai,
-            "助動詞-デス"   => Self::JodoushiDesu,
+            "助動詞-ダ" => Self::JodoushiDa,
+            "助動詞-タ" => Self::JodoushiTa,
+            "助動詞-ヌ" => Self::JodoushiNu,
+            "助動詞-マイ" => Self::JodoushiMai,
+            "助動詞-ナイ" => Self::JodoushiNai,
+            "助動詞-タイ" => Self::JodoushiTai,
+            "助動詞-デス" => Self::JodoushiDesu,
             "助動詞-ラシイ" => Self::JodoushiRashii,
-            "助動詞-マス"   => Self::JodoushiMasu,
-            "助動詞-レル"   => Self::JodoushiReru,
+            "助動詞-マス" => Self::JodoushiMasu,
+            "助動詞-レル" => Self::JodoushiReru,
 
-            "文語助動詞-ナリ-断定"  => Self::BungojodoushiNari,
-            "文語助動詞-ベシ"       => Self::BungojodoushiBeshi,
+            "文語助動詞-ナリ-断定" => Self::BungojodoushiNari,
+            "文語助動詞-ベシ" => Self::BungojodoushiBeshi,
 
             "サ行変格" => Self::Sagyouhenkaku,
             "カ行変格" => Self::Kagyouhenkaku,
 
-            "*"            => Self::Unset,         
+            "*" => Self::Unset,
 
-            _ => {
-                UnidicTag::Unknown
-            },
+            _ => { UnidicTag::Unknown }
         }
     }
 }

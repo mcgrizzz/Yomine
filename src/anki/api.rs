@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
+use serde::{ Deserialize, Serialize };
 
 #[derive(Debug)]
 pub struct Deck {
@@ -14,7 +14,6 @@ pub struct Field {
     pub value: String,
     order: u32,
 }
-
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -71,11 +70,11 @@ impl<T> ApiResponse<T> {
 
 async fn make_request<T: for<'de> Deserialize<'de>>(
     action: &str,
-    params: Option<serde_json::Value>,
+    params: Option<serde_json::Value>
 ) -> Result<ApiResponse<T>, reqwest::Error> {
     let mut body = serde_json::Map::new();
     body.insert("action".to_string(), serde_json::Value::String(action.to_string()));
-    body.insert("version".to_string(), serde_json::Value::Number(6.into()));
+    body.insert("version".to_string(), serde_json::Value::Number((6).into()));
 
     if let Some(params) = params {
         body.insert("params".to_string(), params);
@@ -84,10 +83,8 @@ async fn make_request<T: for<'de> Deserialize<'de>>(
     let response: ApiResponse<T> = Client::new()
         .post("http://localhost:8765/")
         .json(&body)
-        .send()
-        .await?
-        .json()
-        .await?;
+        .send().await?
+        .json().await?;
 
     Ok(response)
 }
@@ -100,13 +97,16 @@ pub async fn get_version() -> Result<u32, reqwest::Error> {
 }
 
 pub async fn get_deck_ids() -> Result<Vec<Deck>, reqwest::Error> {
-    let response: ApiResponse<HashMap<String, u64>> =
-        make_request("deckNamesAndIds", None).await?;
+    let response: ApiResponse<HashMap<String, u64>> = make_request("deckNamesAndIds", None).await?;
 
-    Ok(response.unwrap_result().unwrap_or_default()
-        .into_iter()
-        .map(|(name, id)| Deck { name, id })
-        .collect())
+    Ok(
+        response
+            .unwrap_result()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(name, id)| Deck { name, id })
+            .collect()
+    )
 }
 
 pub async fn get_note_ids(query: &str) -> Result<Vec<u64>, reqwest::Error> {
@@ -128,8 +128,7 @@ pub async fn get_cards(card_ids: Vec<u64>) -> Result<Vec<Card>, reqwest::Error> 
 }
 
 pub async fn get_model_ids() -> Result<HashMap<String, u64>, reqwest::Error> {
-    let response: ApiResponse<HashMap<String, u64>> =
-        make_request("modelNamesAndIds", None).await?;
+    let response: ApiResponse<HashMap<String, u64>> = make_request("modelNamesAndIds", None).await?;
     Ok(response.unwrap_result().unwrap_or_default())
 }
 
