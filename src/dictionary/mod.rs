@@ -7,14 +7,17 @@ type Frequency = CacheFrequency;
 
 
 use serde::{Deserialize, Serialize};
+use crate::core::utils::deserialize_number_or_numeric_string;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum JsonFrequency {
+    #[serde(deserialize_with = "deserialize_number_or_numeric_string")]
     Number(u32),
     Complex {
+        #[serde(deserialize_with = "deserialize_number_or_numeric_string")]
         value: u32,
-
+        
         #[serde(rename = "displayValue")]
         display_value: Option<String>,
     }

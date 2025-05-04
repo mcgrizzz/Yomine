@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+zip = "2.6.1"
 bincode = { version = "2.0.1", features = ["serde"]} 
 eframe = "0.30.0"
 egui_extras = "0.30.0"

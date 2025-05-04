@@ -1,22 +1,33 @@
-use std::{collections::HashMap, fs::{self, File}, io::{BufReader, Read, Write}, path::Path, time::Instant};
+use std::{
+    collections::HashMap,
+    fs::{self, File},
+    io::{BufReader, Read, Write},
+    path::Path,
+    time::Instant,
+};
 
-use std::sync::Mutex;
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use regex::Regex;
+use zip::ZipArchive;
+use std::sync::Mutex;
 use wana_kana::{ConvertJapanese, IsJapaneseStr};
 
-use crate::{core::{utils::{harmonic_frequency, NormalizeLongVowel}, YomineError}, dictionary::TermMetaBankV3};
+use crate::{
+    core::{
+        utils::{harmonic_frequency, NormalizeLongVowel},
+        YomineError,
+    },
+    dictionary::TermMetaBankV3,
+};
 
 use super::{frequency_dict::FrequencyDictionary, DictionaryIndex, FrequencyData};
 
-
 pub struct FrequencyManager {
-    dictionaries: HashMap<String, FrequencyDictionary>, 
-    toggled_states: HashMap<String, bool>,              
+    dictionaries: HashMap<String, FrequencyDictionary>,
+    toggled_states: HashMap<String, bool>,
 }
 
 impl FrequencyManager {
-
     fn new() -> Self {
         FrequencyManager {
             dictionaries: HashMap::new(),
@@ -34,7 +45,10 @@ impl FrequencyManager {
             *state = enabled;
             Ok(())
         } else {
-            Err(YomineError::Custom(format!("Dictionary '{}' not found", name)))
+            Err(YomineError::Custom(format!(
+                "Dictionary '{}' not found",
+                name
+            )))
         }
     }
 
@@ -51,19 +65,29 @@ impl FrequencyManager {
             .collect()
     }
 
-    pub fn build_freq_map(&self, lemma_form: &str, lemma_reading: &str, is_kana: bool) -> HashMap<String, u32> {
-        let mut freq_map: HashMap<String, u32> = self.get_enabled_dictionaries().iter()
-                .filter_map(|dict| {
-                    let freq = dict.get_frequency(&lemma_form, &lemma_reading, is_kana);
-                    if let Some(term_freq) = freq {
-                        Some((dict.title.clone(), term_freq.value())) 
-                    } else {
-                        None 
-                    }
-                })
-                .collect();
+    pub fn build_freq_map(
+        &self,
+        lemma_form: &str,
+        lemma_reading: &str,
+        is_kana: bool,
+    ) -> HashMap<String, u32> {
+        let mut freq_map: HashMap<String, u32> = self
+            .get_enabled_dictionaries()
+            .iter()
+            .filter_map(|dict| {
+                let freq = dict.get_frequency(&lemma_form, &lemma_reading, is_kana);
+                if let Some(term_freq) = freq {
+                    Some((dict.title.clone(), term_freq.value()))
+                } else {
+                    None
+                }
+            })
+            .collect();
 
-        freq_map.insert("HARMONIC".to_string(), self.harmonic_frequency(lemma_form, lemma_reading, is_kana));
+        freq_map.insert(
+            "HARMONIC".to_string(),
+            self.harmonic_frequency(lemma_form, lemma_reading, is_kana),
+        );
         freq_map
     }
 
@@ -73,7 +97,9 @@ impl FrequencyManager {
 
         for (dict_name, dictionary) in &self.dictionaries {
             if *self.toggled_states.get(dict_name).unwrap_or(&false) {
-                if let Some(freq_data) = dictionary.get_frequency(lemma_form, lemma_reading, is_kana) {
+                if let Some(freq_data) =
+                    dictionary.get_frequency(lemma_form, lemma_reading, is_kana)
+                {
                     let frequency = freq_data.value();
                     if frequency > 0 {
                         sum_of_reciprocals += 1.0 / frequency as f32;
@@ -99,12 +125,16 @@ impl FrequencyManager {
                 if let Some(freq_data) = dictionary.get_frequencies_by_key(input) {
                     if !input.is_kana() {
                         //Filter the kana specific frequencies
-                        freqs.extend(freq_data.iter().filter(|f| !f.has_special_marker()).collect::<Vec<&FrequencyData>>());
+                        freqs.extend(
+                            freq_data
+                                .iter()
+                                .filter(|f| !f.has_special_marker())
+                                .collect::<Vec<&FrequencyData>>(),
+                        );
                     } else {
                         //Don't filter otherwise since we matched on a kana key...
                         freqs.extend(freq_data);
                     }
-                    
                 }
             }
         }
@@ -118,20 +148,36 @@ impl FrequencyManager {
         // Helper closure to get frequency for exact word/reading pair from a dictionary
         let get_exact_freq = |d: &FrequencyDictionary| -> Option<u32> {
             if let Some(entries) = d.get_frequencies_by_key(word) {
-                let matching_entries: Vec<&FrequencyData> = entries.iter().filter(|e| {
-                    if let FrequencyData::Nested { reading: entry_reading, .. } = e {
-                        let entry_script = if entry_reading.as_str().is_hiragana() { "hiragana" } else { "katakana" };
-                        let normalized_reading = if entry_script == "hiragana" {
-                            reading.to_hiragana().normalize_long_vowel()
+                let matching_entries: Vec<&FrequencyData> = entries
+                    .iter()
+                    .filter(|e| {
+                        if let FrequencyData::Nested {
+                            reading: entry_reading,
+                            ..
+                        } = e
+                        {
+                            let entry_script = if entry_reading.as_str().is_hiragana() {
+                                "hiragana"
+                            } else {
+                                "katakana"
+                            };
+                            let normalized_reading = if entry_script == "hiragana" {
+                                reading.to_hiragana().normalize_long_vowel()
+                            } else {
+                                reading.to_katakana()
+                            };
+                            let marker_condition = if is_kana {
+                                e.has_special_marker()
+                            } else {
+                                !e.has_special_marker()
+                            };
+                            marker_condition
+                                && normalized_reading == *entry_reading.normalize_long_vowel()
                         } else {
-                            reading.to_katakana()
-                        };
-                        let marker_condition = if is_kana { e.has_special_marker() } else { !e.has_special_marker() };
-                        marker_condition && normalized_reading == *entry_reading.normalize_long_vowel()
-                    } else {
-                        false
-                    }
-                }).collect();
+                            false
+                        }
+                    })
+                    .collect();
                 if !matching_entries.is_empty() {
                     // Select the smallest frequency among matching entries, consistent with existing logic
                     matching_entries.into_iter().map(|e| e.value()).min()
@@ -147,15 +193,28 @@ impl FrequencyManager {
         let has_other = |d: &FrequencyDictionary| -> bool {
             if let Some(entries) = d.get_frequencies_by_key(word) {
                 entries.iter().any(|e| {
-                    if let FrequencyData::Nested { reading: entry_reading, .. } = e {
-                        let entry_script = if entry_reading.as_str().is_hiragana() { "hiragana" } else { "katakana" };
+                    if let FrequencyData::Nested {
+                        reading: entry_reading,
+                        ..
+                    } = e
+                    {
+                        let entry_script = if entry_reading.as_str().is_hiragana() {
+                            "hiragana"
+                        } else {
+                            "katakana"
+                        };
                         let normalized_reading = if entry_script == "hiragana" {
                             reading.to_hiragana().normalize_long_vowel()
                         } else {
                             reading.to_katakana()
                         };
-                        let marker_condition = if is_kana { e.has_special_marker() } else { !e.has_special_marker() };
-                        marker_condition && normalized_reading != *entry_reading.normalize_long_vowel()
+                        let marker_condition = if is_kana {
+                            e.has_special_marker()
+                        } else {
+                            !e.has_special_marker()
+                        };
+                        marker_condition
+                            && normalized_reading != *entry_reading.normalize_long_vowel()
                     } else {
                         false
                     }
@@ -168,7 +227,10 @@ impl FrequencyManager {
         // Helper closure to get Simple frequency from a dictionary
         let get_simple = |d: &FrequencyDictionary| -> Option<u32> {
             if let Some(entries) = d.get_frequencies_by_key(word) {
-                entries.iter().find(|e| matches!(e, FrequencyData::Simple(_))).map(|e| e.value())
+                entries
+                    .iter()
+                    .find(|e| matches!(e, FrequencyData::Simple(_)))
+                    .map(|e| e.value())
             } else {
                 None
             }
@@ -177,7 +239,10 @@ impl FrequencyManager {
         let enabled_dicts = self.get_enabled_dictionaries();
 
         // Collect frequencies for exact word/reading pairs
-        let exact_freqs: Vec<u32> = enabled_dicts.iter().filter_map(|d| get_exact_freq(d)).collect();
+        let exact_freqs: Vec<u32> = enabled_dicts
+            .iter()
+            .filter_map(|d| get_exact_freq(d))
+            .collect();
 
         if !exact_freqs.is_empty() {
             // Case 1: Exact matches found, calculate harmonic mean
@@ -187,7 +252,8 @@ impl FrequencyManager {
             None
         } else {
             // Case 3 & 4: No Nested frequencies, use Simple frequencies or return None
-            let simple_freqs: Vec<u32> = enabled_dicts.iter().filter_map(|d| get_simple(d)).collect();
+            let simple_freqs: Vec<u32> =
+                enabled_dicts.iter().filter_map(|d| get_simple(d)).collect();
             harmonic_frequency(&simple_freqs)
         }
     }
@@ -226,12 +292,18 @@ fn parse_term_meta_bank(folder_path: &Path) -> Result<Vec<TermMetaBankV3>, Yomin
                 .and_then(|data| serde_json::from_str::<Vec<Vec<serde_json::Value>>>(&data).ok()) // Parse JSON as nested arrays
                 .into_iter() // Handle Option
                 .flat_map(|nested_array| nested_array.into_iter()) // Flatten nested arrays
-                .filter_map(|raw_entry| serde_json::from_value::<TermMetaBankV3>(serde_json::Value::Array(raw_entry)).ok()) // Convert to TermMetaBankV3
+                .filter_map(|raw_entry| {
+                    serde_json::from_value::<TermMetaBankV3>(serde_json::Value::Array(raw_entry))
+                        .ok()
+                }) // Convert to TermMetaBankV3
                 .filter(|meta| meta.data_type == "freq") // Filter by data type
         })
         .collect();
 
-    println!("Parsed {} entries from term meta bank files.", term_meta_list.len());
+    println!(
+        "Parsed {} entries from term meta bank files.",
+        term_meta_list.len()
+    );
 
     Ok(term_meta_list)
 }
@@ -244,11 +316,12 @@ fn load_cached_dict(cache_path: &Path) -> Result<FrequencyDictionary, String> {
     reader
         .read_to_end(&mut buffer)
         .map_err(|e| format!("Failed to read cache file: {}", e))?;
-    
+
     // Replace bincode::deserialize with bincode::serde::decode_from_slice
-    let (dict, _): (FrequencyDictionary, usize) = bincode::serde::decode_from_slice(&buffer, bincode::config::standard())
-        .map_err(|e| format!("Failed to decode cache: {}", e))?;
-    
+    let (dict, _): (FrequencyDictionary, usize) =
+        bincode::serde::decode_from_slice(&buffer, bincode::config::standard())
+            .map_err(|e| format!("Failed to decode cache: {}", e))?;
+
     Ok(dict)
 }
 
@@ -256,7 +329,7 @@ fn save_cached_dict(dict: &FrequencyDictionary, cache_path: &Path) -> Result<(),
     // Replace bincode::serialize with bincode::serde::encode_to_vec
     let encoded = bincode::serde::encode_to_vec(dict, bincode::config::standard())
         .map_err(|e| format!("Failed to encode dictionary: {}", e))?;
-    
+
     let mut file = File::create(cache_path)
         .map_err(|e| format!("Failed to create cache file at {:?}: {}", cache_path, e))?;
     file.write_all(&encoded)
@@ -264,12 +337,38 @@ fn save_cached_dict(dict: &FrequencyDictionary, cache_path: &Path) -> Result<(),
     Ok(())
 }
 
+fn extract_zip(zip_path: &Path, extract_to: &Path) -> Result<(), YomineError> {
+    let file = File::open(zip_path)
+        .map_err(|e| YomineError::Custom(format!("Failed to open zip file: {}", e)))?;
+    let mut archive = ZipArchive::new(file)
+        .map_err(|e| YomineError::Custom(format!("Failed to read zip archive: {}", e)))?;
+    archive.extract(extract_to)
+        .map_err(|e| YomineError::Custom(format!("Failed to extract zip: {}", e)))?;
+
+    Ok(())
+}
 
 pub fn process_frequency_dictionaries() -> Result<FrequencyManager, YomineError> {
     let manager = Mutex::new(FrequencyManager::new());
     let start = Instant::now();
 
-    fs::read_dir("frequency_dict")?
+    let dir_path = Path::new("frequency_dict");
+
+    for entry in fs::read_dir(dir_path)
+        .map_err(|e| YomineError::Custom(format!("Failed to read directory: {}", e)))? {
+        let entry = entry.map_err(|e| YomineError::Custom(format!("Failed to read entry: {}", e)))?;
+        let path = entry.path();
+        if path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("zip") {
+            let extract_dir = dir_path.join(path.file_stem().unwrap_or_default().to_string_lossy().as_ref());
+            if !extract_dir.exists() {
+                fs::create_dir_all(&extract_dir)
+                    .map_err(|e| YomineError::Custom(format!("Failed to create extraction directory: {}", e)))?;
+                extract_zip(&path, &extract_dir)?;
+            }
+        }
+    }
+
+    fs::read_dir(dir_path)?
         .filter_map(|e| e.ok())
         .par_bridge()
         .for_each(|entry| {
@@ -290,16 +389,22 @@ pub fn process_frequency_dictionaries() -> Result<FrequencyManager, YomineError>
                     Ok(cached_dict) => {
                         if cached_dict.revision == index.revision {
                             let duration = load_start.elapsed();
-                            println!("Loaded '{}' from cache in {:?}", dict_name, duration);
+                            println!("Loaded '{}' from cache in {:?}: {} entries", dict_name, duration, cached_dict.terms.len());
                             let mut manager_guard = manager.lock().unwrap();
                             manager_guard.add_dictionary(dict_name, cached_dict);
                             return;
                         } else {
-                            println!("Revision mismatch for '{}': cache={}, index={}", dict_name, cached_dict.revision, index.revision);
+                            println!(
+                                "Revision mismatch for '{}': cache={}, index={}",
+                                dict_name, cached_dict.revision, index.revision
+                            );
                         }
                     }
                     Err(e) => {
-                        println!("Failed to load cache for '{}': {}, rebuilding from JSON", dict_name, e);
+                        println!(
+                            "Failed to load cache for '{}': {}, rebuilding from JSON",
+                            dict_name, e
+                        );
                     }
                 }
 
@@ -340,25 +445,44 @@ pub fn process_frequency_dictionaries() -> Result<FrequencyManager, YomineError>
 mod tests {
     use super::*;
 
-    fn assert_frequency(dict: &FrequencyDictionary, term: &str, reading: &str, is_kana: bool, expected: Option<u32>) {
-        let result = dict.get_frequency(term, reading, is_kana).map(|f| f.value());
-        assert_eq!(result, expected, "Failed for term: {}, reading: {}, is_kana: {}", term, reading, is_kana);
+    fn assert_frequency(
+        dict: &FrequencyDictionary,
+        term: &str,
+        reading: &str,
+        is_kana: bool,
+        expected: Option<u32>,
+    ) {
+        let result = dict
+            .get_frequency(term, reading, is_kana)
+            .map(|f| f.value());
+        assert_eq!(
+            result, expected,
+            "Failed for term: {}, reading: {}, is_kana: {}",
+            term, reading, is_kana
+        );
     }
 
     impl FrequencyManager {
         fn get_dictionary(&self, name: &str) -> Option<&FrequencyDictionary> {
-            self.toggled_states
-                .get(name)
-                .and_then(|&enabled| if enabled { self.dictionaries.get(name) } else { None })
+            self.toggled_states.get(name).and_then(|&enabled| {
+                if enabled {
+                    self.dictionaries.get(name)
+                } else {
+                    None
+                }
+            })
         }
     }
 
     #[test]
     fn test_frequency() {
-        let frequency_manager = process_frequency_dictionaries().expect("Failed to load dictionaries");
+        let frequency_manager =
+            process_frequency_dictionaries().expect("Failed to load dictionaries");
 
-        let dict = frequency_manager.get_dictionary("JPDBv2㋕").expect("JPDBv2㋕ dictionary not found");
-           
+        let dict = frequency_manager
+            .get_dictionary("JPDBv2㋕")
+            .expect("JPDBv2㋕ dictionary not found");
+
         assert_frequency(&dict, "の", "の", true, Some(1));
 
         // Test kana frequency vs normal frequency

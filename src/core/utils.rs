@@ -117,7 +117,10 @@ mod tests {
 
 
 use difference::Changeset;
+use serde::{Deserialize, Deserializer};
 use wana_kana::utils::{is_char_kanji, is_char_kana};
+
+use super::YomineError;
 
 // Applies deinflection rules step-by-step, adjusting the reading accordingly.
 // Does not check word existence; filter later with dictionaries.
@@ -190,4 +193,45 @@ fn initial_kanji_stem(word: &str) -> String {
 // Helper function to count trailing kana characters
 fn trailing_kana_len(word: &str) -> usize {
     word.chars().rev().take_while(|&c| is_char_kana(c)).count()
+}
+
+
+pub fn deserialize_number_or_numeric_string<'de, D>(deserializer: D) -> Result<u32, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    // Use serde_json::Value as an intermediate type to handle both numbers and strings
+    let value = serde_json::Value::deserialize(deserializer)?;
+
+    match value {
+        serde_json::Value::Number(num) => {
+            if let Some(n) = num.as_u64() {
+                if n <= u32::MAX as u64 {
+                    Ok(n as u32)
+                } else {
+                    Err(serde::de::Error::custom(format!(
+                        "number {} is too large for u32",
+                        n
+                    )))
+                }
+            } else {
+                Err(serde::de::Error::custom(
+                    "number cannot be converted to u32",
+                ))
+            }
+        }
+        // Handle JSON strings (e.g., "123")
+        serde_json::Value::String(s) => match s.parse::<u32>() {
+            Ok(num) => Ok(num),
+            Err(_) => Err(serde::de::Error::custom(format!(
+                "string '{}' is not a valid number",
+                s
+            ))),
+        },
+        // Reject anything else (e.g., objects, arrays, booleans)
+        _ => Err(serde::de::Error::custom(format!(
+            "expected a number or numeric string, got: {}",
+            value
+        ))),
+    }
 }
