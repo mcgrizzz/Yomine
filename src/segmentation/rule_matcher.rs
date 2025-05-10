@@ -1,3 +1,8 @@
+use std::thread::current;
+
+use wana_kana::{ ConvertJapanese, IsJapaneseStr };
+
+use crate::core::utils::NormalizeLongVowel;
 use crate::core::YomineError;
 use super::word::{ Word, POS, get_default_pos };
 use super::token_models::UnidicToken;
@@ -232,14 +237,36 @@ pub fn process_tokens(tokens: Vec<UnidicToken>, rules: &[Rule]) -> Result<Vec<Wo
 
         if !rule_applied {
             let pos = get_default_pos(&current_token);
+
+            //Tokenizer outputs
+            let (surface_hatsuon, lemma_hatsuon) = if current_token.surface.as_str().is_katakana() {
+                (
+                    current_token.surface_hatsuon.clone().to_katakana(),
+                    current_token.lemma_hatsuon.clone().to_katakana(),
+                )
+            } else {
+                (
+                    current_token.surface_hatsuon
+                        .clone()
+                        .to_hiragana()
+                        .normalize_long_vowel()
+                        .into_owned(),
+                    current_token.lemma_hatsuon
+                        .clone()
+                        .to_hiragana()
+                        .normalize_long_vowel()
+                        .into_owned(),
+                )
+            };
+
             let word = Word {
                 surface_form: current_token.surface.clone(),
-                surface_hatsuon: current_token.surface_hatsuon.clone(),
+                surface_hatsuon,
                 lemma_form: current_token.lemma_form.clone(),
-                lemma_hatsuon: current_token.lemma_hatsuon.clone(),
+                lemma_hatsuon,
                 part_of_speech: pos,
                 tokens: vec![current_token.clone()],
-                main_word: None, // For single tokens, main_word is typically not needed
+                main_word: None,
             };
 
             words.push(word);

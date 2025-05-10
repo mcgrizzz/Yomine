@@ -31,6 +31,7 @@ pub enum POS {
     Counter,
     Symbol,
     Expression,
+    NounExpression,
     Other,
     Unknown,
 }
@@ -40,7 +41,7 @@ impl fmt::Display for POS {
         let readable = match self {
             POS::Noun => "Noun",
             POS::ProperNoun => "Proper Noun",
-            POS::CompoundNoun => "Compound Noun",
+            POS::CompoundNoun | POS::NounExpression => "Compound Noun",
             POS::Pronoun => "Pronoun",
             POS::Adjective => "Adjective",
             POS::AdjectivalNoun => "Adjectival Noun",

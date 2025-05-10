@@ -1,6 +1,9 @@
 use std::collections::HashMap;
+use eframe::egui::cache;
 use serde::Deserialize;
 use wana_kana::{ ConvertJapanese, IsJapaneseStr };
+
+use crate::core::utils::NormalizeLongVowel;
 
 use super::{ CacheFrequencyData, FrequencyData, TermMetaBankV3 };
 
@@ -15,10 +18,21 @@ impl FrequencyDictionary {
     pub fn new(title: String, revision: String, term_meta_list: Vec<TermMetaBankV3>) -> Self {
         let mut terms = HashMap::new();
 
+        //Do reading normalization here so we don't ever have to compute again.
         for term_meta in term_meta_list {
             if let Some(json_freq_data) = term_meta.data {
-                let cache_freq_data: CacheFrequencyData = json_freq_data.into();
-                terms.entry(term_meta.term.clone()).or_insert_with(Vec::new).push(cache_freq_data);
+                let mut cache_freq_data: CacheFrequencyData = json_freq_data.into();
+
+                // Normalize the long vowel of the reading if it exists
+                if let Some(reading) = cache_freq_data.reading() {
+                    let normalized_reading = reading.normalize_long_vowel().into_owned();
+                    cache_freq_data.set_reading(normalized_reading);
+                }
+
+                // Normalize the long vowel of the term/key
+                let normalized_term = term_meta.term.normalize_long_vowel().into_owned();
+
+                terms.entry(normalized_term).or_insert_with(Vec::new).push(cache_freq_data);
             }
         }
 
@@ -49,12 +63,7 @@ impl FrequencyDictionary {
         self.terms.get(lemma_form).and_then(|entries| {
             let matching_entry = entries.iter().find(|entry| {
                 if let Some(entry_reading) = entry.reading().as_deref() {
-                    let normalized_reading = if entry_reading.is_hiragana() {
-                        lemma_reading.to_hiragana()
-                    } else {
-                        lemma_reading.to_katakana()
-                    };
-                    entry.has_special_marker() && normalized_reading.eq(entry_reading)
+                    entry.has_special_marker() && lemma_reading.eq(entry_reading)
                 } else {
                     false
                 }
@@ -74,12 +83,7 @@ impl FrequencyDictionary {
                 .iter()
                 .filter(|entry| {
                     if let Some(entry_reading) = entry.reading().as_deref() {
-                        let normalized_reading = if entry_reading.is_hiragana() {
-                            lemma_reading.to_hiragana()
-                        } else {
-                            lemma_reading.to_katakana()
-                        };
-                        !entry.has_special_marker() && normalized_reading.eq(entry_reading)
+                        !entry.has_special_marker() && lemma_reading.eq(entry_reading)
                     } else {
                         false
                     }

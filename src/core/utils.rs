@@ -1,38 +1,50 @@
-use std::cell::OnceCell;
+use std::{ borrow::Cow, cell::OnceCell };
 
 use jp_deinflector::deinflect;
 use regex::Regex;
 
 pub trait NormalizeLongVowel {
-    fn normalize_long_vowel(&self) -> String;
+    fn normalize_long_vowel(&self) -> Cow<'_, str>;
 }
 
 //とおい -> とうい AND  けいたい -> けいたい
 impl NormalizeLongVowel for str {
-    fn normalize_long_vowel(&self) -> String {
-        // OnceCell will only compile the Regex once
-        let cell = OnceCell::new();
-        let re: &Regex = cell.get_or_init(|| {
-            Regex::new(
-                r"([おこそとのほもよろごぞどぼぽ])お|([けせてねへめれげぜでべぺ])え"
-            ).unwrap()
-        });
+    fn normalize_long_vowel(&self) -> Cow<'_, str> {
+        // Check if the string is hiragana
+        if self.is_hiragana() {
+            // Lazily initialize the regex using OnceCell
+            let cell = OnceCell::new();
+            let re: &Regex = cell.get_or_init(|| {
+                Regex::new(
+                    r"([おこそとのほもよろごぞどぼぽ])お|([けせてねへめれげぜでべぺ])え"
+                ).unwrap()
+            });
 
-        re.replace_all(self, |captures: &regex::Captures| {
-            if let Some(o_row) = captures.get(1) {
-                format!("{}う", o_row.as_str())
-            } else if let Some(e_row) = captures.get(2) {
-                format!("{}い", e_row.as_str())
+            // Check if any replacement is needed
+            if re.is_match(self) {
+                // Perform replacement only if a match is found
+                let replaced = re.replace_all(self, |captures: &regex::Captures| {
+                    if let Some(o_row) = captures.get(1) {
+                        format!("{}う", o_row.as_str())
+                    } else if let Some(e_row) = captures.get(2) {
+                        format!("{}い", e_row.as_str())
+                    } else {
+                        captures[0].to_string() // Fallback (shouldn't be reached)
+                    }
+                });
+                Cow::Owned(replaced.to_string()) // Return owned string with changes
             } else {
-                captures[0].to_string() // Fallback (should never be reached)
+                Cow::Borrowed(self)
             }
-        }).to_string()
+        } else {
+            Cow::Borrowed(self)
+        }
     }
 }
 
 /// Implement the trait for `String` by forwarding the method to `str`
 impl NormalizeLongVowel for String {
-    fn normalize_long_vowel(&self) -> String {
+    fn normalize_long_vowel(&self) -> Cow<'_, str> {
         self.as_str().normalize_long_vowel()
     }
 }
@@ -115,8 +127,7 @@ mod tests {
 }
 
 use serde::{ Deserialize, Deserializer };
-use wana_kana::utils::is_char_kana;
-
+use wana_kana::{ utils::is_char_kana, IsJapaneseStr };
 
 fn kana_suffix_length(word: &str) -> usize {
     word.chars()
@@ -125,12 +136,15 @@ fn kana_suffix_length(word: &str) -> usize {
         .count()
 }
 
-fn kanji_mapping(word: &str, reading: &str) -> (String,  String) {
+fn kanji_mapping(word: &str, reading: &str) -> (String, String) {
     let suffix_len = kana_suffix_length(word);
-    let base_len =  word.chars().count() - suffix_len;
+    let base_len = word.chars().count() - suffix_len;
 
     let base: String = word.chars().take(base_len).collect();
-    let base_reading: String = reading.chars().take(reading.chars().count() - suffix_len).collect();
+    let base_reading: String = reading
+        .chars()
+        .take(reading.chars().count() - suffix_len)
+        .collect();
 
     (base, base_reading)
 }

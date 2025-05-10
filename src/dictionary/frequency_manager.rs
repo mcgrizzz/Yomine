@@ -10,12 +10,9 @@ use rayon::iter::{ ParallelBridge, ParallelIterator };
 use regex::Regex;
 use zip::ZipArchive;
 use std::sync::Mutex;
-use wana_kana::{ ConvertJapanese, IsJapaneseStr };
+use wana_kana::IsJapaneseStr;
 
-use crate::{
-    core::{ utils::{ harmonic_frequency, NormalizeLongVowel }, YomineError },
-    dictionary::TermMetaBankV3,
-};
+use crate::{ core::{ utils::harmonic_frequency, YomineError }, dictionary::TermMetaBankV3 };
 
 use super::{ frequency_dict::FrequencyDictionary, DictionaryIndex, FrequencyData };
 
@@ -146,23 +143,12 @@ impl FrequencyManager {
                     .iter()
                     .filter(|e| {
                         if let FrequencyData::Nested { reading: entry_reading, .. } = e {
-                            let entry_script = if entry_reading.as_str().is_hiragana() {
-                                "hiragana"
-                            } else {
-                                "katakana"
-                            };
-                            let normalized_reading = if entry_script == "hiragana" {
-                                reading.to_hiragana().normalize_long_vowel()
-                            } else {
-                                reading.to_katakana()
-                            };
                             let marker_condition = if is_kana {
                                 e.has_special_marker()
                             } else {
                                 !e.has_special_marker()
                             };
-                            marker_condition &&
-                                normalized_reading == *entry_reading.normalize_long_vowel()
+                            marker_condition && entry_reading.as_str() == entry_reading
                         } else {
                             false
                         }
@@ -187,23 +173,12 @@ impl FrequencyManager {
             if let Some(entries) = d.get_frequencies_by_key(word) {
                 entries.iter().any(|e| {
                     if let FrequencyData::Nested { reading: entry_reading, .. } = e {
-                        let entry_script = if entry_reading.as_str().is_hiragana() {
-                            "hiragana"
-                        } else {
-                            "katakana"
-                        };
-                        let normalized_reading = if entry_script == "hiragana" {
-                            reading.to_hiragana().normalize_long_vowel()
-                        } else {
-                            reading.to_katakana()
-                        };
                         let marker_condition = if is_kana {
                             e.has_special_marker()
                         } else {
                             !e.has_special_marker()
                         };
-                        marker_condition &&
-                            normalized_reading != *entry_reading.normalize_long_vowel()
+                        marker_condition && reading != entry_reading
                     } else {
                         false
                     }

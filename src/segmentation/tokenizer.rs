@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use vibrato::{ tokenizer::worker::Worker, Tokenizer };
-use crate::core::utils::pairwise_deinflection;
+use crate::core::utils::{ pairwise_deinflection, NormalizeLongVowel };
 use crate::core::{ Sentence, Term, YomineError };
 use crate::dictionary::frequency_manager::FrequencyManager;
 use crate::dictionary::token_dictionary::{ ensure_dictionary, load_dictionary, DictType };
@@ -58,9 +58,6 @@ pub fn extract_words(
                                 &term.surface_reading
                             );
 
-                            // println!("\nOriginal form: {}/{}", term.surface_form, term.surface_reading);
-                            // println!("Before filter -- Deinflections = {:?}", deinflections);
-
                             let mut sorted_deinflections: Vec<(String, String)> = deinflections
                                 .into_iter()
                                 .filter(|(word, reading)|
@@ -78,11 +75,6 @@ pub fn extract_words(
                                 term.lemma_form = sorted_deinflections[0].0.clone();
                                 term.lemma_reading = sorted_deinflections[0].1.clone();
                             }
-                            // Debug output
-
-                            // for (word, reading) in &sorted_deinflections {
-                            //     println!("Deinflected Pair: Word = {}, Reading = {}, Harmonic Frequency = {:?}", word, reading, frequency_manager.get_harmonic_frequency_for_pair(word, reading));
-                            // }
                         }
                         _ => {}
                     }
@@ -119,9 +111,97 @@ pub fn extract_words(
             })
         );
 
-        terms.append(&mut sentence_terms);
+        //Add phrases without filtering the terms for now
+        'outer: for start in 0..sentence_terms.len() {
+            for end in (start + 1..sentence_terms.len()).rev() {
+                let subrange = &sentence_terms[start..=end];
+                let mut phrase: Term = Term::from_slice(subrange);
 
-        //TODO: Build phrases out of all contiguous words. Look up phrases in frequency dict. If they exist, get their frequency and compare to individual words.
+                let freq = frequency_manager.get_harmonic_frequency_for_pair(
+                    &phrase.surface_form.normalize_long_vowel(),
+                    &phrase.surface_reading.normalize_long_vowel()
+                );
+
+                if let Some(frequency) = freq {
+                    let word_frequencies: Vec<(String, f32)> = subrange
+                        .iter()
+                        .map(|term| {
+                            let freq = term.frequencies
+                                .get("HARMONIC")
+                                .cloned()
+                                .unwrap_or(u32::max_value());
+                            (term.lemma_form.to_string(), freq as f32)
+                        })
+                        .collect();
+
+                    let mult_frequencies: f32 = word_frequencies
+                        .iter()
+                        .map(|(_, freq)| *freq as f32)
+                        .product();
+
+                    let k = subrange.len() as u32;
+                    let score: f32 = (frequency as f32).powf(k as f32) / mult_frequencies;
+
+                    let ratios: Vec<f32> = word_frequencies
+                        .iter()
+                        .map(|(_, freq)| (frequency as f32) / *freq)
+                        .collect();
+
+                    let max_ratio: f32 = ratios.iter().fold(0.0, |acc, &x| acc.max(x));
+                    let char_count = phrase.lemma_form.chars().count();
+
+                    let score_threshold = 10.0;
+                    let ratio_threshold = 120.0;
+                    let min_len = 4;
+
+                    let override_ratio_threshold = 40.0;
+                    let phrase_freq_threshold = 10000;
+
+                    if char_count < min_len {
+                        continue;
+                    }
+
+                    if frequency > phrase_freq_threshold && max_ratio < override_ratio_threshold {
+                        continue;
+                    }
+
+                    phrase.part_of_speech = POS::NounExpression;
+                    for term in subrange {
+                        if
+                            !matches!(
+                                term.part_of_speech,
+                                POS::Noun | POS::CompoundNoun | POS::ProperNoun
+                            )
+                        {
+                            phrase.part_of_speech = POS::Expression;
+                            break;
+                        }
+                    }
+
+                    if score <= score_threshold || max_ratio >= ratio_threshold {
+                        phrase.frequencies.insert("HARMONIC".to_string(), frequency);
+                        phrase.sentence_references.append(
+                            &mut sentence_terms[start].sentence_references.clone()
+                        );
+
+                        // println!(
+                        //     "'{}': [{}, {}, {}, {}],",
+                        //     &phrase.lemma_form,
+                        //     frequency,
+                        //     score,
+                        //     max_ratio,
+                        //     char_count,
+                        // );
+
+                        sentence_terms.push(phrase);
+
+                        break 'outer; // Stop on the largest phrase that satisfies the heuristic
+                    }
+                }
+            }
+        }
+
+        terms.append(&mut sentence_terms);
     }
 
     terms

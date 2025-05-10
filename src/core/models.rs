@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{ collections::HashMap, hash::Hash };
 
 use crate::segmentation::word::POS;
 
@@ -65,7 +65,37 @@ pub struct Term {
     pub is_kana: bool,
     pub part_of_speech: POS, // Grammatical category
     pub frequencies: HashMap<String, u32>, // <(dictionary_id, frequency)>
-    pub full_segment: String, //If we have main word, this includes the non-main part of the segment, otherwise it is the same as lemma_form
-    pub full_segment_reading: String, //If we have main word, this includes the non-main part of the segment, otherwise it is the same as lemma_reading
+    pub full_segment: String, //If we have main word, this includes the non-main part of the segment, in surface form
+    pub full_segment_reading: String, //If we have main word, this includes the non-main part of the segment, in surface form
     pub sentence_references: Vec<(u32, usize)>, // Vec<(sentence_id, start_index)>
+}
+
+impl Term {
+    //Generate a phrase from a slice of terms
+    pub fn from_slice(terms: &[Term]) -> Self {
+        let surface_form = terms
+            .iter()
+            .map(|t| t.full_segment.as_str())
+            .collect::<String>();
+        let surface_reading = terms
+            .iter()
+            .map(|t| t.full_segment_reading.as_str())
+            .collect::<String>();
+        let lemma_form = surface_form.clone();
+        let lemma_reading = surface_reading.clone();
+        let is_kana = terms.iter().all(|t| t.is_kana);
+        Term {
+            id: 1,
+            surface_form: surface_form.clone(),
+            surface_reading: surface_reading.clone(),
+            lemma_form,
+            lemma_reading,
+            is_kana,
+            part_of_speech: POS::Expression,
+            full_segment: surface_form,
+            full_segment_reading: surface_reading,
+            frequencies: HashMap::new(),
+            sentence_references: Vec::new(),
+        }
+    }
 }

@@ -49,6 +49,14 @@ pub enum CacheFrequencyData {
     },
 }
 
+impl CacheFrequencyData {
+    pub fn set_reading(&mut self, new_reading: String) {
+        if let CacheFrequencyData::Nested { reading, .. } = self {
+            *reading = new_reading;
+        }
+    }
+}
+
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "kebab-case")] // Match the JSON naming convention
 enum FrequencyMode {
