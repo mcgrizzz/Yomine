@@ -169,7 +169,7 @@ impl FrequencyManager {
                     })
                     .collect();
                 if !matching_entries.is_empty() {
-                    // Select the smallest frequency among matching entries, consistent with existing logic
+                    // Select the smallest frequency among matching entries
                     matching_entries
                         .into_iter()
                         .map(|e| e.value())

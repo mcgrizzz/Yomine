@@ -64,7 +64,7 @@ You can also check out these Google Drive folders for more frequency dictionarie
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/yomine.git
+   git clone https://github.com/mcgrizzz/Yomine.git
    cd yomine
 
 2. Build and run:

@@ -114,14 +114,26 @@ mod tests {
     }
 }
 
-use difference::Changeset;
 use serde::{ Deserialize, Deserializer };
-use wana_kana::utils::{ is_char_kanji, is_char_kana };
+use wana_kana::utils::is_char_kana;
 
-use super::YomineError;
 
-// Applies deinflection rules step-by-step, adjusting the reading accordingly.
-// Does not check word existence; filter later with dictionaries.
+fn kana_suffix_length(word: &str) -> usize {
+    word.chars()
+        .rev()
+        .take_while(|&c| is_char_kana(c))
+        .count()
+}
+
+fn kanji_mapping(word: &str, reading: &str) -> (String,  String) {
+    let suffix_len = kana_suffix_length(word);
+    let base_len =  word.chars().count() - suffix_len;
+
+    let base: String = word.chars().take(base_len).collect();
+    let base_reading: String = reading.chars().take(reading.chars().count() - suffix_len).collect();
+
+    (base, base_reading)
+}
 
 pub fn pairwise_deinflection(word: &str, reading: &str) -> Vec<(String, String)> {
     let mut results = vec![(word.to_string(), reading.to_string())];
@@ -132,70 +144,14 @@ pub fn pairwise_deinflection(word: &str, reading: &str) -> Vec<(String, String)>
         return results;
     }
 
-    // Compute stem and stem reading from the original word and reading
-    let stem = initial_kanji_stem(word);
-    let trailing_kana = trailing_kana_len(word);
-    let stem_reading_len = reading.chars().count().saturating_sub(trailing_kana);
-    let stem_reading = reading.chars().take(stem_reading_len).collect::<String>();
-
-    let mut current_word = word.to_string();
-    let mut current_reading = reading.to_string();
+    let (base, base_reading) = kanji_mapping(word, reading);
 
     for deinflected_word in deinflections {
-        if deinflected_word == current_word {
-            continue;
-        }
-
-        let adjusted_reading = if deinflected_word.starts_with(&stem) {
-            // If the deinflected word preserves the stem, use stem_reading + ending
-            let ending = &deinflected_word[stem.len()..];
-            stem_reading.clone() + ending
-        } else {
-            // Fallback to original diff logic if stem changes (rare in this context)
-            let diff = Changeset::new(&current_word, &deinflected_word, "");
-            let mut adjusted = String::new();
-            let mut reading_iter = current_reading.chars();
-
-            for change in diff.diffs {
-                match change {
-                    difference::Difference::Same(text) => {
-                        let same_len = text.chars().count();
-                        adjusted.extend(reading_iter.by_ref().take(same_len));
-                    }
-                    difference::Difference::Rem(text) => {
-                        let rem_len = text.chars().count();
-                        reading_iter.by_ref().take(rem_len).for_each(drop);
-                    }
-                    difference::Difference::Add(text) => {
-                        adjusted.push_str(&text);
-                    }
-                }
-            }
-            adjusted
-        };
-
-        results.push((deinflected_word.clone(), adjusted_reading.clone()));
-        current_word = deinflected_word.clone();
-        current_reading = adjusted_reading;
+        let adjusted_reading = deinflected_word.replacen(&base, &base_reading, 1);
+        results.push((deinflected_word, adjusted_reading));
     }
 
     results
-}
-
-//TODO:  This is wrong if we have a compound verblike (振り返る) since this will only get the first kanji
-// Helper function to get the initial kanji stem
-fn initial_kanji_stem(word: &str) -> String {
-    word.chars()
-        .take_while(|&c| is_char_kanji(c))
-        .collect()
-}
-
-// Helper function to count trailing kana characters
-fn trailing_kana_len(word: &str) -> usize {
-    word.chars()
-        .rev()
-        .take_while(|&c| is_char_kana(c))
-        .count()
 }
 
 pub fn deserialize_number_or_numeric_string<'de, D>(deserializer: D) -> Result<u32, D::Error>
