@@ -1,6 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
+use wana_kana::ConvertJapanese;
+
 use crate::anki::{AnkiState, FieldMapping};
 use crate::core::{Sentence, SourceFile, Term};
 use crate::core::models::FileType;
@@ -73,7 +75,7 @@ pub async fn process_source_file(
     terms.sort_by(|a, b| {
         a.lemma_form.cmp(&b.lemma_form).then_with(|| a.lemma_reading.cmp(&b.lemma_reading))
     });
-    terms.dedup_by(|a, b| a.lemma_form == b.lemma_form && a.lemma_reading == b.lemma_reading);
+    terms.dedup_by(|a, b| a.lemma_form == b.lemma_form && a.lemma_reading.to_hiragana() == b.lemma_reading.to_hiragana());
     //let dedup_duration = dedup_start.elapsed();
     //println!("Deduplicating terms took: {:?}", dedup_duration);
     println!("Deduplicated: {}", terms.len());
