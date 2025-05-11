@@ -37,7 +37,7 @@ Yomine uses frequency dictionaries to show you more relevant words for your lear
 
 Yomine automatically scans for frequency dictionaries located in the `frequency_dict/` directory of the project. Each dictionary must be in the valid [Yomitan](https://github.com/yomidevs/yomitan) format.
 
-When you start Yomine, it loads all compatible dictionaries found in this directory.
+When you start Yomine, it loads and processes all compatible dictionaries found in this directory.
 
 ### Downloading Frequency Dictionaries
 
@@ -71,3 +71,18 @@ You can also check out these Google Drive folders for more frequency dictionarie
     ```bash
     cargo build --release
     cargo run --release
+
+### Credits
+
+Yomine author and maintainer: [@mcgrizzz](https://github.com/mcgrizzz)
+
+Yomine is licensed under [MIT](LICENSE-MIT) OR [Apache-2.0](LICENSE-APACHE)
+
+
+
+ * [Vibrato](https://github.com/daac-tools/vibrato) for text segmentation, [MIT](https://github.com/daac-tools/vibrato/blob/main/LICENSE-MIT) or [Apache-2.0](https://github.com/daac-tools/vibrato/blob/main/LICENSE-APACHE)
+ * [egui](https://github.com/emilk/egui) for user interface, [MIT](https://github.com/emilk/egui/blob/main/LICENSE-MIT) or [Apache-2.0](https://github.com/emilk/egui/blob/main/LICENSE-APACHE)
+  * [WanaKana Rust](https://github.com/PSeitz/wana_kana_rust) for japanese text utilities, [MIT](https://github.com/PSeitz/wana_kana_rust/blob/master/LICENSE)
+ * [jp-definflector](https://github.com/btrkeks/jp-deinflector) for deinflection
+
+ * `NotoSansJP-Bold.tff` `NotoSansJP-Regular.tff` `NotoSansJP-Thin.tff` - [SIL Open Font License](https://openfontlicense.org/open-font-license-official-text/)
