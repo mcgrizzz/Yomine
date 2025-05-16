@@ -22,21 +22,21 @@ pub enum JsonFrequency {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum CacheFrequency {
-    Number(u32),
-    Complex {
-        value: u32,
-        display_value: Option<String>,
-    },
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum JsonFrequencyData {
     Simple(JsonFrequency),
     Nested {
         reading: String,
         frequency: JsonFrequency,
+    },
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum CacheFrequency {
+    Number(u32),
+    Complex {
+        value: u32,
+        display_value: Option<String>,
     },
 }
 

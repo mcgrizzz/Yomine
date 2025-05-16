@@ -12,7 +12,7 @@ use zstd::stream::copy_decode;
 
 use crate::core::YomineError;
 
-const DICT_DIR: &str = "dictionaries";
+const DICT_DIR: &str = "dictionaries/tokenizer";
 
 pub enum DictType {
     Unidic,

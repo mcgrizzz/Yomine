@@ -16,6 +16,8 @@ use crate::{ core::{ utils::harmonic_frequency, YomineError }, dictionary::TermM
 
 use super::{ frequency_dict::FrequencyDictionary, DictionaryIndex, FrequencyData };
 
+const DICT_DIR: &str = "dictionaries/frequency";
+
 pub struct FrequencyManager {
     dictionaries: HashMap<String, FrequencyDictionary>,
     toggled_states: HashMap<String, bool>,
@@ -317,7 +319,8 @@ pub fn process_frequency_dictionaries() -> Result<FrequencyManager, YomineError>
     let manager = Mutex::new(FrequencyManager::new());
     let start = Instant::now();
 
-    let dir_path = Path::new("frequency_dict");
+    let dir_path = Path::new(DICT_DIR);
+    fs::create_dir_all(DICT_DIR)?;
 
     for entry in fs
         ::read_dir(dir_path)
