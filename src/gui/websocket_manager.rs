@@ -1,4 +1,5 @@
 use std::sync::Arc;
+
 use crate::websocket::WebSocketServer;
 
 #[derive(Default)]
@@ -15,10 +16,7 @@ pub struct WebSocketManager {
 impl WebSocketManager {
     pub fn new() -> Self {
         let websocket_server = WebSocketServer::start_server();
-        Self {
-            state: WebSocketState::default(),
-            server: websocket_server,
-        }
+        Self { state: WebSocketState::default(), server: websocket_server }
     }
 
     pub fn update(&mut self) {

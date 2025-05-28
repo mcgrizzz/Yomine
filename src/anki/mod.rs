@@ -1,10 +1,39 @@
-use std::{ collections::{ HashMap, HashSet }, sync::Arc, time::{ Duration, Instant } };
-use api::{ get_field_names, get_model_ids, get_note_ids, get_notes, get_version };
-use rayon::iter::{ IntoParallelIterator, ParallelIterator };
-use tokio::{ task::{ self }, time::sleep };
+use std::{
+    collections::{
+        HashMap,
+        HashSet,
+    },
+    sync::Arc,
+    time::{
+        Duration,
+        Instant,
+    },
+};
+
+use api::{
+    get_field_names,
+    get_model_ids,
+    get_note_ids,
+    get_notes,
+    get_version,
+};
+use rayon::iter::{
+    IntoParallelIterator,
+    ParallelIterator,
+};
+use tokio::{
+    task::{
+        self,
+    },
+    time::sleep,
+};
 use wana_kana::IsJapaneseStr;
+
 use crate::{
-    core::{ utils::NormalizeLongVowel, Term },
+    core::{
+        utils::NormalizeLongVowel,
+        Term,
+    },
     dictionary::frequency_manager::FrequencyManager,
 };
 
@@ -20,19 +49,14 @@ pub struct AnkiState {
 impl AnkiState {
     pub async fn new(
         model_mapping: HashMap<String, FieldMapping>,
-        frequency_manager: Arc<FrequencyManager>
+        frequency_manager: Arc<FrequencyManager>,
     ) -> Result<Self, reqwest::Error> {
         let start = Instant::now();
         let vocab = get_total_vocab(&model_mapping).await?;
         let duration = start.elapsed();
         println!("AnkiState::new - get_total_vocab took: {:?}", duration);
 
-        let result = Ok(Self {
-            models: Vec::new(),
-            model_mapping,
-            vocab,
-            frequency_manager,
-        });
+        let result = Ok(Self { models: Vec::new(), model_mapping, vocab, frequency_manager });
         println!("AnkiState::new total time: {:?}", start.elapsed());
         result
     }
@@ -78,10 +102,8 @@ impl AnkiState {
                         (min.min(*freq), max.max(*freq))
                     });
 
-                if
-                    let Some((_, matched_freq)) = average_frequencies
-                        .iter()
-                        .find(|(reading, _)| reading == anki_reading)
+                if let Some((_, matched_freq)) =
+                    average_frequencies.iter().find(|(reading, _)| reading == anki_reading)
                 {
                     if max_freq > min_freq {
                         let normalized = (*matched_freq - min_freq) / (max_freq - min_freq);
@@ -130,18 +152,14 @@ impl AnkiState {
             .into_par_iter()
             .filter(|term| {
                 let score = match surface_form {
-                    true => {
-                        self.highest_inclusivity_score(
-                            &term.surface_form.normalize_long_vowel(),
-                            &term.surface_reading.normalize_long_vowel()
-                        )
-                    }
-                    false => {
-                        self.highest_inclusivity_score(
-                            &term.lemma_form.normalize_long_vowel(),
-                            &term.lemma_reading.normalize_long_vowel()
-                        )
-                    }
+                    true => self.highest_inclusivity_score(
+                        &term.surface_form.normalize_long_vowel(),
+                        &term.surface_reading.normalize_long_vowel(),
+                    ),
+                    false => self.highest_inclusivity_score(
+                        &term.lemma_form.normalize_long_vowel(),
+                        &term.lemma_reading.normalize_long_vowel(),
+                    ),
                 };
                 !(score > 0.75)
             })
@@ -180,17 +198,13 @@ pub async fn get_models() -> Result<Vec<Model>, reqwest::Error> {
         .map(|(model_name, id)| {
             task::spawn(async move {
                 let fields = get_field_names(&model_name).await?;
-                Ok::<Model, reqwest::Error>(Model {
-                    name: model_name,
-                    id,
-                    fields,
-                })
+                Ok::<Model, reqwest::Error>(Model { name: model_name, id, fields })
             })
         })
         .collect();
 
-    let models: Vec<Model> = futures::future
-        ::join_all(handles).await
+    let models: Vec<Model> = futures::future::join_all(handles)
+        .await
         .into_iter()
         .filter_map(|result| result.ok())
         .filter_map(|inner_result| inner_result.ok())
@@ -199,7 +213,7 @@ pub async fn get_models() -> Result<Vec<Model>, reqwest::Error> {
 }
 
 pub async fn get_total_vocab(
-    model_mapping: &HashMap<String, FieldMapping>
+    model_mapping: &HashMap<String, FieldMapping>,
 ) -> Result<Vec<Vocab>, reqwest::Error> {
     let deck_query = "deck:*";
     let note_ids = get_note_ids(&deck_query).await?;
@@ -213,9 +227,8 @@ pub async fn get_total_vocab(
             if relevant_models.contains(&note.model_name) {
                 if let Some(field_mapping) = model_mapping.get(&note.model_name) {
                     let term = note.fields.get(&field_mapping.term_field).map(|f| f.value.clone());
-                    let reading = note.fields
-                        .get(&field_mapping.reading_field)
-                        .map(|f| f.value.clone());
+                    let reading =
+                        note.fields.get(&field_mapping.reading_field).map(|f| f.value.clone());
                     if let (Some(term), Some(reading)) = (term, reading) {
                         return Some(Vocab {
                             term,
@@ -241,10 +254,7 @@ pub async fn wait_awake(wait_time: u64, max_attempts: u32) -> Result<bool, reqwe
             Err(err) => {
                 println!(
                     "AnkiConnect attempt {} of {} failed. Retrying in {} seconds... Error: {}",
-                    attempt,
-                    max_attempts,
-                    wait_time,
-                    err
+                    attempt, max_attempts, wait_time, err
                 );
                 if attempt < max_attempts {
                     sleep(Duration::from_secs(wait_time)).await;

@@ -1,20 +1,47 @@
-use std::collections::{HashMap, HashSet};
-use std::time::Instant;
+use std::{
+    collections::{
+        HashMap,
+        HashSet,
+    },
+    time::Instant,
+};
 
 use wana_kana::ConvertJapanese;
 
-use crate::anki::{AnkiState, FieldMapping};
-use crate::core::{Sentence, SourceFile, Term};
-use crate::core::models::FileType;
-use crate::gui::LanguageTools;
-use crate::parser::read_srt;
-use crate::segmentation::tokenizer::extract_words;
-
 use super::YomineError;
+use crate::{
+    anki::{
+        AnkiState,
+        FieldMapping,
+    },
+    core::{
+        models::FileType,
+        Sentence,
+        SourceFile,
+        Term,
+    },
+    gui::LanguageTools,
+    parser::read_srt,
+    segmentation::tokenizer::extract_words,
+};
 
 /// Blacklist of common Japanese terms to filter out from the extracted terms.
 pub const BLACKLIST: [&str; 15] = [
-    "の", "を", "が", "と", "で", "だ", "も", "な", "お", "ん", "か", "れる", "です", "られる", "せる",
+    "の",
+    "を",
+    "が",
+    "と",
+    "で",
+    "だ",
+    "も",
+    "な",
+    "お",
+    "ん",
+    "か",
+    "れる",
+    "です",
+    "られる",
+    "せる",
 ];
 
 pub async fn process_source_file(
@@ -28,7 +55,9 @@ pub async fn process_source_file(
     // Parse the source file
     //let parse_start = Instant::now();
     let mut sentences = match source_file.file_type {
-        FileType::SRT => read_srt(source_file).map_err(|e| YomineError::FailedToLoadFile(e.to_string()))?,
+        FileType::SRT => {
+            read_srt(source_file).map_err(|e| YomineError::FailedToLoadFile(e.to_string()))?
+        }
         FileType::Other(ref format) => {
             return Err(YomineError::UnsupportedFileType(format.clone()));
         }
@@ -60,13 +89,14 @@ pub async fn process_source_file(
 
     // Initialize Anki state
     //let anki_init_start = Instant::now();
-    let anki_state = match AnkiState::new(model_mapping, language_tools.frequency_manager.clone()).await {
-        Ok(state) => Some(state),
-        Err(e) => {
-            eprintln!("Failed to initialize AnkiState: {}", e);
-            None
-        }
-    };
+    let anki_state =
+        match AnkiState::new(model_mapping, language_tools.frequency_manager.clone()).await {
+            Ok(state) => Some(state),
+            Err(e) => {
+                eprintln!("Failed to initialize AnkiState: {}", e);
+                None
+            }
+        };
     //let anki_init_duration = anki_init_start.elapsed();
     //println!("Initializing Anki state took: {:?}", anki_init_duration);
 
@@ -75,7 +105,10 @@ pub async fn process_source_file(
     terms.sort_by(|a, b| {
         a.lemma_form.cmp(&b.lemma_form).then_with(|| a.lemma_reading.cmp(&b.lemma_reading))
     });
-    terms.dedup_by(|a, b| a.lemma_form == b.lemma_form && a.lemma_reading.to_hiragana() == b.lemma_reading.to_hiragana());
+    terms.dedup_by(|a, b| {
+        a.lemma_form == b.lemma_form
+            && a.lemma_reading.to_hiragana() == b.lemma_reading.to_hiragana()
+    });
     //let dedup_duration = dedup_start.elapsed();
     //println!("Deduplicating terms took: {:?}", dedup_duration);
     println!("Deduplicated: {}", terms.len());

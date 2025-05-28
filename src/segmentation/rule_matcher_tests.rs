@@ -7,7 +7,10 @@ mod tests {
         dictionary::token_dictionary::DictType,
         segmentation::{
             rule_matcher::parse_into_words,
-            token_models::{ UnidicToken, VibratoToken },
+            token_models::{
+                UnidicToken,
+                VibratoToken,
+            },
             tokenizer::init_vibrato,
         },
     };
@@ -15,7 +18,7 @@ mod tests {
     /// Extract UnidicTokens from a sentence going through the vibrato -> VibratoToken -> RawToken -> UnidicToken conversion chain
     pub fn tokenize_text(
         text: &str,
-        tokenizer: &Result<Tokenizer, YomineError>
+        tokenizer: &Result<Tokenizer, YomineError>,
     ) -> Vec<UnidicToken> {
         // Create vibrato tokenizer
         let tokenizer = match tokenizer {
@@ -108,10 +111,9 @@ mod tests {
             //Extract suru verbs and na adjectives for proper sentences highlighting
             // "勉強することが好きです。",  // should extract 勉強, but highlight 勉強する as one unit.
             //"彼は元気な人です。",  // should extract 元気, but highlight 元気な as one unit.
-            "ごちそうさまでした"
-            //"寿司ではなくチョコレートケーキが食べたい"
-            // // Large text.
-            //"東京に住んでいる日本語教師の田中さんは、毎朝早く起きて、朝ごはんを食べますが、今日は特別に早く起きました。電車に乗って、学校へ行く途中、友達に会って、一緒に学校まで行きました。授業で、学生に日本語を教える時、田中さんはいつも熱心に説明します。田中さんが教えている学生は、とても優秀です。お昼に、同僚とラーメンを食べに行きましたが、あまり美味しくなかったです。午後、東京タワーに登りましたが、田中さんは高いところが苦手なので、すぐに降りました。夕方、家に帰って、疲れていたので、早く寝ました。田中さんは三冊の本を買いましたが、猫を好きです。田中さんは、教えることが好きです。東京タワーは高いですか？"
+            "ごちそうさまでした", //"寿司ではなくチョコレートケーキが食べたい"
+                                  // // Large text.
+                                  //"東京に住んでいる日本語教師の田中さんは、毎朝早く起きて、朝ごはんを食べますが、今日は特別に早く起きました。電車に乗って、学校へ行く途中、友達に会って、一緒に学校まで行きました。授業で、学生に日本語を教える時、田中さんはいつも熱心に説明します。田中さんが教えている学生は、とても優秀です。お昼に、同僚とラーメンを食べに行きましたが、あまり美味しくなかったです。午後、東京タワーに登りましたが、田中さんは高いところが苦手なので、すぐに降りました。夕方、家に帰って、疲れていたので、早く寝ました。田中さんは三冊の本を買いましたが、猫を好きです。田中さんは、教えることが好きです。東京タワーは高いですか？"
         ];
 
         let tokenizer = init_vibrato(&DictType::Unidic);
@@ -129,25 +131,23 @@ mod tests {
             println!("Processed words ({}):", words.len());
             for (i, word) in words.iter().enumerate() {
                 match &word.main_word {
-                    Some(mw) =>
-                        println!(
-                            "  {}. \"{}[{}]\" (POS: {:?}, token count: {}, main_word: {:?})",
-                            i + 1,
-                            word.surface_form,
-                            word.surface_hatsuon,
-                            word.part_of_speech,
-                            word.tokens.len(),
-                            mw.lemma_form
-                        ),
-                    None =>
-                        println!(
-                            "  {}. \"{}[{}]\" (POS: {:?}, token count: {}, main_word: None)",
-                            i + 1,
-                            word.surface_form,
-                            word.surface_hatsuon,
-                            word.part_of_speech,
-                            word.tokens.len()
-                        ),
+                    Some(mw) => println!(
+                        "  {}. \"{}[{}]\" (POS: {:?}, token count: {}, main_word: {:?})",
+                        i + 1,
+                        word.surface_form,
+                        word.surface_hatsuon,
+                        word.part_of_speech,
+                        word.tokens.len(),
+                        mw.lemma_form
+                    ),
+                    None => println!(
+                        "  {}. \"{}[{}]\" (POS: {:?}, token count: {}, main_word: None)",
+                        i + 1,
+                        word.surface_form,
+                        word.surface_hatsuon,
+                        word.part_of_speech,
+                        word.tokens.len()
+                    ),
                 }
 
                 for (j, token) in word.tokens.iter().enumerate() {

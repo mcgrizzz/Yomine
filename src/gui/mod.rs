@@ -1,12 +1,14 @@
-pub mod theme;
-pub mod table;
 pub mod app;
+pub mod error_modal;
 pub mod file_modal;
-pub mod websocket_manager;
 pub mod message_overlay;
+pub mod modal;
+pub mod table;
+pub mod theme;
 pub mod top_bar;
+pub mod websocket_manager;
 
-// Re-export the main app struct and language tools
-pub use app::{YomineApp, LanguageTools};
-
-
+pub use app::{
+    LanguageTools,
+    YomineApp,
+};

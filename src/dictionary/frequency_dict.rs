@@ -1,11 +1,18 @@
 use std::collections::HashMap;
+
 use eframe::egui::cache;
 use serde::Deserialize;
-use wana_kana::{ ConvertJapanese, IsJapaneseStr };
+use wana_kana::{
+    ConvertJapanese,
+    IsJapaneseStr,
+};
 
+use super::{
+    CacheFrequencyData,
+    FrequencyData,
+    TermMetaBankV3,
+};
 use crate::core::utils::NormalizeLongVowel;
-
-use super::{ CacheFrequencyData, FrequencyData, TermMetaBankV3 };
 
 #[derive(serde::Serialize, Deserialize, Clone)]
 pub struct FrequencyDictionary {
@@ -36,11 +43,7 @@ impl FrequencyDictionary {
             }
         }
 
-        FrequencyDictionary {
-            title,
-            revision,
-            terms,
-        }
+        FrequencyDictionary { title, revision, terms }
     }
 
     //If dictionary form is in kana
@@ -48,12 +51,11 @@ impl FrequencyDictionary {
         &self,
         lemma_form: &str,
         lemma_reading: &str,
-        is_kana: bool
+        is_kana: bool,
     ) -> Option<&FrequencyData> {
         if is_kana {
-            self.get_kana_frequency(lemma_form, lemma_reading).or_else(||
-                self.get_normal_frequency(lemma_form, lemma_reading)
-            )
+            self.get_kana_frequency(lemma_form, lemma_reading)
+                .or_else(|| self.get_normal_frequency(lemma_form, lemma_reading))
         } else {
             self.get_normal_frequency(lemma_form, lemma_reading)
         }
@@ -76,7 +78,7 @@ impl FrequencyDictionary {
     fn get_normal_frequency(
         &self,
         lemma_form: &str,
-        lemma_reading: &str
+        lemma_reading: &str,
     ) -> Option<&FrequencyData> {
         self.terms.get(lemma_form).and_then(|entries| {
             let matching_entries: Vec<_> = entries

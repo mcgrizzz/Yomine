@@ -1,10 +1,26 @@
-use eframe::egui::{ self, pos2, Color32, Context, RichText, Ui };
-use egui_extras::{ Column, TableBuilder, TableRow };
+use eframe::egui::{
+    self,
+    pos2,
+    Color32,
+    Context,
+    RichText,
+    Ui,
+};
+use egui_extras::{
+    Column,
+    TableBuilder,
+    TableRow,
+};
 use wana_kana::ConvertJapanese;
 
-use crate::{ core::Term, segmentation::word::POS };
-
-use super::{ theme::blend_colors, YomineApp };
+use super::{
+    theme::blend_colors,
+    YomineApp,
+};
+use crate::{
+    core::Term,
+    segmentation::word::POS,
+};
 
 pub struct TableState {
     sort: TableSort,
@@ -12,9 +28,7 @@ pub struct TableState {
 
 impl Default for TableState {
     fn default() -> Self {
-        Self {
-            sort: TableSort::FrequencyAscending,
-        }
+        Self { sort: TableSort::FrequencyAscending }
     }
 }
 
@@ -52,8 +66,9 @@ fn col_term(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &YomineAp
         ui.label(
             RichText::new(&term.lemma_form)
                 .color(blend_colors(normal_color, app.theme.red(), 0.8))
-                .size(22.0)
-        ).on_hover_ui_at_pointer(|ui| {
+                .size(22.0),
+        )
+        .on_hover_ui_at_pointer(|ui| {
             ui.label(app.theme.heading(&term.lemma_reading.to_hiragana()));
             ui.label(app.theme.heading(&term.lemma_reading.to_katakana()));
         });
@@ -66,13 +81,11 @@ fn segment_ui(
     text_color: Color32,
     underline_color: Option<Color32>,
     highlight: bool,
-    hover_text: Option<RichText>
+    hover_text: Option<RichText>,
 ) {
-    // Create a label with the specified text and color
     let label = egui::Label::new(RichText::new(text).color(text_color));
     let response = ui.add(label);
 
-    // Draw the underline beneath the text
     if let Some(underline_color) = underline_color {
         let rect = response.rect;
         let thickness = match highlight {
@@ -87,10 +100,8 @@ fn segment_ui(
 
         if highlight {
             // Draw a solid underline for highlighted segments
-            ui.painter().line_segment([pos2(x_start, y), pos2(x_end, y)], (
-                thickness,
-                underline_color,
-            ));
+            ui.painter()
+                .line_segment([pos2(x_start, y), pos2(x_end, y)], (thickness, underline_color));
         } else {
             // Draw a dashed underline for non-highlighted segments
             let dash_length = 2.0; // Length of each dash in points
@@ -103,16 +114,15 @@ fn segment_ui(
                 if dash_end > x_end {
                     dash_end = x_end; // Truncate the last dash if it exceeds the end
                 }
-                ui.painter().line_segment([pos2(dash_start, y), pos2(dash_end, y)], (
-                    thickness,
-                    underline_color,
-                ));
-                current_x = dash_end + gap_length; // Move to the start of the next dash
+                ui.painter().line_segment(
+                    [pos2(dash_start, y), pos2(dash_end, y)],
+                    (thickness, underline_color),
+                );
+                current_x = dash_end + gap_length;
             }
         }
     }
 
-    // Add hover effect to display the specified hover text
     if let Some(hover_text) = hover_text {
         response.on_hover_text(hover_text);
     }
@@ -120,17 +130,14 @@ fn segment_ui(
 
 fn col_sentence(ctx: &Context, row: &mut TableRow, term: &Term, app: &YomineApp) {
     row.col(|ui| {
-        // Early return if no sentence reference exists
         if term.sentence_references.get(0).is_none() {
             return;
         }
 
-        // Get sentence content and surface index
         let sentence = term.sentence_references.get(0).unwrap();
         let sentence_content = app.sentences.get(sentence.0 as usize).unwrap();
         let surface_index = sentence.1;
 
-        // Define highlighted color
         let highlighted_color = app.theme.red();
         let normal_color = ctx.style().visuals.widgets.noninteractive.fg_stroke.color;
         // Use horizontal layout with no spacing between items
@@ -147,11 +154,13 @@ fn col_sentence(ctx: &Context, row: &mut TableRow, term: &Term, app: &YomineApp)
                     blend_colors(normal_color, highlighted_color, 0.95)
                 } else {
                     match pos {
-                        POS::Verb | POS::SuruVerb =>
-                            blend_colors(normal_color, app.theme.blue(), 0.75),
+                        POS::Verb | POS::SuruVerb => {
+                            blend_colors(normal_color, app.theme.blue(), 0.75)
+                        }
                         POS::Noun => blend_colors(normal_color, app.theme.green(), 0.75),
-                        POS::Adjective | POS::AdjectivalNoun =>
-                            blend_colors(normal_color, app.theme.orange(), 0.75),
+                        POS::Adjective | POS::AdjectivalNoun => {
+                            blend_colors(normal_color, app.theme.orange(), 0.75)
+                        }
                         POS::Adverb => blend_colors(normal_color, app.theme.purple(), 0.75),
                         POS::Postposition => blend_colors(normal_color, Color32::BLACK, 0.25),
                         _ => normal_color,
@@ -183,9 +192,8 @@ fn col_sentence(ctx: &Context, row: &mut TableRow, term: &Term, app: &YomineApp)
 }
 
 fn format_human_timestamp(timestamp: &str) -> String {
-    if
-        let Ok(seconds) =
-            crate::websocket::WebSocketServer::convert_srt_timestamp_to_seconds(timestamp)
+    if let Ok(seconds) =
+        crate::websocket::WebSocketServer::convert_srt_timestamp_to_seconds(timestamp)
     {
         // Extract hours, minutes, seconds
         let hours = (seconds / 3600.0).floor() as u32;
@@ -226,7 +234,8 @@ fn col_timestamp(_ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &Yo
                 // Format the timestamp in a more human-readable way
                 let human_timestamp = format_human_timestamp(clean_timestamp);
 
-                let is_confirmed = app.websocket_manager
+                let is_confirmed = app
+                    .websocket_manager
                     .get_confirmed_timestamps()
                     .contains(&clean_timestamp.to_string());
 
@@ -249,23 +258,28 @@ fn col_timestamp(_ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &Yo
 
                 if response.clicked() {
                     if let Some(server) = &app.websocket_manager.server {
-                        if
-                            let Ok(seconds) =
-                                crate::websocket::WebSocketServer::convert_srt_timestamp_to_seconds(
-                                    clean_timestamp
-                                )
+                        if let Ok(seconds) =
+                            crate::websocket::WebSocketServer::convert_srt_timestamp_to_seconds(
+                                clean_timestamp,
+                            )
                         {
                             // Send the timestamp to all connected clients
                             match server.seek_timestamp(seconds, clean_timestamp) {
                                 Ok(_) => {
-                                    println!("Sent seek command for timestamp: {}", clean_timestamp);
+                                    println!(
+                                        "Sent seek command for timestamp: {}",
+                                        clean_timestamp
+                                    );
                                 }
                                 Err(e) => {
                                     eprintln!("Error sending seek command: {:?}", e);
                                 }
                             }
                         } else {
-                            eprintln!("Failed to convert timestamp: {} to seconds", clean_timestamp);
+                            eprintln!(
+                                "Failed to convert timestamp: {} to seconds",
+                                clean_timestamp
+                            );
                         }
                     } else {
                         println!("WebSocket server not available");
@@ -310,20 +324,28 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
                 ui.add_space(1.0);
 
                 ui.label(
-                    egui::RichText
-                        ::new("ファイルがまだ読み込まれていません")
+                    egui::RichText::new("ファイルがまだ読み込まれていません")
                         .size(18.0)
-                        .color(app.theme.orange())
+                        .color(app.theme.orange()),
                 );
 
                 ui.add_space(10.0);
 
-                ui.label(
-                    egui::RichText
-                        ::new("Use File → Open New File")
+                let label = egui::Label::new(
+                    egui::RichText::new("Open New File")
                         .size(14.0)
-                        .color(ctx.style().visuals.weak_text_color())
-                );
+                        .color(ctx.style().visuals.weak_text_color()),
+                )
+                .sense(egui::Sense::click());
+
+                let mut response = ui.add(label);
+
+                if response.hovered() {
+                    response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
+                }
+                if response.clicked() {
+                    app.file_modal.open_dialog();
+                }
             });
         } else if !app.terms.is_empty() {
             ui.heading("Term Table");
@@ -349,10 +371,8 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
 
                             let sentence = t.sentence_references.get(0).unwrap();
                             let sentence_content = app.sentences.get(sentence.0 as usize).unwrap();
-                            let lines: Vec<&str> = sentence_content.text
-                                .trim()
-                                .split("\n")
-                                .collect();
+                            let lines: Vec<&str> =
+                                sentence_content.text.trim().split("\n").collect();
                             (36.0_f32).max(18.0 * (lines.len() as f32)) //Size 22.0 font is not 22 height..
                         };
 
@@ -365,7 +385,7 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
                                 col_timestamp(ctx, &mut row, t, app);
                                 col_frequency(ctx, &mut row, t, app);
                                 col_pos(ctx, &mut row, t, app);
-                            }
+                            },
                         );
                     });
             });
@@ -384,34 +404,31 @@ pub fn header_cols(_ctx: &egui::Context, mut header: TableRow<'_, '_>, app: &mut
         ui.label(app.theme.heading("Timestamp"));
     });
     header.col(|ui| {
-        egui::Sides
-            ::new()
-            .height(25.0)
-            .show(
-                ui,
-                |ui| {
-                    if ui.button(app.table_state.sort.text()).clicked() {
-                        app.table_state.sort = app.table_state.sort.click();
-                        app.terms.sort_unstable_by(|a, b| {
-                            match app.table_state.sort {
-                                TableSort::FrequencyAscending => {
-                                    let freq_a = a.frequencies.get("HARMONIC").unwrap();
-                                    let freq_b = b.frequencies.get("HARMONIC").unwrap();
-                                    freq_a.cmp(freq_b) // Ascending order
-                                }
-                                TableSort::FrequencyDescending => {
-                                    let freq_a = a.frequencies.get("HARMONIC").unwrap();
-                                    let freq_b = b.frequencies.get("HARMONIC").unwrap();
-                                    freq_b.cmp(freq_a) // Descending order
-                                }
+        egui::Sides::new().height(25.0).show(
+            ui,
+            |ui| {
+                if ui.button(app.table_state.sort.text()).clicked() {
+                    app.table_state.sort = app.table_state.sort.click();
+                    app.terms.sort_unstable_by(|a, b| {
+                        match app.table_state.sort {
+                            TableSort::FrequencyAscending => {
+                                let freq_a = a.frequencies.get("HARMONIC").unwrap();
+                                let freq_b = b.frequencies.get("HARMONIC").unwrap();
+                                freq_a.cmp(freq_b) // Ascending order
                             }
-                        });
-                    }
-                },
-                |ui| {
-                    ui.label(app.theme.heading("Frequency"));
+                            TableSort::FrequencyDescending => {
+                                let freq_a = a.frequencies.get("HARMONIC").unwrap();
+                                let freq_b = b.frequencies.get("HARMONIC").unwrap();
+                                freq_b.cmp(freq_a) // Descending order
+                            }
+                        }
+                    });
                 }
-            );
+            },
+            |ui| {
+                ui.label(app.theme.heading("Frequency"));
+            },
+        );
     });
 
     header.col(|ui| {

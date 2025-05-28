@@ -1,20 +1,47 @@
 use std::collections::HashMap;
 
-use vibrato::{ tokenizer::worker::Worker, Tokenizer };
-use crate::core::utils::{ pairwise_deinflection, NormalizeLongVowel };
-use crate::core::{ Sentence, Term, YomineError };
-use crate::dictionary::frequency_manager::FrequencyManager;
-use crate::dictionary::token_dictionary::{ ensure_dictionary, load_dictionary, DictType };
+use vibrato::{
+    tokenizer::worker::Worker,
+    Tokenizer,
+};
 use wana_kana::IsJapaneseStr;
 
-use super::rule_matcher::parse_into_words;
-use super::token_models::{ RawToken, UnidicToken, VibratoToken };
-use super::word::{ Word, POS };
+use super::{
+    rule_matcher::parse_into_words,
+    token_models::{
+        RawToken,
+        UnidicToken,
+        VibratoToken,
+    },
+    word::{
+        Word,
+        POS,
+    },
+};
+use crate::{
+    core::{
+        utils::{
+            pairwise_deinflection,
+            NormalizeLongVowel,
+        },
+        Sentence,
+        Term,
+        YomineError,
+    },
+    dictionary::{
+        frequency_manager::FrequencyManager,
+        token_dictionary::{
+            ensure_dictionary,
+            load_dictionary,
+            DictType,
+        },
+    },
+};
 
 pub fn extract_words(
     mut worker: Worker<'_>,
     sentences: &mut [Sentence],
-    frequency_manager: &FrequencyManager
+    frequency_manager: &FrequencyManager,
 ) -> Vec<Term> {
     let mut terms = Vec::<Term>::new();
 
@@ -48,28 +75,26 @@ pub fn extract_words(
                 let mut term: Term = word.into();
                 if term.surface_form.as_str().is_japanese() {
                     match term.part_of_speech {
-                        | POS::Verb
+                        POS::Verb
                         | POS::SuruVerb
                         | POS::AdjectivalNoun
                         | POS::Adjective
                         | POS::Noun => {
-                            let deinflections: Vec<(String, String)> = pairwise_deinflection(
-                                &term.surface_form,
-                                &term.surface_reading
-                            );
+                            let deinflections: Vec<(String, String)> =
+                                pairwise_deinflection(&term.surface_form, &term.surface_reading);
 
                             let mut sorted_deinflections: Vec<(String, String)> = deinflections
                                 .into_iter()
-                                .filter(|(word, reading)|
+                                .filter(|(word, reading)| {
                                     frequency_manager
                                         .get_harmonic_frequency_for_pair(word, reading)
                                         .is_some()
-                                )
+                                })
                                 .collect();
 
-                            sorted_deinflections.sort_by_key(|(word, reading)|
+                            sorted_deinflections.sort_by_key(|(word, reading)| {
                                 frequency_manager.get_harmonic_frequency_for_pair(word, reading)
-                            );
+                            });
 
                             if sorted_deinflections.len() > 0 {
                                 term.lemma_form = sorted_deinflections[0].0.clone();
@@ -83,11 +108,12 @@ pub fn extract_words(
                 let freq_map: HashMap<String, u32> = frequency_manager.build_freq_map(
                     &term.lemma_form,
                     &term.lemma_reading,
-                    term.is_kana
+                    term.is_kana,
                 );
                 term.frequencies = freq_map;
 
-                let index_in_sentence = sentence.text
+                let index_in_sentence = sentence
+                    .text
                     .match_indices(&term.surface_form)
                     .next()
                     .map(|(idx, _)| idx)
@@ -99,17 +125,16 @@ pub fn extract_words(
             })
             .collect();
 
-        sentence.segments.extend(
-            sentence_terms.iter().map(|term| {
-                let start_index = sentence.text
-                    .match_indices(&term.full_segment)
-                    .next()
-                    .map(|(idx, _)| idx)
-                    .unwrap_or(0);
-                let end_index = start_index + term.full_segment.len();
-                (term.surface_reading.clone(), term.part_of_speech.clone(), start_index, end_index)
-            })
-        );
+        sentence.segments.extend(sentence_terms.iter().map(|term| {
+            let start_index = sentence
+                .text
+                .match_indices(&term.full_segment)
+                .next()
+                .map(|(idx, _)| idx)
+                .unwrap_or(0);
+            let end_index = start_index + term.full_segment.len();
+            (term.surface_reading.clone(), term.part_of_speech.clone(), start_index, end_index)
+        }));
 
         //Add phrases without filtering the terms for now
         'outer: for start in 0..sentence_terms.len() {
@@ -119,14 +144,15 @@ pub fn extract_words(
 
                 let freq = frequency_manager.get_harmonic_frequency_for_pair(
                     &phrase.surface_form.normalize_long_vowel(),
-                    &phrase.surface_reading.normalize_long_vowel()
+                    &phrase.surface_reading.normalize_long_vowel(),
                 );
 
                 if let Some(frequency) = freq {
                     let word_frequencies: Vec<(String, f32)> = subrange
                         .iter()
                         .map(|term| {
-                            let freq = term.frequencies
+                            let freq = term
+                                .frequencies
                                 .get("HARMONIC")
                                 .cloned()
                                 .unwrap_or(u32::max_value());
@@ -134,10 +160,8 @@ pub fn extract_words(
                         })
                         .collect();
 
-                    let mult_frequencies: f32 = word_frequencies
-                        .iter()
-                        .map(|(_, freq)| *freq as f32)
-                        .product();
+                    let mult_frequencies: f32 =
+                        word_frequencies.iter().map(|(_, freq)| *freq as f32).product();
 
                     let k = subrange.len() as u32;
                     let score: f32 = (frequency as f32).powf(k as f32) / mult_frequencies;
@@ -167,12 +191,10 @@ pub fn extract_words(
 
                     phrase.part_of_speech = POS::NounExpression;
                     for term in subrange {
-                        if
-                            !matches!(
-                                term.part_of_speech,
-                                POS::Noun | POS::CompoundNoun | POS::ProperNoun
-                            )
-                        {
+                        if !matches!(
+                            term.part_of_speech,
+                            POS::Noun | POS::CompoundNoun | POS::ProperNoun
+                        ) {
                             phrase.part_of_speech = POS::Expression;
                             break;
                         }
@@ -180,9 +202,9 @@ pub fn extract_words(
 
                     if score <= score_threshold || max_ratio >= ratio_threshold {
                         phrase.frequencies.insert("HARMONIC".to_string(), frequency);
-                        phrase.sentence_references.append(
-                            &mut sentence_terms[start].sentence_references.clone()
-                        );
+                        phrase
+                            .sentence_references
+                            .append(&mut sentence_terms[start].sentence_references.clone());
 
                         // println!(
                         //     "'{}': [{}, {}, {}, {}],",

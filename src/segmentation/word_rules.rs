@@ -1,6 +1,14 @@
-use super::rule_matcher::{ Rule, TokenMatcher, RuleAction, MainWordPolicy, Matcher };
-use super::word::POS;
-use super::unidic_tags::UnidicTag;
+use super::{
+    rule_matcher::{
+        MainWordPolicy,
+        Matcher,
+        Rule,
+        RuleAction,
+        TokenMatcher,
+    },
+    unidic_tags::UnidicTag,
+    word::POS,
+};
 
 /**
  * These rules are not necessarily how an online parser would parse like ichi.moe. We want to prioritize minable terms and what we will be adding and checking against in our dictionary
@@ -11,15 +19,13 @@ pub fn create_default_rules() -> Vec<Rule> {
             name: "Jodoushi to jodoushi binding",
             current: TokenMatcher {
                 pos1: Matcher::Any(vec![UnidicTag::Jodoushi]),
-                conjugation_type: Matcher::Any(
-                    vec![
-                        UnidicTag::JodoushiTa,
-                        UnidicTag::JodoushiNai,
-                        UnidicTag::JodoushiTai,
-                        UnidicTag::JodoushiMasu,
-                        UnidicTag::JodoushiNu
-                    ]
-                ),
+                conjugation_type: Matcher::Any(vec![
+                    UnidicTag::JodoushiTa,
+                    UnidicTag::JodoushiNai,
+                    UnidicTag::JodoushiTai,
+                    UnidicTag::JodoushiMasu,
+                    UnidicTag::JodoushiNu,
+                ]),
                 ..Default::default()
             },
             next: None,
@@ -35,7 +41,6 @@ pub fn create_default_rules() -> Vec<Rule> {
                 main_word_policy: None,
             },
         },
-
         Rule {
             name: "Verb + Tai binding",
             current: TokenMatcher {
@@ -56,7 +61,6 @@ pub fn create_default_rules() -> Vec<Rule> {
                 main_word_policy: None,
             },
         },
-
         Rule {
             name: "Jodoushi to verb binding",
             current: TokenMatcher {
@@ -75,14 +79,15 @@ pub fn create_default_rules() -> Vec<Rule> {
                 main_word_policy: None,
             },
         },
-
         Rule {
             name: "Jodoushi to adjective binding",
             current: TokenMatcher {
                 pos1: Matcher::Any(vec![UnidicTag::Jodoushi]),
-                conjugation_type: Matcher::Any(
-                    vec![UnidicTag::JodoushiTa, UnidicTag::JodoushiNai, UnidicTag::JodoushiTai]
-                ),
+                conjugation_type: Matcher::Any(vec![
+                    UnidicTag::JodoushiTa,
+                    UnidicTag::JodoushiNai,
+                    UnidicTag::JodoushiTai,
+                ]),
                 ..Default::default()
             },
             next: None,
@@ -98,7 +103,6 @@ pub fn create_default_rules() -> Vec<Rule> {
                 main_word_policy: None,
             },
         },
-
         Rule {
             name: "Keiyoushi to Hijiritsukanou Keiyoushi binding",
             current: TokenMatcher {
@@ -119,7 +123,6 @@ pub fn create_default_rules() -> Vec<Rule> {
                 main_word_policy: None,
             },
         },
-
         Rule {
             name: "Compound Noun Binding",
             current: TokenMatcher {
@@ -141,7 +144,6 @@ pub fn create_default_rules() -> Vec<Rule> {
                 main_word_policy: None,
             },
         },
-
         Rule {
             name: "Prefix Noun",
             current: TokenMatcher {
@@ -161,7 +163,6 @@ pub fn create_default_rules() -> Vec<Rule> {
                 main_word_policy: Some(MainWordPolicy::UseSecondToken),
             },
         },
-
         Rule {
             name: "Te-form binding",
             current: TokenMatcher {
@@ -183,7 +184,6 @@ pub fn create_default_rules() -> Vec<Rule> {
                 main_word_policy: None,
             },
         },
-
         Rule {
             name: "Suffix to noun",
             current: TokenMatcher {
@@ -203,7 +203,6 @@ pub fn create_default_rules() -> Vec<Rule> {
                 main_word_policy: None,
             },
         },
-
         Rule {
             name: "Join numbers",
             current: TokenMatcher {
@@ -221,7 +220,6 @@ pub fn create_default_rules() -> Vec<Rule> {
                 main_word_policy: None,
             },
         },
-
         Rule {
             name: "suru-possible + suru",
             current: TokenMatcher {
@@ -242,7 +240,6 @@ pub fn create_default_rules() -> Vec<Rule> {
                 main_word_policy: Some(MainWordPolicy::UseFirstToken),
             },
         },
-
         //We need two rules since unidic has both na and na-possible adjectival nouns
         Rule {
             name: "Na-adj + na",
@@ -264,7 +261,6 @@ pub fn create_default_rules() -> Vec<Rule> {
                 main_word_policy: Some(MainWordPolicy::UseFirstToken),
             },
         },
-
         Rule {
             name: "Na-adj possible + na",
             current: TokenMatcher {
@@ -285,6 +281,6 @@ pub fn create_default_rules() -> Vec<Rule> {
                 pos: POS::AdjectivalNoun,
                 main_word_policy: Some(MainWordPolicy::UseFirstToken),
             },
-        }
+        },
     ]
 }

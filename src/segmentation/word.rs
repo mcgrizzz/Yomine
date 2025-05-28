@@ -3,10 +3,11 @@ use std::collections::HashMap;
 
 use wana_kana::IsJapaneseStr;
 
+use super::{
+    token_models::UnidicToken,
+    unidic_tags::UnidicTag,
+};
 use crate::core::Term;
-
-use super::token_models::UnidicToken;
-use super::unidic_tags::UnidicTag;
 
 #[derive(PartialEq, Clone, Debug, Hash, Eq)]
 pub enum POS {
@@ -119,24 +120,20 @@ impl Into<Term> for Word {
 
 pub fn get_default_pos(token: &UnidicToken) -> POS {
     match token.pos1 {
-        UnidicTag::Meishi => {
-            match token.pos2 {
-                UnidicTag::Koyuumeishi => POS::ProperNoun,
-                UnidicTag::Suushi => POS::Number,
-                _ => POS::Noun,
-            }
-        }
+        UnidicTag::Meishi => match token.pos2 {
+            UnidicTag::Koyuumeishi => POS::ProperNoun,
+            UnidicTag::Suushi => POS::Number,
+            _ => POS::Noun,
+        },
         UnidicTag::Doushi => POS::Verb,
         UnidicTag::Keiyoushi => POS::Adjective,
         UnidicTag::Keijoushi => POS::Adjective,
         UnidicTag::Fukushi => POS::Adverb,
         UnidicTag::Joshi => POS::Postposition,
-        UnidicTag::Jodoushi => {
-            match token.conjugation_type {
-                UnidicTag::JodoushiDesu => POS::Copula,
-                _ => POS::Postposition,
-            }
-        }
+        UnidicTag::Jodoushi => match token.conjugation_type {
+            UnidicTag::JodoushiDesu => POS::Copula,
+            _ => POS::Postposition,
+        },
         UnidicTag::Rentaishi => POS::Determiner,
         UnidicTag::Setsuzokushi => POS::Conjunction,
         UnidicTag::Settouji => POS::Prefix,

@@ -1,9 +1,28 @@
-use std::sync::{ Arc, Mutex };
-use std::net::SocketAddr;
-use futures_util::{ SinkExt, StreamExt };
-use serde::{ Deserialize, Serialize };
-use tokio::{ sync::mpsc, runtime::Runtime, net::TcpListener };
-use tokio_tungstenite::{ accept_async, tungstenite::protocol::Message };
+use std::{
+    net::SocketAddr,
+    sync::{
+        Arc,
+        Mutex,
+    },
+};
+
+use futures_util::{
+    SinkExt,
+    StreamExt,
+};
+use serde::{
+    Deserialize,
+    Serialize,
+};
+use tokio::{
+    net::TcpListener,
+    runtime::Runtime,
+    sync::mpsc,
+};
+use tokio_tungstenite::{
+    accept_async,
+    tungstenite::protocol::Message,
+};
 use uuid::Uuid;
 
 use crate::core::errors::YomineError;
@@ -54,9 +73,8 @@ pub struct WebSocketServer {
     server_running: Arc<Mutex<bool>>,
     seek_statuses: Arc<Mutex<Vec<SeekStatus>>>,
     // A channel for message ID confirmations from the connection handlers to the main server
-    confirmation_channel: Arc<
-        (tokio::sync::mpsc::Sender<String>, Mutex<tokio::sync::mpsc::Receiver<String>>)
-    >,
+    confirmation_channel:
+        Arc<(tokio::sync::mpsc::Sender<String>, Mutex<tokio::sync::mpsc::Receiver<String>>)>,
 }
 
 impl WebSocketServer {
@@ -107,9 +125,9 @@ impl WebSocketServer {
     async fn run_server(&self) -> Result<(), YomineError> {
         let addr = "127.0.0.1:8766".parse::<SocketAddr>().unwrap();
 
-        let listener = TcpListener::bind(&addr).await.map_err(|e|
-            YomineError::Custom(format!("Failed to bind to address: {}", e))
-        )?;
+        let listener = TcpListener::bind(&addr)
+            .await
+            .map_err(|e| YomineError::Custom(format!("Failed to bind to address: {}", e)))?;
 
         println!("WebSocket server running on {}", addr);
         println!("ASBPlayer can connect to: ws://127.0.0.1:8766/ws");
@@ -121,13 +139,8 @@ impl WebSocketServer {
             let confirmation_sender = self.confirmation_channel.0.clone();
 
             tokio::spawn(async move {
-                if
-                    let Err(e) = Self::handle_connection(
-                        stream,
-                        addr,
-                        clients,
-                        confirmation_sender
-                    ).await
+                if let Err(e) =
+                    Self::handle_connection(stream, addr, clients, confirmation_sender).await
                 {
                     eprintln!("Error handling connection from {}: {:?}", addr, e);
                 }
@@ -141,11 +154,11 @@ impl WebSocketServer {
         stream: tokio::net::TcpStream,
         addr: SocketAddr,
         clients: Arc<Mutex<Vec<ConnectedClient>>>,
-        confirmation_sender: tokio::sync::mpsc::Sender<String>
+        confirmation_sender: tokio::sync::mpsc::Sender<String>,
     ) -> Result<(), YomineError> {
-        let ws_stream = accept_async(stream).await.map_err(|e|
-            YomineError::Custom(format!("Error during WebSocket handshake: {}", e))
-        )?;
+        let ws_stream = accept_async(stream)
+            .await
+            .map_err(|e| YomineError::Custom(format!("Error during WebSocket handshake: {}", e)))?;
 
         println!("WebSocket connection established with: {}", addr);
 
@@ -248,7 +261,7 @@ impl WebSocketServer {
         let mut clients = self.connected_clients.lock().unwrap();
         let initial_count = clients.len();
 
-        clients.retain(|client| { !client.sender.is_closed() && client.sender.capacity() > 0 });
+        clients.retain(|client| !client.sender.is_closed() && client.sender.capacity() > 0);
 
         let removed = initial_count - clients.len();
         if removed > 0 {
@@ -277,8 +290,7 @@ impl WebSocketServer {
                 status.confirmed = true;
                 println!(
                     "Confirmed timestamp: {} for message ID: {}",
-                    status.timestamp_str,
-                    message_id
+                    status.timestamp_str, message_id
                 );
                 return Some(status.timestamp_str.clone());
             }
@@ -313,18 +325,13 @@ impl WebSocketServer {
 
     pub fn get_confirmed_timestamps(&self) -> Vec<String> {
         let statuses = self.seek_statuses.lock().unwrap();
-        statuses
-            .iter()
-            .filter(|s| s.confirmed)
-            .map(|s| s.timestamp_str.clone())
-            .collect()
+        statuses.iter().filter(|s| s.confirmed).map(|s| s.timestamp_str.clone()).collect()
     }
 
     pub fn seek_timestamp(&self, timestamp: f64, timestamp_str: &str) -> Result<(), YomineError> {
         println!(
             "Sending seek command for timestamp: {} seconds, str: {}",
-            timestamp,
-            timestamp_str
+            timestamp, timestamp_str
         );
 
         let message_id = Uuid::new_v4().to_string();
@@ -361,7 +368,7 @@ impl WebSocketServer {
             let mut clients = self.connected_clients.lock().unwrap();
 
             let initial_count = clients.len();
-            clients.retain(|client| { !client.sender.is_closed() && client.sender.capacity() > 0 });
+            clients.retain(|client| !client.sender.is_closed() && client.sender.capacity() > 0);
 
             let removed = initial_count - clients.len();
             if removed > 0 {
@@ -375,14 +382,10 @@ impl WebSocketServer {
 
             println!("Found {} connected clients", clients.len());
 
-            clients
-                .iter()
-                .map(|client| client.sender.clone())
-                .collect::<Vec<_>>()
+            clients.iter().map(|client| client.sender.clone()).collect::<Vec<_>>()
         };
-        let rt = Runtime::new().map_err(|e|
-            YomineError::Custom(format!("Failed to create runtime: {}", e))
-        )?;
+        let rt = Runtime::new()
+            .map_err(|e| YomineError::Custom(format!("Failed to create runtime: {}", e)))?;
 
         // Spawn a task for each client to send the message
         for (index, sender) in client_senders.into_iter().enumerate() {

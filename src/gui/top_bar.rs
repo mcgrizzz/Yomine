@@ -1,6 +1,9 @@
 use eframe::egui;
-use crate::gui::file_modal::FileModal;
-use crate::gui::websocket_manager::WebSocketManager;
+
+use crate::gui::{
+    file_modal::FileModal,
+    websocket_manager::WebSocketManager,
+};
 
 pub struct TopBar;
 
@@ -9,7 +12,7 @@ impl TopBar {
         ctx: &egui::Context,
         file_modal: &mut FileModal,
         websocket_manager: &WebSocketManager,
-        anki_connected: bool
+        anki_connected: bool,
     ) {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
@@ -34,7 +37,7 @@ impl TopBar {
     fn show_status_indicators(
         ui: &mut egui::Ui,
         websocket_manager: &WebSocketManager,
-        anki_connected: bool
+        anki_connected: bool,
     ) {
         let asbplayer_connected = websocket_manager.has_clients();
 
@@ -52,9 +55,8 @@ impl TopBar {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 2.0;
             ui.small("asbplayer").on_hover_text(asbplayer_tooltip);
-            ui.small(egui::RichText::new("●").color(asbplayer_color)).on_hover_text(
-                asbplayer_tooltip
-            );
+            ui.small(egui::RichText::new("●").color(asbplayer_color))
+                .on_hover_text(asbplayer_tooltip);
         });
 
         ui.add_space(3.0);
@@ -65,11 +67,8 @@ impl TopBar {
             egui::Color32::from_rgb(200, 80, 80)
         };
 
-        let anki_tooltip = if anki_connected {
-            "Connected to Anki"
-        } else {
-            "Not Connected to Anki"
-        };
+        let anki_tooltip =
+            if anki_connected { "Connected to Anki" } else { "Not Connected to Anki" };
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 2.0;
             ui.small("Anki").on_hover_text(anki_tooltip);

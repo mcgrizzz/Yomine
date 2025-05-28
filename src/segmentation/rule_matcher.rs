@@ -1,13 +1,24 @@
 use std::thread::current;
 
-use wana_kana::{ ConvertJapanese, IsJapaneseStr };
+use wana_kana::{
+    ConvertJapanese,
+    IsJapaneseStr,
+};
 
-use crate::core::utils::NormalizeLongVowel;
-use crate::core::YomineError;
-use super::word::{ Word, POS, get_default_pos };
-use super::token_models::UnidicToken;
-use super::unidic_tags::UnidicTag;
-use super::word_rules::create_default_rules;
+use super::{
+    token_models::UnidicToken,
+    unidic_tags::UnidicTag,
+    word::{
+        get_default_pos,
+        Word,
+        POS,
+    },
+    word_rules::create_default_rules,
+};
+use crate::core::{
+    utils::NormalizeLongVowel,
+    YomineError,
+};
 
 /**
  * Allows us to write rules instead of lots of nested logic which can become unwieldy.
@@ -16,7 +27,7 @@ use super::word_rules::create_default_rules;
 
 #[derive(Clone)]
 pub enum Matcher<T> {
-    None, // Always matches (default)
+    None,        // Always matches (default)
     Any(Vec<T>), // Matches if any of the contained values match
     Not(Vec<T>), // Matches if none of the contained values match
 }
@@ -50,13 +61,13 @@ pub struct TokenMatcher {
 
 impl TokenMatcher {
     pub fn matches(&self, token: &UnidicToken) -> bool {
-        self.pos1.matches(&token.pos1) &&
-            self.pos2.matches(&token.pos2) &&
-            self.pos3.matches(&token.pos3) &&
-            self.pos4.matches(&token.pos4) &&
-            self.surface.matches(&token.surface) &&
-            self.conjugation_type.matches(&token.conjugation_type) &&
-            self.conjugation_form.matches(&token.conjugation_form)
+        self.pos1.matches(&token.pos1)
+            && self.pos2.matches(&token.pos2)
+            && self.pos3.matches(&token.pos3)
+            && self.pos4.matches(&token.pos4)
+            && self.surface.matches(&token.surface)
+            && self.conjugation_type.matches(&token.conjugation_type)
+            && self.conjugation_form.matches(&token.conjugation_form)
     }
 }
 
@@ -79,7 +90,7 @@ pub enum RuleAction {
 
 #[derive(Clone)]
 pub enum MainWordPolicy {
-    UseFirstToken, // Use first token's lemma as main word
+    UseFirstToken,  // Use first token's lemma as main word
     UseSecondToken, // Use second token's lemma as main word
 }
 
@@ -187,9 +198,8 @@ pub fn process_tokens(tokens: Vec<UnidicToken>, rules: &[Rule]) -> Result<Vec<Wo
                                 match policy {
                                     MainWordPolicy::UseFirstToken => {
                                         // In a merge, the first token is from the previous word
-                                        if
-                                            prev_word.main_word.is_none() &&
-                                            !prev_word.tokens.is_empty()
+                                        if prev_word.main_word.is_none()
+                                            && !prev_word.tokens.is_empty()
                                         {
                                             prev_word.main_word = Some(prev_word.tokens[0].clone());
                                         }
@@ -246,12 +256,14 @@ pub fn process_tokens(tokens: Vec<UnidicToken>, rules: &[Rule]) -> Result<Vec<Wo
                 )
             } else {
                 (
-                    current_token.surface_hatsuon
+                    current_token
+                        .surface_hatsuon
                         .clone()
                         .to_hiragana()
                         .normalize_long_vowel()
                         .into_owned(),
-                    current_token.lemma_hatsuon
+                    current_token
+                        .lemma_hatsuon
                         .clone()
                         .to_hiragana()
                         .normalize_long_vowel()

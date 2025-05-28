@@ -1,7 +1,18 @@
 use std::{
-    fs::{ self, File },
-    io::{ self, BufReader, BufWriter, Cursor },
-    path::{ Path, PathBuf },
+    fs::{
+        self,
+        File,
+    },
+    io::{
+        self,
+        BufReader,
+        BufWriter,
+        Cursor,
+    },
+    path::{
+        Path,
+        PathBuf,
+    },
 };
 
 use reqwest::blocking::get;
@@ -41,7 +52,7 @@ impl DictType {
     // lemma_form index, lemma_reading index
     pub fn lemma_indices(&self) -> (usize, usize) {
         match self {
-            DictType::Unidic => { (10, 11) }
+            DictType::Unidic => (10, 11),
             DictType::Ipadic => {
                 (6, 8) //8 is the surface form reading.. sometimes? Let's use unidic for now
             }

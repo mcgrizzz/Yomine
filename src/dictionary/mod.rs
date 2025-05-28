@@ -1,17 +1,22 @@
-pub mod token_dictionary;
 pub mod frequency_dict;
 pub mod frequency_manager;
+pub mod token_dictionary;
 
 type FrequencyData = CacheFrequencyData;
 type Frequency = CacheFrequency;
 
-use serde::{ Deserialize, Serialize };
+use serde::{
+    Deserialize,
+    Serialize,
+};
+
 use crate::core::utils::deserialize_number_or_numeric_string;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum JsonFrequency {
-    #[serde(deserialize_with = "deserialize_number_or_numeric_string")] Number(u32),
+    #[serde(deserialize_with = "deserialize_number_or_numeric_string")]
+    Number(u32),
     Complex {
         #[serde(deserialize_with = "deserialize_number_or_numeric_string")]
         value: u32,
@@ -25,28 +30,19 @@ pub enum JsonFrequency {
 #[serde(untagged)]
 pub enum JsonFrequencyData {
     Simple(JsonFrequency),
-    Nested {
-        reading: String,
-        frequency: JsonFrequency,
-    },
+    Nested { reading: String, frequency: JsonFrequency },
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum CacheFrequency {
     Number(u32),
-    Complex {
-        value: u32,
-        display_value: Option<String>,
-    },
+    Complex { value: u32, display_value: Option<String> },
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum CacheFrequencyData {
     Simple(CacheFrequency),
-    Nested {
-        reading: String,
-        frequency: CacheFrequency,
-    },
+    Nested { reading: String, frequency: CacheFrequency },
 }
 
 impl CacheFrequencyData {
@@ -128,11 +124,9 @@ impl From<JsonFrequency> for CacheFrequency {
     fn from(json_freq: JsonFrequency) -> Self {
         match json_freq {
             JsonFrequency::Number(n) => CacheFrequency::Number(n),
-            JsonFrequency::Complex { value, display_value } =>
-                CacheFrequency::Complex {
-                    value,
-                    display_value,
-                },
+            JsonFrequency::Complex { value, display_value } => {
+                CacheFrequency::Complex { value, display_value }
+            }
         }
     }
 }
@@ -141,11 +135,9 @@ impl From<JsonFrequencyData> for CacheFrequencyData {
     fn from(json_data: JsonFrequencyData) -> Self {
         match json_data {
             JsonFrequencyData::Simple(freq) => CacheFrequencyData::Simple(freq.into()),
-            JsonFrequencyData::Nested { reading, frequency } =>
-                CacheFrequencyData::Nested {
-                    reading,
-                    frequency: frequency.into(),
-                },
+            JsonFrequencyData::Nested { reading, frequency } => {
+                CacheFrequencyData::Nested { reading, frequency: frequency.into() }
+            }
         }
     }
 }

@@ -1,4 +1,7 @@
-use std::{ borrow::Cow, cell::OnceCell };
+use std::{
+    borrow::Cow,
+    cell::OnceCell,
+};
 
 use jp_deinflector::deinflect;
 use regex::Regex;
@@ -15,9 +18,8 @@ impl NormalizeLongVowel for str {
             // Lazily initialize the regex using OnceCell
             let cell = OnceCell::new();
             let re: &Regex = cell.get_or_init(|| {
-                Regex::new(
-                    r"([おこそとのほもよろごぞどぼぽ])お|([けせてねへめれげぜでべぺ])え"
-                ).unwrap()
+                Regex::new(r"([おこそとのほもよろごぞどぼぽ])お|([けせてねへめれげぜでべぺ])え")
+                    .unwrap()
             });
 
             // Check if any replacement is needed
@@ -101,7 +103,7 @@ mod tests {
             ("読ませる".to_string(), "よませる".to_string()),
             ("読ませらる".to_string(), "よませらる".to_string()),
             ("読む".to_string(), "よむ".to_string()),
-            ("読ます".to_string(), "よます".to_string())
+            ("読ます".to_string(), "よます".to_string()),
         ];
 
         assert_eq!(result, expected);
@@ -119,21 +121,24 @@ mod tests {
             ("思いる".to_string(), "おもいる".to_string()),
             ("思います".to_string(), "おもいます".to_string()),
             ("思いまする".to_string(), "おもいまする".to_string()),
-            ("思いましる".to_string(), "おもいましる".to_string())
+            ("思いましる".to_string(), "おもいましる".to_string()),
         ];
 
         assert_eq!(result, expected);
     }
 }
 
-use serde::{ Deserialize, Deserializer };
-use wana_kana::{ utils::is_char_kana, IsJapaneseStr };
+use serde::{
+    Deserialize,
+    Deserializer,
+};
+use wana_kana::{
+    utils::is_char_kana,
+    IsJapaneseStr,
+};
 
 fn kana_suffix_length(word: &str) -> usize {
-    word.chars()
-        .rev()
-        .take_while(|&c| is_char_kana(c))
-        .count()
+    word.chars().rev().take_while(|&c| is_char_kana(c)).count()
 }
 
 fn kanji_mapping(word: &str, reading: &str) -> (String, String) {
@@ -141,10 +146,7 @@ fn kanji_mapping(word: &str, reading: &str) -> (String, String) {
     let base_len = word.chars().count() - suffix_len;
 
     let base: String = word.chars().take(base_len).collect();
-    let base_reading: String = reading
-        .chars()
-        .take(reading.chars().count() - suffix_len)
-        .collect();
+    let base_reading: String = reading.chars().take(reading.chars().count() - suffix_len).collect();
 
     (base, base_reading)
 }
@@ -169,7 +171,8 @@ pub fn pairwise_deinflection(word: &str, reading: &str) -> Vec<(String, String)>
 }
 
 pub fn deserialize_number_or_numeric_string<'de, D>(deserializer: D) -> Result<u32, D::Error>
-    where D: Deserializer<'de>
+where
+    D: Deserializer<'de>,
 {
     // Use serde_json::Value as an intermediate type to handle both numbers and strings
     let value = serde_json::Value::deserialize(deserializer)?;
@@ -187,18 +190,16 @@ pub fn deserialize_number_or_numeric_string<'de, D>(deserializer: D) -> Result<u
             }
         }
         // Handle JSON strings (e.g., "123")
-        serde_json::Value::String(s) =>
-            match s.parse::<u32>() {
-                Ok(num) => Ok(num),
-                Err(_) =>
-                    Err(serde::de::Error::custom(format!("string '{}' is not a valid number", s))),
+        serde_json::Value::String(s) => match s.parse::<u32>() {
+            Ok(num) => Ok(num),
+            Err(_) => {
+                Err(serde::de::Error::custom(format!("string '{}' is not a valid number", s)))
             }
+        },
         // Reject anything else (e.g., objects, arrays, booleans)
-        _ =>
-            Err(
-                serde::de::Error::custom(
-                    format!("expected a number or numeric string, got: {}", value)
-                )
-            ),
+        _ => Err(serde::de::Error::custom(format!(
+            "expected a number or numeric string, got: {}",
+            value
+        ))),
     }
 }

@@ -1,4 +1,5 @@
 use eframe::egui;
+
 use crate::gui::theme::Theme;
 
 pub struct MessageOverlay {
@@ -8,10 +9,7 @@ pub struct MessageOverlay {
 
 impl MessageOverlay {
     pub fn new() -> Self {
-        Self {
-            active: true, 
-            message: Some("Loading language tools...".to_string()),
-        }
+        Self { active: true, message: Some("Loading language tools...".to_string()) }
     }
 
     pub fn set_message(&mut self, message: String) {
@@ -27,8 +25,7 @@ impl MessageOverlay {
     pub fn show(&self, ctx: &egui::Context, theme: &Theme) {
         if self.active {
             // Background overlay
-            egui::Area
-                ::new(egui::Id::new("message_overlay"))
+            egui::Area::new(egui::Id::new("message_overlay"))
                 .order(egui::Order::Foreground)
                 .fixed_pos(egui::Pos2::new(0.0, 0.0))
                 .show(ctx, |ui| {
@@ -37,7 +34,7 @@ impl MessageOverlay {
                     ui.painter().rect_filled(
                         ui.ctx().screen_rect(),
                         0.0,
-                        egui::Color32::from_black_alpha(120)
+                        egui::Color32::from_black_alpha(120),
                     );
                 });
 
@@ -47,8 +44,7 @@ impl MessageOverlay {
             };
 
             // Message box
-            egui::Window
-                ::new("message_box")
+            egui::Window::new("message_box")
                 .order(egui::Order::Foreground)
                 .collapsible(false)
                 .resizable(false)
@@ -56,12 +52,8 @@ impl MessageOverlay {
                 .fixed_size(egui::Vec2::new(200.0, 100.0))
                 .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::new(0.0, 0.0))
                 .show(ctx, |ui| {
-                    ui.style_mut().visuals.window_fill = egui::Color32::from_rgba_premultiplied(
-                        0,
-                        0,
-                        0,
-                        150
-                    );
+                    ui.style_mut().visuals.window_fill =
+                        egui::Color32::from_rgba_premultiplied(0, 0, 0, 150);
                     ui.style_mut().visuals.window_stroke = egui::Stroke::new(2.0, theme.red());
 
                     ui.centered_and_justified(|ui| {
