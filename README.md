@@ -17,7 +17,7 @@ There are currently no prebuilt binaries available. You'll need to build from so
 
 ### Screenshot
 
-![Yomine UI](screenshot.png)
+![Yomine UI](mining.png)
 
 ## Planned Features (in no particular order)
 
@@ -51,6 +51,32 @@ You can also check out these Google Drive folders for more frequency dictionarie
 
 **Note**: Always download from trusted sources to avoid corrupted or malicious files. If you can't find a specific dictionary, consider generating your own using tools mentioned in Yomitan's documentation or community guides. You may want to ask around on the moeway discord as well.
 
+## Setting Up Anki Integration
+
+Yomine connects to Anki to filter out terms you already know.
+
+### Prerequisites
+
+**Install AnkiConnect**: Install the [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on in Anki
+   - In Anki, go to Tools → Add-ons → Get Add-ons
+   - Enter the code: `2055492159`
+   - Restart Anki
+
+### Configuring Model Mappings
+
+Yomine needs to know which fields in your Anki notes contain the Japanese terms and readings. Here's how to configure this:
+
+1. **Open Settings**: In Yomine, go to Settings → Anki Settings
+2. **Check Connection**: Wait for Yomine to connect to Anki
+3. **Add Model Mappings**: 
+   - Select your Anki note type from the dropdown
+   - Yomine will try to guess these fields for you but you may need to manually select them.
+   - Choose the **Term Field**: The field containing the Japanese word or phrase
+   - Choose the **Reading Field**: The field containing the term reading
+   - Click "Add" to save the mapping
+   - Save your settings
+
+![Anki Setup](anki_setup.png)
 
 ## Building from Source
 
