@@ -16,6 +16,10 @@ use super::{
     error_modal::ErrorModal,
     file_modal::FileModal,
     message_overlay::MessageOverlay,
+    settings::{
+        SettingsData,
+        SettingsModal,
+    },
     table::{
         term_table,
         TableState,
@@ -36,6 +40,10 @@ use crate::{
         Term,
     },
     dictionary::frequency_manager::FrequencyManager,
+    persistence::{
+        load_json_or_default,
+        save_json,
+    },
 };
 
 pub struct LanguageTools {
@@ -48,9 +56,11 @@ pub struct YomineApp {
     pub terms: Vec<Term>,
     pub sentences: Vec<Sentence>,
     pub model_mapping: HashMap<String, FieldMapping>,
+    pub settings_data: SettingsData,
     pub table_state: TableState,
     pub file_modal: FileModal,
     pub error_modal: ErrorModal,
+    pub settings_modal: SettingsModal,
     pub theme: Theme,
     pub zoom: f32,
     pub anki_connected: bool,
@@ -72,9 +82,18 @@ impl YomineApp {
         let (language_tools_sender, language_tools_receiver) = std::sync::mpsc::channel();
         let (loading_message_sender, loading_message_receiver) = std::sync::mpsc::channel();
 
+        // Load settings from disk
+        let mut settings_data = load_json_or_default::<SettingsData>("settings.json");
+
+        // If we have model mappings passed in, merge them with loaded settings
+        for (model_name, field_mapping) in model_mapping {
+            settings_data.anki_model_mappings.insert(model_name, field_mapping);
+        }
+
         Self::start_background_loading(language_tools_sender, loading_message_sender);
         let app = Self {
-            model_mapping,
+            model_mapping: settings_data.anki_model_mappings.clone(),
+            settings_data,
             theme: Theme::dracula(),
             zoom: cc.egui_ctx.zoom_factor(),
             anki_connected: false,
@@ -83,6 +102,7 @@ impl YomineApp {
             message_overlay: MessageOverlay::new(),
             file_modal: FileModal::new(),
             error_modal: ErrorModal::new(),
+            settings_modal: SettingsModal::new(),
             table_state: TableState::default(),
             language_tools: None,
             language_tools_receiver: Some(language_tools_receiver),
@@ -206,7 +226,32 @@ impl eframe::App for YomineApp {
 
         self.websocket_manager.update();
         self.update_anki_status();
-        TopBar::show(ctx, &mut self.file_modal, &self.websocket_manager, self.anki_connected);
+
+        if self.settings_modal.is_settings_open() {
+            let viewport_info = ctx.input(|i| i.viewport().clone());
+            if let Some(inner_rect) = viewport_info.inner_rect {
+                let current_size = inner_rect.size();
+                let min_required_size = egui::Vec2::new(900.0, 750.0);
+
+                if current_size.x < min_required_size.x || current_size.y < min_required_size.y {
+                    let new_size = egui::Vec2::new(
+                        current_size.x.max(min_required_size.x),
+                        current_size.y.max(min_required_size.y),
+                    );
+                    ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(new_size));
+                }
+            }
+        }
+
+        let current_settings = self.get_current_settings();
+        TopBar::show(
+            ctx,
+            &mut self.file_modal,
+            &mut self.settings_modal,
+            &current_settings,
+            &self.websocket_manager,
+            self.anki_connected,
+        );
         if let Some(source_file) = self.file_modal.show(ctx) {
             println!("File selected: {:?}", source_file.original_file);
             self.process_source_file(source_file);
@@ -222,6 +267,13 @@ impl eframe::App for YomineApp {
 
         self.message_overlay.show(ctx, &self.theme);
         self.error_modal.show(ctx);
+
+        if let Some(settings) = self.settings_modal.show(ctx) {
+            self.model_mapping = settings.anki_model_mappings.clone();
+            self.settings_data = settings;
+
+            self.save_settings();
+        }
     }
 }
 
@@ -311,6 +363,16 @@ impl YomineApp {
                 self.anki_connected = false;
             }
             self.last_anki_check = Some(now);
+        }
+    }
+
+    fn get_current_settings(&self) -> SettingsData {
+        self.settings_data.clone()
+    }
+
+    fn save_settings(&self) {
+        if let Err(e) = save_json(&self.settings_data, "settings.json") {
+            eprintln!("Failed to save settings: {}", e);
         }
     }
 }

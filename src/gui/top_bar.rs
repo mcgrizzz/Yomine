@@ -2,6 +2,10 @@ use eframe::egui;
 
 use crate::gui::{
     file_modal::FileModal,
+    settings::{
+        SettingsData,
+        SettingsModal,
+    },
     websocket_manager::WebSocketManager,
 };
 
@@ -11,6 +15,8 @@ impl TopBar {
     pub fn show(
         ctx: &egui::Context,
         file_modal: &mut FileModal,
+        settings_modal: &mut SettingsModal,
+        current_settings: &SettingsData,
         websocket_manager: &WebSocketManager,
         anki_connected: bool,
     ) {
@@ -24,6 +30,12 @@ impl TopBar {
                     }
                     if ui.button("Quit").clicked() {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+                });
+
+                ui.menu_button("Settings", |ui| {
+                    if ui.button("Anki Settings").clicked() {
+                        settings_modal.open_settings(current_settings.clone(), ctx);
                     }
                 });
 

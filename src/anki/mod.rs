@@ -172,12 +172,12 @@ impl AnkiState {
 
 #[derive(Debug)]
 pub struct Model {
-    name: String,
-    id: u64,
-    fields: Vec<String>,
+    pub name: String,
+    pub id: u64,
+    pub fields: Vec<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct FieldMapping {
     pub term_field: String,
     pub reading_field: String,

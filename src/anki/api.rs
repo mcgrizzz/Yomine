@@ -136,3 +136,22 @@ pub async fn get_field_names(model_name: &str) -> Result<Vec<String>, reqwest::E
     let response: ApiResponse<Vec<String>> = make_request("modelFieldNames", Some(params)).await?;
     Ok(response.unwrap_result().unwrap_or_default())
 }
+
+pub async fn get_sample_note_for_model(model_name: &str) -> Result<Option<Note>, reqwest::Error> {
+    let query = if model_name.contains(' ') || model_name.contains(':') || model_name.contains('"')
+    {
+        format!("note:\"{}\"", model_name.replace('"', "\\\""))
+    } else {
+        format!("note:{}", model_name)
+    };
+    let note_ids = get_note_ids(&query).await?;
+
+    if !note_ids.is_empty() {
+        let mid_index = note_ids.len() / 2;
+        let mid_note_id = note_ids[mid_index];
+        let notes = get_notes(vec![mid_note_id]).await?;
+        Ok(notes.into_iter().next())
+    } else {
+        Ok(None)
+    }
+}
