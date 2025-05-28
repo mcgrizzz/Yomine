@@ -3,6 +3,7 @@ use egui::epaint::Shadow;
 use egui::style::{ Selection, WidgetVisuals, Widgets };
 use egui::{ Color32, Stroke, Visuals };
 
+#[derive(Clone)]
 pub struct Theme {
     dark: Option<ThemeDetails>,
     light: Option<ThemeDetails>,
@@ -81,6 +82,7 @@ impl Theme {
     }
 }
 
+#[derive(Clone)]
 pub struct ThemeDetails {
     background: Color32,
     foreground: Color32,

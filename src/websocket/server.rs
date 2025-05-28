@@ -60,18 +60,12 @@ pub struct WebSocketServer {
 }
 
 impl WebSocketServer {
-    // Start the WebSocket server
     pub fn start_server() -> Option<Arc<Self>> {
-        // Check if we're already in a runtime
-        let runtime = if tokio::runtime::Handle::try_current().is_ok() {
-            None // Already in a runtime
-        } else {
-            match Runtime::new() {
-                Ok(rt) => Some(rt),
-                Err(e) => {
-                    eprintln!("Failed to create Tokio runtime: {}", e);
-                    return None;
-                }
+        let rt = match Runtime::new() {
+            Ok(rt) => rt,
+            Err(e) => {
+                eprintln!("Failed to create Tokio runtime: {}", e);
+                return None;
             }
         };
 
@@ -101,12 +95,9 @@ impl WebSocketServer {
             }
         };
 
-        // Execute the start future based on runtime context
-        if let Some(rt) = runtime {
-            rt.spawn(start_future);
-        } else {
-            tokio::spawn(start_future);
-        }
+        std::thread::spawn(move || {
+            rt.block_on(start_future);
+        });
 
         *server_arc.server_running.lock().unwrap() = true;
         Some(server_arc)
@@ -114,10 +105,8 @@ impl WebSocketServer {
 
     // Run the WebSocket server
     async fn run_server(&self) -> Result<(), YomineError> {
-        // Define the address to listen on
         let addr = "127.0.0.1:8766".parse::<SocketAddr>().unwrap();
 
-        // Create the TCP listener
         let listener = TcpListener::bind(&addr).await.map_err(|e|
             YomineError::Custom(format!("Failed to bind to address: {}", e))
         )?;
@@ -125,14 +114,12 @@ impl WebSocketServer {
         println!("WebSocket server running on {}", addr);
         println!("ASBPlayer can connect to: ws://127.0.0.1:8766/ws");
 
-        // Accept connections
         while let Ok((stream, addr)) = listener.accept().await {
             println!("New connection from: {}", addr);
 
             let clients = self.connected_clients.clone();
             let confirmation_sender = self.confirmation_channel.0.clone();
 
-            // Handle this connection in a new task
             tokio::spawn(async move {
                 if
                     let Err(e) = Self::handle_connection(
@@ -150,34 +137,28 @@ impl WebSocketServer {
         Ok(())
     }
 
-    // Handle an individual client connection
     async fn handle_connection(
         stream: tokio::net::TcpStream,
         addr: SocketAddr,
         clients: Arc<Mutex<Vec<ConnectedClient>>>,
         confirmation_sender: tokio::sync::mpsc::Sender<String>
     ) -> Result<(), YomineError> {
-        // Accept the WebSocket connection
         let ws_stream = accept_async(stream).await.map_err(|e|
             YomineError::Custom(format!("Error during WebSocket handshake: {}", e))
         )?;
 
         println!("WebSocket connection established with: {}", addr);
 
-        // Split the WebSocket into sender and receiver
         let (mut ws_sender, mut ws_receiver) = ws_stream.split();
 
-        // Create a channel for sending messages to the client
         let (tx, mut rx) = mpsc::channel::<String>(32);
 
-        // Add this client to our list of connected clients
         {
             let mut clients_lock = clients.lock().unwrap();
             clients_lock.push(ConnectedClient { sender: tx.clone() });
             println!("Client registered. Total clients: {}", clients_lock.len());
         }
 
-        // Task to forward messages from the channel to the WebSocket
         let forward_task = tokio::spawn(async move {
             while let Some(msg) = rx.recv().await {
                 if ws_sender.send(Message::Text(msg)).await.is_err() {
@@ -186,20 +167,17 @@ impl WebSocketServer {
             }
         });
 
-        // Handle incoming messages
         while let Some(msg) = ws_receiver.next().await {
             match msg {
                 Ok(Message::Text(message)) => {
                     println!("Received message from client {}: {}", addr, message);
 
-                    // Handle PING-PONG for connection keepalive
                     if message == "PING" {
                         println!("Received PING from client, sending PONG");
                         if let Err(e) = tx.send("PONG".to_string()).await {
                             eprintln!("Failed to send PONG: {}", e);
                         }
                     } else {
-                        // Try to parse as a command response from ASBPlayer
                         match serde_json::from_str::<CommandResponse>(&message) {
                             Ok(response) if response.command == "response" => {
                                 println!(
@@ -207,7 +185,6 @@ impl WebSocketServer {
                                     response.message_id
                                 );
 
-                                // Send the message ID directly to the main server instance
                                 let message_id = response.message_id.clone();
                                 if let Err(e) = confirmation_sender.send(message_id).await {
                                     eprintln!("Failed to send message ID for confirmation: {}", e);
@@ -216,7 +193,6 @@ impl WebSocketServer {
                                 }
                             }
                             Err(e) => {
-                                // Not a valid response JSON or not a "response" command
                                 println!("Received message that's not a valid response: {}", e);
                             }
                             _ => {}
@@ -235,26 +211,19 @@ impl WebSocketServer {
             }
         }
 
-        // Client disconnected, cancel the forward task
         forward_task.abort();
 
-        // Explicitly close the sender channel to ensure it's marked as closed
         drop(tx);
 
-        // Remove this specific client from our list
         {
             let mut clients_lock = clients.lock().unwrap();
             let initial_count = clients_lock.len();
 
-            // Remove clients with closed channels or try to send a test message
             clients_lock.retain(|client| {
-                // First check if the channel is explicitly closed
                 if client.sender.is_closed() {
                     return false;
                 }
 
-                // If not explicitly closed, it might still be unusable
-                // The channel capacity check is a lightweight way to assess if it's likely functional
                 client.sender.capacity() > 0
             });
 
@@ -270,18 +239,15 @@ impl WebSocketServer {
         Ok(())
     }
 
-    // Check if the server is running and has clients
     pub fn has_clients(&self) -> bool {
         let server_running = *self.server_running.lock().unwrap();
         if !server_running {
             return false;
         }
 
-        // Get a lock and clean up invalid clients
         let mut clients = self.connected_clients.lock().unwrap();
         let initial_count = clients.len();
 
-        // Remove invalid clients
         clients.retain(|client| { !client.sender.is_closed() && client.sender.capacity() > 0 });
 
         let removed = initial_count - clients.len();
@@ -292,20 +258,16 @@ impl WebSocketServer {
         !clients.is_empty()
     }
 
-    // Get a copy of current seek statuses
     pub fn get_seek_statuses(&self) -> Vec<SeekStatus> {
         let statuses = self.seek_statuses.lock().unwrap();
         statuses.clone()
     }
 
-    // Check if a timestamp has been confirmed
     pub fn is_timestamp_confirmed(&self, timestamp_str: &str) -> bool {
         let statuses = self.seek_statuses.lock().unwrap();
         statuses.iter().any(|status| status.timestamp_str == timestamp_str && status.confirmed)
     }
 
-    // Update a particular seek status as confirmed
-    // Now this is simpler - just updating internal state without broadcasting
     pub fn confirm_seek_status(&self, message_id: &str) -> Option<String> {
         println!("Confirming seek status for message ID: {}", message_id);
         let mut statuses = self.seek_statuses.lock().unwrap();
@@ -326,24 +288,18 @@ impl WebSocketServer {
         None
     }
 
-    // Check and process any pending message ID confirmations from the channel
     pub fn process_pending_confirmations(&self) {
-        // Try to get a lock on the receiver
         if let Ok(mut receiver) = self.confirmation_channel.1.try_lock() {
-            // Process any pending message IDs in a non-blocking way
             loop {
-                // Try to receive a message
                 match receiver.try_recv() {
                     Ok(message_id) => {
                         println!("Received confirmation request for message ID: {}", message_id);
 
-                        // Confirm the seek status
                         if let Some(timestamp) = self.confirm_seek_status(&message_id) {
                             println!("Processed confirmation for timestamp: {}", timestamp);
                         }
                     }
                     Err(tokio::sync::mpsc::error::TryRecvError::Empty) => {
-                        // No more messages to process
                         break;
                     }
                     Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
@@ -355,7 +311,6 @@ impl WebSocketServer {
         }
     }
 
-    // Get all recently confirmed timestamps
     pub fn get_confirmed_timestamps(&self) -> Vec<String> {
         let statuses = self.seek_statuses.lock().unwrap();
         statuses
@@ -365,7 +320,6 @@ impl WebSocketServer {
             .collect()
     }
 
-    // Send a seek command to all connected clients and track its status
     pub fn seek_timestamp(&self, timestamp: f64, timestamp_str: &str) -> Result<(), YomineError> {
         println!(
             "Sending seek command for timestamp: {} seconds, str: {}",
@@ -373,18 +327,15 @@ impl WebSocketServer {
             timestamp_str
         );
 
-        // Generate a unique ID for this seek command
         let message_id = Uuid::new_v4().to_string();
         println!("Generated message ID: {}", message_id);
 
-        // Create the seek command
         let command = SeekCommand {
             command: "seek-timestamp".to_string(),
             message_id: message_id.clone(),
             body: SeekBody { timestamp },
         };
 
-        // Track this seek command
         {
             let mut statuses = self.seek_statuses.lock().unwrap();
             statuses.push(SeekStatus {
@@ -396,24 +347,19 @@ impl WebSocketServer {
             });
             println!("Added seek status to tracking. Total tracked: {}", statuses.len());
 
-            // Limit the number of tracked statuses to prevent memory growth
             if statuses.len() > 100 {
-                // Keep only the 50 most recent
                 statuses.sort_by(|a, b| b.sent_time.cmp(&a.sent_time));
                 statuses.truncate(50);
-                println!("Trimmed tracked statuses to 50 entries");
+                println!("Trimmed tracked statuses to 100 entries");
             }
         }
 
-        // Serialize to JSON
         let json = serde_json::to_string(&command)?;
         println!("Sending seek command to all clients: {}", json);
 
-        // Check if we have clients and get their senders
         let client_senders = {
             let mut clients = self.connected_clients.lock().unwrap();
 
-            // Clean up invalid clients before sending
             let initial_count = clients.len();
             clients.retain(|client| { !client.sender.is_closed() && client.sender.capacity() > 0 });
 
@@ -429,50 +375,27 @@ impl WebSocketServer {
 
             println!("Found {} connected clients", clients.len());
 
-            // Just extract the senders, which we can clone
             clients
                 .iter()
                 .map(|client| client.sender.clone())
                 .collect::<Vec<_>>()
         };
+        let rt = Runtime::new().map_err(|e|
+            YomineError::Custom(format!("Failed to create runtime: {}", e))
+        )?;
 
-        // Send to all clients in a background task
-        if tokio::runtime::Handle::try_current().is_ok() {
-            // We're in a runtime
-            println!("Using existing tokio runtime");
-            // Iterate over the vector and spawn a task for each sender
-            for (index, sender) in client_senders.into_iter().enumerate() {
-                let json = json.clone();
-                let client_index = index + 1;
+        // Spawn a task for each client to send the message
+        for (index, sender) in client_senders.into_iter().enumerate() {
+            let json = json.clone();
+            let client_index = index + 1;
 
-                tokio::spawn(async move {
-                    println!("Sending to client #{}: starting...", client_index);
-                    match sender.send(json).await {
-                        Ok(_) => println!("Successfully sent command to client #{}", client_index),
-                        Err(e) => eprintln!("Failed to send to client #{}: {}", client_index, e),
-                    }
-                });
-            }
-        } else {
-            // We need a runtime
-            println!("Creating new tokio runtime");
-            let rt = Runtime::new().map_err(|e|
-                YomineError::Custom(format!("Failed to create runtime: {}", e))
-            )?;
-
-            // Create a new runtime and move each sender into its own task
-            for (index, sender) in client_senders.into_iter().enumerate() {
-                let json = json.clone();
-                let client_index = index + 1;
-
-                rt.spawn(async move {
-                    println!("Sending to client #{}: starting...", client_index);
-                    match sender.send(json).await {
-                        Ok(_) => println!("Successfully sent command to client #{}", client_index),
-                        Err(e) => eprintln!("Failed to send to client #{}: {}", client_index, e),
-                    }
-                });
-            }
+            rt.spawn(async move {
+                println!("Sending to client #{}: starting...", client_index);
+                match sender.send(json).await {
+                    Ok(_) => println!("Successfully sent command to client #{}", client_index),
+                    Err(e) => eprintln!("Failed to send to client #{}: {}", client_index, e),
+                }
+            });
         }
 
         Ok(())

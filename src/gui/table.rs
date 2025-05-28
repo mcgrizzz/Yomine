@@ -1,15 +1,4 @@
-use eframe::egui::{
-    self,
-    pos2,
-    text::LayoutJob,
-    Color32,
-    Context,
-    Rgba,
-    RichText,
-    TextFormat,
-    TextStyle,
-    Ui,
-};
+use eframe::egui::{ self, pos2, Color32, Context, RichText, Ui };
 use egui_extras::{ Column, TableBuilder, TableRow };
 use wana_kana::ConvertJapanese;
 
@@ -218,7 +207,7 @@ fn format_human_timestamp(timestamp: &str) -> String {
     }
 }
 
-fn col_timestamp(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &YomineApp) {
+fn col_timestamp(_ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &YomineApp) {
     row.col(|ui| {
         if let None = term.sentence_references.get(0) {
             return;
@@ -226,9 +215,8 @@ fn col_timestamp(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &Yom
 
         let sentence = term.sentence_references.get(0).unwrap();
         let sentence_content = app.sentences.get(sentence.0 as usize).unwrap();
-
         if let Some(timestamp) = &sentence_content.timestamp {
-            if app.websocket_state.has_clients && app.websocket_server.is_some() {
+            if app.websocket_manager.has_clients() && app.websocket_manager.server.is_some() {
                 // If we have connected clients, show a clickable button
                 // Check if this timestamp has been confirmed
 
@@ -238,9 +226,9 @@ fn col_timestamp(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &Yom
                 // Format the timestamp in a more human-readable way
                 let human_timestamp = format_human_timestamp(clean_timestamp);
 
-                let is_confirmed = app.websocket_state.confirmed_timestamps.contains(
-                    &clean_timestamp.to_string()
-                );
+                let is_confirmed = app.websocket_manager
+                    .get_confirmed_timestamps()
+                    .contains(&clean_timestamp.to_string());
 
                 // Color based on confirmation status
                 let button_text = if is_confirmed {
@@ -260,7 +248,7 @@ fn col_timestamp(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &Yom
                 // Show original timestamp on hover
 
                 if response.clicked() {
-                    if let Some(server) = &app.websocket_server {
+                    if let Some(server) = &app.websocket_manager.server {
                         if
                             let Ok(seconds) =
                                 crate::websocket::WebSocketServer::convert_srt_timestamp_to_seconds(
@@ -295,7 +283,7 @@ fn col_timestamp(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &Yom
     });
 }
 
-fn col_frequency(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &YomineApp) {
+fn col_frequency(_ctx: &egui::Context, row: &mut TableRow, term: &Term, _app: &YomineApp) {
     row.col(|ui| {
         if let Some(&freq) = term.frequencies.get("HARMONIC") {
             ui.label(if freq == u32::MAX { "？".to_string() } else { freq.to_string() });
@@ -303,7 +291,7 @@ fn col_frequency(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &Yom
     });
 }
 
-fn col_pos(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &YomineApp) {
+fn col_pos(_ctx: &egui::Context, row: &mut TableRow, term: &Term, _app: &YomineApp) {
     let pos = term.part_of_speech.to_string();
 
     row.col(|ui| {
@@ -313,47 +301,79 @@ fn col_pos(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &YomineApp
 
 pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
     egui::CentralPanel::default().show(ctx, |ui| {
-        ui.heading("Term Table");
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            TableBuilder::new(ui)
-                .striped(true)
-                .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                .column(Column::auto().at_least(100.0))
-                .column(Column::auto().at_least(150.0))
-                .column(Column::auto().at_least(40.0))
-                .column(Column::auto().at_least(40.0))
-                .column(Column::remainder())
-                .header(25.0, |mut header| {
-                    header_cols(ctx, header, app);
-                })
-                .body(|mut body| {
-                    let row_height = |i: usize| {
-                        let t = &app.terms[i];
+        if app.terms.is_empty() && !app.message_overlay.active {
+            ui.vertical_centered(|ui| {
+                ui.add_space(100.0);
 
-                        if let None = t.sentence_references.get(0) {
-                            return 36.0;
-                        }
+                ui.label(egui::RichText::new("No File Loaded").size(32.0).color(app.theme.cyan()));
 
-                        let sentence = t.sentence_references.get(0).unwrap();
-                        let sentence_content = app.sentences.get(sentence.0 as usize).unwrap();
-                        let lines: Vec<&str> = sentence_content.text.trim().split("\n").collect();
-                        (36.0_f32).max(18.0 * (lines.len() as f32)) //Size 22.0 font is not 22 height..
-                    };
+                ui.add_space(1.0);
 
-                    body.heterogeneous_rows((0..app.terms.iter().len()).map(row_height), |mut row| {
-                        let t = &app.terms[row.index()];
-                        col_term(ctx, &mut row, t, app);
-                        col_sentence(ctx, &mut row, t, app);
-                        col_timestamp(ctx, &mut row, t, app);
-                        col_frequency(ctx, &mut row, t, app);
-                        col_pos(ctx, &mut row, t, app);
+                ui.label(
+                    egui::RichText
+                        ::new("ファイルがまだ読み込まれていません")
+                        .size(18.0)
+                        .color(app.theme.orange())
+                );
+
+                ui.add_space(10.0);
+
+                ui.label(
+                    egui::RichText
+                        ::new("Use File → Open New File")
+                        .size(14.0)
+                        .color(ctx.style().visuals.weak_text_color())
+                );
+            });
+        } else if !app.terms.is_empty() {
+            ui.heading("Term Table");
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                TableBuilder::new(ui)
+                    .striped(true)
+                    .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                    .column(Column::auto().at_least(100.0))
+                    .column(Column::auto().at_least(150.0))
+                    .column(Column::auto().at_least(40.0))
+                    .column(Column::auto().at_least(40.0))
+                    .column(Column::remainder())
+                    .header(25.0, |header| {
+                        header_cols(ctx, header, app);
+                    })
+                    .body(|body| {
+                        let row_height = |i: usize| {
+                            let t = &app.terms[i];
+
+                            if let None = t.sentence_references.get(0) {
+                                return 36.0;
+                            }
+
+                            let sentence = t.sentence_references.get(0).unwrap();
+                            let sentence_content = app.sentences.get(sentence.0 as usize).unwrap();
+                            let lines: Vec<&str> = sentence_content.text
+                                .trim()
+                                .split("\n")
+                                .collect();
+                            (36.0_f32).max(18.0 * (lines.len() as f32)) //Size 22.0 font is not 22 height..
+                        };
+
+                        body.heterogeneous_rows(
+                            (0..app.terms.iter().len()).map(row_height),
+                            |mut row| {
+                                let t = &app.terms[row.index()];
+                                col_term(ctx, &mut row, t, app);
+                                col_sentence(ctx, &mut row, t, app);
+                                col_timestamp(ctx, &mut row, t, app);
+                                col_frequency(ctx, &mut row, t, app);
+                                col_pos(ctx, &mut row, t, app);
+                            }
+                        );
                     });
-                });
-        });
+            });
+        }
     });
 }
 
-pub fn header_cols(ctx: &egui::Context, mut header: TableRow<'_, '_>, app: &mut YomineApp) {
+pub fn header_cols(_ctx: &egui::Context, mut header: TableRow<'_, '_>, app: &mut YomineApp) {
     header.col(|ui| {
         ui.label(app.theme.heading("Term"));
     });
