@@ -4,6 +4,11 @@ on:
   push:
     branches: [ main ]
 
+permissions:
+  contents: write
+  packages: write
+  pull-requests: read
+
 env:
   CARGO_TERM_COLOR: always
 
