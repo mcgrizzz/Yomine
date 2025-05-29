@@ -236,7 +236,7 @@ impl YomineApp {
         }
     }
 
-    fn handle_task_result(&mut self, result: TaskResult, ctx: &egui::Context) {
+    fn handle_task_result(&mut self, result: TaskResult, _ctx: &egui::Context) {
         match result {
             TaskResult::LanguageToolsLoaded(result) => match result {
                 Ok(language_tools) => {

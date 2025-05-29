@@ -1,11 +1,6 @@
 use std::collections::HashMap;
 
-use eframe::egui::cache;
 use serde::Deserialize;
-use wana_kana::{
-    ConvertJapanese,
-    IsJapaneseStr,
-};
 
 use super::{
     CacheFrequencyData,

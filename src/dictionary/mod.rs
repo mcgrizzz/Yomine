@@ -3,7 +3,6 @@ pub mod frequency_manager;
 pub mod token_dictionary;
 
 type FrequencyData = CacheFrequencyData;
-type Frequency = CacheFrequency;
 
 use serde::{
     Deserialize,

@@ -30,7 +30,6 @@ impl TaskResult {
             TaskResult::FileProcessing(_) => "file_processing",
             TaskResult::LanguageToolsLoaded(_) => "language_tools",
             TaskResult::LoadingMessage(_) => "loading_message",
-            _ => "unknown",
         }
     }
 }

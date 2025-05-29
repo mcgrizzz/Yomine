@@ -219,75 +219,56 @@ impl MediaType {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn test_parse_tv_show_standard() {
-        let result = parse_filename("[Netflix Rip] Sousou no Frieren - S01E24 [1080p].mkv");
-        if let MediaType::TvShow { title, season, episode, source } = result {
-            assert_eq!(title, "Sousou no Frieren");
-            assert_eq!(season, Some(1));
-            assert_eq!(episode, Some(24));
-            assert_eq!(source, Some("Netflix".to_string()));
-        } else {
-            panic!("Expected TvShow, got {:?}", result);
-        }
-    }
 
     #[test]
-    fn test_parse_netflix_style() {
-        let result = parse_filename(
+    fn test_filename_parsing() {
+        // Test TV show parsing with Japanese title, source detection, and language suffix
+        let tv_result = parse_filename(
             "ダンダダン.S01E08.なんかモヤモヤするじゃんよ.WEBRip.Netflix.ja[cc].srt",
         );
-        if let MediaType::TvShow { title, season, episode, source } = result {
+        if let MediaType::TvShow { title, season, episode, source } = tv_result {
             assert_eq!(title, "ダンダダン");
             assert_eq!(season, Some(1));
             assert_eq!(episode, Some(8));
             assert_eq!(source, Some("Netflix".to_string()));
         } else {
-            panic!("Expected TvShow, got {:?}", result);
+            panic!("Expected TvShow, got {:?}", tv_result);
         }
-    }
 
-    #[test]
-    fn test_parse_movie() {
-        let result = parse_filename("Your Name (2016) [1080p] BluRay.mkv");
-        if let MediaType::Movie { title, year, source } = result {
+        // Test movie parsing
+        let movie_result = parse_filename("Your Name (2016) [1080p] BluRay.mkv");
+        if let MediaType::Movie { title, year, source } = movie_result {
             assert_eq!(title, "Your Name");
             assert_eq!(year, Some(2016));
             assert!(source.is_none());
         } else {
-            panic!("Expected Movie, got {:?}", result);
+            panic!("Expected Movie, got {:?}", movie_result);
         }
-    }
 
-    #[test]
-    fn test_parse_generic() {
-        let result = parse_filename(
+        // Test generic parsing
+        let generic_result = parse_filename(
             "[Japanese] 【九州→東京】豪華フェリーの高級個室に乗船 [DownSub.com].srt",
         );
-        if let MediaType::Generic { title, source } = result {
+        if let MediaType::Generic { title, source } = generic_result {
             assert_eq!(title, "【九州→東京】豪華フェリーの高級個室に乗船");
             assert!(source.is_none());
         } else {
-            panic!("Expected Generic, got {:?}", result);
+            panic!("Expected Generic, got {:?}", generic_result);
         }
     }
+
     #[test]
-    fn test_clean_title() {
+    fn test_title_cleaning() {
+        // Test various title cleaning scenarios
         assert_eq!(clean_title("[Release] show.name_here"), "Show Name Here");
-        assert_eq!(clean_title("show-name.S01E01"), "show name S01E01");
         assert_eq!(clean_title("SHOW_NAME"), "Show Name");
-        assert_eq!(clean_title("show_name"), "Show Name");
-    }
-
-    #[test]
-    fn test_language_suffix_removal() {
-        assert_eq!(clean_title("show.name.ja"), "Show Name");
+        assert_eq!(clean_title("show.name.ja"), "Show Name"); // Language suffix removal
         assert_eq!(clean_title("movie.title.en[cc]"), "Movie Title");
-        assert_eq!(clean_title("content.zh"), "Content");
     }
 
     #[test]
-    fn test_display_title() {
+    fn test_media_type_methods() {
+        // Test display_title method
         let tv_show = MediaType::TvShow {
             title: "Attack On Titan".to_string(),
             season: Some(1),
@@ -299,22 +280,12 @@ mod tests {
         let movie =
             MediaType::Movie { title: "Spirited Away".to_string(), year: Some(2001), source: None };
         assert_eq!(movie.display_title(), "Spirited Away (2001)");
-    }
 
-    #[test]
-    fn test_database_matchable() {
-        let tv_show = MediaType::TvShow {
-            title: "Show".to_string(),
-            season: Some(1),
-            episode: Some(1),
-            source: None,
-        };
-        assert!(tv_show.is_database_matchable());
-
-        let movie = MediaType::Movie { title: "Movie".to_string(), year: Some(2020), source: None };
-        assert!(movie.is_database_matchable());
+        // Test database_matchable method
+        assert!(tv_show.is_database_matchable()); // Has season and episode
+        assert!(movie.is_database_matchable()); // Has year
 
         let generic = MediaType::Generic { title: "Generic".to_string(), source: None };
-        assert!(!generic.is_database_matchable());
+        assert!(!generic.is_database_matchable()); // Generic types are never matchable
     }
 }

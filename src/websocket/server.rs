@@ -47,7 +47,7 @@ struct CommandResponse {
     command: String,
     #[serde(rename = "messageId")]
     message_id: String,
-    body: serde_json::Value,
+    //body: serde_json::Value,
 }
 
 // Track timestamp seek status

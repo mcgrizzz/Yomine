@@ -1,8 +1,6 @@
 use eframe::egui::{
     self,
     RichText,
-    Style,
-    Ui,
 };
 use egui::{
     epaint::Shadow,

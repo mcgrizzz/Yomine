@@ -1,5 +1,3 @@
-use std::thread::current;
-
 use wana_kana::{
     ConvertJapanese,
     IsJapaneseStr,

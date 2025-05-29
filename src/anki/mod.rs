@@ -40,8 +40,6 @@ use crate::{
 pub mod api;
 
 pub struct AnkiState {
-    models: Vec<Model>,
-    model_mapping: HashMap<String, FieldMapping>,
     vocab: Vec<Vocab>,
     frequency_manager: Arc<FrequencyManager>,
 }
@@ -56,7 +54,7 @@ impl AnkiState {
         let duration = start.elapsed();
         println!("AnkiState::new - get_total_vocab took: {:?}", duration);
 
-        let result = Ok(Self { models: Vec::new(), model_mapping, vocab, frequency_manager });
+        let result = Ok(Self { vocab, frequency_manager });
         println!("AnkiState::new total time: {:?}", start.elapsed());
         result
     }
@@ -192,7 +190,7 @@ pub struct Vocab {
 pub async fn get_models() -> Result<Vec<Model>, reqwest::Error> {
     let model_ids = get_model_ids().await?;
 
-    let join_start = Instant::now();
+    //let join_start = Instant::now();
     let handles: Vec<_> = model_ids
         .into_iter()
         .map(|(model_name, id)| {
