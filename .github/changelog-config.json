@@ -1,0 +1,62 @@
+{
+  "categories": [
+    {
+      "title": "## 🚀 Features",
+      "labels": ["feature", "enhancement", "feat"]
+    },
+    {
+      "title": "## 🐛 Bug Fixes", 
+      "labels": ["bug", "fix", "bugfix"]
+    },
+    {
+      "title": "## 📚 Documentation",
+      "labels": ["documentation", "docs"]
+    },
+    {
+      "title": "## 🔧 Maintenance",
+      "labels": ["maintenance", "chore", "refactor"]
+    },
+    {
+      "title": "## 🎨 UI/UX",
+      "labels": ["ui", "ux", "design"]
+    },
+    {
+      "title": "## ⚡ Performance",
+      "labels": ["performance", "perf"]
+    },
+    {
+      "title": "## 🔒 Security",
+      "labels": ["security"]
+    }
+  ],
+  "ignore_labels": [
+    "ignore-for-release",
+    "duplicate",
+    "question",
+    "invalid",
+    "wontfix"
+  ],
+  "sort": "ASC",
+  "template": "#{{CHANGELOG}}\n\n<details>\n<summary>All Changes</summary>\n\n#{{UNCATEGORIZED}}\n\n</details>",
+  "pr_template": "- #{{TITLE}} by @#{{AUTHOR}} in ##{{NUMBER}}",
+  "empty_template": "- No changes",
+  "label_extractor": [
+    {
+      "pattern": "^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\\(.+\\))?(!)?:",
+      "target": "$1"
+    }
+  ],
+  "transformers": [
+    {
+      "pattern": "^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\\(.+\\))?(!)?:",
+      "target": ""
+    }
+  ],
+  "max_tags_to_fetch": 200,
+  "max_pull_requests": 1000,
+  "max_back_track_time_days": 365,
+  "exclude_merge_branches": [
+    "main",
+    "master"
+  ]
+}

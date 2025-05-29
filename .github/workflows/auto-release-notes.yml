@@ -1,0 +1,36 @@
+name: Auto Release Notes
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  generate-release-notes:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Generate Release Notes
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const { data: release } = await github.rest.repos.getRelease({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            release_id: context.payload.release.id
+          });
+          
+          // Generate release notes using GitHub's API
+          const { data: releaseNotes } = await github.rest.repos.generateReleaseNotes({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            tag_name: release.tag_name,
+            previous_tag_name: release.target_commitish
+          });
+          
+          // Update the release with generated notes
+          await github.rest.repos.updateRelease({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            release_id: context.payload.release.id,
+            body: releaseNotes.body
+          });
