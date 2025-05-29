@@ -120,13 +120,6 @@ pub async fn process_source_file(
         let filter_anki_duration = filter_anki_start.elapsed();
         println!("Filtering terms against Anki took: {:?}", filter_anki_duration);
         println!("Filtered: {}", terms.len());
-
-        // Uncomment and time the second filter if you decide to use it
-        // let filter_anki_surface_start = Instant::now();
-        // terms = state.filter_existing_terms(terms, true);
-        // let filter_anki_surface_duration = filter_anki_surface_start.elapsed();
-        // println!("Filtering terms against Anki (surface form) took: {:?}", filter_anki_surface_duration);
-        // println!("Filtered surface form: {}", terms.len());
     }
 
     // Total time

@@ -170,7 +170,7 @@ impl AnkiState {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Model {
     pub name: String,
     pub id: u64,

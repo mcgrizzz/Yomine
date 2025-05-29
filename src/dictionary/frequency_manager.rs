@@ -37,6 +37,7 @@ use crate::{
 
 const DICT_DIR: &str = "dictionaries/frequency";
 
+#[derive(Debug)]
 pub struct FrequencyManager {
     dictionaries: HashMap<String, FrequencyDictionary>,
     toggled_states: HashMap<String, bool>,

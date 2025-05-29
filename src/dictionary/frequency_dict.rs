@@ -14,7 +14,7 @@ use super::{
 };
 use crate::core::utils::NormalizeLongVowel;
 
-#[derive(serde::Serialize, Deserialize, Clone)]
+#[derive(serde::Serialize, Deserialize, Clone, Debug)]
 pub struct FrequencyDictionary {
     pub title: String,
     pub revision: String,

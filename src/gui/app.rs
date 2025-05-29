@@ -1,12 +1,6 @@
 use std::{
     collections::HashMap,
-    sync::{
-        mpsc::{
-            Receiver,
-            Sender,
-        },
-        Arc,
-    },
+    sync::Arc,
 };
 
 use eframe::egui;
@@ -34,7 +28,10 @@ use super::{
 use crate::{
     anki::FieldMapping,
     core::{
-        pipeline::process_source_file,
+        tasks::{
+            TaskManager,
+            TaskResult,
+        },
         Sentence,
         SourceFile,
         Term,
@@ -46,12 +43,21 @@ use crate::{
     },
 };
 
+#[derive(Clone)]
 pub struct LanguageTools {
     pub tokenizer: Arc<Tokenizer>,
     pub frequency_manager: Arc<FrequencyManager>,
 }
 
-#[derive(Default)]
+impl std::fmt::Debug for LanguageTools {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LanguageTools")
+            .field("tokenizer", &"Arc<Tokenizer>")
+            .field("frequency_manager", &"Arc<FrequencyManager>")
+            .finish()
+    }
+}
+
 pub struct YomineApp {
     pub terms: Vec<Term>,
     pub sentences: Vec<Sentence>,
@@ -68,10 +74,8 @@ pub struct YomineApp {
     pub websocket_manager: WebSocketManager,
     pub message_overlay: MessageOverlay,
     pub language_tools: Option<LanguageTools>,
-    pub language_tools_receiver: Option<Receiver<Result<LanguageTools, String>>>,
-    pub loading_message_receiver: Option<Receiver<String>>,
-    pub update_receiver: Option<Receiver<Result<(Vec<Term>, Vec<Sentence>), String>>>,
     pub current_processing_file: Option<String>,
+    task_manager: TaskManager,
 }
 
 impl YomineApp {
@@ -79,18 +83,16 @@ impl YomineApp {
         cc: &eframe::CreationContext<'_>,
         model_mapping: HashMap<String, FieldMapping>,
     ) -> Self {
-        let (language_tools_sender, language_tools_receiver) = std::sync::mpsc::channel();
-        let (loading_message_sender, loading_message_receiver) = std::sync::mpsc::channel();
+        let task_manager = TaskManager::new();
 
-        // Load settings from disk
+        task_manager.load_language_tools();
+
         let mut settings_data = load_json_or_default::<SettingsData>("settings.json");
 
-        // If we have model mappings passed in, merge them with loaded settings
         for (model_name, field_mapping) in model_mapping {
             settings_data.anki_model_mappings.insert(model_name, field_mapping);
         }
 
-        Self::start_background_loading(language_tools_sender, loading_message_sender);
         let app = Self {
             model_mapping: settings_data.anki_model_mappings.clone(),
             settings_data,
@@ -105,12 +107,10 @@ impl YomineApp {
             settings_modal: SettingsModal::new(),
             table_state: TableState::default(),
             language_tools: None,
-            language_tools_receiver: Some(language_tools_receiver),
-            loading_message_receiver: Some(loading_message_receiver),
             terms: Vec::new(),
             sentences: Vec::new(),
-            update_receiver: None,
             current_processing_file: None,
+            task_manager: task_manager,
         };
 
         app.setup_fonts(cc);
@@ -153,75 +153,14 @@ impl YomineApp {
         cc.egui_ctx.set_zoom_factor(cc.egui_ctx.zoom_factor() + 0.7);
         set_theme(&cc.egui_ctx, self.theme.clone());
     }
-
-    fn start_background_loading(
-        language_tools_sender: Sender<Result<LanguageTools, String>>,
-        loading_message_sender: Sender<String>,
-    ) {
-        std::thread::spawn(move || {
-            use std::sync::Arc;
-
-            use crate::{
-                dictionary::{
-                    frequency_manager,
-                    token_dictionary::DictType,
-                },
-                segmentation::tokenizer::init_vibrato,
-            };
-
-            let result = (|| -> Result<LanguageTools, String> {
-                let _ = loading_message_sender.send("Loading tokenizer...".to_string());
-                let dict_type = DictType::Unidic;
-                let tokenizer = Arc::new(init_vibrato(&dict_type).map_err(|e| e.to_string())?);
-
-                let _ =
-                    loading_message_sender.send("Loading frequency dictionaries...".to_string());
-                let frequency_manager = Arc::new(
-                    frequency_manager::process_frequency_dictionaries()
-                        .map_err(|e| e.to_string())?,
-                );
-
-                let _ =
-                    loading_message_sender.send("Language tools loaded successfully!".to_string());
-                Ok(LanguageTools { tokenizer, frequency_manager })
-            })();
-
-            language_tools_sender.send(result).unwrap();
-        });
-    }
 }
 
 impl eframe::App for YomineApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        if let Some(receiver) = &self.loading_message_receiver {
-            if let Ok(message) = receiver.try_recv() {
-                self.message_overlay.set_message(message);
-                ctx.request_repaint();
-            }
-        }
+        let task_results = self.task_manager.poll_results();
 
-        if let Some(receiver) = &self.language_tools_receiver {
-            if let Ok(result) = receiver.try_recv() {
-                match &result {
-                    Ok(language_tools) => {
-                        self.language_tools = Some(LanguageTools {
-                            tokenizer: language_tools.tokenizer.clone(),
-                            frequency_manager: language_tools.frequency_manager.clone(),
-                        });
-                        self.message_overlay.clear_message();
-                        self.loading_message_receiver = None;
-                    }
-                    Err(_) => {
-                        self.message_overlay.set_message(
-                            "Failed to load language tools. Please check your dictionaries."
-                                .to_string(),
-                        );
-                        self.loading_message_receiver = None;
-                    }
-                }
-                self.language_tools_receiver = None;
-                ctx.request_repaint();
-            }
+        for result in task_results {
+            self.handle_task_result(result, ctx);
         }
 
         self.websocket_manager.update();
@@ -257,12 +196,6 @@ impl eframe::App for YomineApp {
             self.process_source_file(source_file);
         }
 
-        if let Some(receiver) = &self.update_receiver {
-            if let Ok(result) = receiver.try_recv() {
-                self.handle_processing_result(result);
-                ctx.request_repaint();
-            }
-        }
         term_table(ctx, self);
 
         self.message_overlay.show(ctx, &self.theme);
@@ -292,29 +225,43 @@ impl YomineApp {
         if let Some(language_tools) = &self.language_tools {
             self.message_overlay.set_message("Processing file...".to_string());
             let source_file_clone = source_file.clone();
-            let tokenizer = language_tools.tokenizer.clone();
-            let frequency_manager = language_tools.frequency_manager.clone();
             let model_mapping = self.model_mapping.clone();
-            let (sender, receiver) = std::sync::mpsc::channel();
-
-            std::thread::spawn(move || {
-                let rt = tokio::runtime::Runtime::new().unwrap();
-                let result = rt.block_on(async {
-                    process_source_file(
-                        &source_file_clone,
-                        model_mapping,
-                        &(LanguageTools { tokenizer, frequency_manager }),
-                    )
-                    .await
-                    .map_err(|e| e.to_string())
-                });
-
-                sender.send(result).unwrap();
-            });
-
-            self.update_receiver = Some(receiver);
+            self.task_manager.process_file(
+                source_file_clone,
+                model_mapping,
+                language_tools.clone(),
+            );
         } else {
             println!("Language tools not loaded yet!");
+        }
+    }
+
+    fn handle_task_result(&mut self, result: TaskResult, ctx: &egui::Context) {
+        match result {
+            TaskResult::LanguageToolsLoaded(result) => match result {
+                Ok(language_tools) => {
+                    self.language_tools = Some(language_tools);
+                    self.message_overlay.clear_message();
+                }
+                Err(e) => {
+                    self.message_overlay
+                        .set_message(format!("Failed to load language tools: {}", e));
+                }
+            },
+
+            TaskResult::FileProcessing(result) => {
+                self.message_overlay.clear_message();
+                self.handle_processing_result(result);
+            }
+
+            TaskResult::LoadingMessage(message) => {
+                self.message_overlay.set_message(message);
+            }
+
+            TaskResult::AnkiConnection(connected) => {
+                self.anki_connected = connected;
+            }
+            _ => {}
         }
     }
 
@@ -344,7 +291,7 @@ impl YomineApp {
                 self.sentences = Vec::new();
             }
         }
-        self.update_receiver = None;
+
         self.current_processing_file = None;
     }
 
@@ -356,12 +303,7 @@ impl YomineApp {
         };
 
         if should_check {
-            if let Ok(rt) = tokio::runtime::Runtime::new() {
-                self.anki_connected =
-                    rt.block_on(async { crate::anki::api::get_version().await.is_ok() });
-            } else {
-                self.anki_connected = false;
-            }
+            self.task_manager.check_anki_connection();
             self.last_anki_check = Some(now);
         }
     }
