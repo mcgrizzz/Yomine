@@ -26,28 +26,23 @@ jobs:
         include:
           - target: x86_64-pc-windows-msvc
             os: windows-latest
-            name: yomine-${{ github.event.release.tag_name || inputs.tag_name }}-windows-x64
-            archive_ext: zip
+            name: yomine-${{ github.event.release.tag_name || inputs.tag_name }}-windows-x64.exe
             executable_ext: .exe
             
           - target: x86_64-apple-darwin
             os: macos-latest
             name: yomine-${{ github.event.release.tag_name || inputs.tag_name }}-macos-intel-x64
-            archive_ext: tar.gz
             executable_ext: ""
             
           - target: aarch64-apple-darwin
             os: macos-latest
             name: yomine-${{ github.event.release.tag_name || inputs.tag_name }}-macos-apple-arm64
-            archive_ext: tar.gz
             executable_ext: ""
             
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             name: yomine-${{ github.event.release.tag_name || inputs.tag_name }}-linux-x64
-            archive_ext: tar.gz
-            executable_ext: ""
-            
+            executable_ext: ""            
     runs-on: ${{ matrix.os }}
     
     steps:
@@ -81,62 +76,68 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
       with:
         targets: ${{ matrix.target }}
-    
+
     # Linux dependencies for egui
     - name: Install Linux dependencies
       if: matrix.os == 'ubuntu-latest'
       run: |
         sudo apt-get update
         sudo apt-get install -y libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev
-      # Build the application
+
+    # Build the application
     - name: Build release binary
       run: cargo build --release --target ${{ matrix.target }}
 
-    # Generate checksums
-    - name: Generate checksums
-      shell: bash
-      run: |
-        if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-          cd target/${{ matrix.target }}/release
-          sha256sum yomine.exe > yomine.exe.sha256
-          cd -
-        else
-          cd target/${{ matrix.target }}/release
-          sha256sum yomine > yomine.sha256
-          cd -
-        fi
-
-    # Create archives with improved naming and checksums
-    - name: Create Windows archive
+    # Copy and rename binary to final name
+    - name: Prepare binary (Windows)
       if: matrix.os == 'windows-latest'
       run: |
-        copy target\${{ matrix.target }}\release\yomine.exe yomine${{ matrix.executable_ext }}
-        copy target\${{ matrix.target }}\release\yomine.exe.sha256 yomine${{ matrix.executable_ext }}.sha256
-        7z a ${{ matrix.name }}.${{ matrix.archive_ext }} yomine${{ matrix.executable_ext }} yomine${{ matrix.executable_ext }}.sha256
+        copy target\${{ matrix.target }}\release\yomine.exe ${{ matrix.name }}
+      shell: cmd
 
-    - name: Create Unix archive
+    - name: Prepare binary (Unix)
       if: matrix.os != 'windows-latest'
       run: |
-        cp target/${{ matrix.target }}/release/yomine yomine${{ matrix.executable_ext }}
-        cp target/${{ matrix.target }}/release/yomine.sha256 yomine${{ matrix.executable_ext }}.sha256
-        chmod +x yomine${{ matrix.executable_ext }}
-        tar -czf ${{ matrix.name }}.${{ matrix.archive_ext }} yomine${{ matrix.executable_ext }} yomine${{ matrix.executable_ext }}.sha256
-
-    # Generate archive checksums
-    - name: Generate archive checksums
+        cp target/${{ matrix.target }}/release/yomine ${{ matrix.name }}
+        chmod +x ${{ matrix.name }}
       shell: bash
-      run: |
-        if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-          sha256sum ${{ matrix.name }}.${{ matrix.archive_ext }} > ${{ matrix.name }}.${{ matrix.archive_ext }}.sha256
-        else
-          sha256sum ${{ matrix.name }}.${{ matrix.archive_ext }} > ${{ matrix.name }}.${{ matrix.archive_ext }}.sha256
-        fi      # Upload to release
-    - name: Upload release assets
+
+    # Upload bare binary to release
+    - name: Upload binary to release
       uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ env.TAG_NAME }}
-        files: |
-          ${{ matrix.name }}.${{ matrix.archive_ext }}
-          ${{ matrix.name }}.${{ matrix.archive_ext }}.sha256
+        files: ${{ matrix.name }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Create consolidated checksum file (runs after all binaries are uploaded)
+  create-checksums:
+    needs: build-and-upload
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Download release assets
+      uses: robinraju/release-downloader@v1.11
+      with:        
+        repository: ${{ github.repository }}
+        tag: ${{ env.TAG_NAME }}
+        fileName: "yomine-*"
+        out-file-path: "downloads"
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Generate consolidated checksums
+      run: |
+        cd downloads
+        sha256sum yomine-* > ../SHA256SUMS.txt
+        echo "Generated checksums:"
+        cat ../SHA256SUMS.txt
+      shell: bash
+
+    - name: Upload checksums to release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ env.TAG_NAME }}
+        files: SHA256SUMS.txt
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

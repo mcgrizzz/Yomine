@@ -138,6 +138,7 @@ jobs:
     - name: Create GitHub Release
       uses: actions/github-script@v7
       with:
+        github-token: ${{ secrets.MY_PAT }}
         script: |
           const version = '${{ inputs.version }}';
           const releaseType = '${{ inputs.release_type }}';
@@ -145,17 +146,16 @@ jobs:
           
           let releaseName;
           let releaseBody;
-          
-          if (isPrerelease) {
-            // Beta release naming like Anki: "yomine 1.0.0 Beta 1"
+            if (isPrerelease) {
+            // Beta release naming: "0.3.0 Beta 1"
             const betaMatch = version.match(/v(\d+\.\d+\.\d+)(?:-(beta|alpha|rc)\.(\d+)|b(\d+))$/);
             if (betaMatch) {
               const baseVersion = betaMatch[1];
               const betaNumber = betaMatch[3] || betaMatch[4] || '1';
               const betaType = betaMatch[2] || 'beta';
-              releaseName = `yomine ${baseVersion} ${betaType.charAt(0).toUpperCase() + betaType.slice(1)} ${betaNumber}`;
+              releaseName = `${baseVersion} ${betaType.charAt(0).toUpperCase() + betaType.slice(1)} ${betaNumber}`;
             } else {
-              releaseName = `yomine ${version}`;
+              releaseName = `${version}`;
             }
             
             releaseBody = `**This is a pre-release version for testing purposes.**\n\n` +
@@ -163,8 +163,9 @@ jobs:
                          `Please report any issues you encounter on [GitHub Issues](https://github.com/${context.repo.owner}/${context.repo.repo}/issues).\n\n` +
                          `*Release notes will be automatically generated once binaries are built.*`;
           } else {
-            // Stable release naming: "yomine v1.0.0"
-            releaseName = `yomine ${version}`;
+            // Stable release naming: "0.3.0"
+            const stableMatch = version.match(/v(\d+\.\d+\.\d+)$/);
+            releaseName = stableMatch ? stableMatch[1] : version;
             releaseBody = `Release ${version} of yomine\n\n*Release notes will be automatically generated once binaries are built.*`;
           }
           
