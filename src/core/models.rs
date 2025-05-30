@@ -76,7 +76,8 @@ impl Term {
     //Generate a phrase from a slice of terms
     pub fn from_slice(terms: &[Term]) -> Self {
         let full_segment = terms.iter().map(|t| t.full_segment.as_str()).collect::<String>();
-        let full_segment_reading = terms.iter().map(|t| t.full_segment_reading.as_str()).collect::<String>();
+        let full_segment_reading =
+            terms.iter().map(|t| t.full_segment_reading.as_str()).collect::<String>();
         let surface_form = full_segment.clone();
         let surface_reading = full_segment_reading.clone();
         let lemma_form = surface_form.clone();
