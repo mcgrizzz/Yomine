@@ -3,6 +3,12 @@ name: Release
 on:
   release:
     types: [created]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag name for the release (e.g., v0.3.0-beta.1)'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -10,6 +16,8 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  # Set the tag name based on trigger type
+  TAG_NAME: ${{ github.event.release.tag_name || inputs.tag_name }}
 
 jobs:
   build-and-upload:
@@ -18,25 +26,25 @@ jobs:
         include:
           - target: x86_64-pc-windows-msvc
             os: windows-latest
-            name: yomine-${{ github.event.release.tag_name }}-windows-x64
+            name: yomine-${{ github.event.release.tag_name || inputs.tag_name }}-windows-x64
             archive_ext: zip
             executable_ext: .exe
             
           - target: x86_64-apple-darwin
             os: macos-latest
-            name: yomine-${{ github.event.release.tag_name }}-macos-intel-x64
+            name: yomine-${{ github.event.release.tag_name || inputs.tag_name }}-macos-intel-x64
             archive_ext: tar.gz
             executable_ext: ""
             
           - target: aarch64-apple-darwin
             os: macos-latest
-            name: yomine-${{ github.event.release.tag_name }}-macos-apple-arm64
+            name: yomine-${{ github.event.release.tag_name || inputs.tag_name }}-macos-apple-arm64
             archive_ext: tar.gz
             executable_ext: ""
             
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-            name: yomine-${{ github.event.release.tag_name }}-linux-x64
+            name: yomine-${{ github.event.release.tag_name || inputs.tag_name }}-linux-x64
             archive_ext: tar.gz
             executable_ext: ""
             
@@ -122,11 +130,11 @@ jobs:
           sha256sum ${{ matrix.name }}.${{ matrix.archive_ext }} > ${{ matrix.name }}.${{ matrix.archive_ext }}.sha256
         else
           sha256sum ${{ matrix.name }}.${{ matrix.archive_ext }} > ${{ matrix.name }}.${{ matrix.archive_ext }}.sha256
-        fi
-      # Upload to release
+        fi      # Upload to release
     - name: Upload release assets
       uses: softprops/action-gh-release@v2
       with:
+        tag_name: ${{ env.TAG_NAME }}
         files: |
           ${{ matrix.name }}.${{ matrix.archive_ext }}
           ${{ matrix.name }}.${{ matrix.archive_ext }}.sha256

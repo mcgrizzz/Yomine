@@ -21,8 +21,9 @@
 - **Beta**: `v1.0.0-beta.1`, `v1.0.0-beta.2`
 
 ## What Happens Automatically
-- Validates version format
-- Runs tests and formatting
-- Builds cross-platform binaries (Windows, macOS, Linux)
-- Generates release notes with contributor lists
+- **Verifies CI tests passed** for the current commit
+- Validates version format and availability
+- Creates the GitHub release page
+- **Triggers automatic binary building** via release.yml workflow
+- Generates release notes with contributor lists  
 - Uploads binaries with checksums
