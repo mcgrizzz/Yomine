@@ -4,6 +4,9 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: write
+
 jobs:
   generate-release-notes:
     runs-on: ubuntu-latest
@@ -19,18 +22,203 @@ jobs:
             release_id: context.payload.release.id
           });
           
+          // Get the previous release for comparison
+          const { data: releases } = await github.rest.repos.listReleases({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            per_page: 10
+          });
+            const currentRelease = releases.find(r => r.id === context.payload.release.id);
+          
+          // For beta releases, compare against the latest stable release
+          // For stable releases, compare against the previous stable release
+          let previousRelease;
+          if (currentRelease.prerelease) {
+            previousRelease = releases.find(r => r.id !== context.payload.release.id && !r.prerelease);
+          } else {
+            const stableReleases = releases.filter(r => !r.prerelease && r.id !== context.payload.release.id);
+            previousRelease = stableReleases[0];
+          }
+          
           // Generate release notes using GitHub's API
-          const { data: releaseNotes } = await github.rest.repos.generateReleaseNotes({
+          const { data: generatedNotes } = await github.rest.repos.generateReleaseNotes({
             owner: context.repo.owner,
             repo: context.repo.repo,
             tag_name: release.tag_name,
-            previous_tag_name: release.target_commitish
+            previous_tag_name: previousRelease?.tag_name
           });
+          
+          // Extract commits and categorize them
+          const commitPattern = /\* (.+) by @(\w+) in #(\d+)/g;
+          const commits = [];
+          let match;
+          
+          while ((match = commitPattern.exec(generatedNotes.body)) !== null) {
+            commits.push({
+              title: match[1],
+              author: match[2],
+              pr: match[3]
+            });
+          }
+          
+          // Categorize commits
+          const features = commits.filter(c => 
+            c.title.toLowerCase().includes('feat') || 
+            c.title.toLowerCase().includes('add') || 
+            c.title.toLowerCase().includes('implement')
+          );
+          
+          const fixes = commits.filter(c => 
+            c.title.toLowerCase().includes('fix') || 
+            c.title.toLowerCase().includes('bug') || 
+            c.title.toLowerCase().includes('correct')
+          );
+          
+          const improvements = commits.filter(c => 
+            c.title.toLowerCase().includes('improve') || 
+            c.title.toLowerCase().includes('enhance') || 
+            c.title.toLowerCase().includes('update') || 
+            c.title.toLowerCase().includes('refactor')
+          );
+          
+          const other = commits.filter(c => 
+            !features.includes(c) && !fixes.includes(c) && !improvements.includes(c)
+          );          // Get unique contributors
+          const contributors = [...new Set(commits.map(c => c.author))];
+          
+          // Find new contributors by checking previous releases
+          let newContributors = [];
+          if (previousRelease) {
+            try {
+              // Get all previous releases to find historical contributors
+              const { data: allReleases } = await github.rest.repos.listReleases({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                per_page: 100
+              });
+              
+              // Extract all previous contributors
+              const previousContributors = new Set();
+              for (const pastRelease of allReleases) {
+                if (pastRelease.id === context.payload.release.id) continue;
+                
+                const bodyText = pastRelease.body || '';
+                const pastCommitPattern = /\* (.+) by @(\w+) in #(\d+)/g;
+                let pastMatch;
+                while ((pastMatch = pastCommitPattern.exec(bodyText)) !== null) {
+                  previousContributors.add(pastMatch[2]);
+                }
+                
+                // Also check contributors section
+                const contributorPattern = /@(\w+)/g;
+                let contributorMatch;
+                while ((contributorMatch = contributorPattern.exec(bodyText)) !== null) {
+                  previousContributors.add(contributorMatch[1]);
+                }
+              }
+              
+              // Find new contributors
+              newContributors = contributors.filter(contributor => !previousContributors.has(contributor));
+            } catch (error) {
+              console.log('Could not determine new contributors:', error.message);
+            }
+          } else {
+            // If this is the first release, all contributors are new
+            newContributors = contributors;
+          }
+          
+          // Build professional release notes
+          let releaseBody = "";
+          
+          // Add beta warning if this is a pre-release
+          if (currentRelease.prerelease) {
+            releaseBody += "⚠️ **This is a beta release** ⚠️\n\n";
+            releaseBody += "This is a pre-release version intended for testing and feedback. It may contain bugs and is not recommended for production use.\n\n";
+            releaseBody += "**Please report any issues you encounter to help us improve the final release.**\n\n";
+            releaseBody += "---\n\n";
+          }
+          
+          releaseBody += "## What's Changed\n\n";
+          
+          if (features.length > 0) {
+            releaseBody += "### ✨ New Features\n\n";
+            features.forEach(commit => {
+              releaseBody += `• ${commit.title} by [@${commit.author}](https://github.com/${commit.author}) in [#${commit.pr}](https://github.com/${context.repo.owner}/${context.repo.repo}/pull/${commit.pr})\n`;
+            });
+            releaseBody += "\n";
+          }
+          
+          if (improvements.length > 0) {
+            releaseBody += "### 🚀 Improvements\n\n";
+            improvements.forEach(commit => {
+              releaseBody += `• ${commit.title} by [@${commit.author}](https://github.com/${commit.author}) in [#${commit.pr}](https://github.com/${context.repo.owner}/${context.repo.repo}/pull/${commit.pr})\n`;
+            });
+            releaseBody += "\n";
+          }
+          
+          if (fixes.length > 0) {
+            releaseBody += "### 🐛 Bug Fixes\n\n";
+            fixes.forEach(commit => {
+              releaseBody += `• ${commit.title} by [@${commit.author}](https://github.com/${commit.author}) in [#${commit.pr}](https://github.com/${context.repo.owner}/${context.repo.repo}/pull/${commit.pr})\n`;
+            });
+            releaseBody += "\n";
+          }
+          
+          if (other.length > 0) {
+            releaseBody += "### 🔧 Other Changes\n\n";
+            other.forEach(commit => {
+              releaseBody += `• ${commit.title} by [@${commit.author}](https://github.com/${commit.author}) in [#${commit.pr}](https://github.com/${context.repo.owner}/${context.repo.repo}/pull/${commit.pr})\n`;
+            });
+            releaseBody += "\n";
+          }
+            // Add download information
+          releaseBody += "## 📥 Downloads\n\n";
+          releaseBody += "This release includes binaries for the following platforms:\n\n";
+          releaseBody += "| Platform | Architecture | File |\n";
+          releaseBody += "|----------|--------------|------|\n";
+          releaseBody += `| Windows | x64 | yomine-${release.tag_name}-windows-x64.zip |\n`;
+          releaseBody += `| macOS (Intel) | x64 | yomine-${release.tag_name}-macos-intel-x64.tar.gz |\n`;
+          releaseBody += `| macOS (Apple Silicon) | ARM64 | yomine-${release.tag_name}-macos-apple-arm64.tar.gz |\n`;
+          releaseBody += `| Linux | x64 | yomine-${release.tag_name}-linux-x64.tar.gz |\n\n`;
+          releaseBody += "**Note:** SHA256 checksums are provided for all files to verify integrity.\n\n";
+            // Add contributors section
+          if (contributors.length > 0) {
+            releaseBody += "## Contributors\n\n";
+            
+            // Show new contributors first if any
+            if (newContributors.length > 0) {
+              releaseBody += "### New Contributors\n";
+              newContributors.forEach(contributor => {
+                releaseBody += `* [@${contributor}](https://github.com/${contributor}) made their first contribution\n`;
+              });
+              releaseBody += "\n";
+            }
+            
+            // Show all contributors
+            if (contributors.length > newContributors.length) {
+              releaseBody += "### All Contributors\n";
+              contributors.forEach(contributor => {
+                releaseBody += `[@${contributor}](https://github.com/${contributor}) `;
+              });
+              releaseBody += "\n\n";
+            } else if (newContributors.length === 0) {
+              // If no new contributors, just show all
+              contributors.forEach(contributor => {
+                releaseBody += `[@${contributor}](https://github.com/${contributor}) `;
+              });
+              releaseBody += "\n\n";
+            }
+          }
+          
+          // Add changelog link
+          if (previousRelease) {
+            releaseBody += `**Full Changelog**: [${previousRelease.tag_name}...${release.tag_name}](https://github.com/${context.repo.owner}/${context.repo.repo}/compare/${previousRelease.tag_name}...${release.tag_name})`;
+          }
           
           // Update the release with generated notes
           await github.rest.repos.updateRelease({
             owner: context.repo.owner,
             repo: context.repo.repo,
             release_id: context.payload.release.id,
-            body: releaseNotes.body
+            body: releaseBody
           });

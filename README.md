@@ -28,7 +28,8 @@ There are currently no prebuilt binaries available. You'll need to build from so
 - [ ] **Custom Frequency Dictionaries**: Generate your own frequency lists from files you pick. For example you may want to generate a frequency dictionary for a certain show and then prioritize those terms in your mining.
 - [ ] **Frequency Dictionary Weighting and Toggling**: Tweak how much each frequency list affects the rankings
 - [ ] **Advanced Filtering Options**: Add better ways to filter terms, like by part of speech, min-max frequency, n+1 comprehensibility (or even n+i)
-- [ ] **Prebuilt Binaries**
+- [x] **Prebuilt Binaries**
+
 ## Frequency Dictionaries for Yomine
 
 Yomine uses frequency dictionaries to show you more relevant words for your learning and to help with the segmentation process.

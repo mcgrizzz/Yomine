@@ -75,22 +75,23 @@ pub struct Term {
 impl Term {
     //Generate a phrase from a slice of terms
     pub fn from_slice(terms: &[Term]) -> Self {
-        let surface_form = terms.iter().map(|t| t.full_segment.as_str()).collect::<String>();
-        let surface_reading =
-            terms.iter().map(|t| t.full_segment_reading.as_str()).collect::<String>();
+        let full_segment = terms.iter().map(|t| t.full_segment.as_str()).collect::<String>();
+        let full_segment_reading = terms.iter().map(|t| t.full_segment_reading.as_str()).collect::<String>();
+        let surface_form = full_segment.clone();
+        let surface_reading = full_segment_reading.clone();
         let lemma_form = surface_form.clone();
         let lemma_reading = surface_reading.clone();
         let is_kana = terms.iter().all(|t| t.is_kana);
         Term {
             id: 1,
-            surface_form: surface_form.clone(),
-            surface_reading: surface_reading.clone(),
+            surface_form,
+            surface_reading,
             lemma_form,
             lemma_reading,
             is_kana,
             part_of_speech: POS::Expression,
-            full_segment: surface_form,
-            full_segment_reading: surface_reading,
+            full_segment,
+            full_segment_reading,
             frequencies: HashMap::new(),
             sentence_references: Vec::new(),
         }

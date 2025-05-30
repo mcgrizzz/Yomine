@@ -1,8 +1,8 @@
 use eframe::egui::{
     self,
-    pos2,
     Color32,
     Context,
+    Response,
     RichText,
     Ui,
 };
@@ -60,71 +60,122 @@ impl Default for TableSort {
 }
 
 fn col_term(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &YomineApp) {
-    let normal_color = ctx.style().visuals.widgets.noninteractive.fg_stroke.color;
-
     row.col(|ui| {
-        ui.label(
-            RichText::new(&term.lemma_form)
-                .color(blend_colors(normal_color, app.theme.red(), 0.8))
-                .size(22.0),
-        )
-        .on_hover_ui_at_pointer(|ui| {
-            ui.label(app.theme.heading(&term.lemma_reading.to_hiragana()));
-            ui.label(app.theme.heading(&term.lemma_reading.to_katakana()));
-        });
+        let highlighted_color = app.theme.red();
+        let normal_color = ctx.style().visuals.widgets.noninteractive.fg_stroke.color;
+        let term_color = blend_colors(normal_color, highlighted_color, 0.8);
+        
+        ui.label(RichText::new(&term.lemma_form).color(term_color).size(22.0))
+            .on_hover_ui_at_pointer(|ui| {
+                ui.label(app.theme.heading(&term.lemma_reading.to_hiragana()));
+                ui.label(app.theme.heading(&term.lemma_reading.to_katakana()));
+            });
     });
+}
+
+/// Determines the color for a part of speech
+fn get_pos_color(pos: &POS, normal_color: Color32, app: &YomineApp) -> Color32 {
+    match pos {
+        POS::Verb | POS::SuruVerb => blend_colors(normal_color, app.theme.blue(), 0.75),
+        POS::Noun => blend_colors(normal_color, app.theme.green(), 0.75),
+        POS::Adjective | POS::AdjectivalNoun => blend_colors(normal_color, app.theme.orange(), 0.75),
+        POS::Adverb => blend_colors(normal_color, app.theme.purple(), 0.75),
+        POS::Postposition => blend_colors(normal_color, Color32::BLACK, 0.25),
+        _ => normal_color,
+    }
+}
+
+/// Finds which segments form an expression by matching consecutive segments
+fn find_expression_segments(
+    term_text: &str,
+    sentence_segments: &[(String, POS, usize, usize)],
+    sentence_text: &str,
+) -> Vec<usize> {
+    let mut segments_to_highlight = Vec::new();
+    let mut current_text = String::new();
+    let mut start_idx = None;
+    
+    for (idx, (_, _, start, stop)) in sentence_segments.iter().enumerate() {
+        let segment_text = &sentence_text[*start..*stop];
+        let potential_text = current_text.clone() + segment_text;
+        
+        if term_text.starts_with(&potential_text) {
+            // This segment could be part of the expression
+            if start_idx.is_none() {
+                start_idx = Some(idx);
+            }
+            current_text = potential_text;
+            
+            if current_text == *term_text {
+                // We found the complete expression
+                if let Some(start) = start_idx {
+                    for i in start..=idx {
+                        segments_to_highlight.push(i);
+                    }
+                }
+                break;
+            }
+        } else {
+            // Reset if this segment doesn't continue the pattern
+            current_text.clear();
+            start_idx = None;
+            
+            // Check if this single segment starts the expression
+            if term_text.starts_with(segment_text) {
+                current_text = segment_text.to_string();
+                start_idx = Some(idx);
+                
+                if current_text == *term_text {
+                    segments_to_highlight.push(idx);
+                    break;
+                }
+            }
+        }
+    }
+    
+    segments_to_highlight
+}
+
+/// Determines if a segment belongs to a term
+fn is_segment_part_of_term(
+    idx: usize,
+    start: usize,
+    stop: usize,
+    is_expression: bool,
+    expression_segments: &[usize],
+    surface_index: usize,
+    term_text: &str,
+) -> bool {
+    if is_expression {
+        // For expressions, check if this segment index is in our highlight list
+        expression_segments.contains(&idx)
+    } else {
+        // For regular terms, use character position overlap with surface_index
+        let term_start = surface_index;
+        let term_end = term_start + term_text.len();
+        start < term_end && stop > term_start
+    }
 }
 
 fn segment_ui(
     ui: &mut Ui,
     text: &str,
     text_color: Color32,
-    underline_color: Option<Color32>,
-    highlight: bool,
+    _underline_color: Option<Color32>, // Don't use underlines in wrapping context
+    _highlight: bool,
     hover_text: Option<RichText>,
-) {
+    _skip_underline: bool,
+) -> Response {
     let label = egui::Label::new(RichText::new(text).color(text_color));
     let response = ui.add(label);
 
-    if let Some(underline_color) = underline_color {
-        let rect = response.rect;
-        let thickness = match highlight {
-            true => 1.5,
-            false => 1.0,
-        };
-
-        // Calculate the y-position and x-range for the underline
-        let y = rect.left_bottom().y + (thickness / 2.0 + 0.75);
-        let x_start = rect.left_bottom().x + 1.5;
-        let x_end = rect.right_bottom().x - 1.5;
-
-        if highlight {
-            // Draw a solid underline for highlighted segments
-            ui.painter()
-                .line_segment([pos2(x_start, y), pos2(x_end, y)], (thickness, underline_color));
-        } else {
-            // Draw a dashed underline for non-highlighted segments
-            let dash_length = 2.0; // Length of each dash in points
-            let gap_length = 2.0; // Length of each gap in points
-            let mut current_x = x_start;
-
-            while current_x < x_end {
-                let dash_start = current_x;
-                let mut dash_end = current_x + dash_length;
-                if dash_end > x_end {
-                    dash_end = x_end; // Truncate the last dash if it exceeds the end
-                }
-                ui.painter().line_segment(
-                    [pos2(dash_start, y), pos2(dash_end, y)],
-                    (thickness, underline_color),
-                );
-                current_x = dash_end + gap_length;
-            }
-        }
-    }
+    // Don't draw underlines in wrapping context as they get misaligned
+    // This will be handled at a higher level if needed
 
     if let Some(hover_text) = hover_text {
-        response.on_hover_text(hover_text);
+        response.on_hover_text(hover_text)
+    } else {
+        response
     }
 }
 
@@ -140,31 +191,36 @@ fn col_sentence(ctx: &Context, row: &mut TableRow, term: &Term, app: &YomineApp)
 
         let highlighted_color = app.theme.red();
         let normal_color = ctx.style().visuals.widgets.noninteractive.fg_stroke.color;
-        // Use horizontal layout with no spacing between items
+        let is_expression = matches!(term.part_of_speech, POS::Expression | POS::NounExpression);
+
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 0.0;
 
+            // For expressions, we need to match the exact text content
+            let term_text = if is_expression {
+                &term.full_segment
+            } else {
+                &term.surface_form
+            };
+            
+            // For expressions, find consecutive segments that form the expression
+            let mut segments_to_highlight = Vec::new();
+            if is_expression {
+                segments_to_highlight = find_expression_segments(term_text, &sentence_content.segments, &sentence_content.text);
+            }
+
             // Iterate over segments
-            for (reading, pos, start, stop) in sentence_content.segments.iter() {
+            for (idx, (reading, pos, start, stop)) in sentence_content.segments.iter().enumerate() {
                 let segment_text = &sentence_content.text[*start..*stop];
-                let is_term = *start == surface_index;
+                
+                // Check if this segment is part of the term
+                let is_term = is_segment_part_of_term(idx, *start, *stop, is_expression, &segments_to_highlight, surface_index, term_text);
 
                 // Determine colors
                 let color = if is_term {
                     blend_colors(normal_color, highlighted_color, 0.95)
                 } else {
-                    match pos {
-                        POS::Verb | POS::SuruVerb => {
-                            blend_colors(normal_color, app.theme.blue(), 0.75)
-                        }
-                        POS::Noun => blend_colors(normal_color, app.theme.green(), 0.75),
-                        POS::Adjective | POS::AdjectivalNoun => {
-                            blend_colors(normal_color, app.theme.orange(), 0.75)
-                        }
-                        POS::Adverb => blend_colors(normal_color, app.theme.purple(), 0.75),
-                        POS::Postposition => blend_colors(normal_color, Color32::BLACK, 0.25),
-                        _ => normal_color,
-                    }
+                    get_pos_color(pos, normal_color, app)
                 };
 
                 let text_color = if is_term {
@@ -178,14 +234,28 @@ fn col_sentence(ctx: &Context, row: &mut TableRow, term: &Term, app: &YomineApp)
                     _ => Some(RichText::new(&format!("{}", reading.to_hiragana())).color(color)),
                 };
 
-                match pos {
-                    POS::Symbol => {
-                        segment_ui(ui, segment_text, text_color, None, is_term, hover_text);
-                    }
+                // For expressions, skip individual underlines; for symbols, don't underline
+                let (underline_color, skip_underline) = match pos {
+                    POS::Symbol => (None, false),
                     _ => {
-                        segment_ui(ui, segment_text, text_color, Some(color), is_term, hover_text);
+                        if is_expression && is_term {
+                            (Some(color), true) // Skip individual underlines for expressions
+                        } else {
+                            (Some(color), false) // Normal underlines for non-expressions
+                        }
                     }
-                }
+                };
+
+                // Use segment_ui to add the segment
+                segment_ui(
+                    ui,
+                    segment_text,
+                    text_color,
+                    underline_color,
+                    is_term,
+                    hover_text,
+                    skip_underline,
+                );
             }
         });
     });
@@ -215,7 +285,7 @@ fn format_human_timestamp(timestamp: &str) -> String {
     }
 }
 
-fn col_timestamp(_ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &YomineApp) {
+fn col_timestamp(_ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &YomineApp, has_websocket_clients: bool) {
     row.col(|ui| {
         if let None = term.sentence_references.get(0) {
             return;
@@ -224,67 +294,9 @@ fn col_timestamp(_ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &Yo
         let sentence = term.sentence_references.get(0).unwrap();
         let sentence_content = app.sentences.get(sentence.0 as usize).unwrap();
         if let Some(timestamp) = &sentence_content.timestamp {
-            if app.websocket_manager.has_clients() && app.websocket_manager.server.is_some() {
+            if has_websocket_clients {
                 // If we have connected clients, show a clickable button
-                // Check if this timestamp has been confirmed
-
-                // Extract the first part of the timestamp if it contains an arrow
-                let clean_timestamp = timestamp.split(" --> ").next().unwrap_or(timestamp);
-
-                // Format the timestamp in a more human-readable way
-                let human_timestamp = format_human_timestamp(clean_timestamp);
-
-                let is_confirmed = app
-                    .websocket_manager
-                    .get_confirmed_timestamps()
-                    .contains(&clean_timestamp.to_string());
-
-                // Color based on confirmation status
-                let button_text = if is_confirmed {
-                    format!("👁 {}", human_timestamp) // Eye for confirmed
-                } else {
-                    format!("▶ {}", human_timestamp) // Play button for not confirmed
-                };
-
-                // Use a visually distinct button for confirmed timestamps
-                let mut button = egui::Button::new(button_text);
-                if is_confirmed {
-                    button = button.fill(egui::Color32::from_hex("#71778a").unwrap());
-                }
-
-                let response = ui.add(button);
-
-                // Show original timestamp on hover
-
-                if response.clicked() {
-                    if let Some(server) = &app.websocket_manager.server {
-                        if let Ok(seconds) =
-                            crate::websocket::WebSocketServer::convert_srt_timestamp_to_seconds(
-                                clean_timestamp,
-                            )
-                        {
-                            // Send the timestamp to all connected clients
-                            match server.seek_timestamp(seconds, clean_timestamp) {
-                                Ok(_) => {
-                                    println!(
-                                        "Sent seek command for timestamp: {}",
-                                        clean_timestamp
-                                    );
-                                }
-                                Err(e) => {
-                                    eprintln!("Error sending seek command: {:?}", e);
-                                }
-                            }
-                        } else {
-                            eprintln!(
-                                "Failed to convert timestamp: {} to seconds",
-                                clean_timestamp
-                            );
-                        }
-                    } else {
-                        println!("WebSocket server not available");
-                    }
-                }
+                create_timestamp_button(ui, timestamp, app);
             } else {
                 // If no clients connected, just show the timestamp in human-readable format
                 let timestamp_vec: Vec<&str> = timestamp.split(" --> ").collect();
@@ -348,6 +360,9 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
                 }
             });
         } else if !app.terms.is_empty() {
+            // Check websocket state once for all terms
+            let has_websocket_clients = app.websocket_manager.has_clients() && app.websocket_manager.server.is_some();
+            
             ui.heading("Term Table");
             egui::ScrollArea::vertical().show(ui, |ui| {
                 TableBuilder::new(ui)
@@ -382,7 +397,7 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
                                 let t = &app.terms[row.index()];
                                 col_term(ctx, &mut row, t, app);
                                 col_sentence(ctx, &mut row, t, app);
-                                col_timestamp(ctx, &mut row, t, app);
+                                col_timestamp(ctx, &mut row, t, app, has_websocket_clients);
                                 col_frequency(ctx, &mut row, t, app);
                                 col_pos(ctx, &mut row, t, app);
                             },
@@ -434,4 +449,61 @@ pub fn header_cols(_ctx: &egui::Context, mut header: TableRow<'_, '_>, app: &mut
     header.col(|ui| {
         ui.label(app.theme.heading("Part of Speech"));
     });
+}
+
+/// Creates a clickable timestamp button with WebSocket integration
+fn create_timestamp_button(
+    ui: &mut Ui,
+    timestamp: &str,
+    app: &YomineApp,
+) {
+    // Extract the first part of the timestamp if it contains an arrow
+    let clean_timestamp = timestamp.split(" --> ").next().unwrap_or(timestamp);
+    
+    // Format the timestamp in a more human-readable way
+    let human_timestamp = format_human_timestamp(clean_timestamp);
+    
+    let is_confirmed = app
+        .websocket_manager
+        .get_confirmed_timestamps()
+        .contains(&clean_timestamp.to_string());
+    
+    // Color based on confirmation status
+    let button_text = if is_confirmed {
+        format!("👁 {}", human_timestamp) // Eye for confirmed
+    } else {
+        format!("▶ {}", human_timestamp) // Play button for not confirmed
+    };
+    
+    // Use a visually distinct button for confirmed timestamps
+    let mut button = egui::Button::new(button_text);
+    if is_confirmed {
+        button = button.fill(egui::Color32::from_hex("#71778a").unwrap());
+    }
+    
+    let response = ui.add(button);
+    
+    if response.clicked() {
+        if let Some(server) = &app.websocket_manager.server {
+            if let Ok(seconds) =
+                crate::websocket::WebSocketServer::convert_srt_timestamp_to_seconds(
+                    clean_timestamp,
+                )
+            {
+                // Send the timestamp to all connected clients
+                match server.seek_timestamp(seconds, clean_timestamp) {
+                    Ok(_) => {
+                        println!("Sent seek command for timestamp: {}", clean_timestamp);
+                    }
+                    Err(e) => {
+                        eprintln!("Error sending seek command: {:?}", e);
+                    }
+                }
+            } else {
+                eprintln!("Failed to convert timestamp: {} to seconds", clean_timestamp);
+            }
+        } else {
+            println!("WebSocket server not available");
+        }
+    }
 }
