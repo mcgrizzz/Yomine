@@ -27,13 +27,15 @@ tokio-tungstenite = { version = "0.20.1", features = ["native-tls"] }
 uuid = { version = "1.7.0", features = ["v4", "serde"] }
 vibrato = "0.5.2"
 wana_kana = "4.0.0"
-xz2 = "0.1.7"
 zstd = "0.13.2"
 chrono = { version = "0.4.41", features = ["serde"] }
 
-[target.'cfg(target_os = "macos")'.dependencies.xz2]
-version = "0.1.7"
-features = ["static"]
+# Platform-specific dependencies
+[target.'cfg(target_os = "macos")'.dependencies]
+xz2 = { version = "0.1.7", features = ["static"] }
+
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+xz2 = "0.1.7"
 
 [patch.crates-io]
 vibrato = { git = "https://github.com/daac-tools/vibrato.git", branch = "main" }

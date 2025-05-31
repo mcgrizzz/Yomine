@@ -10,7 +10,11 @@ body = """
 {% for group, commits in commits | group_by(attribute="group") %}
 ### {{ group | striptags | trim | upper_first }}
 {% for commit in commits %}
-- {% if commit.scope %}**{{commit.scope}}**: {% endif %}{{ commit.message | upper_first }} by [@{{ commit.author.name }}](https://github.com/{{ commit.author.name }})
+- {% if commit.scope %}**{{commit.scope}}**: {% endif %}"{{ commit.message | upper_first }}"{% if "in [#" in commit.message and commit.author.name %} by [@{{ commit.author.name }}](https://github.com/{{ commit.author.name }}){% endif %}
+{% if commit.body %}
+{{ commit.body | indent(width=2) }}
+{% endif %}
+
 {% endfor %}
 {% endfor %}
 """
@@ -36,6 +40,9 @@ split_commits = false
 commit_preprocessors = [
   # Replace issue numbers
   { pattern = '\((\w+\s)?#([0-9]+)\)', replace = "([#${2}](https://github.com/shigeokitamura/yomine/issues/${2}))"},
+  # Extract PR references - these will show usernames
+  { pattern = '\(#([0-9]+)\)', replace = " in [#${1}](https://github.com/shigeokitamura/yomine/pull/${1})"},
+  { pattern = 'Merge pull request #([0-9]+)', replace = "Merge PR [#${1}](https://github.com/shigeokitamura/yomine/pull/${1})"},
   # Check spelling of the commit with https://github.com/crate-ci/typos
   # If the spelling is incorrect, it will be automatically fixed.
   #{ pattern = '.*', replace_command = 'typos --write-changes -' },
@@ -82,8 +89,8 @@ protect_breaking_commits = false
 filter_commits = false
 # regex for matching git tags
 tag_pattern = "v[0-9].*"
-# regex for skipping tags
-skip_tags = "v0.1.0-beta.1"
+# regex for skipping tags (none - we want to process all tags including betas)
+skip_tags = ""
 # regex for ignoring tags
 ignore_tags = ""
 # sort the tags topologically

@@ -21,122 +21,184 @@ env:
 
 jobs:
   build-and-upload:
+    name: Release - ${{ matrix.platform.os-name }}    
     strategy:
       matrix:
-        include:
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
+        platform:
+          - os-name: Windows-x86_64
+            runs-on: windows-latest
+            target: x86_64-pc-windows-msvc
             name: yomine-${{ github.event.release.tag_name || inputs.tag_name }}-windows-x64.exe
-            executable_ext: .exe
             
-          - target: x86_64-apple-darwin
-            os: macos-latest
-            name: yomine-${{ github.event.release.tag_name || inputs.tag_name }}-macos-intel-x64
-            executable_ext: ""
-            
-          - target: aarch64-apple-darwin
-            os: macos-latest
-            name: yomine-${{ github.event.release.tag_name || inputs.tag_name }}-macos-apple-arm64
-            executable_ext: ""
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
+          - os-name: Linux-x86_64
+            runs-on: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
             name: yomine-${{ github.event.release.tag_name || inputs.tag_name }}-linux-x64
-            executable_ext: ""
             
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.platform.runs-on }}
+    steps:      
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build binary
+        uses: houseabsolute/actions-rust-cross@v1
+        with:
+          command: build
+          target: ${{ matrix.platform.target }}
+          args: "--release"
+          strip: true
+
+      # Debug: List target directory contents to see what was actually built
+      - name: List target directory contents
+        run: |
+          echo "Contents of target directory:"
+          ls -la target/ || dir target\ /s
+          echo "Contents of target/${{ matrix.platform.target }}:"
+          ls -la target/${{ matrix.platform.target }}/ || dir target\${{ matrix.platform.target }}\ /s
+          echo "Contents of target/${{ matrix.platform.target }}/release:"
+          ls -la target/${{ matrix.platform.target }}/release/ || dir target\${{ matrix.platform.target }}\release\ /s
+        shell: bash      # Prepare binary for all platforms
+      - name: Prepare binary (Windows)
+        if: matrix.platform.runs-on == 'windows-latest'
+        run: |
+          copy target\${{ matrix.platform.target }}\release\yomine.exe ${{ matrix.platform.name }}
+        shell: cmd
+
+      - name: Prepare binary (Linux)
+        if: matrix.platform.runs-on == 'ubuntu-latest'
+        run: |
+          cp target/${{ matrix.platform.target }}/release/yomine ${{ matrix.platform.name }}
+          chmod +x ${{ matrix.platform.name }}
+        shell: bash
+
+      # Upload files to release      
+      - name: Upload binary to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          files: ${{ matrix.platform.name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Build macOS Universal Binary (separate job)
+  build-macos-universal:
+    name: Release - macOS Universal
+    runs-on: macos-latest
     
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Cache cargo registry
-      uses: actions/cache@v4
-      with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-registry-
-    
-    - name: Cache cargo index
-      uses: actions/cache@v4
-      with:
-        path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-index-
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Cache cargo target
-      uses: actions/cache@v4
-      with:
-        path: target
-        key: ${{ runner.os }}-cargo-build-target-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-build-target-${{ matrix.target }}-
+      # Build Intel binary
+      - name: Build Intel binary
+        uses: houseabsolute/actions-rust-cross@v1
+        with:
+          command: build
+          target: x86_64-apple-darwin
+          args: "--release"
+          strip: true
 
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@stable
+      # Build ARM64 binary  
+      - name: Build ARM64 binary
+        uses: houseabsolute/actions-rust-cross@v1
+        with:
+          command: build
+          target: aarch64-apple-darwin
+          args: "--release"
+          strip: true      # Create Universal Binary
+      - name: Create Universal Binary
+        run: |          # Create universal binary using lipo
+          lipo -create \
+            target/x86_64-apple-darwin/release/yomine \
+            target/aarch64-apple-darwin/release/yomine \
+            -output yomine-${{ env.TAG_NAME }}-macos-universal
+          
+          # Make it executable
+          chmod +x yomine-${{ env.TAG_NAME }}-macos-universal
+          
+          # Verify the universal binary
+          echo "Universal binary architecture info:"
+          lipo -info yomine-${{ env.TAG_NAME }}-macos-universal
+          
+          # Show file size
+          echo "Universal binary size:"
+          ls -lh yomine-${{ env.TAG_NAME }}-macos-universal
+          
+          # Verify it's properly executable
+          echo "File permissions:"
+          ls -la yomine-${{ env.TAG_NAME }}-macos-universal
+            # Check file type
+          echo "File type:"
+          file yomine-${{ env.TAG_NAME }}-macos-universal
 
-    # Install cross for cross-compilation
-    - name: Install cross
-      run: cargo install cross --git https://github.com/cross-rs/cross
+      # Ad-hoc Code Signing for macOS Binary
+      - name: Ad-hoc Code Sign macOS Binary
+        run: |
+          # Sign the universal binary
+          codesign --force --sign - --options runtime --timestamp yomine-${{ env.TAG_NAME }}-macos-universal
+          
+          # Verify the signing
+          echo "Verifying binary code signature:"
+          codesign --verify --verbose yomine-${{ env.TAG_NAME }}-macos-universal
+          
+          # Display signature info
+          echo "Binary code signature details:"
+          codesign --display --verbose yomine-${{ env.TAG_NAME }}-macos-universal
+          
+          echo "macOS binary successfully ad-hoc signed!"
+        shell: bash
 
-    # Linux dependencies are now handled by cross in Docker containers
-    # No need for manual dependency installation
-
-    # Build the application using cross
-    - name: Build release binary
-      run: cross build --release --target ${{ matrix.target }}
-
-    # Copy and rename binary to final name
-    - name: Prepare binary (Windows)
-      if: matrix.os == 'windows-latest'
-      run: |
-        copy target\${{ matrix.target }}\release\yomine.exe ${{ matrix.name }}
-      shell: cmd
-
-    - name: Prepare binary (Unix)
-      if: matrix.os != 'windows-latest'
-      run: |
-        cp target/${{ matrix.target }}/release/yomine ${{ matrix.name }}
-        chmod +x ${{ matrix.name }}
-      shell: bash
-
-    # Upload bare binary to release
-    - name: Upload binary to release
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ env.TAG_NAME }}
-        files: ${{ matrix.name }}
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+      - name: Upload macOS Universal Binary to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          files: yomine-${{ env.TAG_NAME }}-macos-universal
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   # Create consolidated checksum file (runs after all binaries are uploaded)
   create-checksums:
-    needs: build-and-upload
+    needs: [build-and-upload, build-macos-universal]
     runs-on: ubuntu-latest
     
-    steps:
-    - name: Download release assets
-      uses: robinraju/release-downloader@v1.11
-      with:        
-        repository: ${{ github.repository }}
-        tag: ${{ env.TAG_NAME }}
-        fileName: "yomine-*"
-        out-file-path: "downloads"
-        token: ${{ secrets.GITHUB_TOKEN }}
+    steps:      
+      - name: Download release assets
+        uses: robinraju/release-downloader@v1.11
+        with:        
+          repository: ${{ github.repository }}
+          tag: ${{ env.TAG_NAME }}
+          fileName: "yomine-*"
+          out-file-path: "downloads"
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Generate consolidated checksums
-      run: |
-        cd downloads
-        sha256sum yomine-* > ../SHA256SUMS.txt
-        echo "Generated checksums:"
-        cat ../SHA256SUMS.txt
-      shell: bash
+      - name: Generate consolidated checksums
+        run: |
+          cd downloads
+          # Generate checksums for all downloaded files
+          sha256sum yomine-* > ../SHA256SUMS.txt
+          echo "Generated checksums:"
+          cat ../SHA256SUMS.txt
+          
+          # Create a detailed checksums file with descriptions
+          cat > ../SHA256SUMS-detailed.txt << 'EOF'
+          # SHA256 Checksums for Yomine Release
+          # 
+          # File descriptions:
+          # - *-windows-x86_64.exe: Windows 64-bit executable
+          # - *-linux-x86_64: Linux 64-bit executable  
+          # - *-macos-universal: macOS universal binary (Intel + Apple Silicon)
+          #
+          # For macOS users: Download the universal binary - it works on both Intel and Apple Silicon Macs
+          
+          EOF
+          cat ../SHA256SUMS.txt >> ../SHA256SUMS-detailed.txt
+        shell: bash
 
-    - name: Upload checksums to release
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ env.TAG_NAME }}
-        files: SHA256SUMS.txt
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload checksums to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          files: |
+            SHA256SUMS.txt
+            SHA256SUMS-detailed.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
