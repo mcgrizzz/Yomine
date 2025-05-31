@@ -29,121 +29,75 @@ jobs:
             runs-on: windows-latest
             target: x86_64-pc-windows-msvc
             name: yomine-${{ github.event.release.tag_name || inputs.tag_name }}-windows-x64.exe
-            is_macos: false
             
           - os-name: macOS-x86_64
             runs-on: macos-latest
             target: x86_64-apple-darwin
             name: yomine-${{ github.event.release.tag_name || inputs.tag_name }}-macos-intel-x64
-            is_macos: true
             
           - os-name: macOS-arm64
             runs-on: macos-latest
             target: aarch64-apple-darwin
             name: yomine-${{ github.event.release.tag_name || inputs.tag_name }}-macos-apple-arm64
-            is_macos: true
             
           - os-name: Linux-x86_64
             runs-on: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             name: yomine-${{ github.event.release.tag_name || inputs.tag_name }}-linux-x64
-            is_macos: false
             
     runs-on: ${{ matrix.platform.runs-on }}
-    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Build binary
-      uses: houseabsolute/actions-rust-cross@v1
-      with:
-        command: build
-        target: ${{ matrix.platform.target }}
-        args: "--release"
-        strip: true
+      - name: Build binary
+        uses: houseabsolute/actions-rust-cross@v1
+        with:
+          command: build
+          target: ${{ matrix.platform.target }}
+          args: "--release"
+          strip: true
 
-    # Create macOS .app bundle
-    - name: Create macOS .app bundle
-      if: matrix.platform.is_macos
-      run: |
-        # Create app bundle structure
-        APP_NAME="Yomine"
-        APP_DIR="${APP_NAME}.app"
-        mkdir -p "${APP_DIR}/Contents/MacOS"
-        mkdir -p "${APP_DIR}/Contents/Resources"
-        
-        # Copy binary
-        cp "target/${{ matrix.platform.target }}/release/yomine" "${APP_DIR}/Contents/MacOS/${APP_NAME}"
-        
-        # Create Info.plist
-        cat > "${APP_DIR}/Contents/Info.plist" << EOF
-        <?xml version="1.0" encoding="UTF-8"?>
-        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-        <plist version="1.0">
-        <dict>
-            <key>CFBundleDisplayName</key>
-            <string>Yomine</string>
-            <key>CFBundleExecutable</key>
-            <string>${APP_NAME}</string>
-            <key>CFBundleIdentifier</key>
-            <string>com.yomine.app</string>
-            <key>CFBundleInfoDictionaryVersion</key>
-            <string>6.0</string>
-            <key>CFBundleName</key>
-            <string>Yomine</string>
-            <key>CFBundlePackageType</key>
-            <string>APPL</string>
-            <key>CFBundleShortVersionString</key>
-            <string>${{ env.TAG_NAME }}</string>
-            <key>CFBundleVersion</key>
-            <string>${{ env.TAG_NAME }}</string>
-            <key>LSMinimumSystemVersion</key>
-            <string>10.15</string>
-            <key>NSHighResolutionCapable</key>
-            <true/>
-            <key>LSApplicationCategoryType</key>
-            <string>public.app-category.productivity</string>
-        </dict>
-        </plist>
-        EOF
-        
-        # Create ZIP archive of .app bundle
-        zip -r "${{ matrix.platform.name }}.app.zip" "${APP_DIR}"
-      shell: bash
+      # Debug: List target directory contents to see what was actually built
+      - name: List target directory contents
+        run: |
+          echo "Contents of target directory:"
+          ls -la target/ || dir target\ /s
+          echo "Contents of target/${{ matrix.platform.target }}:"
+          ls -la target/${{ matrix.platform.target }}/ || dir target\${{ matrix.platform.target }}\ /s
+          echo "Contents of target/${{ matrix.platform.target }}/release:"
+          ls -la target/${{ matrix.platform.target }}/release/ || dir target\${{ matrix.platform.target }}\release\ /s
+        shell: bash
 
-    # Prepare binary for non-macOS platforms
-    - name: Prepare binary (Windows)
-      if: matrix.platform.runs-on == 'windows-latest'
-      run: |
-        copy target\${{ matrix.platform.target }}\release\yomine.exe ${{ matrix.platform.name }}
-      shell: cmd
+      # Prepare binary for all platforms
+      - name: Prepare binary (Windows)
+        if: matrix.platform.runs-on == 'windows-latest'
+        run: |
+          copy target\${{ matrix.platform.target }}\release\yomine.exe ${{ matrix.platform.name }}
+        shell: cmd
 
-    - name: Prepare binary (Linux)
-      if: matrix.platform.runs-on == 'ubuntu-latest'
-      run: |
-        cp target/${{ matrix.platform.target }}/release/yomine ${{ matrix.platform.name }}
-        chmod +x ${{ matrix.platform.name }}
-      shell: bash
+      - name: Prepare binary (Linux)
+        if: matrix.platform.runs-on == 'ubuntu-latest'
+        run: |
+          cp target/${{ matrix.platform.target }}/release/yomine ${{ matrix.platform.name }}
+          chmod +x ${{ matrix.platform.name }}
+        shell: bash
 
-    # Upload files to release
-    - name: Upload binary to release (non-macOS)
-      if: matrix.platform.is_macos == false
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ env.TAG_NAME }}
-        files: ${{ matrix.platform.name }}
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        
-    - name: Upload .app bundle to release (macOS)
-      if: matrix.platform.is_macos == true
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ env.TAG_NAME }}
-        files: ${{ matrix.platform.name }}.app.zip
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Prepare binary (macOS)
+        if: matrix.platform.runs-on == 'macos-latest'
+        run: |
+          cp target/${{ matrix.platform.target }}/release/yomine ${{ matrix.platform.name }}
+          chmod +x ${{ matrix.platform.name }}
+        shell: bash
+
+      # Upload files to release
+      - name: Upload binary to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          files: ${{ matrix.platform.name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # Create consolidated checksum file (runs after all binaries are uploaded)
   create-checksums:
@@ -151,28 +105,28 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Download release assets
-      uses: robinraju/release-downloader@v1.11
-      with:        
-        repository: ${{ github.repository }}
-        tag: ${{ env.TAG_NAME }}
-        fileName: "yomine-*"
-        out-file-path: "downloads"
-        token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download release assets
+        uses: robinraju/release-downloader@v1.11
+        with:        
+          repository: ${{ github.repository }}
+          tag: ${{ env.TAG_NAME }}
+          fileName: "yomine-*"
+          out-file-path: "downloads"
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Generate consolidated checksums
-      run: |
-        cd downloads
-        # Generate checksums for all downloaded files
-        sha256sum yomine-* > ../SHA256SUMS.txt
-        echo "Generated checksums:"
-        cat ../SHA256SUMS.txt
-      shell: bash
+      - name: Generate consolidated checksums
+        run: |
+          cd downloads
+          # Generate checksums for all downloaded files
+          sha256sum yomine-* > ../SHA256SUMS.txt
+          echo "Generated checksums:"
+          cat ../SHA256SUMS.txt
+        shell: bash
 
-    - name: Upload checksums to release
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ env.TAG_NAME }}
-        files: SHA256SUMS.txt
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload checksums to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          files: SHA256SUMS.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
