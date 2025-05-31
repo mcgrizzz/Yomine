@@ -61,27 +61,27 @@ impl Default for TableSort {
 
 fn col_term(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &YomineApp) {
     row.col(|ui| {
-        let highlighted_color = app.theme.red();
+        let highlighted_color = app.theme.red(ctx);
         let normal_color = ctx.style().visuals.widgets.noninteractive.fg_stroke.color;
         let term_color = blend_colors(normal_color, highlighted_color, 0.8);
 
         ui.label(RichText::new(&term.lemma_form).color(term_color).size(22.0))
             .on_hover_ui_at_pointer(|ui| {
-                ui.label(app.theme.heading(&term.lemma_reading.to_hiragana()));
-                ui.label(app.theme.heading(&term.lemma_reading.to_katakana()));
+                ui.label(app.theme.heading(ui.ctx(), &term.lemma_reading.to_hiragana()));
+                ui.label(app.theme.heading(ui.ctx(), &term.lemma_reading.to_katakana()));
             });
     });
 }
 
 /// Determines the color for a part of speech
-fn get_pos_color(pos: &POS, normal_color: Color32, app: &YomineApp) -> Color32 {
+fn get_pos_color(pos: &POS, normal_color: Color32, app: &YomineApp, ctx: &egui::Context) -> Color32 {
     match pos {
-        POS::Verb | POS::SuruVerb => blend_colors(normal_color, app.theme.blue(), 0.75),
-        POS::Noun => blend_colors(normal_color, app.theme.green(), 0.75),
+        POS::Verb | POS::SuruVerb => blend_colors(normal_color, app.theme.blue(ctx), 0.75),
+        POS::Noun => blend_colors(normal_color, app.theme.green(ctx), 0.75),
         POS::Adjective | POS::AdjectivalNoun => {
-            blend_colors(normal_color, app.theme.orange(), 0.75)
+            blend_colors(normal_color, app.theme.orange(ctx), 0.75)
         }
-        POS::Adverb => blend_colors(normal_color, app.theme.purple(), 0.75),
+        POS::Adverb => blend_colors(normal_color, app.theme.purple(ctx), 0.75),
         POS::Postposition => blend_colors(normal_color, Color32::BLACK, 0.25),
         _ => normal_color,
     }
@@ -191,7 +191,7 @@ fn col_sentence(ctx: &Context, row: &mut TableRow, term: &Term, app: &YomineApp)
         let sentence_content = app.sentences.get(sentence.0 as usize).unwrap();
         let surface_index = sentence.1;
 
-        let highlighted_color = app.theme.red();
+        let highlighted_color = app.theme.red(ctx);
         let normal_color = ctx.style().visuals.widgets.noninteractive.fg_stroke.color;
         let is_expression = matches!(term.part_of_speech, POS::Expression | POS::NounExpression);
 
@@ -230,7 +230,7 @@ fn col_sentence(ctx: &Context, row: &mut TableRow, term: &Term, app: &YomineApp)
                 let color = if is_term {
                     blend_colors(normal_color, highlighted_color, 0.95)
                 } else {
-                    get_pos_color(pos, normal_color, app)
+                    get_pos_color(pos, normal_color, app, ctx)
                 };
 
                 let text_color = if is_term {
@@ -347,14 +347,14 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
             ui.vertical_centered(|ui| {
                 ui.add_space(100.0);
 
-                ui.label(egui::RichText::new("No File Loaded").size(32.0).color(app.theme.cyan()));
+                ui.label(egui::RichText::new("No File Loaded").size(32.0).color(app.theme.cyan(ui.ctx())));
 
                 ui.add_space(1.0);
 
                 ui.label(
                     egui::RichText::new("ファイルがまだ読み込まれていません")
                         .size(18.0)
-                        .color(app.theme.orange()),
+                        .color(app.theme.orange(ui.ctx())),
                 );
 
                 ui.add_space(10.0);
@@ -380,7 +380,14 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
             let has_websocket_clients =
                 app.websocket_manager.has_clients() && app.websocket_manager.server.is_some();
 
-            ui.heading("Term Table");
+            // Display current file's parsed title as the main heading
+            if let Some(ref source_file) = app.current_source_file {
+                ui.heading(
+                    egui::RichText::new(&source_file.title).color(app.theme.cyan(ui.ctx())).strong(),
+                );
+            } else {
+                ui.heading("Term Table");
+            }
             egui::ScrollArea::vertical().show(ui, |ui| {
                 TableBuilder::new(ui)
                     .striped(true)
@@ -425,15 +432,15 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
     });
 }
 
-pub fn header_cols(_ctx: &egui::Context, mut header: TableRow<'_, '_>, app: &mut YomineApp) {
+pub fn header_cols(ctx: &egui::Context, mut header: TableRow<'_, '_>, app: &mut YomineApp) {
     header.col(|ui| {
-        ui.label(app.theme.heading("Term"));
+        ui.label(app.theme.heading(ui.ctx(), "Term"));
     });
     header.col(|ui| {
-        ui.label(app.theme.heading("Sentence"));
+        ui.label(app.theme.heading(ui.ctx(), "Sentence"));
     });
     header.col(|ui| {
-        ui.label(app.theme.heading("Timestamp"));
+        ui.label(app.theme.heading(ui.ctx(), "Timestamp"));
     });
     header.col(|ui| {
         egui::Sides::new().height(25.0).show(
@@ -458,13 +465,13 @@ pub fn header_cols(_ctx: &egui::Context, mut header: TableRow<'_, '_>, app: &mut
                 }
             },
             |ui| {
-                ui.label(app.theme.heading("Frequency"));
+                ui.label(app.theme.heading(ui.ctx(), "Frequency"));
             },
         );
     });
 
     header.col(|ui| {
-        ui.label(app.theme.heading("Part of Speech"));
+        ui.label(app.theme.heading(ui.ctx(), "Part of Speech"));
     });
 }
 
@@ -486,11 +493,14 @@ fn create_timestamp_button(ui: &mut Ui, timestamp: &str, app: &YomineApp) {
         format!("▶ {}", human_timestamp) // Play button for not confirmed
     };
 
-    // Use a visually distinct button for confirmed timestamps
     let mut button = egui::Button::new(button_text);
+    let button_color = egui::Color32::from_hex("#71778a");
     if is_confirmed {
-        button = button.fill(egui::Color32::from_hex("#71778a").unwrap());
+        button = button.fill(button_color.clone().unwrap());
     }
+
+    let outline = blend_colors(button_color.unwrap(), app.theme.highlight(ui.ctx()), 0.8);
+    button = button.stroke(egui::Stroke::new(1.0, outline));
 
     let response = ui.add(button);
 

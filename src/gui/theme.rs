@@ -41,41 +41,66 @@ impl Theme {
         }
     }
 
-    //These need to be changed eventually.
-    pub fn bold(&self, content: &str) -> RichText {
-        return RichText::new(content).color(self.dark().unwrap().orange);
+    /// Get the current theme variant based on the UI context
+    fn current_theme(&self, ctx: &egui::Context) -> &ThemeDetails {
+        let is_dark_mode = ctx.style().visuals.dark_mode;
+        if is_dark_mode {
+            self.dark().unwrap()
+        } else {
+            self.light().unwrap()
+        }
     }
 
-    pub fn heading(&self, content: &str) -> RichText {
-        return RichText::new(content).color(self.dark().unwrap().purple);
+    pub fn bold(&self, ctx: &egui::Context, content: &str) -> RichText {
+        return RichText::new(content).color(self.current_theme(ctx).orange);
     }
 
-    pub fn red(&self) -> Color32 {
-        return self.dark().unwrap().red;
+    pub fn heading(&self, ctx: &egui::Context, content: &str) -> RichText {
+        return RichText::new(content).color(self.current_theme(ctx).purple);
     }
 
-    pub fn orange(&self) -> Color32 {
-        return self.dark().unwrap().orange;
+    pub fn red(&self, ctx: &egui::Context) -> Color32 {
+        return self.current_theme(ctx).red;
     }
 
-    pub fn yellow(&self) -> Color32 {
-        return self.dark().unwrap().yellow;
+    pub fn orange(&self, ctx: &egui::Context) -> Color32 {
+        return self.current_theme(ctx).orange;
     }
 
-    pub fn green(&self) -> Color32 {
-        return self.dark().unwrap().green;
+    pub fn yellow(&self, ctx: &egui::Context) -> Color32 {
+        return self.current_theme(ctx).yellow;
     }
 
-    pub fn purple(&self) -> Color32 {
-        return self.dark().unwrap().purple;
+    pub fn green(&self, ctx: &egui::Context) -> Color32 {
+        return self.current_theme(ctx).green;
     }
 
-    pub fn blue(&self) -> Color32 {
-        return self.dark().unwrap().cyan.linear_multiply(0.8);
+    pub fn purple(&self, ctx: &egui::Context) -> Color32 {
+        return self.current_theme(ctx).purple;
     }
 
-    pub fn cyan(&self) -> Color32 {
-        return self.dark().unwrap().cyan;
+    pub fn blue(&self, ctx: &egui::Context) -> Color32 {
+        return self.current_theme(ctx).blue;
+    }
+    
+    pub fn cyan(&self, ctx: &egui::Context) -> Color32 {
+        return self.current_theme(ctx).cyan;
+    }
+
+    pub fn foreground(&self, ctx: &egui::Context) -> Color32 {
+        self.current_theme(ctx).foreground
+    }
+
+    pub fn comment(&self, ctx: &egui::Context) -> Color32 {
+        self.current_theme(ctx).comment
+    }
+
+    pub fn background_fill(&self, ctx: &egui::Context) -> Color32 {
+        self.current_theme(ctx).background_dark
+    }
+
+    pub fn highlight(&self, ctx: &egui::Context) -> Color32 {
+        self.current_theme(ctx).background_lighter
     }
 
     pub fn tokyo() -> Self {
@@ -100,6 +125,7 @@ pub struct ThemeDetails {
     orange: Color32,
     yellow: Color32,
     green: Color32,
+    blue: Color32,
     purple: Color32,
     cyan: Color32,
     pink: Color32,
@@ -122,6 +148,7 @@ impl ThemeDetails {
             orange: Color32::from_rgb(0xff, 0xb8, 0x6c),
             yellow: Color32::from_rgb(0xf1, 0xfa, 0x8c),
             green: Color32::from_rgb(0x50, 0xfa, 0x7b),
+            blue: Color32::from_rgb(98, 160, 234),
             purple: Color32::from_rgb(189, 147, 249),
             cyan: Color32::from_rgb(139, 233, 253),
             pink: Color32::from_rgb(255, 121, 198),
@@ -142,6 +169,7 @@ impl ThemeDetails {
             orange: Color32::from_rgb(220, 150, 90),      // Muted orange for accents
             yellow: Color32::from_rgb(220, 230, 120),     // Gentle yellow for highlights
             green: Color32::from_rgb(80, 200, 120),       // Balanced green for success
+            blue: Color32::from_rgb(70, 130, 180),        // Steel blue for light theme
             purple: Color32::from_rgb(150, 120, 220),     // Softer purple for accents
             cyan: Color32::from_rgb(80, 190, 230),        // Muted cyan for links or highlights
             pink: Color32::from_rgb(230, 130, 200),       // Gentle pink for special highlights
@@ -162,6 +190,7 @@ impl ThemeDetails {
             orange: Color32::from_rgb(255, 161, 90),
             yellow: Color32::from_rgb(241, 250, 140),
             green: Color32::from_rgb(86, 209, 123),
+            blue: Color32::from_rgb(77, 140, 191),        // A nice blue tone from tokyo night palette
             purple: Color32::from_rgb(189, 147, 249),
             cyan: Color32::from_rgb(97, 175, 239),
             pink: Color32::from_rgb(255, 85, 255),
@@ -182,6 +211,7 @@ impl ThemeDetails {
             orange: Color32::from_rgb(220, 140, 60),      // Muted orange for highlights
             yellow: Color32::from_rgb(220, 230, 100),     // Gentle yellow for emphasis
             green: Color32::from_rgb(80, 180, 100),       // Balanced green for success
+            blue: Color32::from_rgb(65, 130, 170),        // Calm blue for light theme
             purple: Color32::from_rgb(150, 120, 200),     // Subdued purple for accents
             cyan: Color32::from_rgb(80, 160, 200),        // Muted cyan for links or highlights
             pink: Color32::from_rgb(200, 100, 200),       // Soft pink for special highlights

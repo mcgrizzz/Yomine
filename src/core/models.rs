@@ -14,11 +14,24 @@ pub enum FileType {
 #[derive(Debug, Clone)]
 pub struct SourceFile {
     pub id: u32,                 // Unique identifier
-    pub source: String,          // Source type (e.g., "YouTube", "Jimaku", "TXT")
+    pub source: Option<String>,          // Source type (e.g., "YouTube", "Jimaku", "TXT")
     pub file_type: FileType,     // File type (e.g., SRT, TXT)
     pub title: String,           // File name or descriptive title
     pub creator: Option<String>, // Optional creator information
-    pub original_file: String,   // Path to the file stored locally
+    pub original_file: String,   // Path to the file
+}
+
+impl Default for SourceFile {
+    fn default() -> Self {
+        Self {
+            id: 0,
+            source: None,
+            file_type: FileType::SRT,
+            title: String::new(),
+            creator: None,
+            original_file: String::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
