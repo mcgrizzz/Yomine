@@ -29,6 +29,7 @@ vibrato = "0.5.2"
 wana_kana = "4.0.0"
 xz2 = "0.1.7"
 zstd = "0.13.2"
+chrono = "0.4.41"
 
 [target.'cfg(target_os = "macos")'.dependencies.xz2]
 version = "0.1.7"
