@@ -29,8 +29,10 @@ vibrato = "0.5.2"
 wana_kana = "4.0.0"
 xz2 = "0.1.7"
 zstd = "0.13.2"
+chrono = { version = "0.4.41", features = ["serde"] }
 
 [target.'cfg(target_os = "macos")'.dependencies.xz2]
+version = "0.1.7"
 features = ["static"]
 
 [patch.crates-io]

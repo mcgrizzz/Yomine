@@ -75,6 +75,7 @@ pub struct YomineApp {
     pub message_overlay: MessageOverlay,
     pub language_tools: Option<LanguageTools>,
     pub current_processing_file: Option<String>,
+    pub current_source_file: Option<SourceFile>,
     task_manager: TaskManager,
 }
 
@@ -110,6 +111,7 @@ impl YomineApp {
             terms: Vec::new(),
             sentences: Vec::new(),
             current_processing_file: None,
+            current_source_file: None,
             task_manager: task_manager,
         };
 
@@ -191,7 +193,10 @@ impl eframe::App for YomineApp {
             &self.websocket_manager,
             self.anki_connected,
         );
-        if let Some(source_file) = self.file_modal.show(ctx) {
+        if let Some(source_file) = self
+            .file_modal
+            .show(ctx, &self.theme, self.current_source_file.as_ref().map(|sf| sf.original_file.as_str()))
+        {
             println!("File selected: {:?}", source_file.original_file);
             self.process_source_file(source_file);
         }
@@ -213,6 +218,8 @@ impl eframe::App for YomineApp {
 impl YomineApp {
     fn process_source_file(&mut self, source_file: SourceFile) {
         println!("Processing file: {}", source_file.original_file);
+
+        self.current_source_file = Some(source_file.clone());
 
         self.current_processing_file = Some(
             std::path::Path::new(&source_file.original_file)
@@ -280,6 +287,15 @@ impl YomineApp {
                 });
 
                 self.sentences = new_sentences;
+
+                if let Some(source_file) = &self.current_source_file {
+                    self.file_modal.add_recent_file(
+                        source_file.original_file.clone(),
+                        source_file.title.clone(),
+                        source_file.creator.clone(),
+                        self.terms.len(),
+                    );
+                }
             }
             Err(error_msg) => {
                 self.error_modal.show_error_with_details(
@@ -289,6 +305,7 @@ impl YomineApp {
                 );
                 self.terms = Vec::new();
                 self.sentences = Vec::new();
+                self.current_source_file = None;
             }
         }
 

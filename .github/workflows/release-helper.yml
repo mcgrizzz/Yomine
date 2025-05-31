@@ -68,9 +68,8 @@ jobs:
         echo ""
         echo "🔖 Git Tags:"
         git tag --sort=-version:refname | head -10
-        echo ""
-        echo "📦 Cargo.toml version:"
-        grep '^version =' Cargo.toml
+        echo ""        echo "📦 Cargo.toml version:"
+        grep -A 20 '^\[package\]' Cargo.toml | grep '^version =' | head -1
         echo ""
         echo "🌿 Current branch:"
         git branch --show-current
