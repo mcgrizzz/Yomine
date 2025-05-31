@@ -107,41 +107,37 @@ jobs:
           args: "--release"
           strip: true      # Create Universal Binary
       - name: Create Universal Binary
-        run: |
-          # Create universal binary using lipo
+        run: |          # Create universal binary using lipo
           lipo -create \
             target/x86_64-apple-darwin/release/yomine \
             target/aarch64-apple-darwin/release/yomine \
-            -output yomine-${{ env.TAG_NAME }}-macos-universal
+            -output yomine-${{ env.TAG_NAME }}-macos-universal.bin
           
           # Make it executable
-          chmod +x yomine-${{ env.TAG_NAME }}-macos-universal
+          chmod +x yomine-${{ env.TAG_NAME }}-macos-universal.bin
           
           # Verify the universal binary
           echo "Universal binary architecture info:"
-          lipo -info yomine-${{ env.TAG_NAME }}-macos-universal
+          lipo -info yomine-${{ env.TAG_NAME }}-macos-universal.bin
           
           # Show file size
           echo "Universal binary size:"
-          ls -lh yomine-${{ env.TAG_NAME }}-macos-universal      
-    # Ad-hoc Code Signing
+          ls -lh yomine-${{ env.TAG_NAME }}-macos-universal.bin      # Ad-hoc Code Signing
       - name: Ad-hoc Code Sign
         run: |
           # Ad-hoc sign the binary
-          codesign --force --sign - --options runtime yomine-${{ env.TAG_NAME }}-macos-universal
+          codesign --force --sign - --options runtime yomine-${{ env.TAG_NAME }}-macos-universal.bin
           
           # Verify the signing
-          codesign --verify --verbose yomine-${{ env.TAG_NAME }}-macos-universal
+          codesign --verify --verbose yomine-${{ env.TAG_NAME }}-macos-universal.bin
           
           echo "Binary successfully ad-hoc signed!"
-        shell: bash
-
-      # Upload universal binary to release
+        shell: bash      # Upload universal binary to release
       - name: Upload universal binary to release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG_NAME }}
-          files: yomine-${{ env.TAG_NAME }}-macos-universal
+          files: yomine-${{ env.TAG_NAME }}-macos-universal.bin
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   # Create consolidated checksum file (runs after all binaries are uploaded)
