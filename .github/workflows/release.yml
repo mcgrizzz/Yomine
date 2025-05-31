@@ -71,7 +71,7 @@ jobs:
           chmod +x ${{ matrix.platform.name }}
         shell: bash
 
-      # Upload files to release
+      # Upload files to release      
       - name: Upload binary to release
         uses: softprops/action-gh-release@v2
         with:
@@ -127,114 +127,32 @@ jobs:
           # Verify it's properly executable
           echo "File permissions:"
           ls -la yomine-${{ env.TAG_NAME }}-macos-universal
-          
-          # Check file type
+            # Check file type
           echo "File type:"
-          file yomine-${{ env.TAG_NAME }}-macos-universal      # Create macOS App Bundle
-      - name: Create macOS App Bundle
-        run: |
-          # Create the app bundle structure
-          APP_NAME="Yomine.app"
-          APP_BUNDLE_PATH="$APP_NAME"
-          
-          echo "Creating app bundle structure..."
-          mkdir -p "$APP_BUNDLE_PATH/Contents/MacOS"
-          mkdir -p "$APP_BUNDLE_PATH/Contents/Resources"
-          
-          # Copy the binary into the app bundle
-          cp yomine-${{ env.TAG_NAME }}-macos-universal "$APP_BUNDLE_PATH/Contents/MacOS/yomine"
-          chmod +x "$APP_BUNDLE_PATH/Contents/MacOS/yomine"
-          
-          # Create Info.plist file
-          cat > "$APP_BUNDLE_PATH/Contents/Info.plist" << 'EOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>CFBundleExecutable</key>
-              <string>yomine</string>
-              <key>CFBundleIdentifier</key>
-              <string>com.yomine.app</string>
-              <key>CFBundleName</key>
-              <string>Yomine</string>
-              <key>CFBundleDisplayName</key>
-              <string>Yomine</string>
-              <key>CFBundleVersion</key>
-              <string>${{ env.TAG_NAME }}</string>
-              <key>CFBundleShortVersionString</key>
-              <string>${{ env.TAG_NAME }}</string>
-              <key>CFBundlePackageType</key>
-              <string>APPL</string>
-              <key>CFBundleSignature</key>
-              <string>????</string>
-              <key>LSMinimumSystemVersion</key>
-              <string>10.14</string>
-              <key>NSHighResolutionCapable</key>
-              <true/>
-              <key>NSRequiresAquaSystemAppearance</key>
-              <false/>
-              <key>LSApplicationCategoryType</key>
-              <string>public.app-category.productivity</string>
-          </dict>
-          </plist>
-          EOF
-          
-          # Verify the app bundle structure
-          echo "App bundle structure:"
-          find "$APP_BUNDLE_PATH" -type f -exec ls -la {} \;
-          
-          echo "App bundle created successfully!"
-        shell: bash
+          file yomine-${{ env.TAG_NAME }}-macos-universal
 
-      # Ad-hoc Code Signing for App Bundle
-      - name: Ad-hoc Code Sign App Bundle
+      # Ad-hoc Code Signing for macOS Binary
+      - name: Ad-hoc Code Sign macOS Binary
         run: |
-          APP_NAME="Yomine.app"
-          
-          # First sign the binary inside the app bundle
-          codesign --force --sign - --options runtime --timestamp "$APP_NAME/Contents/MacOS/yomine"
-          
-          # Then sign the entire app bundle
-          codesign --force --sign - --options runtime --timestamp "$APP_NAME"
+          # Sign the universal binary
+          codesign --force --sign - --options runtime --timestamp yomine-${{ env.TAG_NAME }}-macos-universal
           
           # Verify the signing
-          echo "Verifying app bundle code signature:"
-          codesign --verify --verbose "$APP_NAME"
+          echo "Verifying binary code signature:"
+          codesign --verify --verbose yomine-${{ env.TAG_NAME }}-macos-universal
           
           # Display signature info
-          echo "App bundle code signature details:"
-          codesign --display --verbose "$APP_NAME"
+          echo "Binary code signature details:"
+          codesign --display --verbose yomine-${{ env.TAG_NAME }}-macos-universal
           
-          # Test that the app bundle is properly formed
-          echo "Testing app bundle executable:"
-          spctl --assess --type execute --verbose "$APP_NAME" || echo "App bundle assessment completed"
-          
-          echo "App bundle successfully ad-hoc signed!"
-        shell: bash      # Package and upload App Bundle
-      - name: Package App Bundle for release
-        run: |
-          # Create a zip archive of the App Bundle for distribution
-          zip -r "yomine-${{ env.TAG_NAME }}-macos-universal.app.zip" "Yomine.app"
-          
-          # Also create a tar.gz for alternative download
-          tar -czf "yomine-${{ env.TAG_NAME }}-macos-universal.app.tar.gz" "Yomine.app"
-          
-          # Verify the packages
-          echo "Created App Bundle packages:"
-          ls -lh yomine-${{ env.TAG_NAME }}-macos-universal.app.*
-          
-          # For backwards compatibility, also keep the raw universal binary
-          echo "Also providing raw universal binary for CLI users"
+          echo "macOS binary successfully ad-hoc signed!"
         shell: bash
 
-      - name: Upload macOS App Bundle to release
+      - name: Upload macOS Universal Binary to release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG_NAME }}
-          files: |
-            yomine-${{ env.TAG_NAME }}-macos-universal.app.zip
-            yomine-${{ env.TAG_NAME }}-macos-universal.app.tar.gz
-            yomine-${{ env.TAG_NAME }}-macos-universal
+          files: yomine-${{ env.TAG_NAME }}-macos-universal
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   # Create consolidated checksum file (runs after all binaries are uploaded)
@@ -259,20 +177,16 @@ jobs:
           sha256sum yomine-* > ../SHA256SUMS.txt
           echo "Generated checksums:"
           cat ../SHA256SUMS.txt
-          
-          # Create a detailed checksums file with descriptions
+            # Create a detailed checksums file with descriptions
           cat > ../SHA256SUMS-detailed.txt << 'EOF'
           # SHA256 Checksums for Yomine Release
           # 
           # File descriptions:
           # - *-windows-x86_64.exe: Windows 64-bit executable
           # - *-linux-x86_64: Linux 64-bit executable  
-          # - *-macos-universal: macOS universal binary (CLI)
-          # - *-macos-universal.app.zip: macOS App Bundle (recommended for GUI)
-          # - *-macos-universal.app.tar.gz: macOS App Bundle (alternative format)
+          # - *-macos-universal: macOS universal binary (Intel + Apple Silicon)
           #
-          # For macOS users: Download the .app.zip file for double-click execution
-          # For CLI users: Download the raw universal binary
+          # For macOS users: Download the universal binary - it works on both Intel and Apple Silicon Macs
           
           EOF
           cat ../SHA256SUMS.txt >> ../SHA256SUMS-detailed.txt        shell: bash

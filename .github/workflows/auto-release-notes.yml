@@ -94,18 +94,32 @@ jobs:
           
           // Add the changelog content
           releaseBody += changelog;
-          
-          // Add download information
+            // Add download information
           releaseBody += "\n\n## Downloads\n\n";
-          releaseBody += "This release includes bare binaries for the following platforms:\n\n";
+          releaseBody += "This release includes binaries for the following platforms:\n\n";
           releaseBody += "| Platform | Architecture | Binary File |\n";
           releaseBody += "|----------|--------------|-------------|\n";
-          releaseBody += `| Windows | x64 | \`yomine.exe\` |\n`;
-          releaseBody += `| macOS (Intel) | x64 | \`yomine-macos-intel\` |\n`;
-          releaseBody += `| macOS (Apple Silicon) | ARM64 | \`yomine-macos-apple\` |\n`;          releaseBody += `| Linux | x64 | \`yomine-linux\` |\n\n`;
-          releaseBody += "**Installation:**\n";
-          releaseBody += "- **Windows**: Download `yomine.exe` and run directly\n";
-          releaseBody += "- **macOS/Linux**: Download the binary for your platform, make it executable (`chmod +x yomine-*`), then run\n\n";
+          releaseBody += `| Windows | x64 | \`yomine-${release.tag_name}-windows-x64.exe\` |\n`;
+          releaseBody += `| macOS (Universal) | Intel + Apple Silicon | \`yomine-${release.tag_name}-macos-universal\` |\n`;
+          releaseBody += `| Linux | x64 | \`yomine-${release.tag_name}-linux-x64\` |\n\n`;
+          releaseBody += "## Installation Instructions\n\n";
+          releaseBody += "### Windows\n";
+          releaseBody += "1. Download `yomine-${release.tag_name}-windows-x64.exe`\n";
+          releaseBody += "2. Run the executable directly\n\n";
+          releaseBody += "### macOS\n";
+          releaseBody += "1. Download `yomine-${release.tag_name}-macos-universal`\n";
+          releaseBody += "2. Make it executable: `chmod +x yomine-${release.tag_name}-macos-universal`\n";
+          releaseBody += "3. Run the binary: `./yomine-${release.tag_name}-macos-universal`\n\n";
+          releaseBody += "**⚠️ macOS Security Note:**\n";
+          releaseBody += "If you get a security warning when first running the app:\n";
+          releaseBody += "1. Go to **System Preferences → Security & Privacy**\n";
+          releaseBody += "2. Click **\"Allow Anyway\"** next to the blocked app message\n";
+          releaseBody += "3. Run the app again - it should now work normally\n\n";
+          releaseBody += "This is normal for applications downloaded outside the Mac App Store.\n\n";
+          releaseBody += "### Linux\n";
+          releaseBody += "1. Download `yomine-${release.tag_name}-linux-x64`\n";
+          releaseBody += "2. Make it executable: `chmod +x yomine-${release.tag_name}-linux-x64`\n";
+          releaseBody += "3. Run the binary: `./yomine-${release.tag_name}-linux-x64`\n\n";
           releaseBody += "**Verification:** SHA256 checksums are available in `SHA256SUMS.txt`\n\n";
           
           // Update the release with generated notes
