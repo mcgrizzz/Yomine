@@ -20,6 +20,11 @@ on:
         required: false
         type: boolean
         default: false
+      skip_tests:
+        description: 'Skip CI test validation (⚠️ Use with caution)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -30,11 +35,18 @@ env:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    
     steps:
     - uses: actions/checkout@v4
     
+    - name: Warning about skipped tests
+      if: ${{ inputs.skip_tests }}
+      run: |
+        echo "⚠️ WARNING: CI test validation has been skipped!"
+        echo "⚠️ This release may contain untested code."
+        echo "⚠️ Use this option only when you're confident the code is stable."
+    
     - name: Check CI status for current commit
+      if: ${{ !inputs.skip_tests }}
       uses: actions/github-script@v7
       with:
         script: |
@@ -109,8 +121,8 @@ jobs:
           BASE_VERSION=$(echo "$VERSION_WITHOUT_V" | sed -E 's/-(beta|alpha|rc)\.[0-9]+$//g' | sed -E 's/b[0-9]+$//g')
           VERSION_WITHOUT_V="$BASE_VERSION"
         fi
-        
-        CARGO_VERSION=$(grep '^version =' Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+          # Extract version from [package] section only - find the first version after [package]
+        CARGO_VERSION=$(grep -A 20 '^\[package\]' Cargo.toml | grep '^version =' | head -1 | sed 's/version = "\(.*\)"/\1/')
         if [[ "$CARGO_VERSION" != "$VERSION_WITHOUT_V" ]]; then
           echo "❌ Cargo.toml version ($CARGO_VERSION) doesn't match base version ($VERSION_WITHOUT_V)"
           if [[ "${{ inputs.release_type }}" == "beta" ]]; then
