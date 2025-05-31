@@ -82,8 +82,8 @@ protect_breaking_commits = false
 filter_commits = false
 # regex for matching git tags
 tag_pattern = "v[0-9].*"
-# regex for skipping tags
-skip_tags = "v0.1.0-beta.1"
+# regex for skipping tags (none - we want to process all tags including betas)
+skip_tags = ""
 # regex for ignoring tags
 ignore_tags = ""
 # sort the tags topologically
