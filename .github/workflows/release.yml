@@ -160,7 +160,7 @@ jobs:
     needs: [build-and-upload, build-macos-universal]
     runs-on: ubuntu-latest
     
-    steps:
+    steps:      
       - name: Download release assets
         uses: robinraju/release-downloader@v1.11
         with:        
@@ -177,7 +177,8 @@ jobs:
           sha256sum yomine-* > ../SHA256SUMS.txt
           echo "Generated checksums:"
           cat ../SHA256SUMS.txt
-            # Create a detailed checksums file with descriptions
+          
+          # Create a detailed checksums file with descriptions
           cat > ../SHA256SUMS-detailed.txt << 'EOF'
           # SHA256 Checksums for Yomine Release
           # 
@@ -189,7 +190,8 @@ jobs:
           # For macOS users: Download the universal binary - it works on both Intel and Apple Silicon Macs
           
           EOF
-          cat ../SHA256SUMS.txt >> ../SHA256SUMS-detailed.txt        shell: bash
+          cat ../SHA256SUMS.txt >> ../SHA256SUMS-detailed.txt
+        shell: bash
 
       - name: Upload checksums to release
         uses: softprops/action-gh-release@v2
