@@ -105,9 +105,7 @@ jobs:
           command: build
           target: aarch64-apple-darwin
           args: "--release"
-          strip: true
-
-      # Create Universal Binary
+          strip: true      # Create Universal Binary
       - name: Create Universal Binary
         run: |
           # Create universal binary using lipo
@@ -125,7 +123,17 @@ jobs:
           
           # Show file size
           echo "Universal binary size:"
-          ls -lh yomine-${{ env.TAG_NAME }}-macos-universal
+          ls -lh yomine-${{ env.TAG_NAME }}-macos-universal      
+    # Ad-hoc Code Signing
+      - name: Ad-hoc Code Sign
+        run: |
+          # Ad-hoc sign the binary
+          codesign --force --sign - --options runtime yomine-${{ env.TAG_NAME }}-macos-universal
+          
+          # Verify the signing
+          codesign --verify --verbose yomine-${{ env.TAG_NAME }}-macos-universal
+          
+          echo "Binary successfully ad-hoc signed!"
         shell: bash
 
       # Upload universal binary to release
