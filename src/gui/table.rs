@@ -74,7 +74,12 @@ fn col_term(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &YomineAp
 }
 
 /// Determines the color for a part of speech
-fn get_pos_color(pos: &POS, normal_color: Color32, app: &YomineApp, ctx: &egui::Context) -> Color32 {
+fn get_pos_color(
+    pos: &POS,
+    normal_color: Color32,
+    app: &YomineApp,
+    ctx: &egui::Context,
+) -> Color32 {
     match pos {
         POS::Verb | POS::SuruVerb => blend_colors(normal_color, app.theme.blue(ctx), 0.75),
         POS::Noun => blend_colors(normal_color, app.theme.green(ctx), 0.75),
@@ -347,7 +352,11 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
             ui.vertical_centered(|ui| {
                 ui.add_space(100.0);
 
-                ui.label(egui::RichText::new("No File Loaded").size(32.0).color(app.theme.cyan(ui.ctx())));
+                ui.label(
+                    egui::RichText::new("No File Loaded")
+                        .size(32.0)
+                        .color(app.theme.cyan(ui.ctx())),
+                );
 
                 ui.add_space(1.0);
 
@@ -383,7 +392,9 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
             // Display current file's parsed title as the main heading
             if let Some(ref source_file) = app.current_source_file {
                 ui.heading(
-                    egui::RichText::new(&source_file.title).color(app.theme.cyan(ui.ctx())).strong(),
+                    egui::RichText::new(&source_file.title)
+                        .color(app.theme.cyan(ui.ctx()))
+                        .strong(),
                 );
             } else {
                 ui.heading("Term Table");

@@ -118,24 +118,31 @@ impl FileModal {
     }
 
     fn create_source_file_from_path_and_metadata(
-        path: &std::path::Path, 
+        path: &std::path::Path,
         title_override: Option<String>,
-        creator_override: Option<String>
+        creator_override: Option<String>,
     ) -> SourceFile {
         let filename = path.file_name().and_then(|name| name.to_str()).unwrap_or("Unknown");
         let file_path_str = path.display().to_string();
 
-        let (title, creator) = if let (Some(title), Some(creator)) = (&title_override, &creator_override) {
-            (title.clone(), Some(creator.clone()))
-        } else {
-            let media_info = filename_parser::parse_filename(filename);
-            let parsed_title = media_info.display_title();
-            let metadata_string = media_info.get_metadata_string();
-            (
-                title_override.unwrap_or(parsed_title),
-                creator_override.or_else(|| if !metadata_string.is_empty() { Some(metadata_string) } else { None })
-            )
-        };
+        let (title, creator) =
+            if let (Some(title), Some(creator)) = (&title_override, &creator_override) {
+                (title.clone(), Some(creator.clone()))
+            } else {
+                let media_info = filename_parser::parse_filename(filename);
+                let parsed_title = media_info.display_title();
+                let metadata_string = media_info.get_metadata_string();
+                (
+                    title_override.unwrap_or(parsed_title),
+                    creator_override.or_else(|| {
+                        if !metadata_string.is_empty() {
+                            Some(metadata_string)
+                        } else {
+                            None
+                        }
+                    }),
+                )
+            };
 
         SourceFile {
             id: 3,
@@ -161,11 +168,7 @@ impl FileModal {
         }
 
         ui.separator();
-        ui.label(
-            egui::RichText::new("Recent Files")
-                .color(theme.cyan(ui.ctx()))
-                .size(13.0),
-        );
+        ui.label(egui::RichText::new("Recent Files").color(theme.cyan(ui.ctx())).size(13.0));
         ui.add_space(3.0);
 
         let mut modal_result = None;
@@ -186,9 +189,7 @@ impl FileModal {
         ui.add_space(20.0);
         ui.vertical_centered(|ui| {
             ui.label(
-                egui::RichText::new("No recent files")
-                    .color(theme.comment(ui.ctx()))
-                    .size(11.0),
+                egui::RichText::new("No recent files").color(theme.comment(ui.ctx())).size(11.0),
             );
         });
     }
@@ -252,14 +253,16 @@ impl FileModal {
         .inner
     }
 
-    fn create_file_button(text: &str, is_current_file: bool, theme: &Theme, ctx: &egui::Context) -> egui::Button<'static> {
-        let text_color = if is_current_file {
-            theme.cyan(ctx)
-        } else {
-            theme.foreground(ctx)
-        };
-        
-        let mut button = egui::Button::new(egui::RichText::new(text.to_string()).size(11.5).color(text_color));
+    fn create_file_button(
+        text: &str,
+        is_current_file: bool,
+        theme: &Theme,
+        ctx: &egui::Context,
+    ) -> egui::Button<'static> {
+        let text_color = if is_current_file { theme.cyan(ctx) } else { theme.foreground(ctx) };
+
+        let mut button =
+            egui::Button::new(egui::RichText::new(text.to_string()).size(11.5).color(text_color));
 
         if is_current_file {
             button = button.fill(theme.background_fill(ctx));
@@ -291,13 +294,13 @@ impl FileModal {
     ) {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let metadata_color = if is_current_file {
-                theme.comment(ui.ctx()).linear_multiply(0.7)  // Darker comment color for current file
+                theme.comment(ui.ctx()).linear_multiply(0.7) // Darker comment color for current file
             } else {
                 theme.comment(ui.ctx())
             };
 
             let term_count_color = if is_current_file {
-                theme.blue(ui.ctx()).linear_multiply(0.8)  // Darker blue for current file
+                theme.blue(ui.ctx()).linear_multiply(0.8) // Darker blue for current file
             } else {
                 theme.blue(ui.ctx())
             };
@@ -324,13 +327,13 @@ impl FileModal {
             ui.add_space(6.0);
 
             let info_color = if is_current_file {
-                theme.comment(ui.ctx()).linear_multiply(0.6)  // Darker comment color for current file
+                theme.comment(ui.ctx()).linear_multiply(0.6) // Darker comment color for current file
             } else {
-                theme.comment(ui.ctx()).linear_multiply(0.9)  // Slightly muted comment color
+                theme.comment(ui.ctx()).linear_multiply(0.9) // Slightly muted comment color
             };
 
             let creator_color = if is_current_file {
-                theme.comment(ui.ctx()).linear_multiply(0.65)  // Slightly different shade for current file
+                theme.comment(ui.ctx()).linear_multiply(0.65) // Slightly different shade for current file
             } else {
                 theme.comment(ui.ctx())
             };

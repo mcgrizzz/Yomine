@@ -193,10 +193,11 @@ impl eframe::App for YomineApp {
             &self.websocket_manager,
             self.anki_connected,
         );
-        if let Some(source_file) = self
-            .file_modal
-            .show(ctx, &self.theme, self.current_source_file.as_ref().map(|sf| sf.original_file.as_str()))
-        {
+        if let Some(source_file) = self.file_modal.show(
+            ctx,
+            &self.theme,
+            self.current_source_file.as_ref().map(|sf| sf.original_file.as_str()),
+        ) {
             println!("File selected: {:?}", source_file.original_file);
             self.process_source_file(source_file);
         }

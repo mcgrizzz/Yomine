@@ -14,7 +14,7 @@ pub enum FileType {
 #[derive(Debug, Clone)]
 pub struct SourceFile {
     pub id: u32,                 // Unique identifier
-    pub source: Option<String>,          // Source type (e.g., "YouTube", "Jimaku", "TXT")
+    pub source: Option<String>,  // Source type (e.g., "YouTube", "Jimaku", "TXT")
     pub file_type: FileType,     // File type (e.g., SRT, TXT)
     pub title: String,           // File name or descriptive title
     pub creator: Option<String>, // Optional creator information

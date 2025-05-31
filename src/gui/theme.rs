@@ -82,7 +82,7 @@ impl Theme {
     pub fn blue(&self, ctx: &egui::Context) -> Color32 {
         return self.current_theme(ctx).blue;
     }
-    
+
     pub fn cyan(&self, ctx: &egui::Context) -> Color32 {
         return self.current_theme(ctx).cyan;
     }
@@ -190,7 +190,7 @@ impl ThemeDetails {
             orange: Color32::from_rgb(255, 161, 90),
             yellow: Color32::from_rgb(241, 250, 140),
             green: Color32::from_rgb(86, 209, 123),
-            blue: Color32::from_rgb(77, 140, 191),        // A nice blue tone from tokyo night palette
+            blue: Color32::from_rgb(77, 140, 191), // A nice blue tone from tokyo night palette
             purple: Color32::from_rgb(189, 147, 249),
             cyan: Color32::from_rgb(97, 175, 239),
             pink: Color32::from_rgb(255, 85, 255),
