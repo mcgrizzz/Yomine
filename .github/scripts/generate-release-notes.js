@@ -197,16 +197,19 @@ async function generateReleaseNotes(github, context) {
     }
 
     // Process the template
-    let releaseBody = template;
-
-    // Handle beta warning section
+    let releaseBody = template;    // Process include tags based on release type
     if (release.prerelease) {
-      // Keep the beta warning in the template as-is
-      console.log('Beta release detected - keeping beta warning');
+      // For beta releases: keep BETA_INCLUDE sections, remove RELEASE_INCLUDE sections
+      releaseBody = releaseBody.replace(/<!-- RELEASE_INCLUDE_START -->[\s\S]*?<!-- RELEASE_INCLUDE_END -->\s*/g, '');
+      releaseBody = releaseBody.replace(/<!-- BETA_INCLUDE_START -->\s*/g, '');
+      releaseBody = releaseBody.replace(/\s*<!-- BETA_INCLUDE_END -->/g, '');
+      console.log('Beta release detected - processed include tags for beta release');
     } else {
-      // Remove the beta warning section for stable releases
-      releaseBody = releaseBody.replace(/## Header for Beta Releases[\s\S]*?---\s*/g, '');
-      console.log('Stable release - removed beta warning section');
+      // For stable releases: keep RELEASE_INCLUDE sections, remove BETA_INCLUDE sections
+      releaseBody = releaseBody.replace(/<!-- BETA_INCLUDE_START -->[\s\S]*?<!-- BETA_INCLUDE_END -->\s*/g, '');
+      releaseBody = releaseBody.replace(/<!-- RELEASE_INCLUDE_START -->\s*/g, '');
+      releaseBody = releaseBody.replace(/\s*<!-- RELEASE_INCLUDE_END -->/g, '');
+      console.log('Stable release detected - processed include tags for stable release');
     }
 
     // Replace placeholders (handle both formats)

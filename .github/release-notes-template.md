@@ -1,11 +1,12 @@
 # Yomine {VERSION}
 
-## Header for Beta Releases
+<!-- BETA_INCLUDE_START -->
 **⚠️ This is a beta release**
 
 This is a pre-release version intended for testing and feedback. It may contain bugs and is not recommended for the average user.
 
 Please report any issues you encounter to help us improve the final release.
+<!-- BETA_INCLUDE_END -->
 
 ---
 
