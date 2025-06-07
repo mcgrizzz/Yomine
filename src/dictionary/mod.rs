@@ -1,5 +1,6 @@
 pub mod frequency_dict;
 pub mod frequency_manager;
+pub mod frequency_utils;
 pub mod token_dictionary;
 
 type FrequencyData = CacheFrequencyData;
