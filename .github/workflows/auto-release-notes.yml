@@ -3,6 +3,12 @@ name: Auto Release Notes
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to generate notes for (e.g., v0.3.0)'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -19,6 +25,37 @@ jobs:
       - name: Update Release Notes
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.MY_PAT }}
           script: |
             const { generateReleaseNotes } = require('./.github/scripts/generate-release-notes.js');
-            await generateReleaseNotes(github, context);
+            
+            let context_to_use = context;
+            
+            // If this is a manual dispatch, we need to fetch the release data
+            if (context.eventName === 'workflow_dispatch') {
+              const release_tag = '${{ inputs.release_tag }}';
+              console.log('Manual dispatch triggered for tag:', release_tag);
+              
+              try {
+                const { data: release } = await github.rest.repos.getReleaseByTag({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  tag: release_tag
+                });
+                  // Create a modified context that looks like a release event
+                context_to_use = {
+                  ...context,
+                  payload: {
+                    release: release
+                  },
+                  repo: context.repo
+                };
+                
+                console.log('Found release:', release.tag_name, 'ID:', release.id);
+              } catch (error) {
+                console.error('Could not find release for tag:', release_tag);
+                throw error;
+              }
+            }
+            
+            await generateReleaseNotes(github, context_to_use);
