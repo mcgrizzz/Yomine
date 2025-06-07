@@ -17,7 +17,7 @@ There are currently no prebuilt binaries available. You'll need to build from so
 
 ### Screenshot
 
-![Yomine UI](mining.png)
+![Yomine UI](docs/imgs/mining.png)
 
 ## Planned Features (in no particular order)
 
@@ -77,7 +77,7 @@ Yomine needs to know which fields in your Anki notes contain the Japanese terms 
    - Click "Add" to save the mapping
    - Save your settings
 
-![Anki Setup](anki_setup.png)
+![Anki Setup](docs/imgs/anki_setup.png)
 
 ## Building from Source
 
