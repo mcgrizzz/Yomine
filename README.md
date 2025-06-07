@@ -1,11 +1,19 @@
+
+
+    
 # Yomine
     Yomine’s name comes from a mix of 読み ("yomi" for reading) + "mine" (as in mining vocab)
 Yomine is an Japanese vocabulary mining tool designed to help language learners extract and study words from subtitle files. Written in Rust, it integrates with asbplayer for timestamp navigation, ranks terms by frequency, and supports Anki integration to filter out known words.
 
+https://github.com/user-attachments/assets/5a680ec7-bd2a-437b-849e-2387240de9a4
+
 ## Status
 
-🚧 **This project is under active development and not yet ready for public use.**  
-There are currently no prebuilt binaries available. You'll need to build from source to try it out.
+[![GitHub Workflow Status (with event)](https://img.shields.io/github/actions/workflow/status/mcgrizzz/Yomine/test.yml)](https://github.com/mcgrizzz/Yomine/actions/workflows/test.yml)
+[![Github All Releases](https://img.shields.io/github/downloads/mcgrizzz/Yomine/total.svg)](https://github.com/mcgrizzz/Yomine/releases)
+    
+🚧 **This project is under active development and may be buggy.**  
+The macos and linux binaries have not been extensively tested. 
 
 ## Features
 
@@ -14,10 +22,6 @@ There are currently no prebuilt binaries available. You'll need to build from so
 - Ranks terms by frequency.
 - Filter known terms based on anki decks.
 - Displays terms, sentences, timestamps, frequency, and part of speech in a table.
-
-### Screenshot
-
-![Yomine UI](docs/imgs/mining.png)
 
 ## Planned Features (in no particular order)
 
