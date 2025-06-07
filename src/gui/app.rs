@@ -10,6 +10,7 @@ use super::{
     error_modal::ErrorModal,
     file_modal::FileModal,
     message_overlay::MessageOverlay,
+    restart_modal::RestartModal,
     settings::{
         SettingsData,
         SettingsModal,
@@ -67,6 +68,7 @@ pub struct YomineApp {
     pub file_modal: FileModal,
     pub error_modal: ErrorModal,
     pub settings_modal: SettingsModal,
+    pub restart_modal: RestartModal,
     pub theme: Theme,
     pub zoom: f32,
     pub anki_connected: bool,
@@ -93,7 +95,6 @@ impl YomineApp {
         for (model_name, field_mapping) in model_mapping {
             settings_data.anki_model_mappings.insert(model_name, field_mapping);
         }
-
         let app = Self {
             model_mapping: settings_data.anki_model_mappings.clone(),
             settings_data,
@@ -106,6 +107,7 @@ impl YomineApp {
             file_modal: FileModal::new(),
             error_modal: ErrorModal::new(),
             settings_modal: SettingsModal::new(),
+            restart_modal: RestartModal::new(),
             table_state: TableState::default(),
             language_tools: None,
             terms: Vec::new(),
@@ -183,7 +185,6 @@ impl eframe::App for YomineApp {
                 }
             }
         }
-
         let current_settings = self.get_current_settings();
         TopBar::show(
             ctx,
@@ -192,6 +193,7 @@ impl eframe::App for YomineApp {
             &current_settings,
             &self.websocket_manager,
             self.anki_connected,
+            &mut self.restart_modal,
         );
         if let Some(source_file) = self.file_modal.show(
             ctx,
@@ -203,9 +205,13 @@ impl eframe::App for YomineApp {
         }
 
         term_table(ctx, self);
-
         self.message_overlay.show(ctx, &self.theme);
-        self.error_modal.show(ctx);
+        self.error_modal.show(ctx); // Handle restart modal
+        if let Some(should_restart) = self.restart_modal.show(ctx) {
+            if should_restart {
+                self.restart_application(ctx);
+            }
+        }
 
         if let Some(settings) = self.settings_modal.show(ctx) {
             self.model_mapping = settings.anki_model_mappings.clone();
@@ -329,10 +335,26 @@ impl YomineApp {
     fn get_current_settings(&self) -> SettingsData {
         self.settings_data.clone()
     }
-
     fn save_settings(&self) {
         if let Err(e) = save_json(&self.settings_data, "settings.json") {
             eprintln!("Failed to save settings: {}", e);
+        }
+    }
+
+    fn restart_application(&self, ctx: &egui::Context) {
+        // Get the current executable path
+        if let Ok(current_exe) = std::env::current_exe() {
+            // Start a new instance of the application
+            if let Err(e) = std::process::Command::new(&current_exe).spawn() {
+                eprintln!("Failed to restart application: {}", e);
+            } else {
+                // Close the current instance
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+        } else {
+            eprintln!("Failed to get current executable path for restart");
+            // Fallback to just closing the application
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
     }
 }
