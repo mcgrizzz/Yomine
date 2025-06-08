@@ -4,6 +4,7 @@ pub mod file_modal;
 pub mod message_overlay;
 pub mod modal;
 pub mod recent_files;
+pub mod restart_modal;
 pub mod settings;
 pub mod table;
 pub mod theme;

@@ -1,12 +1,15 @@
 use eframe::egui;
 
-use crate::gui::{
-    file_modal::FileModal,
-    settings::{
-        SettingsData,
-        SettingsModal,
+use crate::{
+    dictionary::frequency_utils,
+    gui::{
+        file_modal::FileModal,
+        settings::{
+            SettingsData,
+            SettingsModal,
+        },
+        websocket_manager::WebSocketManager,
     },
-    websocket_manager::WebSocketManager,
 };
 
 pub struct TopBar;
@@ -19,14 +22,37 @@ impl TopBar {
         current_settings: &SettingsData,
         websocket_manager: &WebSocketManager,
         anki_connected: bool,
+        restart_modal: &mut crate::gui::restart_modal::RestartModal,
     ) {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 egui::widgets::global_theme_preference_switch(ui);
-
                 ui.menu_button("File", |ui| {
                     if ui.button("Open New File").clicked() {
                         file_modal.open_dialog();
+                    }
+                    if ui.button("Load New Frequency Dictionaries").clicked() {
+                        match frequency_utils::handle_frequency_dictionary_copy() {
+                            Ok(count) => {
+                                if count > 0 {
+                                    println!("Successfully added {} frequency dictionaries", count);
+                                    restart_modal.show_restart_dialog(
+                                        format!("Successfully added {} frequency dictionaries. Please restart the application load them.", count)
+                                    );
+                                } else {
+                                    println!("No new frequency dictionaries were selected or loaded");
+                                    restart_modal.show_info_dialog(
+                                        "No new frequency dictionaries were selected. No changes were made."
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to load frequency dictionaries: {}", e);
+                                restart_modal.show_info_dialog(
+                                    format!("Failed to load frequency dictionaries: {}", e)
+                                );
+                            }
+                        }
                     }
                     if ui.button("Quit").clicked() {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -38,7 +64,6 @@ impl TopBar {
                         settings_modal.open_settings(current_settings.clone(), ctx);
                     }
                 });
-
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     Self::show_status_indicators(ui, websocket_manager, anki_connected);
                 });

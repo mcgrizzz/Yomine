@@ -21,9 +21,14 @@ use vibrato::Dictionary;
 use xz2::bufread::XzDecoder;
 use zstd::stream::copy_decode;
 
-use crate::core::YomineError;
+use crate::{
+    core::YomineError,
+    persistence::get_app_data_dir,
+};
 
-const DICT_DIR: &str = "dictionaries/tokenizer";
+fn get_tokenizer_dict_dir() -> std::path::PathBuf {
+    get_app_data_dir().join("dictionaries").join("tokenizer")
+}
 
 pub enum DictType {
     Unidic,
@@ -88,7 +93,8 @@ fn cleanup_files(folder_path: &Path, keep_file: &Path) -> Result<(), YomineError
 pub fn ensure_dictionary(dict_type: &DictType) -> Result<PathBuf, YomineError> {
     let url = dict_type.url();
     let folder_name = dict_type.folder_name();
-    let extract_path = Path::new(DICT_DIR).join(folder_name);
+    let dict_dir = get_tokenizer_dict_dir();
+    let extract_path = dict_dir.join(folder_name);
     let final_dic_path = extract_path.join("system.dic");
 
     if final_dic_path.exists() {
@@ -96,9 +102,9 @@ pub fn ensure_dictionary(dict_type: &DictType) -> Result<PathBuf, YomineError> {
         return Ok(final_dic_path);
     }
 
-    fs::create_dir_all(DICT_DIR)?;
+    fs::create_dir_all(&dict_dir)?;
 
-    let download_path = Path::new(DICT_DIR).join(format!("{}.tar.gz", folder_name));
+    let download_path = dict_dir.join(format!("{}.tar.gz", folder_name));
     if !download_path.exists() {
         println!("Downloading dictionary from {}...", url);
         let response = get(url)?;

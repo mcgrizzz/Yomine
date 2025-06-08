@@ -34,9 +34,12 @@ use crate::{
         YomineError,
     },
     dictionary::TermMetaBankV3,
+    persistence::get_app_data_dir,
 };
 
-const DICT_DIR: &str = "dictionaries/frequency";
+pub fn get_frequency_dict_dir() -> std::path::PathBuf {
+    get_app_data_dir().join("dictionaries").join("frequency")
+}
 
 #[derive(Debug)]
 pub struct DictionaryState {
@@ -331,10 +334,9 @@ pub fn process_frequency_dictionaries() -> Result<FrequencyManager, YomineError>
     let manager = Mutex::new(FrequencyManager::new(None));
     let start = Instant::now();
 
-    let dir_path = Path::new(DICT_DIR);
-    fs::create_dir_all(DICT_DIR)?;
-
-    for entry in fs::read_dir(dir_path)
+    let dir_path = get_frequency_dict_dir();
+    fs::create_dir_all(&dir_path)?;
+    for entry in fs::read_dir(&dir_path)
         .map_err(|e| YomineError::Custom(format!("Failed to read directory: {}", e)))?
     {
         let entry =
@@ -352,7 +354,7 @@ pub fn process_frequency_dictionaries() -> Result<FrequencyManager, YomineError>
         }
     }
 
-    fs::read_dir(dir_path)?.filter_map(|e| e.ok()).par_bridge().for_each(|entry| {
+    fs::read_dir(&dir_path)?.filter_map(|e| e.ok()).par_bridge().for_each(|entry| {
         let path = entry.path();
         if !path.is_dir() {
             return;
