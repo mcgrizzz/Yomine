@@ -12,6 +12,7 @@ use std::{
     path::Path,
     sync::Mutex,
     time::Instant,
+    u32,
 };
 
 use rayon::iter::{
@@ -41,34 +42,39 @@ pub fn get_frequency_dict_dir() -> std::path::PathBuf {
 }
 
 #[derive(Debug)]
+pub struct DictionaryState {
+    pub weight: f32,
+    pub enabled: bool,
+}
+
+#[derive(Debug)]
 pub struct FrequencyManager {
     dictionaries: HashMap<String, FrequencyDictionary>,
-    toggled_states: HashMap<String, bool>,
+    states: HashMap<String, DictionaryState>,
 }
 
 impl FrequencyManager {
-    fn new() -> Self {
-        FrequencyManager { dictionaries: HashMap::new(), toggled_states: HashMap::new() }
+    fn new(states: Option<HashMap<String, DictionaryState>>) -> Self {
+        let dict_states: HashMap<String, DictionaryState> = states.unwrap_or_default();
+        FrequencyManager { dictionaries: HashMap::new(), states: dict_states }
     }
 
     fn add_dictionary(&mut self, name: String, dictionary: FrequencyDictionary) {
         self.dictionaries.insert(name.clone(), dictionary);
-        self.toggled_states.insert(name, true);
-    }
 
-    fn toggle_dictionary(&mut self, name: &str, enabled: bool) -> Result<(), YomineError> {
-        if let Some(state) = self.toggled_states.get_mut(name) {
-            *state = enabled;
-            Ok(())
-        } else {
-            Err(YomineError::Custom(format!("Dictionary '{}' not found", name)))
+        if !self.states.contains_key(&name) {
+            self.states.insert(name, DictionaryState { weight: 1.0, enabled: true });
         }
     }
 
     fn get_enabled_dictionaries(&self) -> Vec<&FrequencyDictionary> {
-        self.toggled_states
+        self.dictionaries
             .iter()
-            .filter_map(|(name, &enabled)| if enabled { self.dictionaries.get(name) } else { None })
+            .filter_map(|(name, dictionary)| {
+                self.states
+                    .get(name)
+                    .and_then(|state| (state.enabled && state.weight > 0.0).then_some(dictionary))
+            })
             .collect()
     }
 
@@ -79,9 +85,9 @@ impl FrequencyManager {
         is_kana: bool,
     ) -> HashMap<String, u32> {
         let mut freq_map: HashMap<String, u32> = self
-            .get_enabled_dictionaries()
+            .dictionaries
             .iter()
-            .filter_map(|dict| {
+            .filter_map(|(_, dict)| {
                 let freq = dict.get_frequency(&lemma_form, &lemma_reading, is_kana);
                 if let Some(term_freq) = freq {
                     Some((dict.title.clone(), term_freq.value()))
@@ -91,57 +97,73 @@ impl FrequencyManager {
             })
             .collect();
 
-        freq_map.insert(
-            "HARMONIC".to_string(),
-            self.harmonic_frequency(lemma_form, lemma_reading, is_kana),
-        );
+        freq_map.insert("HARMONIC".to_string(), self.get_weighted_harmonic(&freq_map));
         freq_map
     }
 
-    fn harmonic_frequency(&self, lemma_form: &str, lemma_reading: &str, is_kana: bool) -> u32 {
-        let mut sum_of_reciprocals = 0.0;
-        let mut count = 0;
-
-        for (dict_name, dictionary) in &self.dictionaries {
-            if *self.toggled_states.get(dict_name).unwrap_or(&false) {
-                if let Some(freq_data) =
-                    dictionary.get_frequency(lemma_form, lemma_reading, is_kana)
-                {
-                    let frequency = freq_data.value();
-                    if frequency > 0 {
-                        sum_of_reciprocals += 1.0 / (frequency as f32);
-                        count += 1;
-                    }
-                }
+    //Return a boolean so we know whether to update the UI or not.
+    pub fn set_dictionary_state(
+        &mut self,
+        name: &str,
+        weight: f32,
+        enabled: bool,
+    ) -> Result<bool, YomineError> {
+        if let Some(state) = self.states.get_mut(name) {
+            if state.weight != weight || state.enabled != enabled {
+                *state = DictionaryState { weight, enabled };
+                Ok(true)
+            } else {
+                Ok(false)
             }
-        }
-
-        if count > 0 {
-            ((count as f32) / sum_of_reciprocals).round() as u32
         } else {
-            u32::MAX
+            Err(YomineError::Custom(format!("Dictionary '{}' not found", name)))
         }
+    }
+
+    pub fn get_weighted_harmonic(&self, freq_map: &HashMap<String, u32>) -> u32 {
+        let weighted_freqs: Vec<u32> = freq_map
+            .iter()
+            .filter_map(|(name, &freq)| {
+                self.states.get(name).and_then(|state| {
+                    if state.enabled && freq > 0 && state.weight > 0.0 {
+                        let weighted_freq = (freq as f32 / state.weight).round() as u32;
+                        Some(weighted_freq.max(1))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect();
+
+        harmonic_frequency(&weighted_freqs).unwrap_or(u32::MAX)
+    }
+
+    pub fn get_dictionary_state(&self, name: &str) -> Option<&DictionaryState> {
+        self.states.get(name)
+    }
+
+    pub fn get_dictionary_names(&self) -> Vec<String> {
+        self.dictionaries.keys().cloned().collect()
     }
 
     /// Retrieves all frequency data entries for the exact term from enabled dictionaries,
     /// without requiring a reading. For non-kana terms, excludes kana-specific frequencies.
+    // Used for anki term filtering, not affected by weighting or toggling dictionaries.
     pub fn get_frequency_data_by_term(&self, input: &str) -> Vec<&FrequencyData> {
         let mut freqs = Vec::new();
-        for (dict_name, dictionary) in &self.dictionaries {
-            if *self.toggled_states.get(dict_name).unwrap_or(&false) {
-                if let Some(freq_data) = dictionary.get_frequencies_by_key(input) {
-                    if !input.is_kana() {
-                        //Filter the kana specific frequencies
-                        freqs.extend(
-                            freq_data
-                                .iter()
-                                .filter(|f| !f.has_special_marker())
-                                .collect::<Vec<&FrequencyData>>(),
-                        );
-                    } else {
-                        //Don't filter otherwise since we matched on a kana key...
-                        freqs.extend(freq_data);
-                    }
+        for (_, dictionary) in &self.dictionaries {
+            if let Some(freq_data) = dictionary.get_frequencies_by_key(input) {
+                if !input.is_kana() {
+                    //Filter the kana specific frequencies
+                    freqs.extend(
+                        freq_data
+                            .iter()
+                            .filter(|f| !f.has_special_marker())
+                            .collect::<Vec<&FrequencyData>>(),
+                    );
+                } else {
+                    //Don't filter otherwise since we matched on a kana key...
+                    freqs.extend(freq_data);
                 }
             }
         }
@@ -149,6 +171,7 @@ impl FrequencyManager {
         freqs
     }
 
+    //Used for deinflection sorting, not affected by weighting or toggling dictionaries.
     pub fn get_harmonic_frequency_for_pair(&self, word: &str, reading: &str) -> Option<u32> {
         let is_kana = word.is_kana();
 
@@ -308,7 +331,7 @@ fn extract_zip(zip_path: &Path, extract_to: &Path) -> Result<(), YomineError> {
 }
 
 pub fn process_frequency_dictionaries() -> Result<FrequencyManager, YomineError> {
-    let manager = Mutex::new(FrequencyManager::new());
+    let manager = Mutex::new(FrequencyManager::new(None));
     let start = Instant::now();
 
     let dir_path = get_frequency_dict_dir();
@@ -401,55 +424,4 @@ pub fn process_frequency_dictionaries() -> Result<FrequencyManager, YomineError>
     println!("Total processing time: {:?}", total_duration);
 
     Ok(manager.into_inner().unwrap())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn assert_frequency(
-        dict: &FrequencyDictionary,
-        term: &str,
-        reading: &str,
-        is_kana: bool,
-        expected: Option<u32>,
-    ) {
-        let result = dict.get_frequency(term, reading, is_kana).map(|f| f.value());
-        assert_eq!(
-            result, expected,
-            "Failed for term: {}, reading: {}, is_kana: {}",
-            term, reading, is_kana
-        );
-    }
-
-    impl FrequencyManager {
-        fn get_dictionary(&self, name: &str) -> Option<&FrequencyDictionary> {
-            self.toggled_states.get(name).and_then(|&enabled| {
-                if enabled {
-                    self.dictionaries.get(name)
-                } else {
-                    None
-                }
-            })
-        }
-    }
-
-    #[test]
-    fn test_frequency() {
-        let frequency_manager =
-            process_frequency_dictionaries().expect("Failed to load dictionaries");
-
-        let dict =
-            frequency_manager.get_dictionary("JPDBv2㋕").expect("JPDBv2㋕ dictionary not found");
-
-        assert_frequency(&dict, "の", "の", true, Some(1));
-
-        // Test kana frequency vs normal frequency
-        assert_frequency(&dict, "溜まる", "タマル", true, Some(2701));
-        assert_frequency(&dict, "溜まる", "タマル", false, Some(3885));
-
-        // Test reading specificity
-        assert_frequency(&dict, "市", "シ", false, Some(2466));
-        assert_frequency(&dict, "市", "イチ", false, Some(17201));
-    }
 }

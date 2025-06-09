@@ -63,4 +63,4 @@ jobs:
       run: cargo +nightly fmt -- --check
 
     - name: Run tests (excluding external dependency tests)
-      run: cargo test --verbose -- --skip dictionary::frequency_manager::tests::test_frequency --skip segmentation::rule_matcher_tests::tests::inspect_tokens
+      run: cargo test --verbose -- --skip segmentation::rule_matcher_tests::tests::inspect_tokens
