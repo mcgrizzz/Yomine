@@ -1,5 +1,3 @@
-# Yomine {VERSION}
-
 <!-- BETA_INCLUDE_START -->
 **⚠️ This is a beta release**
 
