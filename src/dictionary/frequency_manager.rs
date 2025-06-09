@@ -101,7 +101,7 @@ impl FrequencyManager {
         freq_map
     }
 
-    //Return a boolean so we know whether to update the UI or not. 
+    //Return a boolean so we know whether to update the UI or not.
     pub fn set_dictionary_state(
         &mut self,
         name: &str,
