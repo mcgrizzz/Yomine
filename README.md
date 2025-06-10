@@ -1,10 +1,11 @@
-<div align="center">
     
 # ⛏️ Yomine
 
 A Japanese vocabulary mining tool designed to help language learners extract and study words from subtitle files. It integrates with asbplayer for timestamp navigation, ranks terms by frequency, and supports Anki integration to filter out known words. 
 
 Written in Rust 🦀
+
+<div align="center">
     
 ![Usage GIF](https://github.com/user-attachments/assets/6e3cb2cc-8b0a-4421-96ea-a9776c9ad8b3)
 
