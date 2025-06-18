@@ -305,10 +305,10 @@ impl YomineApp {
                 }
             }
             Err(error_msg) => {
-                self.error_modal.show_error_with_details(
+                self.error_modal.show_error(
                     "File Load Error".to_string(),
                     &format!("Unable to load file: {}", filename),
-                    &error_msg,
+                    Some(&error_msg),
                 );
                 self.terms = Vec::new();
                 self.sentences = Vec::new();

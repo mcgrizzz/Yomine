@@ -1,8 +1,5 @@
 use eframe::egui::{
     self,
-    RichText,
-};
-use egui::{
     epaint::Shadow,
     style::{
         Selection,
@@ -10,6 +7,7 @@ use egui::{
         Widgets,
     },
     Color32,
+    RichText,
     Stroke,
     Visuals,
 };
