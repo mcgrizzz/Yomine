@@ -5,9 +5,9 @@ use eframe::egui;
 use super::{
     anki_service::AnkiService,
     components::{
-        connection_status_ui,
-        field_selection_ui,
-        model_selection_ui,
+        ui_connection_status,
+        ui_field_selection,
+        ui_model_selection,
     },
     data::{
         AnkiModelInfo,
@@ -15,14 +15,7 @@ use super::{
         SettingsData,
     },
 };
-use crate::{
-    anki::FieldMapping,
-    gui::modal::{
-        Modal,
-        ModalConfig,
-        ModalResult,
-    },
-};
+use crate::anki::FieldMapping;
 
 #[derive(Clone)]
 pub struct SettingsModalData {
@@ -48,7 +41,8 @@ impl SettingsModalData {
 }
 
 pub struct SettingsModal {
-    modal: Modal<SettingsModalData>,
+    open: bool,
+    data: SettingsModalData,
     model_editor: ModelMappingEditor,
     available_models: Vec<AnkiModelInfo>,
     anki_service: AnkiService,
@@ -56,18 +50,9 @@ pub struct SettingsModal {
 
 impl SettingsModal {
     pub fn new() -> Self {
-        let config = ModalConfig {
-            min_size: Some(egui::Vec2::new(700.0, 500.0)),
-            fixed_size: Some(egui::Vec2::new(750.0, 550.0)),
-            centered: true,
-            show_overlay: true,
-            resizable: true,
-            ..Default::default()
-        };
-
         Self {
-            modal: Modal::new_with_data("Anki Model Mappings", SettingsModalData::default())
-                .with_config(config),
+            open: false,
+            data: SettingsModalData::default(),
             model_editor: ModelMappingEditor::default(),
             available_models: Vec::new(),
             anki_service: AnkiService::new(),
@@ -75,10 +60,10 @@ impl SettingsModal {
     }
 
     pub fn open_settings(&mut self, current_settings: SettingsData, ctx: &egui::Context) {
-        self.modal.data_mut().settings = current_settings.clone();
-        self.modal.data_mut().temp_model_mappings = current_settings.anki_model_mappings.clone();
-        self.modal.data_mut().original_settings = current_settings.clone();
-        self.modal.open();
+        self.data.settings = current_settings.clone();
+        self.data.temp_model_mappings = current_settings.anki_model_mappings.clone();
+        self.data.original_settings = current_settings.clone();
+        self.open = true;
 
         if self.available_models.is_empty() {
             self.anki_service.fetch_models(ctx);
@@ -99,19 +84,25 @@ impl SettingsModal {
     }
 
     pub fn is_settings_open(&self) -> bool {
-        self.modal.is_open()
+        self.open
     }
 
     pub fn show(&mut self, ctx: &egui::Context) -> Option<SettingsData> {
+        if !self.open {
+            return None;
+        }
+
         self.anki_service.check_async_results(&mut self.available_models, ctx);
 
         let available_models = self.available_models.clone();
         let mut anki_service = std::mem::take(&mut self.anki_service);
         let mut model_editor = std::mem::take(&mut self.model_editor);
 
-        let result = self.modal.show(ctx, |ui, data| {
+        let mut result: Option<SettingsData> = None;
+
+        let modal = egui::Modal::new(egui::Id::new("settings_modal")).show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
-                show_existing_mappings_ui(ui, data, &mut model_editor);
+                ui_existing_mappings(ui, &mut self.data, &mut model_editor);
                 ui.separator();
 
                 ui.heading(if model_editor.is_editing {
@@ -120,22 +111,22 @@ impl SettingsModal {
                     "Add Model Mapping"
                 });
                 ui.add_space(1.0);
-                connection_status_ui(ui, &mut anki_service, ctx);
+                ui_connection_status(ui, &mut anki_service, ctx);
                 ui.add_space(5.0);
 
-                show_mapping_editor_ui(
+                ui_mapping_editor(
                     ui,
                     ctx,
                     &mut model_editor,
                     &available_models,
                     &mut anki_service,
-                    data,
+                    &mut self.data,
                 );
             });
 
             ui.separator();
 
-            let is_dirty = data.is_dirty();
+            let is_dirty = self.data.is_dirty();
             if is_dirty {
                 ui.horizontal(|ui| {
                     ui.colored_label(egui::Color32::YELLOW, "⚠");
@@ -145,13 +136,12 @@ impl SettingsModal {
             }
 
             ui.horizontal(|ui| {
-                let is_dirty = data.is_dirty();
+                let is_dirty = self.data.is_dirty();
 
                 let save_clicked =
                     ui.add_enabled(is_dirty, egui::Button::new("Save Settings")).clicked();
                 let cancel_clicked =
                     ui.add_enabled(is_dirty, egui::Button::new("Cancel")).clicked();
-                let close_clicked = ui.button("Close Settings").clicked();
 
                 let mut reset_clicked = false;
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::RIGHT), |ui| {
@@ -159,56 +149,30 @@ impl SettingsModal {
                 });
 
                 if save_clicked {
-                    let mut settings = data.settings.clone();
-                    settings.anki_model_mappings = data.temp_model_mappings.clone();
-                    data.original_settings = settings.clone();
-                    Some(ModalResult::Custom("save".to_string(), data.clone()))
+                    let mut settings = self.data.settings.clone();
+                    settings.anki_model_mappings = self.data.temp_model_mappings.clone();
+                    self.data.original_settings = settings.clone();
+                    result = Some(settings);
+                    ui.close();
                 } else if cancel_clicked {
-                    data.temp_model_mappings = data.original_settings.anki_model_mappings.clone();
-                    data.settings = data.original_settings.clone();
-                    None
+                    self.data.temp_model_mappings =
+                        self.data.original_settings.anki_model_mappings.clone();
+                    self.data.settings = self.data.original_settings.clone();
                 } else if reset_clicked {
-                    data.temp_model_mappings.clear();
-                    data.settings = SettingsData::new();
-                    None
-                } else if close_clicked {
-                    Some(ModalResult::Cancelled)
-                } else {
-                    None
+                    self.data.temp_model_mappings.clear();
+                    self.data.settings = SettingsData::new();
                 }
             })
-            .inner
         });
 
         self.anki_service = anki_service;
         self.model_editor = model_editor;
 
-        if let Some(modal_result) = result {
-            match modal_result {
-                ModalResult::Confirmed(data) => {
-                    let mut settings = data.settings.clone();
-                    settings.anki_model_mappings = data.temp_model_mappings.clone();
-                    return Some(settings);
-                }
-                ModalResult::Custom(action, data) if action == "save" => {
-                    let mut settings = data.settings.clone();
-                    settings.anki_model_mappings = data.temp_model_mappings.clone();
-                    return Some(settings);
-                }
-                ModalResult::Cancelled => return None,
-                _ => {}
-            }
+        if modal.should_close() {
+            self.open = false;
         }
 
-        None
-    }
-
-    pub fn is_open(&self) -> bool {
-        self.modal.is_open()
-    }
-
-    pub fn close(&mut self) {
-        self.modal.close();
+        result
     }
 }
 
@@ -218,7 +182,7 @@ impl Default for SettingsModal {
     }
 }
 
-fn show_existing_mappings_ui(
+fn ui_existing_mappings(
     ui: &mut egui::Ui,
     data: &mut SettingsModalData,
     model_editor: &mut ModelMappingEditor,
@@ -267,7 +231,7 @@ fn show_existing_mappings_ui(
     }
 }
 
-fn show_mapping_editor_ui(
+fn ui_mapping_editor(
     ui: &mut egui::Ui,
     _ctx: &egui::Context,
     model_editor: &mut ModelMappingEditor,
@@ -275,12 +239,12 @@ fn show_mapping_editor_ui(
     anki_service: &mut AnkiService,
     data: &mut SettingsModalData,
 ) {
-    model_selection_ui(ui, model_editor, available_models, anki_service, _ctx);
+    ui_model_selection(ui, model_editor, available_models, anki_service, _ctx);
 
     if let Some(selected_model) =
         available_models.iter().find(|m| m.name == model_editor.model_name)
     {
-        field_selection_ui(
+        ui_field_selection(
             ui,
             "Term Field",
             &mut model_editor.term_field,
@@ -290,7 +254,7 @@ fn show_mapping_editor_ui(
             "term_field_combo",
         );
 
-        field_selection_ui(
+        ui_field_selection(
             ui,
             "Reading Field",
             &mut model_editor.reading_field,

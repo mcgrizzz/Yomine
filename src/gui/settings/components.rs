@@ -15,7 +15,7 @@ use super::{
     },
 };
 
-pub fn connection_status_ui(
+pub fn ui_connection_status(
     ui: &mut egui::Ui,
     anki_service: &mut AnkiService,
     ctx: &egui::Context,
@@ -55,7 +55,7 @@ pub fn connection_status_ui(
     });
 }
 
-pub fn model_selection_ui(
+pub fn ui_model_selection(
     ui: &mut egui::Ui,
     model_editor: &mut ModelMappingEditor,
     available_models: &[AnkiModelInfo],
@@ -132,7 +132,7 @@ fn trigger_field_guessing(
     }
 }
 
-pub fn field_selection_ui(
+pub fn ui_field_selection(
     ui: &mut egui::Ui,
     label: &str,
     field_value: &mut String,
