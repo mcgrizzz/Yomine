@@ -126,17 +126,16 @@ impl YomineApp {
         let mut fonts = egui::FontDefinitions::default();
         fonts.font_data.insert(
             "noto_sans_jp".to_owned(),
-            egui::FontData::from_static(include_bytes!(
+            std::sync::Arc::new(egui::FontData::from_static(include_bytes!(
                 "../../assets/fonts/NotoSansJP-Regular.ttf"
-            ))
-            .into(),
+            ))),
         );
 
-        fonts.font_data.insert(
-            "noto_sans_jp_bold".to_owned(),
-            egui::FontData::from_static(include_bytes!("../../assets/fonts/NotoSansJP-Bold.ttf"))
-                .into(),
-        );
+        // fonts.font_data.insert(
+        //     "noto_sans_jp_bold".to_owned(),
+        //     egui::FontData::from_static(include_bytes!("../../assets/fonts/NotoSansJP-Bold.ttf"))
+        //         .into(),
+        // );
 
         fonts
             .families
@@ -148,7 +147,7 @@ impl YomineApp {
             .families
             .entry(egui::FontFamily::Monospace)
             .or_default()
-            .insert(0, "noto_sans_jp".to_owned());
+            .push("noto_sans_jp".to_owned());
 
         cc.egui_ctx.set_fonts(fonts);
     }
