@@ -148,6 +148,7 @@ Yomine is licensed under [MIT](LICENSE-MIT) OR [Apache-2.0](LICENSE-APACHE)
 * [WanaKana Rust](https://github.com/PSeitz/wana_kana_rust) for Japanese text utilities - [MIT](https://github.com/PSeitz/wana_kana_rust/blob/master/LICENSE)
 * [jp-deinflector](https://github.com/btrkeks/jp-deinflector) for Japanese deinflection
 * Noto Sans JP fonts - [SIL Open Font License](https://openfontlicense.org/open-font-license-official-text/)
+  * Thanks to https://github.com/r-40021/noto-sans-jp for the converted font without intersection issues.
 
 ---
 
