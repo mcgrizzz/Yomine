@@ -169,21 +169,6 @@ impl eframe::App for YomineApp {
         self.websocket_manager.update();
         self.update_anki_status();
 
-        if self.settings_modal.is_settings_open() {
-            let viewport_info = ctx.input(|i| i.viewport().clone());
-            if let Some(inner_rect) = viewport_info.inner_rect {
-                let current_size = inner_rect.size();
-                let min_required_size = egui::Vec2::new(900.0, 750.0);
-
-                if current_size.x < min_required_size.x || current_size.y < min_required_size.y {
-                    let new_size = egui::Vec2::new(
-                        current_size.x.max(min_required_size.x),
-                        current_size.y.max(min_required_size.y),
-                    );
-                    ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(new_size));
-                }
-            }
-        }
         let current_settings = self.get_current_settings();
         TopBar::show(
             ctx,

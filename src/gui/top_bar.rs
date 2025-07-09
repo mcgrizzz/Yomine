@@ -1,4 +1,4 @@
-use eframe::egui;
+use eframe::egui::{self, containers};
 
 use crate::{
     dictionary::frequency_utils,
@@ -25,7 +25,7 @@ impl TopBar {
         restart_modal: &mut crate::gui::restart_modal::RestartModal,
     ) {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            egui::menu::bar(ui, |ui| {
+            containers::menu::Bar::new().ui(ui, |ui| {
                 egui::widgets::global_theme_preference_switch(ui);
                 ui.menu_button("File", |ui| {
                     if ui.button("Open New File").clicked() {
