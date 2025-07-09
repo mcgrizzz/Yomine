@@ -1,4 +1,7 @@
-use eframe::egui::{self, containers};
+use eframe::egui::{
+    self,
+    containers,
+};
 
 use crate::{
     dictionary::frequency_utils,
