@@ -1,6 +1,6 @@
 [package]
 name = "yomine"
-version = "0.3.2"
+version = "0.3.3"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 
@@ -8,8 +8,8 @@ license = "MIT OR Apache-2.0"
 zip = "0.6"
 bincode = { version = "2.0.1", features = ["serde"]} 
 dirs = "6.0.0"
-eframe = { git = "https://github.com/emilk/egui", rev = "8c2df48" }
-egui_extras = { git = "https://github.com/emilk/egui", rev = "8c2df48" }
+eframe = { git = "https://github.com/emilk/egui", rev = "9fd0ad3" }
+egui_extras = { git = "https://github.com/emilk/egui", rev = "9fd0ad3" }
 futures = "0.3.31"
 futures-util = "0.3.30"
 jp-deinflector = "0.2.0"
