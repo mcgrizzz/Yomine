@@ -12,6 +12,7 @@ fn main() {
             .with_resizable(true),
         ..Default::default()
     };
+
     let _ = eframe::run_native(
         "Yomine App",
         native_options,
