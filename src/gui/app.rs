@@ -120,6 +120,12 @@ impl YomineApp {
         app.setup_fonts(cc);
         app.setup_theme(cc);
 
+        //Make sure it opens above other windows so you can see it.
+        cc.egui_ctx
+            .send_viewport_cmd(egui::ViewportCommand::WindowLevel(egui::WindowLevel::AlwaysOnTop));
+        cc.egui_ctx
+            .send_viewport_cmd(egui::ViewportCommand::WindowLevel(egui::WindowLevel::Normal));
+
         app
     }
     fn setup_fonts(&self, cc: &eframe::CreationContext<'_>) {

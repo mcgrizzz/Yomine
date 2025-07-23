@@ -7,10 +7,13 @@ use eframe::egui::{
         Widgets,
     },
     Color32,
+    Context,
     RichText,
     Stroke,
     Visuals,
 };
+
+use crate::segmentation::word::POS;
 
 #[derive(Clone)]
 pub struct Theme {
@@ -110,6 +113,19 @@ impl Theme {
 
     pub fn dracula() -> Self {
         Theme { dark: Some(ThemeDetails::dracula()), light: Some(ThemeDetails::dracula_light()) }
+    }
+
+    pub fn pos_color(&self, pos: &POS, ctx: &Context, normal_color: Color32) -> Color32 {
+        match pos {
+            POS::Verb | POS::SuruVerb => blend_colors(normal_color, self.blue(ctx), 0.75),
+            POS::Noun => blend_colors(normal_color, self.green(ctx), 0.75),
+            POS::Adjective | POS::AdjectivalNoun => {
+                blend_colors(normal_color, self.orange(ctx), 0.75)
+            }
+            POS::Adverb => blend_colors(normal_color, self.purple(ctx), 0.75),
+            POS::Postposition => blend_colors(normal_color, Color32::BLACK, 0.25),
+            _ => normal_color,
+        }
     }
 }
 

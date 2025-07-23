@@ -158,10 +158,14 @@ fn kana_suffix_length(word: &str) -> usize {
 
 fn kanji_mapping(word: &str, reading: &str) -> (String, String) {
     let suffix_len = kana_suffix_length(word);
-    let base_len = word.chars().count() - suffix_len;
 
+    let word_char_count = word.chars().count();
+    let base_len = word_char_count.saturating_sub(suffix_len);
     let base: String = word.chars().take(base_len).collect();
-    let base_reading: String = reading.chars().take(reading.chars().count() - suffix_len).collect();
+
+    let reading_char_count = reading.chars().count();
+    let base_reading_len = reading_char_count.saturating_sub(suffix_len);
+    let base_reading: String = reading.chars().take(base_reading_len).collect();
 
     (base, base_reading)
 }

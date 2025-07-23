@@ -63,7 +63,7 @@ impl TopBar {
                 });
 
                 ui.menu_button("Settings", |ui| {
-                    if ui.button("Anki Settings").clicked() {
+                    if ui.button("Anki").clicked() {
                         settings_modal.open_settings(current_settings.clone(), ctx);
                     }
                 });

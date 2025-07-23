@@ -223,6 +223,22 @@ pub fn extract_words(
             }
         }
 
+        for term in terms.iter_mut() {
+            if let Some(sentence_term) =
+                sentence_terms.iter().find(|st| st.lemma_form == term.lemma_form)
+            {
+                for sentence_ref in &sentence_term.sentence_references {
+                    if !term.sentence_references.contains(sentence_ref) {
+                        term.sentence_references.push(*sentence_ref);
+                    }
+                }
+            }
+        }
+
+        sentence_terms.retain(|sentence_term| {
+            !terms.iter().any(|existing_term| existing_term.lemma_form == sentence_term.lemma_form)
+        });
+
         terms.append(&mut sentence_terms);
     }
 
