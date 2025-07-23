@@ -222,16 +222,16 @@ fn ui_timestamp_button(ui: &mut Ui, timestamp: &str, app: &YomineApp) {
     };
 
     ui.horizontal_centered(|ui| {
-        let button_atom = Atom::from(button_text).atom_size(Vec2::new(60.0, BUTTON_SIZE));
-        let mut button = egui::Button::new(button_atom);
+        //let button_atom = Atom::from(button_text).atom_size(Vec2::new(60.0, BUTTON_SIZE));
+        let mut button = egui::Button::new(button_text).small();
 
-        let button_color = egui::Color32::from_hex("#71778a");
+        let button_color = egui::Color32::from_hex("#559449ff");
         if is_confirmed {
             button = button.fill(button_color.clone().unwrap());
         }
 
-        let outline = blend_colors(button_color.unwrap(), app.theme.highlight(ui.ctx()), 0.8);
-        button = button.stroke(egui::Stroke::new(1.0, outline));
+        // let outline = blend_colors(button_color.unwrap(), app.theme.highlight(ui.ctx()), 0.8);
+        // button = button.stroke(egui::Stroke::new(1.0, outline));
 
         let response = button.ui(ui);
 
