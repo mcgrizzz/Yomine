@@ -407,7 +407,7 @@ impl WebSocketServer {
     // Convert an SRT timestamp to seconds
     pub fn convert_srt_timestamp_to_seconds(timestamp: &str) -> Result<f64, YomineError> {
         // SRT format: 00:01:47,733 -> 107.733 seconds
-        let parts: Vec<&str> = timestamp.split(|c| (c == ':' || c == ',' || c == '.')).collect();
+        let parts: Vec<&str> = timestamp.split(|c| c == ':' || c == ',' || c == '.').collect();
         if parts.len() < 4 {
             return Err(YomineError::InvalidTimestamp);
         }

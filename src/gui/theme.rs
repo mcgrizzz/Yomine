@@ -142,6 +142,7 @@ pub struct ThemeDetails {
     blue: Color32,
     purple: Color32,
     cyan: Color32,
+    #[allow(dead_code)]
     pink: Color32,
     background_darker: Color32,
     background_dark: Color32,

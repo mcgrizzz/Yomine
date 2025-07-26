@@ -54,13 +54,6 @@ impl CacheFrequencyData {
 }
 
 #[derive(Deserialize, Debug)]
-#[serde(rename_all = "kebab-case")] // Match the JSON naming convention
-enum FrequencyMode {
-    OccurrenceBased,
-    RankBased,
-}
-
-#[derive(Deserialize, Debug)]
 pub struct DictionaryIndex {
     pub title: String,
     pub revision: String,

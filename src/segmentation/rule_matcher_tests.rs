@@ -150,7 +150,7 @@ mod tests {
                     ),
                 }
 
-                for (j, token) in word.tokens.iter().enumerate() {
+                for (_j, token) in word.tokens.iter().enumerate() {
                     println!(
                         "       \"{}[{}]\" (POS: {:?}, {:?}, {:?}, {:?}, conjugation_type: {:?}, conjugation_form: {:?})",
                         token.surface,
