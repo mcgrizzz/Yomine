@@ -65,28 +65,43 @@ impl DictType {
     }
 }
 
-fn cleanup_files(folder_path: &Path, keep_file: &Path) -> Result<(), YomineError> {
+fn cleanup_files(folder_path: &Path, keep_files: &[&str]) -> Result<(), YomineError> {
+    let keep_paths: Vec<PathBuf> = keep_files.iter().map(|f| folder_path.join(f)).collect();
     println!("Cleaning up intermediate files...");
 
     // Iterate through all files and directories in the folder
-    for entry in fs::read_dir(folder_path)? {
-        let entry = entry?;
+    for entry in fs::read_dir(folder_path).map_err(|e| {
+        YomineError::Custom(format!("Failed to read directory during cleanup: {}", e))
+    })? {
+        let entry = entry.map_err(|e| {
+            YomineError::Custom(format!("Failed to get directory entry during cleanup: {}", e))
+        })?;
         let path = entry.path();
 
-        // Skip the file we want to keep
-        if path == keep_file {
+        // Skip the files we want to keep
+        if keep_paths.contains(&path) {
             continue;
         }
 
         // Remove directories or files
         if path.is_dir() {
-            fs::remove_dir_all(&path)?;
+            fs::remove_dir_all(&path).map_err(|e| {
+                YomineError::Custom(format!(
+                    "Failed to remove directory during cleanup: {:?} - {}",
+                    path, e
+                ))
+            })?;
         } else {
-            fs::remove_file(&path)?;
+            fs::remove_file(&path).map_err(|e| {
+                YomineError::Custom(format!(
+                    "Failed to remove file during cleanup: {:?} - {}",
+                    path, e
+                ))
+            })?;
         }
     }
 
-    println!("Cleanup complete. Retained file: {:?}", keep_file);
+    println!("Cleanup complete. Retained files: {:?}", keep_files);
     Ok(())
 }
 
@@ -102,47 +117,110 @@ pub fn ensure_dictionary(dict_type: &DictType) -> Result<PathBuf, YomineError> {
         return Ok(final_dic_path);
     }
 
-    fs::create_dir_all(&dict_dir)?;
+    fs::create_dir_all(&dict_dir).map_err(|e| {
+        YomineError::Custom(format!("Failed to create dictionary directory {:?}: {}", dict_dir, e))
+    })?;
 
-    let download_path = dict_dir.join(format!("{}.tar.gz", folder_name));
-    if !download_path.exists() {
-        println!("Downloading dictionary from {}...", url);
-        let response = get(url)?;
-        let mut file = File::create(&download_path)?;
-        io::copy(&mut Cursor::new(response.bytes()?), &mut file)?;
-        println!("Downloaded dictionary to {:?}", download_path);
+    // Clean up any partial downloads or extractions from previous attempts
+    let download_path = dict_dir.join(format!("{}.tar.xz", folder_name));
+    let tar_path = dict_dir.join(format!("{}.tar", folder_name));
+    fs::remove_file(&download_path).ok();
+    fs::remove_file(&tar_path).ok();
+    fs::remove_dir_all(&extract_path).ok();
+
+    println!("Downloading dictionary from {}...", url);
+    let response = get(url).map_err(|e| {
+        YomineError::Custom(format!("Failed to download dictionary from {}: {}", url, e))
+    })?;
+
+    let mut file = File::create(&download_path).map_err(|e| {
+        YomineError::Custom(format!("Failed to create download file {:?}: {}", download_path, e))
+    })?;
+
+    io::copy(&mut Cursor::new(response.bytes()?), &mut file).map_err(|e| {
+        YomineError::Custom(format!(
+            "Failed to write downloaded data to {:?}: {}",
+            download_path, e
+        ))
+    })?;
+
+    println!("Downloaded dictionary to {:?}", download_path);
+
+    let metadata = download_path.metadata().map_err(|e| {
+        YomineError::Custom(format!(
+            "Failed to get metadata for downloaded file {:?}: {}",
+            download_path, e
+        ))
+    })?;
+
+    if metadata.len() == 0 {
+        return Err(YomineError::Custom(format!(
+            "Downloaded file {:?} is empty. Check your internet connection.",
+            download_path
+        )));
     }
 
-    let tar_path = download_path.with_extension("tar");
-    if !tar_path.exists() {
-        println!("Decompressing XZ to TAR...");
-        let tar_xz_file = File::open(&download_path)?;
-        let mut tar_file = File::create(&tar_path)?;
-        let mut xz_decoder = XzDecoder::new(BufReader::new(tar_xz_file));
-        io::copy(&mut xz_decoder, &mut tar_file)?;
-        println!("Decompressed TAR file to {:?}", tar_path);
-    }
+    println!("Decompressing XZ to TAR...");
+    let tar_xz_file = File::open(&download_path).map_err(|e| {
+        YomineError::Custom(format!("Failed to open downloaded file {:?}: {}", download_path, e))
+    })?;
 
-    if !extract_path.exists() {
-        println!("Extracting TAR archive...");
-        let tar_file = File::open(&tar_path)?;
-        let mut archive = Archive::new(BufReader::new(tar_file));
-        archive.unpack(&extract_path)?;
-        println!("Extracted TAR archive to {:?}", extract_path);
-    }
+    let mut tar_file = File::create(&tar_path).map_err(|e| {
+        YomineError::Custom(format!("Failed to create TAR file {:?}: {}", tar_path, e))
+    })?;
+
+    let mut xz_decoder = XzDecoder::new(BufReader::new(tar_xz_file));
+    io::copy(&mut xz_decoder, &mut tar_file).map_err(|e| {
+        YomineError::Custom(format!(
+            "Failed to decompress XZ to TAR: {}. Possible corrupt download.",
+            e
+        ))
+    })?;
+
+    println!("Decompressed XZ file to {:?}", tar_path);
+
+    println!("Extracting TAR archive...");
+    let tar_file = File::open(&tar_path).map_err(|e| {
+        YomineError::Custom(format!("Failed to open TAR file {:?}: {}", tar_path, e))
+    })?;
+    let mut archive = Archive::new(BufReader::new(tar_file));
+    archive.unpack(&extract_path).map_err(|e| {
+        YomineError::Custom(format!("Failed to unpack TAR to {:?}: {}.", dict_dir, e))
+    })?;
+    println!("Extracted TAR archive to {:?}", extract_path);
 
     let zst_path = extract_path.join(folder_name).join("system.dic.zst");
-    if !final_dic_path.exists() {
-        println!("Decompressing Zstandard to .dic...");
-        let zst_file = File::open(&zst_path)?;
-        let dic_file = File::create(&final_dic_path)?;
-        copy_decode(BufReader::new(zst_file), BufWriter::new(dic_file))?;
-        println!("Decompressed .dic file to {:?}", final_dic_path);
+    if !zst_path.exists() {
+        return Err(YomineError::Custom(format!(
+            "ZST file not found at {:?} after extraction.",
+            zst_path
+        )));
     }
 
+    println!("Decompressing Zstandard to .dic...");
+    let zst_file = File::open(&zst_path).map_err(|e| {
+        YomineError::Custom(format!("Failed to open ZST file {:?}: {}.", zst_path, e))
+    })?;
+    let dic_file = File::create(&final_dic_path).map_err(|e| {
+        YomineError::Custom(format!("Failed to create .dic file {:?}: {}", final_dic_path, e))
+    })?;
+    copy_decode(BufReader::new(zst_file), BufWriter::new(dic_file)).map_err(|e| {
+        YomineError::Custom(format!("Failed to decompress ZST to {:?}: {}.", final_dic_path, e))
+    })?;
+    println!("Decompressed ZST file to {:?}", final_dic_path);
+
+    let inner_path = extract_path.join(folder_name);
+    fs::rename(inner_path.join("BSD"), extract_path.join("BSD"))
+        .map_err(|e| YomineError::Custom(format!("Failed to move BSD file: {}", e)))?;
+    fs::rename(inner_path.join("NOTICE"), extract_path.join("NOTICE"))
+        .map_err(|e| YomineError::Custom(format!("Failed to move NOTICE file: {}", e)))?;
+
     //Clean up extra files
-    cleanup_files(&extract_path, &final_dic_path)?;
+    let keep_files = ["system.dic", "BSD", "NOTICE"];
+    cleanup_files(&extract_path, &keep_files)?;
+    println!("Removing download {:?}", &download_path);
     fs::remove_file(&download_path)?;
+    println!("Removing tar {:?}", &tar_path);
     fs::remove_file(&tar_path)?;
 
     Ok(final_dic_path)
