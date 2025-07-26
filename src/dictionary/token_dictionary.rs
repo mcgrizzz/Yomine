@@ -15,10 +15,10 @@ use std::{
     },
 };
 
+use liblzma::read::XzDecoder;
 use reqwest::blocking::get;
 use tar::Archive;
 use vibrato::Dictionary;
-use xz2::bufread::XzDecoder;
 use zstd::stream::copy_decode;
 
 use crate::{
