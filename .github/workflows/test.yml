@@ -42,5 +42,5 @@ jobs:
     - name: Check formatting
       run: cargo +nightly fmt -- --check
 
-    - name: Run tests (excluding external dependency tests)
+    - name: Run tests
       run: cargo test --verbose -- --skip segmentation::rule_matcher_tests::tests::inspect_tokens

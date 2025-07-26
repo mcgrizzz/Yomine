@@ -1,13 +1,10 @@
 use eframe::egui::{
     self,
     Atom,
-    AtomExt,
     AtomLayout,
     Context,
-    IntoAtoms,
     RichText,
     Ui,
-    Vec2,
     Widget,
 };
 use egui_extras::TableRow;
@@ -22,7 +19,7 @@ use crate::{
     segmentation::word::POS,
 };
 
-const ROW_HEIGHT: f32 = 54.0;
+//const ROW_HEIGHT: f32 = 54.0;
 const ROW_SPACING: f32 = 2.0;
 const BUTTON_SIZE: f32 = 18.0;
 
