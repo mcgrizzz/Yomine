@@ -8,6 +8,8 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  ARGO_PROFILE_DEV_DEBUG: 0
+  RUSTFLAGS: "-D warnings"
 
 jobs:
   test:
@@ -16,34 +18,12 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Cache cargo registry
-      uses: actions/cache@v4
-      with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-registry-
-    
-    - name: Cache cargo index
-      uses: actions/cache@v4
-      with:
-        path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-index-
-    
-    - name: Cache cargo target
-      uses: actions/cache@v4
-      with:
-        path: target
-        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-build-target-
-    
     - name: Install Rust toolchain
       uses: dtolnay/rust-toolchain@nightly
       with:
         components: rustfmt
+
+    - uses: Swatinem/rust-cache@v2
 
     - name: Install Linux dependencies
       run: |
