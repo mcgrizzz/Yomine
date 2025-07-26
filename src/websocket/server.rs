@@ -174,7 +174,7 @@ impl WebSocketServer {
 
         let forward_task = tokio::spawn(async move {
             while let Some(msg) = rx.recv().await {
-                if ws_sender.send(Message::Text(msg)).await.is_err() {
+                if ws_sender.send(Message::text(msg)).await.is_err() {
                     break;
                 }
             }
