@@ -1,5 +1,18 @@
-    
-# ⛏️ Yomine
+
+<p align="center">
+    <img src="https://github.com/user-attachments/assets/a12f45c1-d291-4541-981a-500f439e9682" width="95" height="95" style="border-radius: 16px" alt="yomine" />
+</p>
+
+<div align="center"> 
+
+[![GitHub Workflow Status (with event)](https://img.shields.io/github/actions/workflow/status/mcgrizzz/Yomine/test.yml)](https://github.com/mcgrizzz/Yomine/actions/workflows/test.yml)
+[![Github All Releases](https://img.shields.io/github/downloads/mcgrizzz/Yomine/total.svg)](https://github.com/mcgrizzz/Yomine/releases)
+[![license: Apache](https://img.shields.io/github/license/mcgrizzz/Yomine)](https://github.com/mcgrizzz/Yomine?tab=Apache-2.0-1-ov-file)
+[![license: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](https://github.com/mcgrizzz/Yomine?tab=MIT-2-ov-file)
+
+</div>
+
+# Yomine
 
 A Japanese vocabulary mining tool designed to help language learners extract and study words from subtitle files. It integrates with asbplayer for timestamp navigation, ranks terms by frequency, and supports Anki integration to filter out known words. 
 
@@ -13,13 +26,8 @@ Written in Rust 🦀
 
 ---
 
-
-
 ## Status
 
-[![GitHub Workflow Status (with event)](https://img.shields.io/github/actions/workflow/status/mcgrizzz/Yomine/test.yml)](https://github.com/mcgrizzz/Yomine/actions/workflows/test.yml)
-[![Github All Releases](https://img.shields.io/github/downloads/mcgrizzz/Yomine/total.svg)](https://github.com/mcgrizzz/Yomine/releases)
-    
 🚧 **This project is under active development and may be buggy.**  
 The macOS and Linux binaries have not been extensively tested.
 
