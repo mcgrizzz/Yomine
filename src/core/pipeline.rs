@@ -23,22 +23,9 @@ use crate::{
 };
 
 /// Blacklist of common Japanese terms to filter out from the extracted terms.
-pub const BLACKLIST: [&str; 15] = [
-    "の",
-    "を",
-    "が",
-    "と",
-    "で",
-    "だ",
-    "も",
-    "な",
-    "お",
-    "ん",
-    "か",
-    "れる",
-    "です",
-    "られる",
-    "せる",
+pub const BLACKLIST: [&str; 17] = [
+    "の", "は", "に", "へ", "を", "て", "が", "だ", "た", "と", "から", "も", "で", "か", "です",
+    "ね", "な",
 ];
 
 pub async fn process_source_file(
@@ -113,7 +100,8 @@ pub async fn process_source_file(
     // Filter terms against Anki (if applicable)
     if let Some(state) = anki_state {
         let filter_anki_start = Instant::now();
-        terms = state.filter_existing_terms(terms, false);
+        terms = state.filter_existing_terms(terms);
+
         let filter_anki_duration = filter_anki_start.elapsed();
         println!("Filtering terms against Anki took: {:?}", filter_anki_duration);
         println!("Filtered: {}", terms.len());

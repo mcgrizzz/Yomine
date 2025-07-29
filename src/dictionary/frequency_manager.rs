@@ -187,7 +187,7 @@ impl FrequencyManager {
                             } else {
                                 !e.has_special_marker()
                             };
-                            marker_condition && entry_reading.as_str() == entry_reading
+                            marker_condition && entry_reading.as_str() == reading
                         } else {
                             false
                         }
