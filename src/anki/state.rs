@@ -194,7 +194,34 @@ pub async fn get_models() -> Result<Vec<Model>, reqwest::Error> {
         .map(|(model_name, id)| {
             task::spawn(async move {
                 let fields = get_field_names(&model_name).await?;
-                Ok::<Model, reqwest::Error>(Model { name: model_name, id, fields })
+
+                // Get note count for this model
+                let query = if model_name.contains(' ')
+                    || model_name.contains(':')
+                    || model_name.contains('"')
+                {
+                    format!("note:\"{}\"", model_name.replace('"', "\\\""))
+                } else {
+                    format!("note:{}", model_name)
+                };
+
+                let note_count = match get_note_ids(&query).await {
+                    Ok(note_ids) => note_ids.len(),
+                    Err(_) => 0,
+                };
+
+                // Skip models with no notes
+                if note_count == 0 {
+                    return Ok(None); // Return None to filter out later
+                }
+
+                Ok::<Option<Model>, reqwest::Error>(Some(Model {
+                    name: model_name,
+                    id,
+                    fields,
+                    note_count,
+                    sample_note: None, // Will be loaded separately
+                }))
             })
         })
         .collect();
@@ -204,7 +231,9 @@ pub async fn get_models() -> Result<Vec<Model>, reqwest::Error> {
         .into_iter()
         .filter_map(|result| result.ok())
         .filter_map(|inner_result| inner_result.ok())
+        .flatten()
         .collect();
+
     Ok(models)
 }
 
@@ -227,4 +256,21 @@ pub async fn wait_awake(wait_time: u64, max_attempts: u32) -> Result<bool, reqwe
         }
     }
     Ok(false)
+}
+
+pub async fn get_sample_note_for_model(
+    model_name: &str,
+) -> Result<Option<HashMap<String, String>>, reqwest::Error> {
+    use super::api::get_sample_note_for_model;
+
+    match get_sample_note_for_model(model_name).await? {
+        Some(note) => {
+            let mut sample_fields = HashMap::new();
+            for (field_name, field) in note.fields {
+                sample_fields.insert(field_name, field.value);
+            }
+            Ok(Some(sample_fields))
+        }
+        None => Ok(None),
+    }
 }

@@ -41,28 +41,15 @@ impl AnkiService {
                 match crate::anki::api::get_version().await {
                     Ok(_) => match crate::anki::get_models().await {
                         Ok(models) => {
-                            let mut model_info = Vec::new();
-                            for m in models {
-                                let query = if m.name.contains(' ')
-                                    || m.name.contains(':')
-                                    || m.name.contains('"')
-                                {
-                                    format!("note:\"{}\"", m.name.replace('"', "\\\""))
-                                } else {
-                                    format!("note:{}", m.name)
-                                };
-                                match crate::anki::api::get_note_ids(&query).await {
-                                    Ok(note_ids) if !note_ids.is_empty() => {
-                                        model_info.push(AnkiModelInfo {
-                                            name: m.name,
-                                            fields: m.fields,
-                                            sample_note: None,
-                                        });
-                                    }
-                                    _ => {}
-                                }
-                            }
-
+                            // Convert Model to AnkiModelInfo for UI compatibility
+                            let model_info: Vec<AnkiModelInfo> = models
+                                .into_iter()
+                                .map(|model| AnkiModelInfo {
+                                    name: model.name,
+                                    fields: model.fields,
+                                    sample_note: model.sample_note,
+                                })
+                                .collect();
                             Ok(model_info)
                         }
                         Err(e) => Err(format!("Failed to fetch models: {}", e)),
@@ -89,19 +76,9 @@ impl AnkiService {
 
         std::thread::spawn(move || {
             let rt = tokio::runtime::Runtime::new().unwrap();
-            let result = rt
-                .block_on(async { crate::anki::api::get_sample_note_for_model(&model_name).await });
-
-            let sample_note = match result {
-                Ok(Some(note)) => {
-                    let mut sample_fields = std::collections::HashMap::new();
-                    for (field_name, field) in note.fields {
-                        sample_fields.insert(field_name, field.value);
-                    }
-                    Some(sample_fields)
-                }
-                _ => None,
-            };
+            let sample_note = rt.block_on(async {
+                crate::anki::get_sample_note_for_model(&model_name).await.unwrap_or(None)
+            });
 
             let _ = sender.send((model_name, sample_note));
             ctx_clone.request_repaint();
