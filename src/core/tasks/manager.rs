@@ -3,6 +3,7 @@ use std::{
     sync::{
         mpsc,
         Arc,
+        Mutex,
     },
     thread,
 };
@@ -14,6 +15,7 @@ use crate::{
     anki::FieldMapping,
     core::{
         pipeline::process_source_file,
+        IgnoreList,
         SourceFile,
     },
     gui::LanguageTools,
@@ -78,11 +80,21 @@ impl TaskManager {
                         .map_err(|e| e.to_string())?,
                 );
 
+                let _ =
+                    sender.send(TaskResult::LoadingMessage("Loading ignore list...".to_string()));
+
+                let ignore_list =
+                    Arc::new(Mutex::new(IgnoreList::load().map_err(|e| e.to_string())?));
+
                 let _ = sender.send(TaskResult::LoadingMessage(
                     "Language tools loaded successfully!".to_string(),
                 ));
 
-                Ok::<LanguageTools, String>(LanguageTools { tokenizer, frequency_manager })
+                Ok::<LanguageTools, String>(LanguageTools {
+                    tokenizer,
+                    frequency_manager,
+                    ignore_list,
+                })
             });
 
             let _ = sender.send(TaskResult::LanguageToolsLoaded(result));
