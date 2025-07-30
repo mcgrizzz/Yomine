@@ -1,12 +1,19 @@
+use std::sync::{
+    Arc,
+    Mutex,
+};
+
 use eframe::egui;
 
 use crate::{
+    core::IgnoreList,
     dictionary::frequency_utils,
     gui::{
         file_modal::FileModal,
         settings::{
+            AnkiSettingsModal,
+            IgnoreListModal,
             SettingsData,
-            SettingsModal,
         },
         websocket_manager::WebSocketManager,
     },
@@ -18,11 +25,13 @@ impl TopBar {
     pub fn show(
         ctx: &egui::Context,
         file_modal: &mut FileModal,
-        settings_modal: &mut SettingsModal,
+        settings_modal: &mut AnkiSettingsModal,
+        ignore_list_modal: &mut IgnoreListModal,
         current_settings: &SettingsData,
         websocket_manager: &WebSocketManager,
         anki_connected: bool,
         restart_modal: &mut crate::gui::restart_modal::RestartModal,
+        ignore_list: Option<&Arc<Mutex<IgnoreList>>>,
     ) {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
@@ -62,6 +71,11 @@ impl TopBar {
                 ui.menu_button("Settings", |ui| {
                     if ui.button("Anki").clicked() {
                         settings_modal.open_settings(current_settings.clone(), ctx);
+                    }
+                    if ui.button("Ignore List").clicked() {
+                        if let Some(ignore_list) = ignore_list {
+                            ignore_list_modal.open_modal(ignore_list);
+                        }
                     }
                 });
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

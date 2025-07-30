@@ -5,12 +5,11 @@ use wana_kana::{
     IsJapaneseStr,
 };
 
+use super::types::Vocab;
 use crate::{
     core::utils::NormalizeLongVowel,
     dictionary::frequency_manager::FrequencyManager,
 };
-
-use super::types::Vocab;
 
 pub const KEEP_TERM_THRESHOLD: f32 = 0.60; //Pretty much anything over low-confidence.
 pub const HIGH_CONFIDENCE_SCORE: f32 = 0.85; // Exact matches, kanji/kana pairs
@@ -76,7 +75,8 @@ impl AnkiMatcher {
         //OR kanji/kana pair with same reading, for example: 事 (こと) against こと (こと)
         // Check kanji/kana pair with frequency-based confidence
         if norm_yomine_reading == norm_anki_reading {
-            let kanji_kana_confidence = self.is_kanji_kana_pair(yomine_word, anki_word, &norm_yomine_reading);
+            let kanji_kana_confidence =
+                self.is_kanji_kana_pair(yomine_word, anki_word, &norm_yomine_reading);
             if kanji_kana_confidence > 0.0 {
                 // Use the frequency-based confidence to modulate the score
                 return HIGH_CONFIDENCE_SCORE * kanji_kana_confidence;
@@ -88,7 +88,7 @@ impl AnkiMatcher {
             return MEDIUM_CONFIDENCE_SCORE;
         }
 
-        // 5. Low confidence: same reading, different kanji (both non-kana), this is below the threshold but maybe in the future we can use this. 
+        // 5. Low confidence: same reading, different kanji (both non-kana), this is below the threshold but maybe in the future we can use this.
         //Sometimes the same words have different kanji but are still the same word carrying different nuance.
         if !yomine_word.is_kana()
             && !anki_word.is_kana()
@@ -103,19 +103,16 @@ impl AnkiMatcher {
     /// Check if words form a validated kanji/kana pair using frequency data
     fn is_kanji_kana_pair(&self, word1: &str, word2: &str, reading: &str) -> f32 {
         use std::collections::HashMap;
-        
+
         // Basic structural check first
-        let is_structural_pair = (word1.is_kana() && !word2.is_kana()) || (!word1.is_kana() && word2.is_kana());
+        let is_structural_pair =
+            (word1.is_kana() && !word2.is_kana()) || (!word1.is_kana() && word2.is_kana());
         if !is_structural_pair {
             return 0.0;
         }
 
         // Determine which is kanji and which is kana
-        let kanji_word = if word1.is_kana() {
-            word2
-        } else {
-            word1
-        };
+        let kanji_word = if word1.is_kana() { word2 } else { word1 };
 
         // Get all frequency data for the kanji word
         let frequencies = self.frequency_manager.get_frequency_data_by_term(kanji_word);
@@ -148,9 +145,7 @@ impl AnkiMatcher {
 
         let (min_freq, max_freq) = average_frequencies
             .iter()
-            .fold((f32::MAX, f32::MIN), |(min, max), (_, freq)| {
-                (min.min(*freq), max.max(*freq))
-            });
+            .fold((f32::MAX, f32::MIN), |(min, max), (_, freq)| (min.min(*freq), max.max(*freq)));
 
         //The farther the reading gets from the most likely reading for the kanji, the less likely this is a match
         if let Some((_, matched_freq)) =

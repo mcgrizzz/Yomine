@@ -10,6 +10,7 @@ bincode = { version = "2.0.1", features = ["serde"]}
 dirs = "6.0.0"
 eframe = "0.32.0"
 egui_extras = "0.32.0"
+egui_flex = "0.4.0"
 futures = "0.3.31"
 futures-util = "0.3.30"
 jp-deinflector = "0.2.0"

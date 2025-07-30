@@ -1,6 +1,9 @@
 use std::{
     collections::HashMap,
-    sync::Arc,
+    sync::{
+        Arc,
+        Mutex,
+    },
 };
 
 use eframe::egui;
@@ -12,8 +15,9 @@ use super::{
     message_overlay::MessageOverlay,
     restart_modal::RestartModal,
     settings::{
+        AnkiSettingsModal,
+        IgnoreListModal,
         SettingsData,
-        SettingsModal,
     },
     table::{
         term_table,
@@ -33,6 +37,7 @@ use crate::{
             TaskManager,
             TaskResult,
         },
+        IgnoreList,
         Sentence,
         SourceFile,
         Term,
@@ -48,6 +53,7 @@ use crate::{
 pub struct LanguageTools {
     pub tokenizer: Arc<Tokenizer>,
     pub frequency_manager: Arc<FrequencyManager>,
+    pub ignore_list: Arc<Mutex<IgnoreList>>,
 }
 
 impl std::fmt::Debug for LanguageTools {
@@ -55,6 +61,7 @@ impl std::fmt::Debug for LanguageTools {
         f.debug_struct("LanguageTools")
             .field("tokenizer", &"Arc<Tokenizer>")
             .field("frequency_manager", &"Arc<FrequencyManager>")
+            .field("ignore_list", &"Arc<Mutex<IgnoreList>>")
             .finish()
     }
 }
@@ -67,7 +74,8 @@ pub struct YomineApp {
     pub table_state: TableState,
     pub file_modal: FileModal,
     pub error_modal: ErrorModal,
-    pub settings_modal: SettingsModal,
+    pub anki_settings_modal: AnkiSettingsModal,
+    pub ignore_list_modal: IgnoreListModal,
     pub restart_modal: RestartModal,
     pub theme: Theme,
     pub zoom: f32,
@@ -106,7 +114,8 @@ impl YomineApp {
             message_overlay: MessageOverlay::new(),
             file_modal: FileModal::new(),
             error_modal: ErrorModal::new(),
-            settings_modal: SettingsModal::new(),
+            anki_settings_modal: AnkiSettingsModal::new(),
+            ignore_list_modal: IgnoreListModal::new(),
             restart_modal: RestartModal::new(),
             table_state: TableState::default(),
             language_tools: None,
@@ -176,14 +185,19 @@ impl eframe::App for YomineApp {
         self.update_anki_status();
 
         let current_settings = self.get_current_settings();
+
+        let ignore_list_ref = self.language_tools.as_ref().map(|lt| &lt.ignore_list);
+
         TopBar::show(
             ctx,
             &mut self.file_modal,
-            &mut self.settings_modal,
+            &mut self.anki_settings_modal,
+            &mut self.ignore_list_modal,
             &current_settings,
             &self.websocket_manager,
             self.anki_connected,
             &mut self.restart_modal,
+            ignore_list_ref,
         );
         if let Some(source_file) = self.file_modal.show(
             ctx,
@@ -203,11 +217,15 @@ impl eframe::App for YomineApp {
             }
         }
 
-        if let Some(settings) = self.settings_modal.show(ctx) {
+        if let Some(settings) = self.anki_settings_modal.show(ctx) {
             self.model_mapping = settings.anki_model_mappings.clone();
             self.settings_data = settings;
 
             self.save_settings();
+        }
+
+        if let Some(language_tools) = &self.language_tools {
+            self.ignore_list_modal.show(ctx, &language_tools.ignore_list);
         }
     }
 }

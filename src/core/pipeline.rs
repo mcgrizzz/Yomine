@@ -22,12 +22,6 @@ use crate::{
     segmentation::tokenizer::extract_words,
 };
 
-/// Blacklist of common Japanese terms to filter out from the extracted terms.
-pub const BLACKLIST: [&str; 17] = [
-    "の", "は", "に", "へ", "を", "て", "が", "だ", "た", "と", "から", "も", "で", "か", "です",
-    "ね", "な",
-];
-
 pub async fn process_source_file(
     source_file: &SourceFile,
     model_mapping: HashMap<String, FieldMapping>,
@@ -61,14 +55,20 @@ pub async fn process_source_file(
     //println!("Extracting terms took: {:?}", extract_duration);
     println!("Extracted {} terms", terms.len());
 
-    // Filter blacklisted terms
-    //let filter_blacklist_start = Instant::now();
-    terms = terms
-        .into_iter()
-        .filter(|term| !BLACKLIST.contains(&term.lemma_form.as_str()))
-        .collect::<Vec<Term>>();
-    //let filter_blacklist_duration = filter_blacklist_start.elapsed();
-    //println!("Filtering blacklisted terms took: {:?}", filter_blacklist_duration);
+    // Filter ignored terms
+    //let filter_ignored_start = Instant::now();
+    terms = {
+        let ignore_list = language_tools
+            .ignore_list
+            .lock()
+            .map_err(|_| YomineError::Custom("Failed to lock ignore list".to_string()))?;
+        terms
+            .into_iter()
+            .filter(|term| !ignore_list.contains(&term.lemma_form))
+            .collect::<Vec<Term>>()
+    };
+    //let filter_ignored_duration = filter_ignored_start.elapsed();
+    //println!("Filtering ignored terms took: {:?}", filter_ignored_duration);
     println!("Prefiltered: {}", terms.len());
 
     // Initialize Anki state

@@ -180,17 +180,73 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
     });
 }
 
-fn col_term(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &YomineApp) {
+fn col_term(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &mut YomineApp) {
     row.col(|ui| {
-        let highlighted_color = app.theme.red(ctx);
-        let normal_color = ctx.style().visuals.widgets.noninteractive.fg_stroke.color;
-        let term_color = blend_colors(normal_color, highlighted_color, 0.8);
+        
+        let ignore_status = if let Some(ref language_tools) = app.language_tools {
+            language_tools
+                .ignore_list
+                .lock()
+                .map(|ignore_list| ignore_list.contains(&term.lemma_form))
+                .unwrap_or(false)
+        } else {
+            false
+        };
 
-        ui.label(RichText::new(&term.lemma_form).color(term_color).size(22.0))
-            .on_hover_ui_at_pointer(|ui| {
+        // Set color based on ignore status
+        let term_color = if ignore_status {
+            ctx.style().visuals.weak_text_color()
+        } else {
+            let highlighted_color = app.theme.red(ctx);
+            let normal_color = ctx.style().visuals.widgets.noninteractive.fg_stroke.color;
+            blend_colors(normal_color, highlighted_color, 0.8)
+        };
+
+        let response = ui
+            .label(RichText::new(&term.lemma_form).color(term_color).size(22.0))
+            .on_hover_ui(|ui| {
+                ui.set_min_width(75.0);
                 ui.label(app.theme.heading(ui.ctx(), &term.lemma_reading.to_hiragana()));
                 ui.label(app.theme.heading(ui.ctx(), &term.lemma_reading.to_katakana()));
+
+                ui.separator();
+                if ignore_status {
+                    ui.label(
+                        egui::RichText::new("This term is ignored")
+                            .color(ctx.style().visuals.weak_text_color())
+                            .size(12.0),
+                    );
+                }
             });
+
+        // Context menu for ignore list operations
+        response.context_menu(|ui| {
+            if let Some(ref language_tools) = app.language_tools {
+                if ignore_status {
+                    if ui.button("Remove from ignore list").clicked() {
+                        if let Ok(mut ignore_list) = language_tools.ignore_list.lock() {
+                            if let Err(e) = ignore_list.remove_term(&term.lemma_form) {
+                                eprintln!("Failed to remove term from ignore list: {}", e);
+                                // Could also show a user-facing error message
+                            }
+                        }
+                        ui.close();
+                    }
+                } else {
+                    if ui.button("Add to ignore list").clicked() {
+                        if let Ok(mut ignore_list) = language_tools.ignore_list.lock() {
+                            if let Err(e) = ignore_list.add_term(&term.lemma_form) {
+                                eprintln!("Failed to add term to ignore list: {}", e);
+                                // Could also show a user-facing error message
+                            }
+                        }
+                        ui.close();
+                    }
+                }
+            } else {
+                ui.label("Language tools not loaded");
+            }
+        });
     });
 }
 

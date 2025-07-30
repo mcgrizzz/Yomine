@@ -40,7 +40,7 @@ impl SettingsModalData {
     }
 }
 
-pub struct SettingsModal {
+pub struct AnkiSettingsModal {
     open: bool,
     data: SettingsModalData,
     model_editor: ModelMappingEditor,
@@ -48,7 +48,7 @@ pub struct SettingsModal {
     anki_service: AnkiService,
 }
 
-impl SettingsModal {
+impl AnkiSettingsModal {
     pub fn new() -> Self {
         Self {
             open: false,
@@ -100,7 +100,7 @@ impl SettingsModal {
 
         let mut result: Option<SettingsData> = None;
 
-        let modal = egui::Modal::new(egui::Id::new("settings_modal")).show(ctx, |ui| {
+        let modal = egui::Modal::new(egui::Id::new("anki_settings_modal")).show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 ui_existing_mappings(ui, &mut self.data, &mut model_editor);
                 ui.separator();
@@ -176,7 +176,7 @@ impl SettingsModal {
     }
 }
 
-impl Default for SettingsModal {
+impl Default for AnkiSettingsModal {
     fn default() -> Self {
         Self::new()
     }
