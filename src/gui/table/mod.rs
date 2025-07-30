@@ -182,7 +182,6 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
 
 fn col_term(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &mut YomineApp) {
     row.col(|ui| {
-        
         let ignore_status = if let Some(ref language_tools) = app.language_tools {
             language_tools
                 .ignore_list
