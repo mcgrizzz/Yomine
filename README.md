@@ -34,11 +34,9 @@ The macOS and Linux binaries have not been extensively tested.
 ## Quick Start
 
 1. **Download** the latest release for your platform from [Releases](https://github.com/mcgrizzz/Yomine/releases)
-3. **Set up Anki integration** - see [Anki Setup](#setting-up-anki-integration) below
-4. **Set up Frequency Dictionaries** - [Frequency Dictionaries](#setting-up-frequency-dictionaries)
-5. **Set up ASBPlayer connection** - In ASBPlayer, `MISC` -> `Enable WebSocket client`.
-6. **Load a subtitle file** (.srt) containing Japanese text
-7. **Start mining** - click any term to jump to that timestamp in asbplayer
+2. **Download Frequency Dictionaries** - [Frequency Dictionaries](#setting-up-frequency-dictionaries)
+3. **Connect to Anki** - [Anki Setup](#setting-up-anki-integration)
+4. **Connect to ASBPlayer** - In ASBPlayer, `MISC` -> `Enable WebSocket client`.
 
 That's it! Yomine will segment the text, rank terms by frequency, and show you vocabulary and expressions to learn.
 
@@ -47,7 +45,7 @@ That's it! Yomine will segment the text, rank terms by frequency, and show you v
 - **Vocabulary extraction** from Japanese subtitle files (words and expressions)
 - **Frequency-based ranking** to prioritize terms  
 - **Anki integration** to filter out words you already know
-- **asbplayer integration** for video navigation
+- **ASBPlayer integration** for video navigation
 - **Term analysis** with readings, part-of-speech, and context sentences
 - **Multi-sentence browsing** to see multiple example sentences per term
 - **Ignore list** to hide unwanted terms from your mining results
@@ -75,7 +73,7 @@ Yomine uses frequency dictionaries to rank vocabulary by importance and improve 
 3. Restart when prompted
 
 **Recommended Dictionaries:**
-- **[JPDB v2.2 Frequency Kana](https://github.com/Kuuuube/yomitan-dictionaries/?tab=readme-ov-file#jpdb-v22-frequency-kana-recommended)**: For anime/visual novels
+- **[JPDB v2.2 Frequency Kana](https://github.com/Kuuuube/yomitan-dictionaries/?tab=readme-ov-file#jpdb-v22-frequency-kana-recommended)**: **★ If you only add one, add this one. ★**
 - **[BCCWJ](https://github.com/Kuuuube/yomitan-dictionaries/?tab=readme-ov-file#bccwj-suw-luw-combined)**: Based on the Balanced Corpus of Contemporary Written Japanese
 - **[CC100](https://drive.google.com/file/d/1_AYh1VtCq0cj1hXtFO15zRuPUUhUCSHD/view?usp=sharing)**: List from Common Crawl data
 
@@ -157,7 +155,7 @@ It's the process of extracting unknown words and expressions from native content
 
 **How should I use this tool?** 
 
-I prefer post-input mining: after watching a video or episode, I add it to a todo list. Then, whenever I have time, I can review the content and extract terms I want to add to my Anki mining deck. This helps me stay focused on enjoying the content while watching, knowing I can come back to mine vocabulary later.
+I prefer **post-input mining**: after watching a video or episode, I add it to a todo list. Then, whenever I have time, I can review the content and extract terms I want to add to my Anki mining deck. This helps me stay focused on enjoying the content while watching, knowing I can come back to mine vocabulary later.
 
 **Yomine?** 
 
