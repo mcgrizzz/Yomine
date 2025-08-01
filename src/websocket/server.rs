@@ -7,91 +7,27 @@ use std::{
     thread::JoinHandle,
 };
 
-use futures_util::{
-    SinkExt,
-    StreamExt,
-};
-use serde::{
-    Deserialize,
-    Serialize,
-};
 use tokio::{
     net::TcpListener,
     runtime::Runtime,
-    sync::mpsc::{
-        self,
-        UnboundedSender,
-    },
-};
-use tokio_tungstenite::{
-    accept_async,
-    tungstenite::protocol::Message,
+    sync::mpsc::UnboundedSender,
 };
 use uuid::Uuid;
 
+use super::{
+    connection::handle_connection,
+    types::{
+        ConnectedClient,
+        SeekBody,
+        SeekCommand,
+        SeekStatus,
+        ServerCommand,
+        ServerState,
+    },
+};
 use crate::core::errors::YomineError;
 
-#[derive(Clone, Debug)]
-pub enum ServerState {
-    Running,
-    Stopped,
-    Error(String),
-    Starting,
-}
-
-impl Default for ServerState {
-    fn default() -> Self {
-        Self::Stopped
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum ServerCommand {
-    SendToClients { json: String, clients: Vec<mpsc::Sender<String>> },
-    ProcessConfirmation { message_id: String },
-    Shutdown,
-}
-
-#[derive(Debug, Serialize)]
-struct SeekCommand {
-    command: String,
-    #[serde(rename = "messageId")]
-    message_id: String,
-    body: SeekBody,
-}
-
-#[derive(Debug, Serialize)]
-struct SeekBody {
-    timestamp: f64,
-}
-
-#[derive(Debug, Deserialize)]
-struct CommandResponse {
-    command: String,
-    #[serde(rename = "messageId")]
-    message_id: String,
-}
-
-#[derive(Clone, Debug)]
-pub struct SeekStatus {
-    pub message_id: String,
-    pub timestamp: f64,
-    pub timestamp_str: String, // Original timestamp string for display
-    pub confirmed: bool,
-    pub sent_time: std::time::Instant,
-}
-
-#[derive(Clone)]
-struct ConnectedClient {
-    sender: mpsc::Sender<String>,
-}
-
-impl ConnectedClient {
-    fn is_valid(&self) -> bool {
-        !self.sender.is_closed() && self.sender.capacity() > 0
-    }
-}
-
+/// WebSocket server that handles connections and timestamp seeking
 #[derive(Clone)]
 pub struct WebSocketServer {
     connected_clients: Arc<Mutex<Vec<ConnectedClient>>>,
@@ -194,7 +130,7 @@ impl WebSocketServer {
 
                             tokio::spawn(async move {
                                 if let Err(e) =
-                                    Self::handle_connection(stream, addr, clients, command_sender).await
+                                    handle_connection(stream, addr, clients, command_sender).await
                                 {
                                     eprintln!("[WS] Error handling connection from {}: {:?}", addr, e);
                                 }
@@ -241,118 +177,6 @@ impl WebSocketServer {
 
         *self.server_running.lock().unwrap() = false;
         *self.server_state.lock().unwrap() = ServerState::Stopped;
-
-        Ok(())
-    }
-
-    async fn handle_connection(
-        stream: tokio::net::TcpStream,
-        addr: SocketAddr,
-        clients: Arc<Mutex<Vec<ConnectedClient>>>,
-        command_sender: Arc<Mutex<Option<tokio::sync::mpsc::UnboundedSender<ServerCommand>>>>,
-    ) -> Result<(), YomineError> {
-        let ws_stream = accept_async(stream)
-            .await
-            .map_err(|e| YomineError::Custom(format!("Error during WebSocket handshake: {}", e)))?;
-
-        println!("[WS] WebSocket connection established with: {}", addr);
-
-        let (mut ws_sender, mut ws_receiver) = ws_stream.split();
-
-        let (tx, mut rx) = mpsc::channel::<String>(32);
-
-        {
-            let mut clients_lock = clients.lock().unwrap();
-            clients_lock.push(ConnectedClient { sender: tx.clone() });
-            println!("[WS] Client registered. Total clients: {}", clients_lock.len());
-        }
-
-        let forward_task = tokio::spawn(async move {
-            while let Some(msg) = rx.recv().await {
-                if ws_sender.send(Message::text(msg)).await.is_err() {
-                    break;
-                }
-            }
-        });
-
-        while let Some(msg) = ws_receiver.next().await {
-            match msg {
-                Ok(Message::Text(message)) => {
-                    println!("[WS] Received message from client {}: {}", addr, message);
-
-                    if message == "PING" {
-                        println!("[WS] Received PING from client, sending PONG");
-                        if let Err(e) = tx.send("PONG".to_string()).await {
-                            eprintln!("[WS] Failed to send PONG: {}", e);
-                        }
-                    } else {
-                        match serde_json::from_str::<CommandResponse>(&message) {
-                            Ok(response) if response.command == "response" => {
-                                println!(
-                                    "[WS] Received confirmation from ASBPlayer for message ID: {}",
-                                    response.message_id
-                                );
-
-                                if let Some(sender) = command_sender.lock().unwrap().as_ref() {
-                                    let confirmation_command = ServerCommand::ProcessConfirmation {
-                                        message_id: response.message_id.clone(),
-                                    };
-                                    if let Err(e) = sender.send(confirmation_command) {
-                                        eprintln!(
-                                            "[WS] Failed to send confirmation command: {}",
-                                            e
-                                        );
-                                    }
-                                } else {
-                                    eprintln!("[WS] Command sender not available for confirmation");
-                                }
-                            }
-                            Err(e) => {
-                                println!(
-                                    "[WS] Received message that's not a valid response: {}",
-                                    e
-                                );
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-                Ok(Message::Close(_)) => {
-                    println!("[WS] Client {} disconnected", addr);
-                    break;
-                }
-                Err(e) => {
-                    eprintln!("[WS] Error from client {}: {}", addr, e);
-                    break;
-                }
-                _ => {}
-            }
-        }
-
-        forward_task.abort();
-
-        drop(tx);
-
-        {
-            let mut clients_lock = clients.lock().unwrap();
-            let initial_count = clients_lock.len();
-
-            clients_lock.retain(|client| {
-                if client.sender.is_closed() {
-                    return false;
-                }
-
-                client.sender.capacity() > 0
-            });
-
-            let removed = initial_count - clients_lock.len();
-            println!(
-                "[WS] Client {} disconnected. Removed {} clients. Total clients remaining: {}",
-                addr,
-                removed,
-                clients_lock.len()
-            );
-        }
 
         Ok(())
     }
@@ -426,7 +250,7 @@ impl WebSocketServer {
         {
             let mut clients = self.connected_clients.lock().unwrap();
             for client in clients.iter() {
-                let _ = client.sender.try_send("CLOSE".to_string());
+                let _ = client.tx.try_send("CLOSE".to_string());
             }
             clients.clear();
         }
@@ -489,12 +313,11 @@ impl WebSocketServer {
             }
 
             println!("[WS] Found {} connected clients", clients.len());
-            clients.iter().map(|client| client.sender.clone()).collect::<Vec<_>>()
+            clients.iter().map(|client| client.tx.clone()).collect::<Vec<_>>()
         };
 
         let command_sender = self.command_sender.clone();
         std::thread::spawn(move || {
-
             let client_senders: Vec<_> = client_senders.into_iter().collect();
 
             if let Some(sender) = command_sender.lock().unwrap().as_ref() {
