@@ -164,8 +164,9 @@ pub fn ui_field_selection(
                 if let Some(example_value) = sample_note.get(field_value) {
                     ui.separator();
                     ui.label("Example:");
-                    let display_value = if example_value.len() > 30 {
-                        format!("{}...", &example_value[..27])
+                    let display_value = if example_value.chars().count() > 30 {
+                        let truncated: String = example_value.chars().take(27).collect();
+                        format!("{}...", truncated)
                     } else {
                         example_value.clone()
                     };
