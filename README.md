@@ -34,10 +34,11 @@ The macOS and Linux binaries have not been extensively tested.
 ## Quick Start
 
 1. **Download** the latest release for your platform from [Releases](https://github.com/mcgrizzz/Yomine/releases)
-2. **Set up Anki integration** (optional) - see [Configuration](#setting-up-anki-integration) below
-3. **Set up ASBPlayer connection** (optional) - In ASBPlayer, `MISC` -> `Enable WebSocket client`
-4. **Load a subtitle file** (.srt) containing Japanese text
-5. **Start mining** - click any term to jump to that timestamp in asbplayer
+3. **Set up Anki integration** - see [Anki Setup](#setting-up-anki-integration) below
+4. **Set up Frequency Dictionaries** - [Frequency Dictionaries](#setting-up-frequency-dictionaries)
+5. **Set up ASBPlayer connection** - In ASBPlayer, `MISC` -> `Enable WebSocket client`.
+6. **Load a subtitle file** (.srt) containing Japanese text
+7. **Start mining** - click any term to jump to that timestamp in asbplayer
 
 That's it! Yomine will segment the text, rank terms by frequency, and show you vocabulary and expressions to learn.
 
@@ -48,6 +49,8 @@ That's it! Yomine will segment the text, rank terms by frequency, and show you v
 - **Anki integration** to filter out words you already know
 - **asbplayer integration** for video navigation
 - **Term analysis** with readings, part-of-speech, and context sentences
+- **Multi-sentence browsing** to see multiple example sentences per term
+- **Ignore list** to hide unwanted terms from your mining results
 
 ## Installation
 
@@ -102,11 +105,42 @@ Yomine connects to Anki to filter out terms you already know.
 
 ![Anki Setup](docs/imgs/anki_setup.png)
 
-## Roadmap
+### **Configuring WebSocket Connection**
+
+Yomine uses WebSocket to communicate with ASBPlayer for timestamp navigation.
+
+**Default Setup:**
+- Yomine runs WebSocket server on port `8766`
+- In ASBPlayer: `MISC` → `Enabled WebSocket Client`
+
+**Changing the Port:**
+
+1. In Yomine: Settings → WebSocket Settings
+2. Change the port to something else (8767, 8768, 1111, 5353, etc)
+3. Click "Save and Restart Server"
+4. In ASBPlayer: `MISC` → `WebSocket Server URL` → enter `ws://localhost:YOUR_PORT`
+
+### **Managing Your Ignore List**
+
+The ignore list lets you hide terms you don't want to see from your mining results.
+
+**Adding Terms to Ignore List:**
+1. Right-click any term in the main vocabulary table
+2. Select "Add to Ignore List"
+3. The term will be hidden from future mining sessions
+
+**Managing the Ignore List:**
+1. Go to Settings → Ignore List Settings
+2. View all ignored terms in the list
+3. Remove terms by clicking the red "x"
+
+## **Roadmap**
 
 ### Completed
 - [x] **Anki Integration Customization** 
 - [x] **Prebuilt Binaries**
+- [x] **Multi-Sentence Browsing** - View multiple example sentences per term
+- [x] **Ignore List** - Hide unwanted terms from mining results
 
 ### Planned
 - [ ] **Improved Segmentation**: Better text parsing and part-of-speech tagging
