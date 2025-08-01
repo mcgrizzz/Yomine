@@ -18,6 +18,7 @@ use super::{
         AnkiSettingsModal,
         IgnoreListModal,
         SettingsData,
+        WebSocketSettingsModal,
     },
     table::{
         term_table,
@@ -75,6 +76,7 @@ pub struct YomineApp {
     pub file_modal: FileModal,
     pub error_modal: ErrorModal,
     pub anki_settings_modal: AnkiSettingsModal,
+    pub websocket_settings_modal: WebSocketSettingsModal,
     pub ignore_list_modal: IgnoreListModal,
     pub restart_modal: RestartModal,
     pub theme: Theme,
@@ -103,6 +105,10 @@ impl YomineApp {
         for (model_name, field_mapping) in model_mapping {
             settings_data.anki_model_mappings.insert(model_name, field_mapping);
         }
+
+        // Initialize WebSocketManager with port from settings
+        let websocket_manager = WebSocketManager::new(settings_data.websocket_settings.port);
+
         let app = Self {
             model_mapping: settings_data.anki_model_mappings.clone(),
             settings_data,
@@ -110,11 +116,12 @@ impl YomineApp {
             zoom: cc.egui_ctx.zoom_factor(),
             anki_connected: false,
             last_anki_check: None,
-            websocket_manager: WebSocketManager::new(),
+            websocket_manager,
             message_overlay: MessageOverlay::new(),
             file_modal: FileModal::new(),
             error_modal: ErrorModal::new(),
             anki_settings_modal: AnkiSettingsModal::new(),
+            websocket_settings_modal: WebSocketSettingsModal::new(),
             ignore_list_modal: IgnoreListModal::new(),
             restart_modal: RestartModal::new(),
             table_state: TableState::default(),
@@ -192,6 +199,7 @@ impl eframe::App for YomineApp {
             ctx,
             &mut self.file_modal,
             &mut self.anki_settings_modal,
+            &mut self.websocket_settings_modal,
             &mut self.ignore_list_modal,
             &current_settings,
             &self.websocket_manager,
@@ -221,6 +229,12 @@ impl eframe::App for YomineApp {
             self.model_mapping = settings.anki_model_mappings.clone();
             self.settings_data = settings;
 
+            self.save_settings();
+        }
+
+        if let Some(settings) = self.websocket_settings_modal.show(ctx, &mut self.websocket_manager)
+        {
+            self.settings_data = settings;
             self.save_settings();
         }
 

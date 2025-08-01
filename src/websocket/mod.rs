@@ -1,3 +1,6 @@
 pub mod server;
 
-pub use server::WebSocketServer;
+pub use server::{
+    ServerState,
+    WebSocketServer,
+};

@@ -1,6 +1,12 @@
 use std::sync::Arc;
 
-use crate::websocket::WebSocketServer;
+use crate::{
+    core::errors::YomineError,
+    websocket::{
+        ServerState,
+        WebSocketServer,
+    },
+};
 
 #[derive(Default)]
 pub struct WebSocketState {
@@ -14,9 +20,52 @@ pub struct WebSocketManager {
 }
 
 impl WebSocketManager {
-    pub fn new() -> Self {
-        let websocket_server = WebSocketServer::start_server();
+    pub fn new(port: u16) -> Self {
+        let websocket_server = WebSocketServer::start_server(port);
         Self { state: WebSocketState::default(), server: websocket_server }
+    }
+
+    pub fn restart_server(&mut self, port: u16) -> Result<(), YomineError> {
+        // Shutdown existing server if it exists
+        if let Some(server) = &self.server {
+            println!("[WS] Shutting down existing WebSocket server...");
+            server.shutdown()?;
+            println!("[WS] Server shutdown completed");
+        }
+
+        // Clear the old server reference
+        self.server = None;
+
+        println!("[WS] Starting new WebSocket server on port {}...", port);
+
+        // Start new server with new port
+        self.server = WebSocketServer::start_server(port);
+
+        if self.server.is_none() {
+            return Err(YomineError::Custom(format!(
+                "Failed to start WebSocket server on port {}",
+                port
+            )));
+        }
+
+        println!("[WS] WebSocket server restart completed successfully");
+        Ok(())
+    }
+
+    pub fn get_server_state(&self) -> ServerState {
+        if let Some(server) = &self.server {
+            server.get_server_state()
+        } else {
+            ServerState::Stopped
+        }
+    }
+
+    pub fn get_server_port(&self) -> u16 {
+        if let Some(server) = &self.server {
+            server.get_server_port()
+        } else {
+            8766 // Default port
+        }
     }
 
     pub fn update(&mut self) {
@@ -42,6 +91,6 @@ impl WebSocketManager {
 
 impl Default for WebSocketManager {
     fn default() -> Self {
-        Self::new()
+        Self::new(8766) // Default port
     }
 }

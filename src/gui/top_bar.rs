@@ -14,9 +14,11 @@ use crate::{
             AnkiSettingsModal,
             IgnoreListModal,
             SettingsData,
+            WebSocketSettingsModal,
         },
         websocket_manager::WebSocketManager,
     },
+    websocket::ServerState,
 };
 
 pub struct TopBar;
@@ -25,7 +27,8 @@ impl TopBar {
     pub fn show(
         ctx: &egui::Context,
         file_modal: &mut FileModal,
-        settings_modal: &mut AnkiSettingsModal,
+        anki_settings_modal: &mut AnkiSettingsModal,
+        websocket_settings_modal: &mut WebSocketSettingsModal,
         ignore_list_modal: &mut IgnoreListModal,
         current_settings: &SettingsData,
         websocket_manager: &WebSocketManager,
@@ -70,7 +73,10 @@ impl TopBar {
 
                 ui.menu_button("Settings", |ui| {
                     if ui.button("Anki").clicked() {
-                        settings_modal.open_settings(current_settings.clone(), ctx);
+                        anki_settings_modal.open_settings(current_settings.clone(), ctx);
+                    }
+                    if ui.button("WebSocket Server").clicked() {
+                        websocket_settings_modal.open_settings(current_settings.clone());
                     }
                     if ui.button("Ignore List").clicked() {
                         if let Some(ignore_list) = ignore_list {
@@ -90,24 +96,33 @@ impl TopBar {
         websocket_manager: &WebSocketManager,
         anki_connected: bool,
     ) {
+        let server_state = websocket_manager.get_server_state();
         let asbplayer_connected = websocket_manager.has_clients();
 
-        let asbplayer_color = if asbplayer_connected {
-            egui::Color32::from_rgb(0, 200, 0)
-        } else {
-            egui::Color32::from_rgb(200, 80, 80)
+        let (asbplayer_color, asbplayer_tooltip) = match server_state {
+            ServerState::Running if asbplayer_connected => {
+                (egui::Color32::from_rgb(0, 200, 0), "Connected to asbplayer".to_string())
+            }
+            ServerState::Running => (
+                egui::Color32::from_rgb(200, 200, 0),
+                "WebSocket server running - waiting for asbplayer".to_string(),
+            ),
+            ServerState::Error(ref err) => {
+                (egui::Color32::from_rgb(200, 0, 0), format!("WebSocket server error: {}", err))
+            }
+            ServerState::Starting => {
+                (egui::Color32::from_rgb(100, 100, 200), "WebSocket server starting...".to_string())
+            }
+            ServerState::Stopped => {
+                (egui::Color32::from_rgb(100, 100, 100), "WebSocket server stopped".to_string())
+            }
         };
 
-        let asbplayer_tooltip = if asbplayer_connected {
-            "Connected to asbplayer"
-        } else {
-            "Not Connected to asbplayer"
-        };
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 2.0;
-            ui.small("asbplayer").on_hover_text(asbplayer_tooltip);
+            ui.small("asbplayer").on_hover_text(&asbplayer_tooltip);
             ui.small(egui::RichText::new("●").color(asbplayer_color))
-                .on_hover_text(asbplayer_tooltip);
+                .on_hover_text(&asbplayer_tooltip);
         });
 
         ui.add_space(3.0);
