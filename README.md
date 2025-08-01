@@ -20,7 +20,7 @@ Written in Rust 🦀
 
 <div align="center">
     
-![Usage GIF](https://github.com/user-attachments/assets/6e3cb2cc-8b0a-4421-96ea-a9776c9ad8b3)
+![Usage GIF](https://github.com/user-attachments/assets/691c10dc-9e96-4390-9c46-6143dc1b13d4)
 
 </div>
 
