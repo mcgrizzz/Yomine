@@ -16,7 +16,7 @@ impl AnkiService {
     pub fn new() -> Self {
         Self {
             is_loading_models: false,
-            connection_status: "Ready (click Refresh to load models)".to_string(),
+            connection_status: "Ready".to_string(),
             model_fetch_receiver: None,
             sample_fetch_receiver: None,
         }
@@ -54,7 +54,7 @@ impl AnkiService {
                         }
                         Err(e) => Err(format!("Failed to fetch models: {}", e)),
                     },
-                    Err(e) => Err(format!("Cannot connect to Anki: {}", e)),
+                    Err(_) => Err("Anki Offline".to_string()),
                 }
             });
 

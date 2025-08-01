@@ -3,11 +3,14 @@ pub mod anki_settings_modal;
 pub mod components;
 pub mod data;
 pub mod ignore_list_modal;
+pub mod websocket_settings_modal;
 
 pub use anki_settings_modal::AnkiSettingsModal;
 pub use data::{
     AnkiModelInfo,
     ModelMappingEditor,
     SettingsData,
+    WebSocketSettings,
 };
 pub use ignore_list_modal::IgnoreListModal;
+pub use websocket_settings_modal::WebSocketSettingsModal;
