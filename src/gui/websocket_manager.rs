@@ -72,8 +72,6 @@ impl WebSocketManager {
         if let Some(server) = &self.server {
             self.state.has_clients = server.has_clients();
 
-            server.process_pending_confirmations();
-
             if self.state.has_clients {
                 self.state.confirmed_timestamps = server.get_confirmed_timestamps();
             }

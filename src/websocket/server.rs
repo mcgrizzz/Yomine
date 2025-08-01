@@ -4,6 +4,7 @@ use std::{
         Arc,
         Mutex,
     },
+    thread::JoinHandle,
 };
 
 use futures_util::{
@@ -17,9 +18,9 @@ use serde::{
 use tokio::{
     net::TcpListener,
     runtime::Runtime,
-    sync::{
-        mpsc,
-        oneshot,
+    sync::mpsc::{
+        self,
+        UnboundedSender,
     },
 };
 use tokio_tungstenite::{
@@ -44,7 +45,13 @@ impl Default for ServerState {
     }
 }
 
-// Command to seek to a specific timestamp
+#[derive(Debug, Clone)]
+pub enum ServerCommand {
+    SendToClients { json: String, clients: Vec<mpsc::Sender<String>> },
+    ProcessConfirmation { message_id: String },
+    Shutdown,
+}
+
 #[derive(Debug, Serialize)]
 struct SeekCommand {
     command: String,
@@ -58,16 +65,13 @@ struct SeekBody {
     timestamp: f64,
 }
 
-// Response from ASBPlayer
 #[derive(Debug, Deserialize)]
 struct CommandResponse {
     command: String,
     #[serde(rename = "messageId")]
     message_id: String,
-    //body: serde_json::Value,
 }
 
-// Track timestamp seek status
 #[derive(Clone, Debug)]
 pub struct SeekStatus {
     pub message_id: String,
@@ -95,14 +99,11 @@ pub struct WebSocketServer {
     seek_statuses: Arc<Mutex<Vec<SeekStatus>>>,
     server_state: Arc<Mutex<ServerState>>,
     server_port: Arc<Mutex<u16>>,
-    confirmation_channel:
-        Arc<(tokio::sync::mpsc::Sender<String>, Mutex<tokio::sync::mpsc::Receiver<String>>)>,
-    shutdown_sender: Arc<Mutex<Option<oneshot::Sender<()>>>>,
-    server_handle: Arc<Mutex<Option<std::thread::JoinHandle<()>>>>,
+    server_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
+    command_sender: Arc<Mutex<Option<UnboundedSender<ServerCommand>>>>,
 }
 
 impl WebSocketServer {
-    /// Clean up invalid clients and return count of removed clients
     fn cleanup_clients(&self) -> usize {
         let mut clients = self.connected_clients.lock().unwrap();
         let initial_count = clients.len();
@@ -119,10 +120,8 @@ impl WebSocketServer {
             }
         };
 
-        let (confirmation_sender, confirmation_receiver) =
-            tokio::sync::mpsc::channel::<String>(100);
-
-        let (shutdown_sender, shutdown_receiver) = oneshot::channel::<()>();
+        let (command_sender, command_receiver) =
+            tokio::sync::mpsc::unbounded_channel::<ServerCommand>();
 
         let server = Self {
             connected_clients: Arc::new(Mutex::new(Vec::new())),
@@ -130,19 +129,15 @@ impl WebSocketServer {
             seek_statuses: Arc::new(Mutex::new(Vec::new())),
             server_state: Arc::new(Mutex::new(ServerState::Starting)),
             server_port: Arc::new(Mutex::new(port)),
-            confirmation_channel: Arc::new((
-                confirmation_sender,
-                Mutex::new(confirmation_receiver),
-            )),
-            shutdown_sender: Arc::new(Mutex::new(Some(shutdown_sender))),
             server_handle: Arc::new(Mutex::new(None)),
+            command_sender: Arc::new(Mutex::new(Some(command_sender))),
         };
 
         let server_arc = Arc::new(server);
         let server_clone = server_arc.clone();
 
         let start_future = async move {
-            if let Err(e) = server_clone.run_server(shutdown_receiver).await {
+            if let Err(e) = server_clone.run_server(command_receiver).await {
                 eprintln!("[WS] Failed to start WebSocket server: {:?}", e);
                 *server_clone.server_state.lock().unwrap() = ServerState::Error(e.to_string());
                 *server_clone.server_running.lock().unwrap() = false;
@@ -161,7 +156,7 @@ impl WebSocketServer {
 
     async fn run_server(
         &self,
-        mut shutdown_receiver: oneshot::Receiver<()>,
+        mut command_receiver: tokio::sync::mpsc::UnboundedReceiver<ServerCommand>,
     ) -> Result<(), YomineError> {
         let port = *self.server_port.lock().unwrap();
         let addr = format!("127.0.0.1:{}", port).parse::<SocketAddr>().unwrap();
@@ -195,11 +190,11 @@ impl WebSocketServer {
                             println!("[WS] New connection from: {}", addr);
 
                             let clients = self.connected_clients.clone();
-                            let confirmation_sender = self.confirmation_channel.0.clone();
+                            let command_sender = self.command_sender.clone();
 
                             tokio::spawn(async move {
                                 if let Err(e) =
-                                    Self::handle_connection(stream, addr, clients, confirmation_sender).await
+                                    Self::handle_connection(stream, addr, clients, command_sender).await
                                 {
                                     eprintln!("[WS] Error handling connection from {}: {:?}", addr, e);
                                 }
@@ -211,9 +206,35 @@ impl WebSocketServer {
                         }
                     }
                 }
-                _ = &mut shutdown_receiver => {
-                    println!("[WS] Received shutdown signal, stopping server...");
-                    break;
+
+                Some(command) = command_receiver.recv() => {
+                    match command {
+                        ServerCommand::SendToClients { json, clients } => {
+                            println!("[WS] Received command to send to {} clients", clients.len());
+                            for (index, sender) in clients.into_iter().enumerate() {
+                                let json = json.clone();
+                                let client_index = index + 1;
+
+                                tokio::spawn(async move {
+                                    println!("[WS] Sending to client #{}: starting...", client_index);
+                                    match sender.send(json).await {
+                                        Ok(_) => println!("[WS] Successfully sent command to client #{}", client_index),
+                                        Err(e) => eprintln!("[WS] Failed to send to client #{}: {}", client_index, e),
+                                    }
+                                });
+                            }
+                        }
+                        ServerCommand::ProcessConfirmation { message_id } => {
+                            println!("[WS] Processing confirmation for message ID: {}", message_id);
+                            if let Some(timestamp) = self.confirm_seek_status(&message_id) {
+                                println!("[WS] Processed confirmation for timestamp: {}", timestamp);
+                            }
+                        }
+                        ServerCommand::Shutdown => {
+                            println!("[WS] Received shutdown command, stopping server...");
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -228,7 +249,7 @@ impl WebSocketServer {
         stream: tokio::net::TcpStream,
         addr: SocketAddr,
         clients: Arc<Mutex<Vec<ConnectedClient>>>,
-        confirmation_sender: tokio::sync::mpsc::Sender<String>,
+        command_sender: Arc<Mutex<Option<tokio::sync::mpsc::UnboundedSender<ServerCommand>>>>,
     ) -> Result<(), YomineError> {
         let ws_stream = accept_async(stream)
             .await
@@ -272,14 +293,18 @@ impl WebSocketServer {
                                     response.message_id
                                 );
 
-                                let message_id = response.message_id.clone();
-                                if let Err(e) = confirmation_sender.send(message_id).await {
-                                    eprintln!(
-                                        "[WS] Failed to send message ID for confirmation: {}",
-                                        e
-                                    );
+                                if let Some(sender) = command_sender.lock().unwrap().as_ref() {
+                                    let confirmation_command = ServerCommand::ProcessConfirmation {
+                                        message_id: response.message_id.clone(),
+                                    };
+                                    if let Err(e) = sender.send(confirmation_command) {
+                                        eprintln!(
+                                            "[WS] Failed to send confirmation command: {}",
+                                            e
+                                        );
+                                    }
                                 } else {
-                                    println!("[WS] Sent message ID for confirmation to server");
+                                    eprintln!("[WS] Command sender not available for confirmation");
                                 }
                             }
                             Err(e) => {
@@ -376,32 +401,6 @@ impl WebSocketServer {
         None
     }
 
-    pub fn process_pending_confirmations(&self) {
-        if let Ok(mut receiver) = self.confirmation_channel.1.try_lock() {
-            loop {
-                match receiver.try_recv() {
-                    Ok(message_id) => {
-                        println!(
-                            "[WS] Received confirmation request for message ID: {}",
-                            message_id
-                        );
-
-                        if let Some(timestamp) = self.confirm_seek_status(&message_id) {
-                            println!("[WS] Processed confirmation for timestamp: {}", timestamp);
-                        }
-                    }
-                    Err(tokio::sync::mpsc::error::TryRecvError::Empty) => {
-                        break;
-                    }
-                    Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
-                        println!("[WS] Confirmation channel disconnected");
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
     pub fn get_confirmed_timestamps(&self) -> Vec<String> {
         let statuses = self.seek_statuses.lock().unwrap();
         statuses.iter().filter(|s| s.confirmed).map(|s| s.timestamp_str.clone()).collect()
@@ -419,8 +418,9 @@ impl WebSocketServer {
         *self.server_state.lock().unwrap() = ServerState::Stopped;
         *self.server_running.lock().unwrap() = false;
 
-        if let Some(sender) = self.shutdown_sender.lock().unwrap().take() {
-            let _ = sender.send(());
+        // Send shutdown command through the command channel
+        if let Some(sender) = self.command_sender.lock().unwrap().as_ref() {
+            let _ = sender.send(ServerCommand::Shutdown);
         }
 
         {
@@ -491,21 +491,21 @@ impl WebSocketServer {
             println!("[WS] Found {} connected clients", clients.len());
             clients.iter().map(|client| client.sender.clone()).collect::<Vec<_>>()
         };
-        let rt = Runtime::new()
-            .map_err(|e| YomineError::Custom(format!("Failed to create runtime: {}", e)))?;
 
-        for (index, sender) in client_senders.into_iter().enumerate() {
-            let json = json.clone();
-            let client_index = index + 1;
+        let command_sender = self.command_sender.clone();
+        std::thread::spawn(move || {
 
-            rt.spawn(async move {
-                println!("[WS] Sending to client #{}: starting...", client_index);
-                match sender.send(json).await {
-                    Ok(_) => println!("[WS] Successfully sent command to client #{}", client_index),
-                    Err(e) => eprintln!("[WS] Failed to send to client #{}: {}", client_index, e),
+            let client_senders: Vec<_> = client_senders.into_iter().collect();
+
+            if let Some(sender) = command_sender.lock().unwrap().as_ref() {
+                let command = ServerCommand::SendToClients { json, clients: client_senders };
+                if let Err(e) = sender.send(command) {
+                    eprintln!("[WS] Failed to send command to server: {}", e);
                 }
-            });
-        }
+            } else {
+                eprintln!("[WS] Command sender not available");
+            }
+        });
 
         Ok(())
     }
