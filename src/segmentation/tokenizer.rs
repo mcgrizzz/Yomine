@@ -245,8 +245,11 @@ pub fn extract_words(
     terms
 }
 
-pub fn init_vibrato(dict_type: &DictType) -> Result<Tokenizer, YomineError> {
-    let dict_path = ensure_dictionary(dict_type)?;
+pub fn init_vibrato(
+    dict_type: &DictType,
+    progress_callback: Option<Box<dyn Fn(String) + Send>>,
+) -> Result<Tokenizer, YomineError> {
+    let dict_path = ensure_dictionary(dict_type, progress_callback)?;
     let dict = load_dictionary(dict_path.to_str().unwrap())?;
     let tokenizer = vibrato::Tokenizer::new(dict);
     Ok(tokenizer)

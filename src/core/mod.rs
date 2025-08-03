@@ -1,5 +1,6 @@
 pub mod errors;
 pub mod filename_parser;
+pub mod http;
 pub mod ignore_list;
 pub mod models;
 pub mod pipeline;

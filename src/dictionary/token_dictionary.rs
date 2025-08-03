@@ -7,7 +7,6 @@ use std::{
         self,
         BufReader,
         BufWriter,
-        Cursor,
     },
     path::{
         Path,
@@ -16,13 +15,18 @@ use std::{
 };
 
 use liblzma::read::XzDecoder;
-use reqwest::blocking::get;
 use tar::Archive;
 use vibrato::Dictionary;
 use zstd::stream::copy_decode;
 
 use crate::{
-    core::YomineError,
+    core::{
+        http::{
+            download_to_file,
+            http_client,
+        },
+        YomineError,
+    },
     persistence::get_app_data_dir,
 };
 
@@ -105,7 +109,10 @@ fn cleanup_files(folder_path: &Path, keep_files: &[&str]) -> Result<(), YomineEr
     Ok(())
 }
 
-pub fn ensure_dictionary(dict_type: &DictType) -> Result<PathBuf, YomineError> {
+pub fn ensure_dictionary(
+    dict_type: &DictType,
+    progress_callback: Option<Box<dyn Fn(String) + Send>>,
+) -> Result<PathBuf, YomineError> {
     let url = dict_type.url();
     let folder_name = dict_type.folder_name();
     let dict_dir = get_tokenizer_dict_dir();
@@ -113,7 +120,7 @@ pub fn ensure_dictionary(dict_type: &DictType) -> Result<PathBuf, YomineError> {
     let final_dic_path = extract_path.join("system.dic");
 
     if final_dic_path.exists() {
-        println!("Dictionary already exists: {:?}", final_dic_path);
+        callback_message("Tokenizer model already downloaded, loading...", &progress_callback);
         return Ok(final_dic_path);
     }
 
@@ -128,23 +135,10 @@ pub fn ensure_dictionary(dict_type: &DictType) -> Result<PathBuf, YomineError> {
     fs::remove_file(&tar_path).ok();
     fs::remove_dir_all(&extract_path).ok();
 
-    println!("Downloading dictionary from {}...", url);
-    let response = get(url).map_err(|e| {
-        YomineError::Custom(format!("Failed to download dictionary from {}: {}", url, e))
-    })?;
-
-    let mut file = File::create(&download_path).map_err(|e| {
-        YomineError::Custom(format!("Failed to create download file {:?}: {}", download_path, e))
-    })?;
-
-    io::copy(&mut Cursor::new(response.bytes()?), &mut file).map_err(|e| {
-        YomineError::Custom(format!(
-            "Failed to write downloaded data to {:?}: {}",
-            download_path, e
-        ))
-    })?;
-
-    println!("Downloaded dictionary to {:?}", download_path);
+    callback_message("Downloading tokenizer model...", &progress_callback);
+    let client = http_client()?;
+    download_to_file(&client, url, &download_path)?;
+    callback_message("Downloaded tokenizer model successfully", &progress_callback);
 
     let metadata = download_path.metadata().map_err(|e| {
         YomineError::Custom(format!(
@@ -160,7 +154,7 @@ pub fn ensure_dictionary(dict_type: &DictType) -> Result<PathBuf, YomineError> {
         )));
     }
 
-    println!("Decompressing XZ to TAR...");
+    callback_message("Extracting tokenizer model...", &progress_callback);
     let tar_xz_file = File::open(&download_path).map_err(|e| {
         YomineError::Custom(format!("Failed to open downloaded file {:?}: {}", download_path, e))
     })?;
@@ -177,9 +171,8 @@ pub fn ensure_dictionary(dict_type: &DictType) -> Result<PathBuf, YomineError> {
         ))
     })?;
 
-    println!("Decompressed XZ file to {:?}", tar_path);
+    callback_message("Decompressed XZ file successfully", &progress_callback);
 
-    println!("Extracting TAR archive...");
     let tar_file = File::open(&tar_path).map_err(|e| {
         YomineError::Custom(format!("Failed to open TAR file {:?}: {}", tar_path, e))
     })?;
@@ -187,7 +180,7 @@ pub fn ensure_dictionary(dict_type: &DictType) -> Result<PathBuf, YomineError> {
     archive.unpack(&extract_path).map_err(|e| {
         YomineError::Custom(format!("Failed to unpack TAR to {:?}: {}.", dict_dir, e))
     })?;
-    println!("Extracted TAR archive to {:?}", extract_path);
+    callback_message("Extracted TAR archive successfully", &progress_callback);
 
     let zst_path = extract_path.join(folder_name).join("system.dic.zst");
     if !zst_path.exists() {
@@ -197,7 +190,7 @@ pub fn ensure_dictionary(dict_type: &DictType) -> Result<PathBuf, YomineError> {
         )));
     }
 
-    println!("Decompressing Zstandard to .dic...");
+    callback_message("Finalizing tokenizer setup...", &progress_callback);
     let zst_file = File::open(&zst_path).map_err(|e| {
         YomineError::Custom(format!("Failed to open ZST file {:?}: {}.", zst_path, e))
     })?;
@@ -207,7 +200,7 @@ pub fn ensure_dictionary(dict_type: &DictType) -> Result<PathBuf, YomineError> {
     copy_decode(BufReader::new(zst_file), BufWriter::new(dic_file)).map_err(|e| {
         YomineError::Custom(format!("Failed to decompress ZST to {:?}: {}.", final_dic_path, e))
     })?;
-    println!("Decompressed ZST file to {:?}", final_dic_path);
+    callback_message("Tokenizer model ready", &progress_callback);
 
     let inner_path = extract_path.join(folder_name);
     fs::rename(inner_path.join("BSD"), extract_path.join("BSD"))
@@ -216,6 +209,7 @@ pub fn ensure_dictionary(dict_type: &DictType) -> Result<PathBuf, YomineError> {
         .map_err(|e| YomineError::Custom(format!("Failed to move NOTICE file: {}", e)))?;
 
     //Clean up extra files
+    callback_message("Cleaning up temporary files", &progress_callback);
     let keep_files = ["system.dic", "BSD", "NOTICE"];
     cleanup_files(&extract_path, &keep_files)?;
     println!("Removing download {:?}", &download_path);
@@ -230,6 +224,13 @@ pub fn load_dictionary(path: &str) -> Result<Dictionary, YomineError> {
     let reader = BufReader::new(File::open(path)?);
     let dict = Dictionary::read(reader)?;
     Ok(dict)
+}
+
+fn callback_message(message: &str, callback: &Option<Box<dyn Fn(String) + Send>>) {
+    println!("{}", message);
+    if let Some(ref cb) = callback {
+        cb(message.to_string());
+    }
 }
 
 pub fn is_all_kana(word: &str) -> bool {

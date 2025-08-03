@@ -334,6 +334,7 @@ pub fn process_frequency_dictionaries() -> Result<FrequencyManager, YomineError>
     let manager = Mutex::new(FrequencyManager::new(None));
     let start = Instant::now();
 
+    println!("Loading frequency dictionaries...");
     let dir_path = get_frequency_dict_dir();
     fs::create_dir_all(&dir_path)?;
     for entry in fs::read_dir(&dir_path)
