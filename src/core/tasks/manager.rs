@@ -69,7 +69,15 @@ impl TaskManager {
 
             let result = runtime.block_on(async {
                 let dict_type = DictType::Unidic;
-                let tokenizer = Arc::new(init_vibrato(&dict_type).map_err(|e| e.to_string())?);
+
+                let sender_clone = sender.clone();
+                let progress_callback = Box::new(move |message: String| {
+                    let _ = sender_clone.send(TaskResult::LoadingMessage(message));
+                });
+
+                let tokenizer = Arc::new(
+                    init_vibrato(&dict_type, Some(progress_callback)).map_err(|e| e.to_string())?,
+                );
 
                 let _ = sender.send(TaskResult::LoadingMessage(
                     "Loading frequency dictionaries...".to_string(),
