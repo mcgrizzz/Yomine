@@ -1,6 +1,10 @@
-use std::sync::{
-    Arc,
-    Mutex,
+use std::{
+    path::Path,
+    process::Command,
+    sync::{
+        Arc,
+        Mutex,
+    },
 };
 
 use eframe::egui;
@@ -18,6 +22,7 @@ use crate::{
         },
         websocket_manager::WebSocketManager,
     },
+    persistence::get_app_data_dir,
     websocket::ServerState,
 };
 
@@ -43,29 +48,44 @@ impl TopBar {
                     if ui.button("Open New File").clicked() {
                         file_modal.open_dialog();
                     }
+
                     if ui.button("Load New Frequency Dictionaries").clicked() {
                         match frequency_utils::handle_frequency_dictionary_copy() {
                             Ok(count) => {
                                 if count > 0 {
                                     println!("Successfully added {} frequency dictionaries", count);
-                                    restart_modal.show_restart_dialog(
-                                        format!("Successfully added {} frequency dictionaries. Please restart the application load them.", count)
-                                    );
+                                    restart_modal.show_restart_dialog(format!(
+                                        "Successfully added {} frequency dictionaries. \
+                                         Please restart the application load them.",
+                                        count
+                                    ));
                                 } else {
-                                    println!("No new frequency dictionaries were selected or loaded");
+                                    println!(
+                                        "No new frequency dictionaries were selected or loaded"
+                                    );
                                     restart_modal.show_info_dialog(
-                                        "No new frequency dictionaries were selected. No changes were made."
+                                        "No new frequency dictionaries were selected. \
+                                         No changes were made.",
                                     );
                                 }
                             }
                             Err(e) => {
                                 eprintln!("Failed to load frequency dictionaries: {}", e);
-                                restart_modal.show_info_dialog(
-                                    format!("Failed to load frequency dictionaries: {}", e)
-                                );
+                                restart_modal.show_info_dialog(format!(
+                                    "Failed to load frequency dictionaries: {}",
+                                    e
+                                ));
                             }
                         }
                     }
+
+                    if ui.button("Open Data Folder").clicked() {
+                        let data_dir = get_app_data_dir();
+                        if let Err(e) = open_folder(&data_dir) {
+                            eprintln!("Failed to open data directory: {}", e);
+                        }
+                    }
+
                     if ui.button("Quit").clicked() {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
@@ -84,6 +104,7 @@ impl TopBar {
                         }
                     }
                 });
+
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     Self::show_status_indicators(ui, websocket_manager, anki_connected);
                 });
@@ -141,4 +162,30 @@ impl TopBar {
             ui.small(egui::RichText::new("●").color(anki_color)).on_hover_text(anki_tooltip);
         });
     }
+}
+
+fn open_folder(path: &Path) -> std::io::Result<()> {
+    if !path.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("Path does not exist: {}", path.display()),
+        ));
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("explorer").arg(path).spawn()?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open").arg(path).spawn()?;
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        Command::new("xdg-open").arg(path).spawn()?;
+    }
+
+    Ok(())
 }
