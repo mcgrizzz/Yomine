@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Tag name for the release (e.g., v0.3.0-beta.1)'
+        description: "Tag name for the release (e.g., v0.3.0-beta.1)"
         required: true
         type: string
 
@@ -16,12 +16,11 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  # Set the tag name based on trigger type
   TAG_NAME: ${{ github.event.release.tag_name || inputs.tag_name }}
 
 jobs:
   build-and-upload:
-    name: Release - ${{ matrix.platform.os-name }}    
+    name: Release - ${{ matrix.platform.os-name }}
     strategy:
       matrix:
         platform:
@@ -29,16 +28,20 @@ jobs:
             runs-on: windows-latest
             target: x86_64-pc-windows-msvc
             name: yomine-${{ github.event.release.tag_name || inputs.tag_name }}-windows-x64.exe
-            
           - os-name: Linux-x86_64
             runs-on: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             name: yomine-${{ github.event.release.tag_name || inputs.tag_name }}-linux-x64
-            
+
     runs-on: ${{ matrix.platform.runs-on }}
-    steps:      
+    steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: ${{ runner.os }}-${{ matrix.platform.target }}
 
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v1
@@ -48,7 +51,6 @@ jobs:
           args: "--release"
           strip: true
 
-      # Debug: List target directory contents to see what was actually built
       - name: List target directory contents
         run: |
           echo "Contents of target directory:"
@@ -57,7 +59,8 @@ jobs:
           ls -la target/${{ matrix.platform.target }}/ || dir target\${{ matrix.platform.target }}\ /s
           echo "Contents of target/${{ matrix.platform.target }}/release:"
           ls -la target/${{ matrix.platform.target }}/release/ || dir target\${{ matrix.platform.target }}\release\ /s
-        shell: bash      # Prepare binary for all platforms
+        shell: bash
+
       - name: Prepare binary (Windows)
         if: matrix.platform.runs-on == 'windows-latest'
         run: |
@@ -71,7 +74,6 @@ jobs:
           chmod +x ${{ matrix.platform.name }}
         shell: bash
 
-      # Upload files to release      
       - name: Upload binary to release
         uses: softprops/action-gh-release@v2
         with:
@@ -80,16 +82,19 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Build macOS Universal Binary (separate job)
   build-macos-universal:
     name: Release - macOS Universal
     runs-on: macos-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Build Intel binary
+      - name: Cache Rust build artifacts (x86_64)
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: ${{ runner.os }}-x86_64-apple-darwin
+
       - name: Build Intel binary
         uses: houseabsolute/actions-rust-cross@v1
         with:
@@ -98,53 +103,44 @@ jobs:
           args: "--release"
           strip: true
 
-      # Build ARM64 binary  
+      - name: Cache Rust build artifacts (aarch64)
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: ${{ runner.os }}-aarch64-apple-darwin
+
       - name: Build ARM64 binary
         uses: houseabsolute/actions-rust-cross@v1
         with:
           command: build
           target: aarch64-apple-darwin
           args: "--release"
-          strip: true      # Create Universal Binary
+          strip: true
+
       - name: Create Universal Binary
-        run: |          # Create universal binary using lipo
+        run: |
           lipo -create \
             target/x86_64-apple-darwin/release/yomine \
             target/aarch64-apple-darwin/release/yomine \
             -output yomine-${{ env.TAG_NAME }}-macos-universal
-          
-          # Make it executable
+
           chmod +x yomine-${{ env.TAG_NAME }}-macos-universal
-          
-          # Verify the universal binary
           echo "Universal binary architecture info:"
           lipo -info yomine-${{ env.TAG_NAME }}-macos-universal
-          
-          # Show file size
           echo "Universal binary size:"
           ls -lh yomine-${{ env.TAG_NAME }}-macos-universal
-          
-          # Verify it's properly executable
           echo "File permissions:"
           ls -la yomine-${{ env.TAG_NAME }}-macos-universal
-            # Check file type
           echo "File type:"
           file yomine-${{ env.TAG_NAME }}-macos-universal
+        shell: bash
 
-      # Ad-hoc Code Signing for macOS Binary
       - name: Ad-hoc Code Sign macOS Binary
         run: |
-          # Sign the universal binary
           codesign --force --sign - --options runtime --timestamp yomine-${{ env.TAG_NAME }}-macos-universal
-          
-          # Verify the signing
           echo "Verifying binary code signature:"
           codesign --verify --verbose yomine-${{ env.TAG_NAME }}-macos-universal
-          
-          # Display signature info
           echo "Binary code signature details:"
           codesign --display --verbose yomine-${{ env.TAG_NAME }}-macos-universal
-          
           echo "macOS binary successfully ad-hoc signed!"
         shell: bash
 
@@ -155,7 +151,7 @@ jobs:
           files: yomine-${{ env.TAG_NAME }}-macos-universal
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  # Create consolidated checksum file (runs after all binaries are uploaded)
+          
   create-checksums:
     needs: [build-and-upload, build-macos-universal]
     runs-on: ubuntu-latest
