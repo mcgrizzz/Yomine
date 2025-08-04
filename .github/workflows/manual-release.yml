@@ -56,9 +56,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const { ensureTests } = await import(
-              `${process.env.GITHUB_WORKSPACE}/scripts/ensure-tests.mjs`
-            );
+            const { ensureTests } = require('./.github/scripts/ensure-tests.js');
             await ensureTests({ github, context, core });
 
       - name: Compute version from Cargo.toml and tags
@@ -70,12 +68,7 @@ jobs:
             const fs = require('fs');
             const path = require('path');
 
-            const {
-              computeVersion,
-              buildReleaseName,
-            } = await import(
-              `${process.env.GITHUB_WORKSPACE}/scripts/compute-version.mjs`
-            );
+            const { computeVersion, buildReleaseName } = require('./.github/scripts/compute-version.js');
 
             const releaseType = '${{ inputs.release_type }}';
 

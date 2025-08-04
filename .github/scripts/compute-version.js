@@ -48,7 +48,7 @@ function escapeRegExp(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-export async function computeVersion({ github, context, cargoToml, releaseType }) {
+async function computeVersion({ github, context, cargoToml, releaseType }) {
   const baseVersion = parseCargoVersion(cargoToml); // e.g. 1.2.3
   const owner = context.repo.owner;
   const repo = context.repo.repo;
@@ -89,9 +89,9 @@ export async function computeVersion({ github, context, cargoToml, releaseType }
   };
 }
 
-export function buildReleaseName({ version, baseVersion, isPrerelease }) {
+function buildReleaseName({ version, baseVersion, isPrerelease }) {
   if (isPrerelease) {
-    const m = version.match(/^v(\d+\.\d+\.\d+)-(beta|alpha|rc)\.(\d+)$/);
+    const m = version.match(/^v(\d+\.\d+\.\d+)-(beta)\.(\d+)$/);
     if (m) {
       const betaType = m[2];
       const betaNum = m[3];
@@ -104,3 +104,5 @@ export function buildReleaseName({ version, baseVersion, isPrerelease }) {
   
   return baseVersion;
 }
+
+module.exports = { computeVersion, buildReleaseName };

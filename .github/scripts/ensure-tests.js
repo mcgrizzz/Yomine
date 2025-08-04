@@ -1,5 +1,4 @@
-// scripts/checkCi.mjs
-export async function ensureTests({ github, context, core }) {
+async function ensureTests({ github, context, core }) {
   const sha = context.sha;
   console.log(`Checking CI status for commit: ${sha}`);
 
@@ -39,3 +38,5 @@ export async function ensureTests({ github, context, core }) {
 
   console.log('✅ Tests passed for this commit');
 }
+
+module.exports = { ensureTests };
