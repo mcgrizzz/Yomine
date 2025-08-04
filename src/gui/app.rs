@@ -315,6 +315,7 @@ impl YomineApp {
                     freq_a.cmp(freq_b)
                 });
 
+                self.table_state.clear_sentence_indices();
                 self.sentences = new_sentences;
 
                 if let Some(source_file) = &self.current_source_file {
@@ -335,6 +336,7 @@ impl YomineApp {
                 self.terms = Vec::new();
                 self.sentences = Vec::new();
                 self.current_source_file = None;
+                self.table_state.clear_sentence_indices();
             }
         }
 

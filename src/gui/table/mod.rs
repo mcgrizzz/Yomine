@@ -48,6 +48,10 @@ impl TableState {
         let next = if current == 0 { total_sentences - 1 } else { current - 1 };
         self.sentence_indices.insert(term_index, next);
     }
+
+    pub fn clear_sentence_indices(&mut self) {
+        self.sentence_indices.clear();
+    }
 }
 
 enum TableSort {
