@@ -1,6 +1,3 @@
-import fs from 'fs';
-import path from 'path';
-
 function parseCargoVersion(cargoToml) {
   const afterPackage = cargoToml.split(/\r?\n/);
   let inPackage = false;
