@@ -1,27 +1,24 @@
+# .github/workflows/manual-release.yml
 name: Manual Release
 
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version to release (e.g., v1.0.0 or v1.0.0-beta.1)'
-        required: true
-        type: string
       release_type:
-        description: 'Type of release'
+        description: "Type of release"
         required: true
         type: choice
         options:
-          - 'stable'
-          - 'beta'
-        default: 'stable'
+          - "stable"
+          - "beta"
+        default: "stable"
       create_release:
-        description: 'Create the release after validation'
+        description: "Create the release after validation"
         required: false
         type: boolean
         default: false
       skip_tests:
-        description: 'Skip CI test validation (⚠️ Use with caution)'
+        description: "Skip CI test validation (⚠️ Use with caution)"
         required: false
         type: boolean
         default: false
@@ -35,160 +32,135 @@ env:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    outputs:
+      computed_version: ${{ steps.compute_version.outputs.version }}
+      is_prerelease: ${{ steps.compute_version.outputs.is_prerelease }}
+      release_name: ${{ steps.compute_version.outputs.release_name }}
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Warning about skipped tests
-      if: ${{ inputs.skip_tests }}
-      run: |
-        echo "⚠️ WARNING: CI test validation has been skipped!"
-        echo "⚠️ This release may contain untested code."
-        echo "⚠️ Use this option only when you're confident the code is stable."
-    
-    - name: Check CI status for current commit
-      if: ${{ !inputs.skip_tests }}
-      uses: actions/github-script@v7
-      with:
-        script: |
-          const sha = context.sha;
-          console.log(`Checking CI status for commit: ${sha}`);
-          
-          // Get all check runs for this commit
-          const { data: checkRuns } = await github.rest.checks.listForRef({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            ref: sha
-          });
-          
-          // Look for the Tests workflow
-          const testWorkflow = checkRuns.check_runs.find(run => 
-            run.name === 'test' || run.name.includes('Tests')
-          );
-          
-          if (!testWorkflow) {
-            console.log('⚠️  No test workflow found for this commit');
-            console.log('Available check runs:', checkRuns.check_runs.map(r => r.name));
-            core.setFailed('No CI tests found for this commit. Please ensure tests have run first.');
-            return;
-          }
-          
-          if (testWorkflow.status !== 'completed') {
-            core.setFailed(`Tests are still ${testWorkflow.status}. Please wait for tests to complete.`);
-            return;
-          }
-          
-          if (testWorkflow.conclusion !== 'success') {
-            core.setFailed(`Tests failed with status: ${testWorkflow.conclusion}. Please fix failing tests before releasing.`);
-            return;
-          }
-          
-          console.log('✅ Tests passed for this commit');
-    
-    - name: Validate version format
-      run: |
-        VERSION="${{ inputs.version }}"
-        RELEASE_TYPE="${{ inputs.release_type }}"
-        
-        # Validate format based on release type
-        if [[ "$RELEASE_TYPE" == "stable" ]]; then
-          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "❌ Invalid stable version format. Expected format: v1.0.0"
-            exit 1
-          fi        elif [[ "$RELEASE_TYPE" == "beta" ]]; then
-          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(beta|alpha|rc)\.[0-9]+|b[0-9]+)$ ]]; then
-            echo "❌ Invalid beta version format. Expected format: v1.0.0-beta.1, v1.0.0b1, or v1.0.0-alpha.1"
-            exit 1
-          fi
-        fi
-        echo "✅ Version format is valid for $RELEASE_TYPE release"
-    
-    - name: Check if version exists
-      run: |
-        if git tag | grep -q "^${{ inputs.version }}$"; then
-          echo "❌ Version ${{ inputs.version }} already exists"
-          exit 1
-        fi
-        echo "✅ Version ${{ inputs.version }} is available"
-    
-    - name: Validate Cargo.toml version
-      run: |
-        VERSION_WITHOUT_V="${{ inputs.version }}"
-        VERSION_WITHOUT_V="${VERSION_WITHOUT_V#v}"
-        
-        # For beta versions, extract base version for Cargo.toml comparison
-        if [[ "${{ inputs.release_type }}" == "beta" ]]; then
-          # Extract base version (e.g., 1.0.0 from 1.0.0-beta.1 or 1.0.0b1)
-          BASE_VERSION=$(echo "$VERSION_WITHOUT_V" | sed -E 's/-(beta|alpha|rc)\.[0-9]+$//g' | sed -E 's/b[0-9]+$//g')
-          VERSION_WITHOUT_V="$BASE_VERSION"
-        fi
-          # Extract version from [package] section only - find the first version after [package]
-        CARGO_VERSION=$(grep -A 20 '^\[package\]' Cargo.toml | grep '^version =' | head -1 | sed 's/version = "\(.*\)"/\1/')
-        if [[ "$CARGO_VERSION" != "$VERSION_WITHOUT_V" ]]; then
-          echo "❌ Cargo.toml version ($CARGO_VERSION) doesn't match base version ($VERSION_WITHOUT_V)"
-          if [[ "${{ inputs.release_type }}" == "beta" ]]; then
-            echo "ℹ️  For beta releases, Cargo.toml should contain the base version (e.g., 1.0.0 for v1.0.0-beta.1)"
-          fi
-          echo "Please update Cargo.toml version before releasing"
-          exit 1
-        fi
-        echo "✅ Cargo.toml version matches"
+      - uses: actions/checkout@v4
+
+      - name: Setup Node (for scripts)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Warning about skipped tests
+        if: ${{ inputs.skip_tests }}
+        run: |
+          echo "⚠️ WARNING: CI test validation has been skipped!"
+          echo "⚠️ This release may contain untested code."
+          echo "⚠️ Use this option only when you're confident the code is stable."
+
+      - name: Check CI status for current commit
+        if: ${{ !inputs.skip_tests }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { ensureTests } = await import(
+              `${process.env.GITHUB_WORKSPACE}/scripts/ensure-tests.mjs`
+            );
+            await ensureTests({ github, context, core });
+
+      - name: Compute version from Cargo.toml and tags
+        id: compute_version
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const core = require('@actions/core');
+            const fs = require('fs');
+            const path = require('path');
+
+            const {
+              computeVersion,
+              buildReleaseName,
+            } = await import(
+              `${process.env.GITHUB_WORKSPACE}/scripts/compute-version.mjs`
+            );
+
+            const releaseType = '${{ inputs.release_type }}';
+
+            const cargoPath = path.join(process.env.GITHUB_WORKSPACE, 'Cargo.toml');
+            const cargoToml = fs.readFileSync(cargoPath, 'utf8');
+
+            const { version, isPrerelease, baseVersion } = await computeVersion({
+              github,
+              context,
+              cargoToml,
+              releaseType,
+            });
+
+            const releaseName = buildReleaseName({
+              version,
+              baseVersion,
+              isPrerelease,
+            });
+
+            core.setOutput('version', version);
+            core.setOutput('is_prerelease', String(isPrerelease));
+            core.setOutput('release_name', releaseName);
+
+      - name: Show computed version
+        run: |
+          echo "Computed version: ${{ steps.compute_version.outputs.version }}"
+          echo "Prerelease: ${{ steps.compute_version.outputs.is_prerelease }}"
+          echo "Release name: ${{ steps.compute_version.outputs.release_name }}"
+
   create-release:
     needs: validate
     runs-on: ubuntu-latest
     if: ${{ inputs.create_release }}
-    
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Create Git Tag
-      run: |
-        git config user.name github-actions
-        git config user.email github-actions@github.com
-        git tag ${{ inputs.version }}
-        git push origin ${{ inputs.version }}
-    
-    - name: Create GitHub Release
-      uses: actions/github-script@v7
-      with:
-        github-token: ${{ secrets.MY_PAT }}
-        script: |
-          const version = '${{ inputs.version }}';
-          const releaseType = '${{ inputs.release_type }}';
-          const isPrerelease = releaseType === 'beta';
-          
-          let releaseName;
-          let releaseBody;
-            if (isPrerelease) {
-            // Beta release naming: "0.3.0 Beta 1"
-            const betaMatch = version.match(/v(\d+\.\d+\.\d+)(?:-(beta|alpha|rc)\.(\d+)|b(\d+))$/);
-            if (betaMatch) {
-              const baseVersion = betaMatch[1];
-              const betaNumber = betaMatch[3] || betaMatch[4] || '1';
-              const betaType = betaMatch[2] || 'beta';
-              releaseName = `${baseVersion} ${betaType.charAt(0).toUpperCase() + betaType.slice(1)} ${betaNumber}`;
-            } else {
-              releaseName = `${version}`;
-            }
-            
-            releaseBody = `**This is a pre-release version for testing purposes.**\n\n` +
-                         `⚠️ **Warning**: This beta release may contain bugs and is not recommended for production use.\n\n` +
-                         `Please report any issues you encounter on [GitHub Issues](https://github.com/${context.repo.owner}/${context.repo.repo}/issues).\n\n` +
-                         `*Release notes will be automatically generated once binaries are built.*`;
-          } else {
-            // Stable release naming: "0.3.0"
-            const stableMatch = version.match(/v(\d+\.\d+\.\d+)$/);
-            releaseName = stableMatch ? stableMatch[1] : version;
-            releaseBody = `Release ${version} of yomine\n\n*Release notes will be automatically generated once binaries are built.*`;
-          }
-          
-          const { data: release } = await github.rest.repos.createRelease({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            tag_name: version,
-            name: releaseName,
-            body: releaseBody,
-            draft: false,
-            prerelease: isPrerelease
-          });
-          
-          console.log(`Created ${isPrerelease ? 'pre-' : ''}release: ${release.html_url}`);
+      - uses: actions/checkout@v4
+
+      - name: Setup Node (for scripts)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Create Git Tag
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git tag ${{ needs.validate.outputs.computed_version }}
+          git push origin ${{ needs.validate.outputs.computed_version }}
+
+      - name: Create GitHub Release
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.MY_PAT }}
+        # Use the precomputed values to avoid recomputation
+          script: |
+            const version = '${{ needs.validate.outputs.computed_version }}';
+            const isPrerelease =
+              '${{ needs.validate.outputs.is_prerelease }}' === 'true';
+            const releaseName = '${{ needs.validate.outputs.release_name }}';
+
+            const releaseBody = isPrerelease
+              ? [
+                  '**This is a pre-release version for testing purposes.**',
+                  '',
+                  '⚠️ **Warning**: This beta release may contain bugs and is not recommended for production use.',
+                  '',
+                  'Please report any issues you encounter on GitHub Issues.',
+                  '',
+                  '*Release notes will be automatically generated once binaries are built.*',
+                ].join('\n')
+              : [
+                  `Release ${version} of yomine`,
+                  '',
+                  '*Release notes will be automatically generated once binaries are built.*',
+                ].join('\n');
+
+            const { data: release } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: version,
+              name: releaseName,
+              body: releaseBody,
+              draft: false,
+              prerelease: isPrerelease,
+            });
+
+            console.log(
+              `Created ${isPrerelease ? 'pre-' : ''}release: ${release.html_url}`
+            );
