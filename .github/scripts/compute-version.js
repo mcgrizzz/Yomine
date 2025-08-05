@@ -21,18 +21,20 @@ function toTag(version) {
 }
 
 function parseExistingBetaNumber(tags, baseVersion) {
-  const reHyphen = new RegExp(`^v${escapeRegExp(baseVersion)}-(?:beta)\\.(\\d+)$`);
+  // Prioritize short form but maintain backward compatibility
   const reShort = new RegExp(`^v${escapeRegExp(baseVersion)}b(\\d+)$`);
+  const reLong = new RegExp(`^v${escapeRegExp(baseVersion)}-(?:beta)\\.(\\d+)$`);
 
   let max = 0;
   for (const t of tags) {
-    let m = t.match(reHyphen);
+    let m = t.match(reShort);
     if (m) {
       const n = parseInt(m[1], 10);
       if (!Number.isNaN(n)) max = Math.max(max, n);
       continue;
     }
-    m = t.match(reShort);
+
+    m = t.match(reLong);
     if (m) {
       const n = parseInt(m[1], 10);
       if (!Number.isNaN(n)) max = Math.max(max, n);
@@ -78,7 +80,7 @@ async function computeVersion({ github, context, cargoToml, releaseType }) {
 
   const currentMax = parseExistingBetaNumber(tags, baseVersion);
   const next = currentMax + 1;
-  const tag = `v${baseVersion}-beta.${next}`;
+  const tag = `v${baseVersion}b${next}`; 
   return {
     version: tag,
     isPrerelease: true,
@@ -88,13 +90,16 @@ async function computeVersion({ github, context, cargoToml, releaseType }) {
 
 function buildReleaseName({ version, baseVersion, isPrerelease }) {
   if (isPrerelease) {
-    const m = version.match(/^v(\d+\.\d+\.\d+)-(beta)\.(\d+)$/);
-    if (m) {
-      const betaType = m[2];
-      const betaNum = m[3];
-      return `${baseVersion} ${betaType.charAt(0).toUpperCase()}${betaType.slice(
-        1
-      )} ${betaNum}`;
+    const mShort = version.match(/^v(\d+\.\d+\.\d+)b(\d+)$/);
+    if (mShort) {
+      const betaNum = mShort[2];
+      return `${baseVersion} Beta ${betaNum}`;
+    }
+    const mLong = version.match(/^v(\d+\.\d+\.\d+)-(beta)\.(\d+)$/);
+    if (mLong) {
+      const betaType = mLong[2];
+      const betaNum = mLong[3];
+      return `${baseVersion} ${betaType.charAt(0).toUpperCase()}${betaType.slice(1)} ${betaNum}`;
     }
     return version;
   }
