@@ -68,11 +68,11 @@ jobs:
       - name: List target directory contents
         run: |
           echo "Contents of target directory:"
-          ls -la target/ || dir target\ /s
+          ls -la target/ || dir "target" /s
           echo "Contents of target/${{ matrix.platform.target }}:"
-          ls -la target/${{ matrix.platform.target }}/ || dir target\${{ matrix.platform.target }}\ /s
+          ls -la target/${{ matrix.platform.target }}/ || dir "target/${{ matrix.platform.target }}" /s
           echo "Contents of target/${{ matrix.platform.target }}/release:"
-          ls -la target/${{ matrix.platform.target }}/release/ || dir target\${{ matrix.platform.target }}\release\ /s
+          ls -la target/${{ matrix.platform.target }}/release/ || dir "target/${{ matrix.platform.target }}/release" /s
         shell: bash
 
       - name: Prepare binary (Windows)

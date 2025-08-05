@@ -42,7 +42,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4.4.0
         with:
           node-version: '18.x'
 
@@ -90,7 +90,7 @@ jobs:
       - name: Setup test environment
         run: |
           mkdir -p dictionaries/frequency dictionaries/tokenizer
-          echo "CI_ENVIRONMENT=true" >> $GITHUB_ENV
+          echo "CI_ENVIRONMENT=true" >> "$GITHUB_ENV"
 
       - name: Check formatting
         run: cargo +nightly fmt -- --check
