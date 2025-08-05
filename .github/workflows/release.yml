@@ -56,9 +56,6 @@ jobs:
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: ${{ matrix.platform.target }}
-          prefix-key: v1
 
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v1
@@ -118,9 +115,6 @@ jobs:
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: macos-universal
-          prefix-key: v1
 
       - name: Build Intel binary
         uses: houseabsolute/actions-rust-cross@v1
