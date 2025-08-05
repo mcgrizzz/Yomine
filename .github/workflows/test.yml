@@ -1,47 +1,109 @@
 name: Tests
 
 on:
-  pull_request:
-    branches: [ main ]
   push:
     branches: [ main ]
-
-env:
-  CARGO_TERM_COLOR: always
-  ARGO_PROFILE_DEV_DEBUG: 0
-  RUSTFLAGS: "-D warnings"
+  pull_request:
+    branches: [ main ]
 
 jobs:
-  test:
+  # 1) Figure out what changed
+  filter:
     runs-on: ubuntu-latest
-    
+    outputs:
+      code: ${{ steps.paths.outputs.code }}
+      workflow: ${{ steps.paths.outputs.workflow }}
+      scripts: ${{ steps.paths.outputs.scripts }}
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@nightly
-      with:
-        components: rustfmt
+      - uses: actions/checkout@v4
 
-    - uses: Swatinem/rust-cache@v2
+      - name: Detect changed files
+        id: paths
+        uses: dorny/paths-filter@v3.0.2
+        with:
+          filters: |
+            code:
+              - 'src/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+            workflow:
+              - '.github/workflows/**/*.yml'
+            scripts:
+              - '.github/scripts/**/*.js'
 
-    - name: Install and Cache Linux Dependencies
-      uses: awalsh128/cache-apt-pkgs-action@latest
-      with:
-        packages: libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev
-        version: 1.0
+  # 2) Lint workflows and JS only if workflows OR scripts changed
+  workflow-lint:
+    needs: filter
+    if: >
+      needs.filter.outputs.workflow == 'true' ||
+      needs.filter.outputs.scripts  == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-    - name: Setup test environment  
-      run: |
-        # Create directory structure for dictionaries
-        mkdir -p dictionaries/frequency
-        mkdir -p dictionaries/tokenizer
-        
-        # Set environment variable to indicate we're in CI
-        echo "CI_ENVIRONMENT=true" >> $GITHUB_ENV
+      - name: Setup Node.js
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: '18.x'
 
-    - name: Check formatting
-      run: cargo +nightly fmt -- --check
+      - name: Lint GitHub Actions workflows
+        uses: docker://rhysd/actionlint:1.7.7
+        with:
+          args: -color
 
-    - name: Run tests
-      run: cargo test --verbose -- --skip segmentation::rule_matcher_tests::tests::inspect_tokens
+      - name: Check JS syntax in scripts/
+        run: |
+          find scripts -type f -name '*.js' -print0 \
+            | xargs -0 -n1 node --check
+
+  # 3) Run Rust tests only if Rust sources changed
+  rust-tests:
+    needs: filter
+    if: needs.filter.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+      ARGO_PROFILE_DEV_DEBUG: 0
+      RUSTFLAGS: "-D warnings"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install and Cache Linux Dependencies
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: |
+            libgtk-3-dev
+            libxcb-render0-dev
+            libxcb-shape0-dev
+            libxcb-xfixes0-dev
+            libxkbcommon-dev
+            libssl-dev
+          version: 1.0
+
+      - name: Setup test environment
+        run: |
+          mkdir -p dictionaries/frequency dictionaries/tokenizer
+          echo "CI_ENVIRONMENT=true" >> "$GITHUB_ENV"
+
+      - name: Check formatting
+        run: cargo +nightly fmt -- --check
+
+      - name: Run tests
+        run: |
+          cargo test --verbose -- \
+            --skip segmentation::rule_matcher_tests::tests::inspect_tokens
+
+  # 4) Inform when Rust tests are skipped
+  rust-skipped:
+    needs: filter
+    if: needs.filter.outputs.code == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "🔍 No Rust sources changed; tests skipped."
