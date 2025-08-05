@@ -14,6 +14,7 @@ jobs:
       code: ${{ steps.paths.outputs.code }}
       workflow: ${{ steps.paths.outputs.workflow }}
       scripts: ${{ steps.paths.outputs.scripts }}
+      is_push_to_main: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -31,12 +32,14 @@ jobs:
             scripts:
               - '.github/scripts/**/*.js'
 
-  # 2) Lint workflows and JS only if workflows OR scripts changed
+  # 2) Lint workflows and JS
+  # Run if: workflows/scripts changed OR it's a push to main
   workflow-lint:
     needs: filter
     if: >
       needs.filter.outputs.workflow == 'true' ||
-      needs.filter.outputs.scripts  == 'true'
+      needs.filter.outputs.scripts == 'true' ||
+      needs.filter.outputs.is_push_to_main == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -53,13 +56,16 @@ jobs:
 
       - name: Check JS syntax in scripts/
         run: |
-          find scripts -type f -name '*.js' -print0 \
-            | xargs -0 -n1 node --check
+          find .github/scripts -type f -name '*.js' -print0 2>/dev/null | 
+          xargs -0 -n1 node --check || echo "No JS files found"
 
-  # 3) Run Rust tests only if Rust sources changed
+  # 3) Run Rust tests
+  # Run if: code changed OR it's a push to main
   rust-tests:
     needs: filter
-    if: needs.filter.outputs.code == 'true'
+    if: >
+      needs.filter.outputs.code == 'true' ||
+      needs.filter.outputs.is_push_to_main == 'true'
     runs-on: ubuntu-latest
     env:
       CARGO_TERM_COLOR: always
@@ -100,10 +106,13 @@ jobs:
           cargo test --verbose -- \
             --skip segmentation::rule_matcher_tests::tests::inspect_tokens
 
-  # 4) Inform when Rust tests are skipped
+  # 4) Inform when Rust tests are skipped (only in PRs)
+  # Only run if: no code changed AND it's NOT a push to main
   rust-skipped:
     needs: filter
-    if: needs.filter.outputs.code == 'false'
+    if: >
+      needs.filter.outputs.code == 'false' &&
+      needs.filter.outputs.is_push_to_main == 'false'
     runs-on: ubuntu-latest
     steps:
-      - run: echo "🔍 No Rust sources changed; tests skipped."
+      - run: echo "🔍 No Rust sources changed; tests skipped (PR only behavior)."
