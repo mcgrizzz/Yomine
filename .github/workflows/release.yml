@@ -9,6 +9,22 @@ on:
         description: "Tag name for the release (e.g., v0.3.0-beta.1)"
         required: true
         type: string
+      build_only:
+        description: "Build only without uploading to release"
+        required: false
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      tag_name:
+        description: "Tag name for the release"
+        required: true
+        type: string
+      build_only:
+        description: "Build only without uploading to release"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -20,7 +36,7 @@ env:
 
 jobs:
   build-and-upload:
-    name: Release - ${{ matrix.platform.os-name }}
+    name: ${{ inputs.build_only && 'Build' || 'Release' }} - ${{ matrix.platform.os-name }}
     strategy:
       matrix:
         platform:
@@ -41,7 +57,8 @@ jobs:
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: ${{ runner.os }}-${{ matrix.platform.target }}
+          shared-key: ${{ matrix.platform.target }}
+          prefix-key: v1
 
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v1
@@ -74,7 +91,16 @@ jobs:
           chmod +x ${{ matrix.platform.name }}
         shell: bash
 
+      - name: Upload binary as artifact (build-only mode)
+        if: ${{ inputs.build_only }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform.name }}
+          path: ${{ matrix.platform.name }}
+          retention-days: 7
+
       - name: Upload binary to release
+        if: ${{ !inputs.build_only }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG_NAME }}
@@ -83,17 +109,18 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-macos-universal:
-    name: Release - macOS Universal
+    name: ${{ inputs.build_only && 'Build' || 'Release' }} - macOS Universal
     runs-on: macos-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Cache Rust build artifacts (x86_64)
+      - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: ${{ runner.os }}-x86_64-apple-darwin
+          shared-key: macos-universal
+          prefix-key: v1
 
       - name: Build Intel binary
         uses: houseabsolute/actions-rust-cross@v1
@@ -102,11 +129,6 @@ jobs:
           target: x86_64-apple-darwin
           args: "--release"
           strip: true
-
-      - name: Cache Rust build artifacts (aarch64)
-        uses: Swatinem/rust-cache@v2
-        with:
-          prefix-key: ${{ runner.os }}-aarch64-apple-darwin
 
       - name: Build ARM64 binary
         uses: houseabsolute/actions-rust-cross@v1
@@ -144,7 +166,16 @@ jobs:
           echo "macOS binary successfully ad-hoc signed!"
         shell: bash
 
+      - name: Upload macOS binary as artifact (build-only mode)
+        if: ${{ inputs.build_only }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: yomine-${{ env.TAG_NAME }}-macos-universal
+          path: yomine-${{ env.TAG_NAME }}-macos-universal
+          retention-days: 7
+
       - name: Upload macOS Universal Binary to release
+        if: ${{ !inputs.build_only }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG_NAME }}
@@ -155,6 +186,7 @@ jobs:
   create-checksums:
     needs: [build-and-upload, build-macos-universal]
     runs-on: ubuntu-latest
+    if: ${{ !inputs.build_only }}
     
     steps:      
       - name: Download release assets
@@ -169,12 +201,10 @@ jobs:
       - name: Generate consolidated checksums
         run: |
           cd downloads
-          # Generate checksums for all downloaded files
           sha256sum yomine-* > ../SHA256SUMS.txt
           echo "Generated checksums:"
           cat ../SHA256SUMS.txt
           
-          # Create a detailed checksums file with descriptions
           cat > ../SHA256SUMS-detailed.txt << 'EOF'
           # SHA256 Checksums for Yomine Release
           # 

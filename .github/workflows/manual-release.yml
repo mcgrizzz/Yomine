@@ -1,4 +1,3 @@
-# .github/workflows/manual-release.yml
 name: Manual Release
 
 on:
@@ -14,6 +13,11 @@ on:
         default: "stable"
       create_release:
         description: "Create the release after validation"
+        required: false
+        type: boolean
+        default: false
+      build_only:
+        description: "Build binaries without creating release (for testing)"
         required: false
         type: boolean
         default: false
@@ -50,6 +54,12 @@ jobs:
           echo "⚠️ WARNING: CI test validation has been skipped!"
           echo "⚠️ This release may contain untested code."
           echo "⚠️ Use this option only when you're confident the code is stable."
+
+      - name: Build-only mode notice
+        if: ${{ inputs.build_only }}
+        run: |
+          echo "🔨 BUILD-ONLY MODE: Binaries will be built but no release will be created"
+          echo "📦 Artifacts will be available for download from the workflow run"
 
       - name: Check CI status for current commit
         if: ${{ !inputs.skip_tests }}
@@ -97,10 +107,19 @@ jobs:
           echo "Prerelease: ${{ steps.compute_version.outputs.is_prerelease }}"
           echo "Release name: ${{ steps.compute_version.outputs.release_name }}"
 
+  build-only:
+    needs: validate
+    if: ${{ inputs.build_only }}
+    uses: ./.github/workflows/release.yml
+    with:
+      tag_name: ${{ needs.validate.outputs.computed_version }}
+      build_only: true
+    secrets: inherit
+
   create-release:
     needs: validate
     runs-on: ubuntu-latest
-    if: ${{ inputs.create_release }}
+    if: ${{ inputs.create_release && !inputs.build_only }}
     steps:
       - uses: actions/checkout@v4
 
@@ -120,7 +139,6 @@ jobs:
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.MY_PAT }}
-        # Use the precomputed values to avoid recomputation
           script: |
             const version = '${{ needs.validate.outputs.computed_version }}';
             const isPrerelease =
