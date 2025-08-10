@@ -29,6 +29,7 @@ use super::types::{
     MPV_BUFFER_SIZE,
     MPV_DETECTION_INTERVAL_MS,
     MPV_REQUEST_TIMEOUT_SECS,
+    MPV_SOCKET_TIMEOUT_MS,
 };
 use crate::{
     core::errors::YomineError,
