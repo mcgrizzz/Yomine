@@ -37,6 +37,7 @@ impl TopBar {
         ignore_list_modal: &mut IgnoreListModal,
         current_settings: &SettingsData,
         websocket_manager: &WebSocketManager,
+        mpv_connected: bool,
         anki_connected: bool,
         restart_modal: &mut crate::gui::restart_modal::RestartModal,
         ignore_list: Option<&Arc<Mutex<IgnoreList>>>,
@@ -106,7 +107,12 @@ impl TopBar {
                 });
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    Self::show_status_indicators(ui, websocket_manager, anki_connected);
+                    Self::show_status_indicators(
+                        ui,
+                        websocket_manager,
+                        mpv_connected,
+                        anki_connected,
+                    );
                 });
             });
         });
@@ -115,6 +121,7 @@ impl TopBar {
     fn show_status_indicators(
         ui: &mut egui::Ui,
         websocket_manager: &WebSocketManager,
+        mpv_connected: bool,
         anki_connected: bool,
     ) {
         let server_state = websocket_manager.get_server_state();
@@ -144,6 +151,20 @@ impl TopBar {
             ui.small("asbplayer").on_hover_text(&asbplayer_tooltip);
             ui.small(egui::RichText::new("●").color(asbplayer_color))
                 .on_hover_text(&asbplayer_tooltip);
+        });
+
+        ui.add_space(3.0);
+
+        // MPV indicator
+        let (mpv_color, mpv_tooltip) = if mpv_connected {
+            (egui::Color32::from_rgb(0, 200, 0), "MPV detected - using MPV mode")
+        } else {
+            (egui::Color32::from_rgb(100, 100, 100), "MPV not detected")
+        };
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 2.0;
+            ui.small("mpv").on_hover_text(mpv_tooltip);
+            ui.small(egui::RichText::new("●").color(mpv_color)).on_hover_text(mpv_tooltip);
         });
 
         ui.add_space(3.0);
