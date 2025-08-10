@@ -30,6 +30,8 @@ vibrato = { git = "https://github.com/daac-tools/vibrato.git", rev = "0af7cd0" }
 wana_kana = "4.0.0"
 zstd = "0.13.3"
 chrono = { version = "0.4.41", features = ["serde"] }
+rsubs-lib = "0.3.3"
+time = "0.3.41"
 
 # Platform-specific dependencies
 #[target.'cfg(target_os = "macos")'.dependencies]
