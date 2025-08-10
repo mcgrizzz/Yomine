@@ -182,7 +182,7 @@ impl MpvManager {
 
         #[cfg(unix)]
         {
-            let mut stream = UnixStream::connect(endpoint).map_err(|e| {
+            let stream = UnixStream::connect(endpoint).map_err(|e| {
                 YomineError::Custom(format!("Failed to connect to MPV IPC {}: {}", endpoint, e))
             })?;
 
