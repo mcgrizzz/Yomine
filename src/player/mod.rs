@@ -15,8 +15,31 @@ impl PlayerManager {
     }
 
     pub fn update(&mut self, websocket_port: u16) {
-        self.mpv.update(&mut self.ws, websocket_port);
+        self.mpv.update();
         self.ws.update();
+
+        match (self.mpv.is_connected(), self.ws.server.is_some()) {
+            (true, true) => {
+                //Prefer mpv to websocket server
+                if let Err(e) = self.ws.shutdown_server() {
+                    eprintln!("[Player] Failed to shutdown WebSocket server: {}", e);
+                } else {
+                    println!(
+                        "[Player] MPV detected. WebSocket server stopped; switched to MPV mode."
+                    );
+                }
+            }
+            // Both disconnected -> start WebSocket
+            (false, false) => {
+                //Mpv is not connected so make sure we have websocket server
+                if let Err(e) = self.ws.restart_server(websocket_port) {
+                    eprintln!("[Player] Failed to restart WebSocket server: {}", e);
+                } else {
+                    println!("[Player] MPV not detected. WebSocket server restarted; switched to asbplayer mode.");
+                }
+            }
+            _ => {}
+        }
     }
 
     pub fn seek_timestamp(&self, seconds: f64, timestamp_str: &str) -> Result<(), YomineError> {

@@ -31,10 +31,7 @@ use super::types::{
     MPV_REQUEST_TIMEOUT_SECS,
     MPV_SOCKET_TIMEOUT_MS,
 };
-use crate::{
-    core::errors::YomineError,
-    gui::websocket_manager::WebSocketManager,
-};
+use crate::core::errors::YomineError;
 
 pub struct MpvManager {
     state: Mutex<ConnectionState>,
@@ -69,7 +66,7 @@ impl MpvManager {
         self.confirmed_timestamps.lock().map(|timestamps| timestamps.clone()).unwrap_or_default()
     }
 
-    pub fn update(&self, websocket_manager: &mut WebSocketManager, websocket_port: u16) {
+    pub fn update(&self) {
         let now = Instant::now();
 
         {
@@ -91,7 +88,6 @@ impl MpvManager {
             *last_check = Some(now);
         }
 
-        let was_connected = self.is_connected();
         let detected = self.detect_mpv();
 
         if let Ok(mut state) = self.state.lock() {
@@ -99,7 +95,6 @@ impl MpvManager {
                 if detected { ConnectionState::Connected } else { ConnectionState::Disconnected };
         }
 
-        self.handle_backend_switching(detected, was_connected, websocket_manager, websocket_port);
         self.cleanup_old_requests(now);
     }
 
@@ -260,35 +255,6 @@ impl MpvManager {
                 true
             }
         });
-    }
-
-    fn handle_backend_switching(
-        &self,
-        detected: bool,
-        was_connected: bool,
-        websocket_manager: &mut WebSocketManager,
-        websocket_port: u16,
-    ) {
-        if detected && !was_connected {
-            if websocket_manager.server.is_some() {
-                if let Err(e) = websocket_manager.shutdown_server() {
-                    eprintln!("[MPV] Failed to shutdown WebSocket server during MPV switch: {}", e);
-                } else {
-                    println!("[MPV] MPV detected. WebSocket server stopped; switched to MPV mode.");
-                }
-            }
-        } else if !detected && was_connected {
-            if websocket_manager.server.is_none() {
-                if let Err(e) = websocket_manager.restart_server(websocket_port) {
-                    eprintln!(
-                        "[MPV] Failed to restart WebSocket server after MPV disconnect: {}",
-                        e
-                    );
-                } else {
-                    println!("[MPV] MPV not detected. WebSocket server restarted; switched to asbplayer mode.");
-                }
-            }
-        }
     }
 
     fn detect_mpv(&self) -> bool {

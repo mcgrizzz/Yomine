@@ -14,7 +14,7 @@
 
 # Yomine
 
-A Japanese vocabulary mining tool designed to help language learners extract and study words from subtitle files. It integrates with asbplayer for timestamp navigation, ranks terms by frequency, and supports Anki integration to filter out known words. 
+A Japanese vocabulary mining tool designed to help language learners extract and study words from subtitle files. It integrates with ASBPlayer and MPV for timestamp navigation, ranks terms by frequency, and supports Anki integration to filter out known words.
 
 Written in Rust 🦀
 
@@ -36,7 +36,9 @@ The macOS and Linux binaries have not been extensively tested.
 1. **Download** the latest release for your platform from [Releases](https://github.com/mcgrizzz/Yomine/releases)
 2. **Download Frequency Dictionaries** - [Frequency Dictionaries](#setting-up-frequency-dictionaries)
 3. **Connect to Anki** - [Anki Setup](#setting-up-anki-integration)
-4. **Connect to ASBPlayer** - In ASBPlayer, `MISC` -> `Enable WebSocket client`.
+4. **Connect to a Video Player** - Either:
+   - **ASBPlayer**: In ASBPlayer, `MISC` -> `Enable WebSocket client`
+   - **MPV**: Start MPV with `--input-ipc-server=/tmp/mpv-socket`
 
 That's it! Yomine will segment the text, rank terms by frequency, and show you vocabulary and expressions to learn.
 
@@ -45,7 +47,7 @@ That's it! Yomine will segment the text, rank terms by frequency, and show you v
 - **Vocabulary extraction** from Japanese subtitle files (words and expressions)
 - **Frequency-based ranking** to prioritize terms  
 - **Anki integration** to filter out words you already know
-- **ASBPlayer integration** for video navigation
+- **Video player integration** (ASBPlayer and MPV) for timestamp navigation
 - **Term analysis** with readings, part-of-speech, and context sentences
 - **Multi-sentence browsing** to see multiple example sentences per term
 - **Ignore list** to hide unwanted terms from your mining results
@@ -118,6 +120,22 @@ Yomine uses WebSocket to communicate with ASBPlayer for timestamp navigation.
 3. Click "Save and Restart Server"
 4. In ASBPlayer: `MISC` → `WebSocket Server URL` → enter `ws://localhost:YOUR_PORT`
 
+### **MPV Player Integration**
+
+Yomine can also integrate directly with MPV player for timestamp navigation, providing an alternative to ASBPlayer.
+
+**Setup:**
+1. Start MPV with IPC server enabled:
+   ```bash
+   mpv --input-ipc-server=/tmp/mpv-socket your-video-file.mkv
+   ```
+
+2. Yomine will automatically detect when MPV is running and switch to MPV mode
+3. When MPV is detected, the WebSocket server will be automatically stopped
+4. When MPV is closed, Yomine will automatically restart the WebSocket server for ASBPlayer
+
+**Note:** You can add `input-ipc-server=/tmp/mpv-socket` to your MPV configuration file to enable IPC by default.
+
 ### **Managing Your Ignore List**
 
 The ignore list lets you hide terms you don't want to see from your mining results.
@@ -165,8 +183,6 @@ The name comes from 読み ("yomi" for reading) + "mine" (as in mining vocabular
 
 **Prerequisites**: 
 - [Rust](https://www.rust-lang.org/tools/install) with Cargo
-- [asbplayer](https://github.com/killergerbah/asbplayer) (optional, for timestamp navigation)
-- Anki (optional, for known vocab filtering)
 
 **Steps:**
 ```bash
