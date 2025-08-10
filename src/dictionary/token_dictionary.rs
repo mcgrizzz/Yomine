@@ -22,7 +22,7 @@ use zstd::stream::copy_decode;
 use crate::{
     core::{
         http::{
-            download_to_file,
+            download_with_progress,
             http_client,
         },
         YomineError,
@@ -137,7 +137,8 @@ pub fn ensure_dictionary(
 
     callback_message("Downloading tokenizer model...", &progress_callback);
     let client = http_client()?;
-    download_to_file(&client, url, &download_path)?;
+
+    download_with_progress(&client, url, &download_path, progress_callback.as_ref())?;
     callback_message("Downloaded tokenizer model successfully", &progress_callback);
 
     let metadata = download_path.metadata().map_err(|e| {
