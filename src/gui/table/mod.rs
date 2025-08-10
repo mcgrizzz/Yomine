@@ -120,10 +120,6 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
                 }
             });
         } else if !app.terms.is_empty() {
-            // Check websocket state once for all terms
-            let has_websocket_clients =
-                app.websocket_manager.has_clients() && app.websocket_manager.server.is_some();
-
             // Display current file's parsed title as the main heading
             if let Some(ref source_file) = app.current_source_file {
                 ui.heading(
@@ -167,14 +163,7 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
                             let term_index = row.index();
                             let term = &app.terms[term_index].clone();
                             col_term(ctx, &mut row, &term, app);
-                            col_sentence(
-                                ctx,
-                                &mut row,
-                                &term,
-                                app,
-                                has_websocket_clients,
-                                term_index,
-                            );
+                            col_sentence(ctx, &mut row, &term, app, term_index);
                             col_frequency(ctx, &mut row, &term, app);
                             col_pos(ctx, &mut row, &term, app);
                         });

@@ -48,6 +48,7 @@ use crate::{
         load_json_or_default,
         save_json,
     },
+    player::PlayerManager,
 };
 
 #[derive(Clone)]
@@ -83,7 +84,7 @@ pub struct YomineApp {
     pub zoom: f32,
     pub anki_connected: bool,
     pub last_anki_check: Option<std::time::Instant>,
-    pub websocket_manager: WebSocketManager,
+    pub player: PlayerManager,
     pub message_overlay: MessageOverlay,
     pub language_tools: Option<LanguageTools>,
     pub current_processing_file: Option<String>,
@@ -106,8 +107,10 @@ impl YomineApp {
             settings_data.anki_model_mappings.insert(model_name, field_mapping);
         }
 
-        // Initialize WebSocketManager with port from settings
+        // Initialize PlayerManager with both WebSocket and MPV managers
         let websocket_manager = WebSocketManager::new(settings_data.websocket_settings.port);
+        let mpv_manager = crate::mpv::MpvManager::new();
+        let player = PlayerManager::new(mpv_manager, websocket_manager);
 
         let app = Self {
             model_mapping: settings_data.anki_model_mappings.clone(),
@@ -116,7 +119,7 @@ impl YomineApp {
             zoom: cc.egui_ctx.zoom_factor(),
             anki_connected: false,
             last_anki_check: None,
-            websocket_manager,
+            player,
             message_overlay: MessageOverlay::new(),
             file_modal: FileModal::new(),
             error_modal: ErrorModal::new(),
@@ -188,7 +191,8 @@ impl eframe::App for YomineApp {
             self.handle_task_result(result, ctx);
         }
 
-        self.websocket_manager.update();
+        // Update the combined player (handles both MPV and WebSocket)
+        self.player.update(self.settings_data.websocket_settings.port);
         self.update_anki_status();
 
         let current_settings = self.get_current_settings();
@@ -202,7 +206,8 @@ impl eframe::App for YomineApp {
             &mut self.websocket_settings_modal,
             &mut self.ignore_list_modal,
             &current_settings,
-            &self.websocket_manager,
+            &self.player.ws,
+            self.player.is_connected(),
             self.anki_connected,
             &mut self.restart_modal,
             ignore_list_ref,
@@ -232,8 +237,7 @@ impl eframe::App for YomineApp {
             self.save_settings();
         }
 
-        if let Some(settings) = self.websocket_settings_modal.show(ctx, &mut self.websocket_manager)
-        {
+        if let Some(settings) = self.websocket_settings_modal.show(ctx, &mut self.player.ws) {
             self.settings_data = settings;
             self.save_settings();
         }

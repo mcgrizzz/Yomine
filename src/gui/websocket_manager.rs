@@ -52,6 +52,16 @@ impl WebSocketManager {
         Ok(())
     }
 
+    pub fn shutdown_server(&mut self) -> Result<(), YomineError> {
+        if let Some(server) = &self.server {
+            println!("[WS] Shutting down WebSocket server...");
+            server.shutdown()?;
+            println!("[WS] WebSocket server shutdown completed");
+        }
+        self.server = None;
+        Ok(())
+    }
+
     pub fn get_server_state(&self) -> ServerState {
         if let Some(server) = &self.server {
             server.get_server_state()

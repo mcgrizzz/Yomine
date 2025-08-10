@@ -28,7 +28,6 @@ pub(crate) fn col_sentence(
     row: &mut TableRow,
     term: &Term,
     app: &mut YomineApp,
-    has_websocket_clients: bool,
     term_index: usize,
 ) {
     row.col(|ui| {
@@ -49,7 +48,7 @@ pub(crate) fn col_sentence(
             ui.horizontal(|ui| {
                 //TODO: Nice layout where sentence nav is below sentence content in the row.
                 ui_sentence_navigation(ui, term, term_index, app);
-                ui_timestamp(ui, term, app, has_websocket_clients, term_index);
+                ui_timestamp(ui, term, app, term_index);
 
                 // ui_sentence_content(ctx, ui, term, app, term_index);
             });
@@ -57,13 +56,7 @@ pub(crate) fn col_sentence(
     });
 }
 
-fn ui_timestamp(
-    ui: &mut Ui,
-    term: &Term,
-    app: &YomineApp,
-    has_websocket_clients: bool,
-    term_index: usize,
-) {
+fn ui_timestamp(ui: &mut Ui, term: &Term, app: &YomineApp, term_index: usize) {
     let sentence_idx = app.table_state.get_sentence_index(term_index);
     let sentence_ref = &term.sentence_references[sentence_idx];
 
@@ -73,7 +66,8 @@ fn ui_timestamp(
     };
 
     if let Some(timestamp) = &sentence_content.timestamp {
-        if has_websocket_clients {
+        let player_available = app.player.is_connected();
+        if player_available {
             ui_timestamp_button(ui, timestamp, app);
         } else {
             let timestamp_vec: Vec<&str> = timestamp.split(" --> ").collect();
@@ -208,8 +202,7 @@ fn ui_timestamp_button(ui: &mut Ui, timestamp: &str, app: &YomineApp) {
     // Format the timestamp in a more human-readable way
     let human_timestamp = format_human_timestamp(clean_timestamp);
 
-    let is_confirmed =
-        app.websocket_manager.get_confirmed_timestamps().contains(&clean_timestamp.to_string());
+    let is_confirmed = app.player.get_confirmed_timestamps().contains(&clean_timestamp.to_string());
 
     // Color based on confirmation status
     let button_text = if is_confirmed {
@@ -233,26 +226,19 @@ fn ui_timestamp_button(ui: &mut Ui, timestamp: &str, app: &YomineApp) {
         let response = button.ui(ui);
 
         if response.clicked() {
-            if let Some(server) = &app.websocket_manager.server {
-                if let Ok(seconds) =
-                    crate::websocket::WebSocketServer::convert_srt_timestamp_to_seconds(
-                        clean_timestamp,
-                    )
-                {
-                    // Send the timestamp to all connected clients
-                    match server.seek_timestamp(seconds, clean_timestamp) {
-                        Ok(_) => {
-                            println!("Sent seek command for timestamp: {}", clean_timestamp);
-                        }
-                        Err(e) => {
-                            eprintln!("Error sending seek command: {:?}", e);
-                        }
+            if let Ok(seconds) =
+                crate::websocket::WebSocketServer::convert_srt_timestamp_to_seconds(clean_timestamp)
+            {
+                match app.player.seek_timestamp(seconds, clean_timestamp) {
+                    Ok(_) => {
+                        println!("Sent seek command for timestamp: {}", clean_timestamp);
                     }
-                } else {
-                    eprintln!("Failed to convert timestamp: {} to seconds", clean_timestamp);
+                    Err(e) => {
+                        eprintln!("Error sending seek command: {:?}", e);
+                    }
                 }
             } else {
-                println!("WebSocket server not available");
+                eprintln!("Failed to convert timestamp: {} to seconds", clean_timestamp);
             }
         }
     });
