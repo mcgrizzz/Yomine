@@ -225,9 +225,9 @@ impl WebSocketServer {
         None
     }
 
-    pub fn get_confirmed_timestamps(&self) -> Vec<String> {
+    pub fn get_confirmed_timestamps(&self) -> Vec<f32> {
         let statuses = self.seek_statuses.lock().unwrap();
-        statuses.iter().filter(|s| s.confirmed).map(|s| s.timestamp_str.clone()).collect()
+        statuses.iter().filter(|s| s.confirmed).map(|s| s.timestamp).collect()
     }
 
     pub fn get_server_state(&self) -> ServerState {
@@ -264,7 +264,7 @@ impl WebSocketServer {
         Ok(())
     }
 
-    pub fn seek_timestamp(&self, timestamp: f64, timestamp_str: &str) -> Result<(), YomineError> {
+    pub fn seek_timestamp(&self, timestamp: f32, timestamp_str: &str) -> Result<(), YomineError> {
         println!(
             "[WS] Sending seek command for timestamp: {} seconds, str: {}",
             timestamp, timestamp_str
@@ -331,20 +331,5 @@ impl WebSocketServer {
         });
 
         Ok(())
-    }
-
-    pub fn convert_srt_timestamp_to_seconds(timestamp: &str) -> Result<f64, YomineError> {
-        // SRT format: 00:01:47,733 -> 107.733 seconds
-        let parts: Vec<&str> = timestamp.split(|c| c == ':' || c == ',' || c == '.').collect();
-        if parts.len() < 4 {
-            return Err(YomineError::InvalidTimestamp);
-        }
-
-        let hours: f64 = parts[0].parse().map_err(|_| YomineError::InvalidTimestamp)?;
-        let minutes: f64 = parts[1].parse().map_err(|_| YomineError::InvalidTimestamp)?;
-        let seconds: f64 = parts[2].parse().map_err(|_| YomineError::InvalidTimestamp)?;
-        let milliseconds: f64 = parts[3].parse().map_err(|_| YomineError::InvalidTimestamp)?;
-
-        Ok(hours * 3600.0 + minutes * 60.0 + seconds + milliseconds / 1000.0)
     }
 }

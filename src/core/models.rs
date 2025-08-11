@@ -3,22 +3,41 @@ use std::{
     hash::Hash,
 };
 
+use time::Time;
+
 use crate::segmentation::word::POS;
 
 #[derive(Debug, Clone)]
-pub enum FileType {
+pub enum SourceFileType {
     SRT,
+    SSA,
     Other(String),
+}
+
+impl SourceFileType {
+    pub fn from_extension(file_path: &str) -> Self {
+        if let Some(extension) =
+            std::path::Path::new(file_path).extension().and_then(|ext| ext.to_str())
+        {
+            match extension.to_lowercase().as_str() {
+                "srt" => SourceFileType::SRT,
+                "ass" | "ssa" => SourceFileType::SSA,
+                other => SourceFileType::Other(other.to_uppercase()),
+            }
+        } else {
+            SourceFileType::SRT
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct SourceFile {
-    pub id: u32,                 // Unique identifier
-    pub source: Option<String>,  // Source type (e.g., "YouTube", "Jimaku", "TXT")
-    pub file_type: FileType,     // File type (e.g., SRT, TXT)
-    pub title: String,           // File name or descriptive title
-    pub creator: Option<String>, // Optional creator information
-    pub original_file: String,   // Path to the file
+    pub id: u32,                   // Unique identifier
+    pub source: Option<String>,    // Source type (e.g., "YouTube", "Jimaku", "TXT")
+    pub file_type: SourceFileType, // File type (e.g., SRT, TXT)
+    pub title: String,             // File name or descriptive title
+    pub creator: Option<String>,   // Optional creator information
+    pub original_file: String,     // Path to the file
 }
 
 impl Default for SourceFile {
@@ -26,11 +45,47 @@ impl Default for SourceFile {
         Self {
             id: 0,
             source: None,
-            file_type: FileType::SRT,
+            file_type: SourceFileType::SRT,
             title: String::new(),
             creator: None,
             original_file: String::new(),
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TimeStamp {
+    pub start: Time,
+    pub end: Time,
+}
+
+impl TimeStamp {
+    pub fn to_secs(&self) -> (f32, f32) {
+        fn secs(t: Time) -> f32 {
+            let (h, m, s, ms) = t.as_hms_milli();
+            (h as f32) * 3600.0 + (m as f32) * 60.0 + (s as f32) + (ms as f32) / 1000.0
+        }
+
+        (secs(self.start), secs(self.end))
+    }
+
+    pub fn to_human_readable(&self) -> (String, String) {
+        fn fmt_time(t: Time) -> String {
+            let (h, m, s, _ms) = t.as_hms_milli();
+
+            if h > 0 {
+                format!("{}h {}m {}s", h, m, s)
+            } else if m > 0 {
+                format!("{}m {}s", m, s)
+            } else {
+                format!("{}s", s)
+            }
+        }
+
+        let start_str = fmt_time(self.start);
+        let stop_str = fmt_time(self.end);
+
+        (format!("{:<11}", start_str), format!("{:<11}", stop_str))
     }
 }
 
@@ -40,7 +95,7 @@ pub struct Sentence {
     pub source_id: u32,                             // Reference to a SourceFile
     pub text: String,                               // Sentence content
     pub segments: Vec<(String, POS, usize, usize)>, // List of segments (reading, POS, start, end) for the sentence
-    pub timestamp: Option<String>,                  // Include timestamp for SRT files
+    pub timestamp: Option<TimeStamp>,
 }
 
 #[derive(serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash)]

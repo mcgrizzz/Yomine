@@ -42,7 +42,7 @@ impl PlayerManager {
         }
     }
 
-    pub fn seek_timestamp(&self, seconds: f64, timestamp_str: &str) -> Result<(), YomineError> {
+    pub fn seek_timestamp(&self, seconds: f32, timestamp_str: &str) -> Result<(), YomineError> {
         if self.mpv.is_connected() {
             self.mpv.seek_timestamp(seconds, timestamp_str)
         } else if let Some(server) = &self.ws.server {
@@ -58,7 +58,7 @@ impl PlayerManager {
         self.mpv.is_connected() || self.ws.has_clients()
     }
 
-    pub fn get_confirmed_timestamps(&self) -> Vec<String> {
+    pub fn get_confirmed_timestamps(&self) -> Vec<f32> {
         let ws_timestamps = self.ws.get_confirmed_timestamps();
         let mpv_timestamps = self.mpv.get_confirmed_timestamps();
 

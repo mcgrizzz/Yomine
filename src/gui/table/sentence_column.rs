@@ -11,7 +11,10 @@ use egui_extras::TableRow;
 use wana_kana::ConvertJapanese;
 
 use crate::{
-    core::Term,
+    core::{
+        models::TimeStamp,
+        Term,
+    },
     gui::{
         theme::blend_colors,
         YomineApp,
@@ -70,10 +73,9 @@ fn ui_timestamp(ui: &mut Ui, term: &Term, app: &YomineApp, term_index: usize) {
         if player_available {
             ui_timestamp_button(ui, timestamp, app);
         } else {
-            let timestamp_vec: Vec<&str> = timestamp.split(" --> ").collect();
-            let human_timestamp = format_human_timestamp(timestamp_vec[0]);
+            let (human_timestamp_start, _human_timestamp_stop) = timestamp.to_human_readable();
             ui.label(
-                RichText::new(&human_timestamp)
+                RichText::new(&human_timestamp_start)
                     .color(ui.ctx().style().visuals.weak_text_color())
                     .size(11.0),
             );
@@ -195,20 +197,17 @@ fn ui_sentence_content(
 }
 
 /// Creates a clickable timestamp button with WebSocket integration
-fn ui_timestamp_button(ui: &mut Ui, timestamp: &str, app: &YomineApp) {
-    // Extract the first part of the timestamp if it contains an arrow
-    let clean_timestamp = timestamp.split(" --> ").next().unwrap_or(timestamp);
+fn ui_timestamp_button(ui: &mut Ui, timestamp: &TimeStamp, app: &YomineApp) {
+    let (seconds_start, _seconds_stop) = timestamp.to_secs();
+    let (human_timestamp_start, _human_timestamp_stop) = timestamp.to_human_readable();
 
-    // Format the timestamp in a more human-readable way
-    let human_timestamp = format_human_timestamp(clean_timestamp);
-
-    let is_confirmed = app.player.get_confirmed_timestamps().contains(&clean_timestamp.to_string());
+    let is_confirmed = app.player.get_confirmed_timestamps().contains(&seconds_start);
 
     // Color based on confirmation status
     let button_text = if is_confirmed {
-        format!("👁 {}", human_timestamp) // Eye for confirmed
+        format!("👁 {}", human_timestamp_start) // Eye for confirmed
     } else {
-        format!("▶ {}", human_timestamp) // Play button for not confirmed
+        format!("▶ {}", human_timestamp_start) // Play button for not confirmed
     };
 
     ui.horizontal_centered(|ui| {
@@ -226,46 +225,12 @@ fn ui_timestamp_button(ui: &mut Ui, timestamp: &str, app: &YomineApp) {
         let response = button.ui(ui);
 
         if response.clicked() {
-            if let Ok(seconds) =
-                crate::websocket::WebSocketServer::convert_srt_timestamp_to_seconds(clean_timestamp)
-            {
-                match app.player.seek_timestamp(seconds, clean_timestamp) {
-                    Ok(_) => {
-                        println!("Sent seek command for timestamp: {}", clean_timestamp);
-                    }
-                    Err(e) => {
-                        eprintln!("Error sending seek command: {:?}", e);
-                    }
-                }
-            } else {
-                eprintln!("Failed to convert timestamp: {} to seconds", clean_timestamp);
+            if let Err(e) = app.player.seek_timestamp(seconds_start, &human_timestamp_start) {
+                eprintln!("Failed to seek timestamp: {}", e);
             }
+            println!("Sent seek command for timestamp: {}", &human_timestamp_start);
         }
     });
-}
-
-fn format_human_timestamp(timestamp: &str) -> String {
-    if let Ok(seconds) =
-        crate::websocket::WebSocketServer::convert_srt_timestamp_to_seconds(timestamp)
-    {
-        // Extract hours, minutes, seconds
-        let hours = (seconds / 3600.0).floor() as u32;
-        let minutes = ((seconds % 3600.0) / 60.0).floor() as u32;
-        let secs = (seconds % 60.0).floor() as u32;
-
-        // Format based on components
-        let formatted = if hours > 0 {
-            format!("{}h {}m {}s", hours, minutes, secs)
-        } else if minutes > 0 {
-            format!("{}m {}s", minutes, secs)
-        } else {
-            format!("{}s", secs)
-        };
-
-        format!("{:<11}", formatted)
-    } else {
-        format!("{:<11}", timestamp)
-    }
 }
 
 fn find_expression_segments(

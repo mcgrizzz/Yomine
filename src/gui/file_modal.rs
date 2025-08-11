@@ -8,7 +8,7 @@ use super::{
 use crate::{
     core::{
         filename_parser,
-        models::FileType,
+        models::SourceFileType,
         SourceFile,
     },
     persistence::{
@@ -286,8 +286,8 @@ impl FileModal {
 
     fn handle_file_browse(&mut self) -> Option<SourceFile> {
         FileDialog::new()
-            .add_filter("Subtitle files", &["srt", "vtt", "ass"])
-            .add_filter("Text files", &["txt"])
+            .add_filter("Subtitle files", &["srt", "ass", "ssa"])
+            //.add_filter("Text files", &["txt"])
             .pick_file()
             .map(|path| Self::create_source_file_from_path_and_metadata(&path, None, None))
     }
@@ -322,7 +322,7 @@ impl FileModal {
         SourceFile {
             id: DEFAULT_SOURCE_FILE_ID,
             source: None,
-            file_type: FileType::from_extension(&file_path_str),
+            file_type: SourceFileType::from_extension(&file_path_str),
             title,
             creator,
             original_file: file_path_str,
@@ -335,7 +335,7 @@ impl FileModal {
         SourceFile {
             id: DEFAULT_SOURCE_FILE_ID,
             source: None,
-            file_type: FileType::from_extension(&entry.file_path),
+            file_type: SourceFileType::from_extension(&entry.file_path),
             title: entry.title.clone(),
             creator: entry.creator.clone(),
             original_file: entry.file_path.clone(),
@@ -377,20 +377,5 @@ impl FileModal {
 impl Default for FileModal {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl FileType {
-    fn from_extension(file_path: &str) -> Self {
-        if let Some(extension) =
-            std::path::Path::new(file_path).extension().and_then(|ext| ext.to_str())
-        {
-            match extension.to_lowercase().as_str() {
-                "srt" => FileType::SRT,
-                other => FileType::Other(other.to_uppercase()),
-            }
-        } else {
-            FileType::SRT
-        }
     }
 }

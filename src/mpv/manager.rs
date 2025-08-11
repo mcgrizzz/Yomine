@@ -36,7 +36,7 @@ use crate::core::errors::YomineError;
 pub struct MpvManager {
     state: Mutex<ConnectionState>,
     last_check: Mutex<Option<Instant>>,
-    confirmed_timestamps: Mutex<Vec<String>>,
+    confirmed_timestamps: Mutex<Vec<f32>>,
     pending_requests: Mutex<Vec<PendingRequest>>,
     request_counter: AtomicU32,
 }
@@ -62,7 +62,7 @@ impl MpvManager {
         self.state.lock().map(|state| *state == ConnectionState::Connected).unwrap_or(false)
     }
 
-    pub fn get_confirmed_timestamps(&self) -> Vec<String> {
+    pub fn get_confirmed_timestamps(&self) -> Vec<f32> {
         self.confirmed_timestamps.lock().map(|timestamps| timestamps.clone()).unwrap_or_default()
     }
 
@@ -98,7 +98,7 @@ impl MpvManager {
         self.cleanup_old_requests(now);
     }
 
-    pub fn seek_timestamp(&self, seconds: f64, timestamp_str: &str) -> Result<(), YomineError> {
+    pub fn seek_timestamp(&self, seconds: f32, timestamp_str: &str) -> Result<(), YomineError> {
         if !self.is_connected() {
             return Err(YomineError::Custom("MPV is not connected".into()));
         }
@@ -120,6 +120,7 @@ impl MpvManager {
 
         let pending_request = PendingRequest {
             request_id,
+            timestamp: seconds,
             timestamp_str: timestamp_str.to_string(),
             sent_time: Instant::now(),
         };
@@ -156,10 +157,10 @@ impl MpvManager {
 
     fn create_seek_command(
         &self,
-        seconds: f64,
+        seconds: f32,
         request_id: u32,
     ) -> Result<MpvCommand, YomineError> {
-        let seconds_value = serde_json::Number::from_f64(seconds)
+        let seconds_value = serde_json::Number::from_f64(seconds as f64)
             .ok_or_else(|| YomineError::Custom("Invalid timestamp value for MPV".into()))?;
 
         Ok(MpvCommand {
@@ -211,7 +212,7 @@ impl MpvManager {
                 let request = pending.remove(pos);
 
                 if resp.error == "success" {
-                    self.push_confirmed(&request.timestamp_str);
+                    self.push_confirmed(request.timestamp);
                     println!(
                         "[MPV] Confirmed seek for timestamp: {} (request_id: {})",
                         request.timestamp_str, resp_id
@@ -226,13 +227,13 @@ impl MpvManager {
         }
     }
 
-    fn push_confirmed(&self, timestamp_str: &str) {
+    fn push_confirmed(&self, timestamp: f32) {
         let mut list = match self.confirmed_timestamps.lock() {
             Ok(guard) => guard,
             Err(_) => return,
         };
 
-        list.push(timestamp_str.to_string());
+        list.push(timestamp);
     }
 
     fn cleanup_old_requests(&self, now: Instant) {

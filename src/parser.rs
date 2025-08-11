@@ -4,43 +4,50 @@ use std::{
 };
 
 use regex::Regex;
+use rsubs_lib::{
+    SRT,
+    SSA,
+};
 
 use crate::core::{
+    models::{
+        SourceFileType,
+        TimeStamp,
+    },
     Sentence,
     SourceFile,
     YomineError,
 };
 
+// Regex now handles any parathesis (full or half width) that contains only hiragana. Not sure if we should include Katakana
+// but that would easy to add, just add '\p{scx=Katakana}'
 static KANA_READING_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\(([^)]*)\)").expect("Failed to compile Japanese kana reading regex")
+    Regex::new(r"(?:\(|（)[\p{scx=Hiragana}・･\s]+(?:\)|）)")
+        .expect("Failed to compile kana-reading regex")
 });
 
-pub fn read_srt(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
-    //So far we only know netflix uses this formatting as per (https://partnerhelp.netflixstudios.com/hc/en-us/articles/215767517-Japanese-Timed-Text-Style-Guide)
-    let delete_readings = source_file.creator.as_deref() == Some("Netflix");
+static STRIP_INLINE_TAGS: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)</?(?:b|i|u)>").expect("Failed to compile inline_strip_tags regex")
+});
 
-    let sentences: Vec<Sentence> = fs::read_to_string(&source_file.original_file)?
-        .replace("\r", "")
-        .split("\n\n")
-        .filter(|s| !s.is_empty())
+fn parse_srt(srt: SRT, source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
+    let sentences: Vec<Sentence> = srt
+        .lines
+        .iter()
+        .filter(|s| !s.text.is_empty())
         .enumerate()
         .filter_map(|(id, entry)| {
-            let lines: Vec<&str> = entry.trim().trim_start_matches("\n").splitn(3, "\n").collect();
+            let raw_text = entry.text.replace("\n", "");
 
-            if lines.len() != 3 {
-                return Some(Err(YomineError::Custom("Invalid subtitle format".to_string())));
-            }
-
-            let timestamp = lines[1].to_string();
-            let raw_text = lines[2].to_string().replace("\n", ""); // Filter out newlines within the text.
-            let mut text = raw_text;
-            if delete_readings {
-                text = KANA_READING_REGEX.replace_all(&text, "").trim().to_string()
-            }
+            let text = raw_text;
+            let text = KANA_READING_REGEX.replace_all(&text, "");
+            let text = STRIP_INLINE_TAGS.replace_all(&text, "").to_string();
 
             if text.is_empty() {
                 return None;
             }
+
+            let timestamp = TimeStamp { start: entry.start, end: entry.end };
 
             Some(Ok(Sentence {
                 id: id as u32,
@@ -59,24 +66,35 @@ pub fn read_srt(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> 
     Ok(sentences)
 }
 
-pub fn read_txt(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
-    let sentences: Vec<Sentence> = fs::read_to_string(&source_file.original_file)?
-        .split_terminator(['。', '！', '？', '\n'])
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .enumerate()
-        .map(|(id, s)| Sentence {
-            id: id as u32,
-            source_id: source_file.id, // Reference to the SourceFile ID
-            segments: vec![],          // segments are generated after tokenization
-            text: s.to_string(),
-            timestamp: None, // Text files don’t have timestamps
-        })
-        .collect();
+pub fn read_srt(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
+    //So far we only know netflix uses this formatting as per (https://partnerhelp.netflixstudios.com/hc/en-us/articles/215767517-Japanese-Timed-Text-Style-Guide)
+    // let delete_readings = source_file.creator.as_deref() == Some("Netflix");
 
-    if sentences.is_empty() {
-        return Err(YomineError::Custom("No sentences found in the file.".to_string()));
+    let raw_srt = fs::read_to_string(&source_file.original_file)?;
+    //new rsubs doesn't like utf-8 BOM at the beginning of the file:
+    let raw_srt = raw_srt.trim_start_matches('\u{feff}');
+    let srt = SRT::parse(raw_srt)
+        .map_err(|err| YomineError::Custom(format!("Error Parsing SRT File: {}", err)))?;
+
+    parse_srt(srt, source_file)
+}
+
+fn read_ssa(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
+    let raw_file = fs::read_to_string(&source_file.original_file)?;
+    let raw_file = raw_file.trim_start_matches('\u{feff}');
+
+    let ssa = SSA::parse_lenient(raw_file)
+        .map_err(|err| YomineError::Custom(format!("Error Parsing SSA/ASS File: {}", err)))?;
+
+    let srt = ssa.to_srt();
+
+    parse_srt(srt, source_file)
+}
+
+pub fn read(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
+    match source_file.file_type {
+        SourceFileType::SRT => read_srt(source_file),
+        SourceFileType::SSA => read_ssa(source_file),
+        SourceFileType::Other(ref format) => Err(YomineError::UnsupportedFileType(format.clone())),
     }
-
-    Ok(sentences)
 }

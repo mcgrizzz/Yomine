@@ -34,6 +34,7 @@ pub struct MpvResponse {
 #[derive(Clone, Debug)]
 pub struct PendingRequest {
     pub request_id: u32,
+    pub timestamp: f32,
     pub timestamp_str: String,
     pub sent_time: Instant,
 }

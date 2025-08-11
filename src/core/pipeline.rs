@@ -12,13 +12,12 @@ use crate::{
         FieldMapping,
     },
     core::{
-        models::FileType,
         Sentence,
         SourceFile,
         Term,
     },
     gui::LanguageTools,
-    parser::read_srt,
+    parser,
     segmentation::tokenizer::extract_words,
 };
 
@@ -32,14 +31,9 @@ pub async fn process_source_file(
 
     // Parse the source file
     //let parse_start = Instant::now();
-    let mut sentences = match source_file.file_type {
-        FileType::SRT => {
-            read_srt(source_file).map_err(|e| YomineError::FailedToLoadFile(e.to_string()))?
-        }
-        FileType::Other(ref format) => {
-            return Err(YomineError::UnsupportedFileType(format.clone()));
-        }
-    };
+    let mut sentences =
+        parser::read(source_file).map_err(|e| YomineError::FailedToLoadFile(e.to_string()))?;
+
     //let parse_duration = parse_start.elapsed();
     //println!("Parsing source file took: {:?}", parse_duration);
     println!("Parsed {} sentences", sentences.len());

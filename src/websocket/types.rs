@@ -35,7 +35,7 @@ pub(crate) struct SeekCommand {
 
 #[derive(Debug, Serialize)]
 pub(crate) struct SeekBody {
-    pub timestamp: f64,
+    pub timestamp: f32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -48,7 +48,7 @@ pub(crate) struct CommandResponse {
 #[derive(Clone, Debug)]
 pub struct SeekStatus {
     pub message_id: String,
-    pub timestamp: f64,
+    pub timestamp: f32,
     pub timestamp_str: String, // Original timestamp string for display
     pub confirmed: bool,
     pub sent_time: std::time::Instant,

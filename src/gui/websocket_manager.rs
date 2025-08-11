@@ -11,7 +11,7 @@ use crate::{
 #[derive(Default)]
 pub struct WebSocketState {
     pub has_clients: bool,
-    pub confirmed_timestamps: Vec<String>,
+    pub confirmed_timestamps: Vec<f32>,
 }
 
 pub struct WebSocketManager {
@@ -92,7 +92,7 @@ impl WebSocketManager {
         self.state.has_clients
     }
 
-    pub fn get_confirmed_timestamps(&self) -> &Vec<String> {
+    pub fn get_confirmed_timestamps(&self) -> &Vec<f32> {
         &self.state.confirmed_timestamps
     }
 }
