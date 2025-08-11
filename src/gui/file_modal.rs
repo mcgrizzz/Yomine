@@ -286,8 +286,8 @@ impl FileModal {
 
     fn handle_file_browse(&mut self) -> Option<SourceFile> {
         FileDialog::new()
-            .add_filter("Subtitle files", &["srt", "vtt", "ass"])
-            .add_filter("Text files", &["txt"])
+            .add_filter("Subtitle files", &["srt", "ass", "ssa"])
+            //.add_filter("Text files", &["txt"])
             .pick_file()
             .map(|path| Self::create_source_file_from_path_and_metadata(&path, None, None))
     }

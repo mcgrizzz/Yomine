@@ -10,7 +10,7 @@ use crate::segmentation::word::POS;
 #[derive(Debug, Clone)]
 pub enum SourceFileType {
     SRT,
-    ASS,
+    SSA,
     Other(String),
 }
 
@@ -21,7 +21,7 @@ impl SourceFileType {
         {
             match extension.to_lowercase().as_str() {
                 "srt" => SourceFileType::SRT,
-                "ass" => SourceFileType::ASS,
+                "ass" | "ssa" => SourceFileType::SSA,
                 other => SourceFileType::Other(other.to_uppercase()),
             }
         } else {
