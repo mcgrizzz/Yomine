@@ -91,7 +91,7 @@ impl TimeStamp {
 
 #[derive(Debug, Clone)]
 pub struct Sentence {
-    pub id: usize,                                    // Unique identifier
+    pub id: usize,                                  // Unique identifier
     pub source_id: u32,                             // Reference to a SourceFile
     pub text: String,                               // Sentence content
     pub segments: Vec<(String, POS, usize, usize)>, // List of segments (reading, POS, start, end) for the sentence
@@ -133,8 +133,8 @@ pub struct Term {
     pub surface_form: String,  // How it is found in the sentence
     pub surface_reading: String,
     pub is_kana: bool,
-    pub part_of_speech: POS,                    // Grammatical category
-    pub frequencies: HashMap<String, u32>,      // <(dictionary_id, frequency)>
+    pub part_of_speech: POS,                      // Grammatical category
+    pub frequencies: HashMap<String, u32>,        // <(dictionary_id, frequency)>
     pub full_segment: String, //If we have main word, this includes the non-main part of the segment, in surface form
     pub full_segment_reading: String, //If we have main word, this includes the non-main part of the segment, in surface form
     pub sentence_references: Vec<(usize, usize)>, // Vec<(sentence_id, start_index)>

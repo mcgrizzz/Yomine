@@ -201,7 +201,6 @@ pub fn extract_words(
                     }
 
                     if score <= score_threshold || max_ratio >= ratio_threshold {
-
                         let index_in_sentence = sentence
                             .text
                             .match_indices(&phrase.surface_form)
