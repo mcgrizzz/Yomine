@@ -37,7 +37,7 @@ fn parse_srt(srt: SRT, source_file: &SourceFile) -> Result<Vec<Sentence>, Yomine
         .filter(|s| !s.text.is_empty())
         .enumerate()
         .filter_map(|(id, entry)| {
-            let raw_text = entry.text.replace("\n", "");
+            let raw_text = entry.text.split_whitespace().collect::<Vec<_>>().join(" ");
 
             let text = raw_text;
             let text = KANA_READING_REGEX.replace_all(&text, "");
@@ -50,7 +50,7 @@ fn parse_srt(srt: SRT, source_file: &SourceFile) -> Result<Vec<Sentence>, Yomine
             let timestamp = TimeStamp { start: entry.start, end: entry.end };
 
             Some(Ok(Sentence {
-                id: id as u32,
+                id: id,
                 source_id: source_file.id, // Reference to the SourceFile ID
                 segments: vec![],          // segments are generated after tokenization
                 text: text,

@@ -106,6 +106,12 @@ pub struct UnidicToken {
 impl From<(String, RawToken)> for UnidicToken {
     fn from(item: (String, RawToken)) -> Self {
         let (surface, raw) = item;
+
+        let replace_missing = |s: String| if s == "*" { surface.clone() } else { s };
+        let surface_hatsuon = replace_missing(raw.pron);
+        let lemma_form = replace_missing(raw.orth_base);
+        let lemma_hatsuon = replace_missing(raw.pron_base);
+
         UnidicToken {
             surface,
             pos1: raw.pos1.as_str().into(),
@@ -114,9 +120,9 @@ impl From<(String, RawToken)> for UnidicToken {
             pos4: raw.pos4.as_str().into(),
             conjugation_type: raw.c_type.as_str().into(),
             conjugation_form: raw.c_form.as_str().into(),
-            surface_hatsuon: raw.pron,
-            lemma_form: raw.orth_base,
-            lemma_hatsuon: raw.pron_base,
+            surface_hatsuon: surface_hatsuon,
+            lemma_form: lemma_form,
+            lemma_hatsuon: lemma_hatsuon,
         }
     }
 }

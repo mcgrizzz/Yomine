@@ -45,7 +45,7 @@ pub fn extract_words(
 ) -> Vec<Term> {
     let mut terms = Vec::<Term>::new();
 
-    for sentence in sentences.iter_mut() {
+    for (ord, sentence) in sentences.iter_mut().enumerate() {
         worker.reset_sentence(&sentence.text);
         worker.tokenize();
 
@@ -119,7 +119,7 @@ pub fn extract_words(
                     .map(|(idx, _)| idx)
                     .unwrap_or(0);
 
-                term.sentence_references.push((sentence.id, index_in_sentence));
+                term.sentence_references.push((ord, index_in_sentence));
 
                 term
             })
@@ -201,20 +201,15 @@ pub fn extract_words(
                     }
 
                     if score <= score_threshold || max_ratio >= ratio_threshold {
+                        let index_in_sentence = sentence
+                            .text
+                            .match_indices(&phrase.surface_form)
+                            .next()
+                            .map(|(idx, _)| idx)
+                            .unwrap_or(0);
+
+                        phrase.sentence_references.push((ord, index_in_sentence));
                         phrase.frequencies.insert("HARMONIC".to_string(), frequency);
-                        phrase
-                            .sentence_references
-                            .append(&mut sentence_terms[start].sentence_references.clone());
-
-                        // println!(
-                        //     "'{}': [{}, {}, {}, {}],",
-                        //     &phrase.lemma_form,
-                        //     frequency,
-                        //     score,
-                        //     max_ratio,
-                        //     char_count,
-                        // );
-
                         sentence_terms.push(phrase);
 
                         break 'outer; // Stop on the largest phrase that satisfies the heuristic
