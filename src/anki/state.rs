@@ -18,6 +18,7 @@ use tokio::{
     task,
     time::sleep,
 };
+use wana_kana::IsJapaneseStr;
 
 use super::{
     api::{
@@ -171,7 +172,11 @@ pub async fn get_total_vocab(
                     let term = note.fields.get(&field_mapping.term_field).map(|f| f.value.clone());
                     let reading =
                         note.fields.get(&field_mapping.reading_field).map(|f| f.value.clone());
-                    if let (Some(term), Some(reading)) = (term, reading) {
+                    if let (Some(term), Some(mut reading)) = (term, reading) {
+                        if reading.trim().is_empty() && term.as_str().is_kana() {
+                            reading = term.clone();
+                        }
+
                         return Some(Vocab {
                             term,
                             reading: reading.normalize_long_vowel().into_owned(),
