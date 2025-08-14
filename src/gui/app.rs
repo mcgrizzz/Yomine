@@ -207,7 +207,7 @@ impl eframe::App for YomineApp {
             &mut self.ignore_list_modal,
             &current_settings,
             &self.player.ws,
-            self.player.is_connected(),
+            self.player.mpv.is_connected(),
             self.anki_connected,
             &mut self.restart_modal,
             ignore_list_ref,
