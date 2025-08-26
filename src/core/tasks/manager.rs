@@ -14,9 +14,13 @@ use super::TaskResult;
 use crate::{
     anki::FieldMapping,
     core::{
-        pipeline::process_source_file,
+        pipeline::{
+            apply_filters,
+            process_source_file,
+        },
         IgnoreList,
         SourceFile,
+        Term,
     },
     gui::LanguageTools,
 };
@@ -137,5 +141,29 @@ impl TaskManager {
 
             let _ = sender.send(TaskResult::AnkiConnection(connected));
         });
+    }
+
+    pub fn refresh_terms(
+        &self,
+        base_terms: Vec<Term>,
+        model_mapping: HashMap<String, FieldMapping>,
+        language_tools: LanguageTools,
+    ) {
+        let (sender, runtime) = self.task_context();
+
+        thread::spawn(move || {
+            let result: Result<Vec<Term>, String> = runtime.block_on(async {
+                apply_filters(base_terms, model_mapping, &language_tools)
+                    .await
+                    .map_err(|e| e.to_string())
+            });
+
+            let _ = sender.send(TaskResult::TermsRefreshed(result));
+        });
+    }
+
+    pub fn request_refresh(&self) {
+        let (sender, _) = self.task_context();
+        let _ = sender.send(TaskResult::RequestRefresh);
     }
 }

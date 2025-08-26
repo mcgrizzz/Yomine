@@ -25,7 +25,7 @@ pub async fn process_source_file(
     source_file: &SourceFile,
     model_mapping: HashMap<String, FieldMapping>,
     language_tools: &LanguageTools,
-) -> Result<(Vec<Term>, Vec<Sentence>), YomineError> {
+) -> Result<(Vec<Term>, Vec<Term>, Vec<Sentence>), YomineError> {
     // Start total timing
     let total_start = Instant::now();
 
@@ -49,37 +49,7 @@ pub async fn process_source_file(
     //println!("Extracting terms took: {:?}", extract_duration);
     println!("Extracted {} terms", terms.len());
 
-    // Filter ignored terms
-    //let filter_ignored_start = Instant::now();
-    terms = {
-        let ignore_list = language_tools
-            .ignore_list
-            .lock()
-            .map_err(|_| YomineError::Custom("Failed to lock ignore list".to_string()))?;
-        terms
-            .into_iter()
-            .filter(|term| !ignore_list.contains(&term.lemma_form))
-            .collect::<Vec<Term>>()
-    };
-    //let filter_ignored_duration = filter_ignored_start.elapsed();
-    //println!("Filtering ignored terms took: {:?}", filter_ignored_duration);
-    println!("Prefiltered: {}", terms.len());
-
-    // Initialize Anki state
-    //let anki_init_start = Instant::now();
-    let anki_state =
-        match AnkiState::new(model_mapping, language_tools.frequency_manager.clone()).await {
-            Ok(state) => Some(state),
-            Err(e) => {
-                eprintln!("Failed to initialize AnkiState: {}", e);
-                None
-            }
-        };
-    //let anki_init_duration = anki_init_start.elapsed();
-    //println!("Initializing Anki state took: {:?}", anki_init_duration);
-
-    // Deduplicate terms
-    //let dedup_start = Instant::now();
+    // Deduplicate terms early to form a refresh baseline
     terms.sort_by(|a, b| {
         a.lemma_form.cmp(&b.lemma_form).then_with(|| a.lemma_reading.cmp(&b.lemma_reading))
     });
@@ -87,23 +57,52 @@ pub async fn process_source_file(
         a.lemma_form == b.lemma_form
             && a.lemma_reading.to_hiragana() == b.lemma_reading.to_hiragana()
     });
-    //let dedup_duration = dedup_start.elapsed();
-    //println!("Deduplicating terms took: {:?}", dedup_duration);
     println!("Deduplicated: {}", terms.len());
 
-    // Filter terms against Anki (if applicable)
-    if let Some(state) = anki_state {
-        let filter_anki_start = Instant::now();
-        terms = state.filter_existing_terms(terms);
+    // Keep a baseline copy for future refresh without re-tokenizing
+    let base_terms = terms.clone();
 
-        let filter_anki_duration = filter_anki_start.elapsed();
-        println!("Filtering terms against Anki took: {:?}", filter_anki_duration);
-        println!("Filtered: {}", terms.len());
-    }
+    let terms = apply_filters(terms, model_mapping, language_tools).await?;
 
     // Total time
     let total_duration = total_start.elapsed();
     println!("Total processing time: {:?}", total_duration);
 
-    Ok((terms, sentences))
+    Ok((base_terms, terms, sentences))
+}
+
+/// Reapply filtering to a baseline set of terms without re-tokenizing.
+/// 1) Applies the current ignore list
+/// 2) Fetches a fresh Anki state and filters again
+pub async fn apply_filters(
+    base_terms: Vec<Term>,
+    model_mapping: std::collections::HashMap<String, FieldMapping>,
+    language_tools: &LanguageTools,
+) -> Result<Vec<Term>, YomineError> {
+    let mut terms = {
+        let ignore_list = language_tools
+            .ignore_list
+            .lock()
+            .map_err(|_| YomineError::Custom("Failed to lock ignore list".to_string()))?;
+        base_terms
+            .into_iter()
+            .filter(|t| !ignore_list.contains(&t.lemma_form))
+            .collect::<Vec<Term>>()
+    };
+
+    match AnkiState::new(model_mapping, language_tools.frequency_manager.clone()).await {
+        Ok(state) => {
+            let filter_anki_start = Instant::now();
+            terms = state.filter_existing_terms(terms);
+
+            let filter_anki_duration = filter_anki_start.elapsed();
+            println!("Filtering terms against Anki took: {:?}", filter_anki_duration);
+            println!("Filtered: {}", terms.len());
+        }
+        Err(e) => {
+            eprintln!("Failed to initialize AnkiState in reapply_filters: {}", e);
+        }
+    }
+
+    Ok(terms)
 }
