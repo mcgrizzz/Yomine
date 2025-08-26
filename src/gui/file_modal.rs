@@ -38,6 +38,11 @@ impl FileModal {
         self.selected_file = None;
     }
 
+    pub fn close(&mut self) {
+        self.open = false;
+        self.selected_file = None;
+    }
+
     pub fn show(
         &mut self,
         ctx: &egui::Context,
@@ -292,7 +297,7 @@ impl FileModal {
             .map(|path| Self::create_source_file_from_path_and_metadata(&path, None, None))
     }
 
-    fn create_source_file_from_path_and_metadata(
+    pub fn create_source_file_from_path_and_metadata(
         path: &std::path::Path,
         title_override: Option<String>,
         creator_override: Option<String>,
