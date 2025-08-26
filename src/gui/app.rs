@@ -1,12 +1,16 @@
 use std::{
     collections::HashMap,
+    mem,
     sync::{
         Arc,
         Mutex,
     },
 };
 
-use eframe::egui;
+use eframe::egui::{
+    self,
+    Id,
+};
 use vibrato::Tokenizer;
 
 use super::{
@@ -34,6 +38,7 @@ use super::{
 use crate::{
     anki::FieldMapping,
     core::{
+        models::SourceFileType,
         tasks::{
             TaskManager,
             TaskResult,
@@ -196,6 +201,8 @@ impl eframe::App for YomineApp {
         // Update the combined player (handles both MPV and WebSocket)
         self.player.update(self.settings_data.websocket_settings.port);
         self.update_anki_status();
+        self.handle_file_drops(ctx);
+        self.draw_file_drop_overlay(ctx);
 
         let current_settings = self.get_current_settings();
 
@@ -430,5 +437,51 @@ impl YomineApp {
             // Fallback to just closing the application
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
+    }
+
+    fn handle_file_drops(&mut self, ctx: &egui::Context) {
+        let dropped = ctx.input_mut(|i| mem::take(&mut i.raw.dropped_files));
+        if dropped.is_empty() {
+            return;
+        }
+
+        if let Some(path) = dropped.iter().filter_map(|f| f.path.as_deref()).find(|p| {
+            let ft = SourceFileType::from_extension(&p.to_string_lossy());
+            ft.is_supported()
+        }) {
+            let source_file =
+                FileModal::create_source_file_from_path_and_metadata(path, None, None);
+
+            self.file_modal.close();
+            self.process_source_file(source_file);
+        }
+    }
+
+    fn draw_file_drop_overlay(&self, ctx: &egui::Context) {
+        let hovering_any = ctx.input(|i| !i.raw.hovered_files.is_empty());
+        if !hovering_any {
+            return;
+        }
+
+        let any_valid_hovered = ctx.input(|i| {
+            i.raw.hovered_files.iter().filter_map(|f| f.path.as_deref()).any(|p| {
+                let ft = SourceFileType::from_extension(&p.to_string_lossy());
+                ft.is_supported()
+            })
+        });
+        if !any_valid_hovered {
+            return;
+        }
+
+        let size = egui::vec2(300.0, 120.0);
+
+        egui::Modal::new(Id::new("file_drop_overlay")).show(ctx, |ui| {
+            ui.set_max_size(size);
+            ui.set_min_size(size);
+
+            ui.centered_and_justified(|ui| {
+                ui.heading("📥  Drop to open");
+            });
+        });
     }
 }

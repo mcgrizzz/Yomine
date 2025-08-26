@@ -101,8 +101,15 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
                         .color(app.theme.orange(ui.ctx())),
                 );
 
-                ui.add_space(10.0);
+                ui.add_space(1.0);
 
+                ui.label(
+                    egui::RichText::new("ℹ You can drag and drop a file at any time to load it.")
+                        .size(10.0)
+                        .color(app.theme.comment(ui.ctx())),
+                );
+
+                ui.add_space(16.0);
                 let label = egui::Label::new(
                     egui::RichText::new("Open New File")
                         .size(14.0)

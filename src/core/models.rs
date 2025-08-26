@@ -25,8 +25,13 @@ impl SourceFileType {
                 other => SourceFileType::Other(other.to_uppercase()),
             }
         } else {
-            SourceFileType::SRT
+            SourceFileType::Other(String::new())
         }
+    }
+
+    #[inline]
+    pub fn is_supported(&self) -> bool {
+        !matches!(self, SourceFileType::Other(_))
     }
 }
 
