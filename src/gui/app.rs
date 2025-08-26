@@ -70,6 +70,7 @@ impl std::fmt::Debug for LanguageTools {
 
 pub struct YomineApp {
     pub terms: Vec<Term>,
+    pub original_terms: Vec<Term>, //Not filtered from ignorelist or anki
     pub sentences: Vec<Sentence>,
     pub model_mapping: HashMap<String, FieldMapping>,
     pub settings_data: SettingsData,
@@ -130,6 +131,7 @@ impl YomineApp {
             table_state: TableState::default(),
             language_tools: None,
             terms: Vec::new(),
+            original_terms: Vec::new(),
             sentences: Vec::new(),
             current_processing_file: None,
             current_source_file: None,
@@ -199,6 +201,8 @@ impl eframe::App for YomineApp {
 
         let ignore_list_ref = self.language_tools.as_ref().map(|lt| &lt.ignore_list);
 
+        let can_refresh = !self.original_terms.is_empty() && self.language_tools.is_some();
+
         TopBar::show(
             ctx,
             &mut self.file_modal,
@@ -211,6 +215,8 @@ impl eframe::App for YomineApp {
             self.anki_connected,
             &mut self.restart_modal,
             ignore_list_ref,
+            &self.task_manager,
+            can_refresh,
         );
         if let Some(source_file) = self.file_modal.show(
             ctx,
@@ -294,6 +300,27 @@ impl YomineApp {
                 self.handle_processing_result(result);
             }
 
+            TaskResult::TermsRefreshed(result) => {
+                self.message_overlay.clear_message();
+                match result {
+                    Ok(mut new_terms) => {
+                        new_terms.sort_unstable_by(|a, b| {
+                            let freq_a = a.frequencies.get("HARMONIC").unwrap_or(&0);
+                            let freq_b = b.frequencies.get("HARMONIC").unwrap_or(&0);
+                            freq_a.cmp(freq_b)
+                        });
+                        self.terms = new_terms;
+                    }
+                    Err(error_msg) => {
+                        self.error_modal.show_error(
+                            "Refresh Error".to_string(),
+                            "Unable to refresh terms".to_string().as_str(),
+                            Some(&error_msg),
+                        );
+                    }
+                }
+            }
+
             TaskResult::LoadingMessage(message) => {
                 self.message_overlay.set_message(message);
             }
@@ -301,23 +328,41 @@ impl YomineApp {
             TaskResult::AnkiConnection(connected) => {
                 self.anki_connected = connected;
             }
+            TaskResult::RequestRefresh => {
+                if !self.original_terms.is_empty() {
+                    if let Some(language_tools) = self.language_tools.clone() {
+                        self.message_overlay.set_message("Refreshing terms...".to_string());
+                        self.task_manager.refresh_terms(
+                            self.original_terms.clone(),
+                            self.model_mapping.clone(),
+                            language_tools,
+                        );
+                    }
+                }
+            }
             _ => {}
         }
     }
 
-    fn handle_processing_result(&mut self, result: Result<(Vec<Term>, Vec<Sentence>), String>) {
+    fn handle_processing_result(
+        &mut self,
+        result: Result<(Vec<Term>, Vec<Term>, Vec<Sentence>), String>,
+    ) {
         self.message_overlay.clear_message();
         let filename = self.current_processing_file.as_deref().unwrap_or("the selected file");
 
         match result {
-            Ok((new_terms, new_sentences)) => {
-                self.terms = new_terms;
+            Ok((base_terms, mut new_terms, new_sentences)) => {
+                self.original_terms = base_terms;
 
-                self.terms.sort_unstable_by(|a, b| {
+                // Keep existing sort behavior
+                new_terms.sort_unstable_by(|a, b| {
                     let freq_a = a.frequencies.get("HARMONIC").unwrap_or(&0);
                     let freq_b = b.frequencies.get("HARMONIC").unwrap_or(&0);
                     freq_a.cmp(freq_b)
                 });
+
+                self.terms = new_terms;
 
                 self.table_state.clear_sentence_indices();
                 self.sentences = new_sentences;
@@ -338,6 +383,7 @@ impl YomineApp {
                     Some(&error_msg),
                 );
                 self.terms = Vec::new();
+                self.original_terms.clear();
                 self.sentences = Vec::new();
                 self.current_source_file = None;
                 self.table_state.clear_sentence_indices();

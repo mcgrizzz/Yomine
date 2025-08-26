@@ -10,7 +10,10 @@ use std::{
 use eframe::egui;
 
 use crate::{
-    core::IgnoreList,
+    core::{
+        tasks::TaskManager,
+        IgnoreList,
+    },
     dictionary::frequency_utils,
     gui::{
         file_modal::FileModal,
@@ -41,6 +44,8 @@ impl TopBar {
         anki_connected: bool,
         restart_modal: &mut crate::gui::restart_modal::RestartModal,
         ignore_list: Option<&Arc<Mutex<IgnoreList>>>,
+        task_manager: &TaskManager,
+        can_refresh: bool,
     ) {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
@@ -105,6 +110,46 @@ impl TopBar {
                         }
                     }
                 });
+
+                if can_refresh {
+                    ui.separator();
+                    let clicked = ui
+                        .button("↻ Refresh")
+                        .on_hover_ui(|ui| {
+                            let cmds =
+                                if cfg!(target_os = "macos") { "F5, Cmd+R" } else { "F5, Ctrl+R" };
+                            ui.vertical(|ui| {
+                                ui.label(
+                                    egui::RichText::new("Reapply ignorelist and Anki filters")
+                                        .strong(),
+                                );
+                                ui.add_space(4.0);
+                                ui.horizontal(|ui| {
+                                    ui.label(
+                                        egui::RichText::new("Shortcut:")
+                                            .italics()
+                                            .color(ui.visuals().weak_text_color()),
+                                    );
+                                    ui.label(
+                                        egui::RichText::new(cmds)
+                                            .monospace()
+                                            .color(egui::Color32::from_rgb(180, 220, 255)),
+                                    );
+                                });
+                            });
+                        })
+                        .clicked();
+
+                    let trigger_from_keys = ctx.input(|i| {
+                        let f5 = i.key_pressed(egui::Key::F5);
+                        let cmd_r = i.modifiers.command && i.key_pressed(egui::Key::R);
+                        f5 || cmd_r
+                    });
+
+                    if clicked || trigger_from_keys {
+                        task_manager.request_refresh();
+                    }
+                }
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     Self::show_status_indicators(
