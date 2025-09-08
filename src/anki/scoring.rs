@@ -1,13 +1,10 @@
 use std::sync::Arc;
 
-use wana_kana::{
-    ConvertJapanese,
-    IsJapaneseStr,
-};
+use wana_kana::IsJapaneseStr;
 
 use super::types::Vocab;
 use crate::{
-    core::utils::NormalizeLongVowel,
+    core::utils::normalize_japanese_text,
     dictionary::frequency_manager::FrequencyManager,
 };
 
@@ -52,13 +49,15 @@ impl AnkiMatcher {
         let anki_reading = anki_card.reading.as_str();
 
         // Normalize all text upfront for consistent comparison
-        let norm_yomine_word = self.normalize_japanese_text(yomine_word);
-        let norm_anki_word = self.normalize_japanese_text(anki_word);
-        let norm_yomine_reading = yomine_reading.to_hiragana();
-        let norm_anki_reading = anki_reading.to_hiragana();
+        let norm_yomine_word = normalize_japanese_text(yomine_word);
+        let norm_anki_word = normalize_japanese_text(anki_word);
+        let norm_yomine_reading = normalize_japanese_text(yomine_reading);
+        let norm_anki_reading = normalize_japanese_text(anki_reading);
 
-        // 1. Perfect match (exact word and reading)
-        if yomine_word == anki_word && norm_yomine_reading == norm_anki_reading {
+        // 1. Perfect match (exact word and reading) + hiragana to katakana matching since it's often an artistic choice
+        if (yomine_word == anki_word || yomine_word.is_kana() && anki_word.is_kana())
+            && norm_yomine_reading == norm_anki_reading
+        {
             return 1.0;
         }
 
@@ -161,11 +160,5 @@ impl AnkiMatcher {
         } else {
             0.0
         }
-    }
-
-    /// Normalize Japanese text for comparison
-    fn normalize_japanese_text(&self, text: &str) -> String {
-        // Only convert to hiragana for consistent kana comparison, preserve actual characters
-        text.to_hiragana().normalize_long_vowel().to_string()
     }
 }

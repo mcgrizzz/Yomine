@@ -40,7 +40,10 @@ use super::{
 };
 use crate::{
     core::{
-        utils::NormalizeLongVowel,
+        utils::{
+            normalize_japanese_text,
+            NormalizeLongVowel,
+        },
         Term,
     },
     dictionary::frequency_manager::FrequencyManager,
@@ -71,13 +74,21 @@ impl AnkiState {
         result
     }
 
-    /// Build a map from terms/readings to vocab indices for efficient lookup
+    /// One time map for the anki vocab to quickly find the potential matches by key
     fn build_relevance_map(vocab: &[Vocab]) -> HashMap<String, Vec<usize>> {
         let mut relevance_map: HashMap<String, Vec<usize>> = HashMap::new();
 
         for (index, vocab_item) in vocab.iter().enumerate() {
             relevance_map.entry(vocab_item.reading.clone()).or_insert_with(Vec::new).push(index);
             relevance_map.entry(vocab_item.term.clone()).or_insert_with(Vec::new).push(index);
+            relevance_map
+                .entry(normalize_japanese_text(vocab_item.reading.as_str()))
+                .or_insert_with(Vec::new)
+                .push(index);
+            relevance_map
+                .entry(normalize_japanese_text(vocab_item.term.as_str()))
+                .or_insert_with(Vec::new)
+                .push(index);
         }
 
         relevance_map
@@ -92,7 +103,12 @@ impl AnkiState {
         let mut highest_score = 0.0;
 
         // Use cached relevance map for efficient lookup
-        for key in [reading, term] {
+        for key in [
+            reading,
+            term,
+            normalize_japanese_text(reading).as_str(),
+            normalize_japanese_text(term).as_str(),
+        ] {
             if let Some(vocab_indices) = self.relevance_map.get(key) {
                 for &index in vocab_indices {
                     let vocab = &self.vocab[index];
@@ -120,13 +136,13 @@ impl AnkiState {
             .map(|term| {
                 // Check both surface and lemma forms, take the higher score
                 let surface_score = self.highest_inclusivity_score(
-                    &term.surface_form.normalize_long_vowel(),
-                    &term.surface_reading.normalize_long_vowel(),
+                    &term.surface_form,
+                    &term.surface_reading,
                     &term.part_of_speech,
                 );
                 let lemma_score = self.highest_inclusivity_score(
-                    &term.lemma_form.normalize_long_vowel(),
-                    &term.lemma_reading.normalize_long_vowel(),
+                    &term.lemma_form,
+                    &term.lemma_reading,
                     &term.part_of_speech,
                 );
 
