@@ -69,6 +69,12 @@ pub fn harmonic_frequency(nums: &Vec<u32>) -> Option<u32> {
     }
 }
 
+/// Normalize Japanese text for comparison
+pub fn normalize_japanese_text(text: &str) -> String {
+    // Only convert to hiragana for consistent kana comparison, preserve actual characters
+    text.to_hiragana().normalize_long_vowel().to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -149,6 +155,7 @@ use serde::{
 };
 use wana_kana::{
     utils::is_char_kana,
+    ConvertJapanese,
     IsJapaneseStr,
 };
 
