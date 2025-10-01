@@ -9,7 +9,7 @@ use super::{
 };
 use crate::core::Term;
 
-#[derive(PartialEq, Clone, Debug, Hash, Eq)]
+#[derive(PartialEq, Clone, Copy, Debug, Hash, Eq)]
 pub enum POS {
     Noun,
     ProperNoun,
@@ -39,7 +39,13 @@ pub enum POS {
 
 impl fmt::Display for POS {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let readable = match self {
+        write!(f, "{}", self.display_name())
+    }
+}
+
+impl POS {
+    pub fn display_name(&self) -> &'static str {
+        match self {
             POS::Noun => "Noun",
             POS::ProperNoun => "Proper Noun",
             POS::CompoundNoun | POS::NounExpression => "Compound Noun",
@@ -63,8 +69,65 @@ impl fmt::Display for POS {
             POS::Expression => "Expression",
             POS::Other => "Other",
             POS::Unknown => "Unknown",
-        };
-        write!(f, "{}", readable)
+        }
+    }
+    pub fn as_key(&self) -> &'static str {
+        match self {
+            POS::Noun => "Noun",
+            POS::ProperNoun => "ProperNoun",
+            POS::CompoundNoun => "CompoundNoun",
+            POS::Pronoun => "Pronoun",
+            POS::Adjective => "Adjective",
+            POS::AdjectivalNoun => "AdjectivalNoun",
+            POS::Adverb => "Adverb",
+            POS::Determiner => "Determiner",
+            POS::Preposition => "Preposition",
+            POS::Postposition => "Postposition",
+            POS::Verb => "Verb",
+            POS::SuruVerb => "SuruVerb",
+            POS::Copula => "Copula",
+            POS::Suffix => "Suffix",
+            POS::Prefix => "Prefix",
+            POS::Conjunction => "Conjunction",
+            POS::Interjection => "Interjection",
+            POS::Number => "Number",
+            POS::Counter => "Counter",
+            POS::Symbol => "Symbol",
+            POS::Expression => "Expression",
+            POS::NounExpression => "NounExpression",
+            POS::Other => "Other",
+            POS::Unknown => "Unknown",
+        }
+    }
+
+    pub fn from_key(key: &str) -> Option<Self> {
+        match key {
+            "Noun" => Some(POS::Noun),
+            "ProperNoun" => Some(POS::ProperNoun),
+            "CompoundNoun" => Some(POS::CompoundNoun),
+            "Pronoun" => Some(POS::Pronoun),
+            "Adjective" => Some(POS::Adjective),
+            "AdjectivalNoun" => Some(POS::AdjectivalNoun),
+            "Adverb" => Some(POS::Adverb),
+            "Determiner" => Some(POS::Determiner),
+            "Preposition" => Some(POS::Preposition),
+            "Postposition" => Some(POS::Postposition),
+            "Verb" => Some(POS::Verb),
+            "SuruVerb" => Some(POS::SuruVerb),
+            "Copula" => Some(POS::Copula),
+            "Suffix" => Some(POS::Suffix),
+            "Prefix" => Some(POS::Prefix),
+            "Conjunction" => Some(POS::Conjunction),
+            "Interjection" => Some(POS::Interjection),
+            "Number" => Some(POS::Number),
+            "Counter" => Some(POS::Counter),
+            "Symbol" => Some(POS::Symbol),
+            "Expression" => Some(POS::Expression),
+            "NounExpression" => Some(POS::NounExpression),
+            "Other" => Some(POS::Other),
+            "Unknown" => Some(POS::Unknown),
+            _ => None,
+        }
     }
 }
 

@@ -10,7 +10,10 @@ use std::{
         Write,
     },
     path::Path,
-    sync::Mutex,
+    sync::{
+        Mutex,
+        RwLock,
+    },
     time::Instant,
     u32,
 };
@@ -41,7 +44,7 @@ pub fn get_frequency_dict_dir() -> std::path::PathBuf {
     get_app_data_dir().join("dictionaries").join("frequency")
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DictionaryState {
     pub weight: f32,
     pub enabled: bool,
@@ -50,28 +53,28 @@ pub struct DictionaryState {
 #[derive(Debug)]
 pub struct FrequencyManager {
     dictionaries: HashMap<String, FrequencyDictionary>,
-    states: HashMap<String, DictionaryState>,
+    states: RwLock<HashMap<String, DictionaryState>>,
 }
 
 impl FrequencyManager {
     fn new(states: Option<HashMap<String, DictionaryState>>) -> Self {
         let dict_states: HashMap<String, DictionaryState> = states.unwrap_or_default();
-        FrequencyManager { dictionaries: HashMap::new(), states: dict_states }
+        FrequencyManager { dictionaries: HashMap::new(), states: RwLock::new(dict_states) }
     }
 
     fn add_dictionary(&mut self, name: String, dictionary: FrequencyDictionary) {
         self.dictionaries.insert(name.clone(), dictionary);
 
-        if !self.states.contains_key(&name) {
-            self.states.insert(name, DictionaryState { weight: 1.0, enabled: true });
-        }
+        let mut states = self.states.write().expect("frequency states poisoned");
+        states.entry(name).or_insert(DictionaryState { weight: 1.0, enabled: true });
     }
 
     fn get_enabled_dictionaries(&self) -> Vec<&FrequencyDictionary> {
+        let states = self.states.read().expect("frequency states poisoned");
         self.dictionaries
             .iter()
             .filter_map(|(name, dictionary)| {
-                self.states
+                states
                     .get(name)
                     .and_then(|state| (state.enabled && state.weight > 0.0).then_some(dictionary))
             })
@@ -103,43 +106,57 @@ impl FrequencyManager {
 
     //Return a boolean so we know whether to update the UI or not.
     pub fn set_dictionary_state(
-        &mut self,
+        &self,
         name: &str,
         weight: f32,
         enabled: bool,
     ) -> Result<bool, YomineError> {
-        if let Some(state) = self.states.get_mut(name) {
-            if state.weight != weight || state.enabled != enabled {
-                *state = DictionaryState { weight, enabled };
-                Ok(true)
-            } else {
-                Ok(false)
+        let mut states = self.states.write().map_err(|_| {
+            YomineError::Custom("Frequency dictionary states unavailable".to_string())
+        })?;
+
+        match states.get_mut(name) {
+            Some(state) => {
+                if (state.weight - weight).abs() > f32::EPSILON || state.enabled != enabled {
+                    *state = DictionaryState { weight, enabled };
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
             }
-        } else {
-            Err(YomineError::Custom(format!("Dictionary '{}' not found", name)))
+            None => Err(YomineError::Custom(format!("Dictionary '{}' not found", name))),
         }
     }
 
     pub fn get_weighted_harmonic(&self, freq_map: &HashMap<String, u32>) -> u32 {
-        let weighted_freqs: Vec<u32> = freq_map
-            .iter()
-            .filter_map(|(name, &freq)| {
-                self.states.get(name).and_then(|state| {
-                    if state.enabled && freq > 0 && state.weight > 0.0 {
-                        let weighted_freq = (freq as f32 / state.weight).round() as u32;
-                        Some(weighted_freq.max(1))
-                    } else {
-                        None
-                    }
-                })
-            })
-            .collect();
+        let states = self.states.read().expect("frequency states poisoned");
 
-        harmonic_frequency(&weighted_freqs).unwrap_or(u32::MAX)
+        let mut sum_of_weights = 0.0;
+        let mut sum_of_weighted_reciprocals = 0.0;
+
+        for (name, &freq) in freq_map {
+            if let Some(state) = states.get(name) {
+                if state.enabled && freq > 0 && state.weight > 0.0 {
+                    sum_of_weights += state.weight;
+                    sum_of_weighted_reciprocals += state.weight / (freq as f32);
+                }
+            }
+        }
+
+        if sum_of_weighted_reciprocals > 0.0 {
+            (sum_of_weights / sum_of_weighted_reciprocals).round() as u32
+        } else {
+            u32::MAX
+        }
     }
 
-    pub fn get_dictionary_state(&self, name: &str) -> Option<&DictionaryState> {
-        self.states.get(name)
+    pub fn get_dictionary_state(&self, name: &str) -> Option<DictionaryState> {
+        let states = self.states.read().ok()?;
+        states.get(name).cloned()
+    }
+
+    pub fn dictionary_states(&self) -> Option<HashMap<String, DictionaryState>> {
+        self.states.read().ok().map(|states| states.clone())
     }
 
     pub fn get_dictionary_names(&self) -> Vec<String> {

@@ -19,8 +19,11 @@ use super::{
     message_overlay::MessageOverlay,
     restart_modal::RestartModal,
     settings::{
+        data::FrequencyDictionarySetting,
         AnkiSettingsModal,
+        FrequencyWeightsModal,
         IgnoreListModal,
+        PosFiltersModal,
         SettingsData,
         WebSocketSettingsModal,
     },
@@ -85,6 +88,8 @@ pub struct YomineApp {
     pub anki_settings_modal: AnkiSettingsModal,
     pub websocket_settings_modal: WebSocketSettingsModal,
     pub ignore_list_modal: IgnoreListModal,
+    pub frequency_weights_modal: FrequencyWeightsModal,
+    pub pos_filters_modal: PosFiltersModal,
     pub restart_modal: RestartModal,
     pub theme: Theme,
     pub zoom: f32,
@@ -108,6 +113,8 @@ impl YomineApp {
         task_manager.load_language_tools();
 
         let mut settings_data = load_json_or_default::<SettingsData>("settings.json");
+        let mut table_state = TableState::default();
+        table_state.apply_pos_settings(&settings_data.pos_filters);
 
         for (model_name, field_mapping) in model_mapping {
             settings_data.anki_model_mappings.insert(model_name, field_mapping);
@@ -133,7 +140,7 @@ impl YomineApp {
             websocket_settings_modal: WebSocketSettingsModal::new(),
             ignore_list_modal: IgnoreListModal::new(),
             restart_modal: RestartModal::new(),
-            table_state: TableState::default(),
+            table_state,
             language_tools: None,
             terms: Vec::new(),
             original_terms: Vec::new(),
@@ -141,6 +148,8 @@ impl YomineApp {
             current_processing_file: None,
             current_source_file: None,
             task_manager: task_manager,
+            frequency_weights_modal: FrequencyWeightsModal::new(),
+            pos_filters_modal: PosFiltersModal::new(),
         };
 
         app.setup_fonts(cc);
@@ -207,6 +216,8 @@ impl eframe::App for YomineApp {
         let current_settings = self.get_current_settings();
 
         let ignore_list_ref = self.language_tools.as_ref().map(|lt| &lt.ignore_list);
+        let frequency_manager =
+            self.language_tools.as_ref().map(|lt| lt.frequency_manager.as_ref());
 
         let can_refresh = !self.original_terms.is_empty() && self.language_tools.is_some();
 
@@ -216,6 +227,8 @@ impl eframe::App for YomineApp {
             &mut self.anki_settings_modal,
             &mut self.websocket_settings_modal,
             &mut self.ignore_list_modal,
+            &mut self.frequency_weights_modal,
+            &mut self.pos_filters_modal,
             &current_settings,
             &self.player.ws,
             self.player.mpv.is_connected(),
@@ -224,6 +237,8 @@ impl eframe::App for YomineApp {
             ignore_list_ref,
             &self.task_manager,
             can_refresh,
+            &self.table_state,
+            frequency_manager,
         );
         if let Some(source_file) = self.file_modal.show(
             ctx,
@@ -252,6 +267,24 @@ impl eframe::App for YomineApp {
 
         if let Some(settings) = self.websocket_settings_modal.show(ctx, &mut self.player.ws) {
             self.settings_data = settings;
+            self.save_settings();
+        }
+
+        if let Some(weights) = self.frequency_weights_modal.show(ctx) {
+            self.settings_data.frequency_weights = weights;
+            if let Some(manager) =
+                self.language_tools.as_ref().map(|lt| Arc::clone(&lt.frequency_manager))
+            {
+                self.apply_frequency_settings(manager.as_ref());
+            }
+            self.save_settings();
+        }
+
+        if let Some(pos_settings) = self.pos_filters_modal.show(ctx) {
+            self.settings_data.pos_filters = pos_settings;
+            self.table_state.apply_pos_settings(&self.settings_data.pos_filters);
+            let freq_manager = self.language_tools.as_ref().map(|lt| lt.frequency_manager.as_ref());
+            self.table_state.ensure_indices(&self.terms, &self.sentences, freq_manager);
             self.save_settings();
         }
 
@@ -295,6 +328,11 @@ impl YomineApp {
                 Ok(language_tools) => {
                     self.language_tools = Some(language_tools);
                     self.message_overlay.clear_message();
+                    if let Some(manager) =
+                        self.language_tools.as_ref().map(|lt| Arc::clone(&lt.frequency_manager))
+                    {
+                        self.apply_frequency_settings(manager.as_ref());
+                    }
                 }
                 Err(e) => {
                     self.message_overlay
@@ -317,6 +355,10 @@ impl YomineApp {
                             freq_a.cmp(freq_b)
                         });
                         self.terms = new_terms;
+                        self.table_state.configure_bounds(&self.terms);
+                        let freq_manager =
+                            self.language_tools.as_ref().map(|lt| lt.frequency_manager.as_ref());
+                        self.table_state.ensure_indices(&self.terms, &self.sentences, freq_manager);
                     }
                     Err(error_msg) => {
                         self.error_modal.show_error(
@@ -370,9 +412,16 @@ impl YomineApp {
                 });
 
                 self.terms = new_terms;
-
-                self.table_state.clear_sentence_indices();
                 self.sentences = new_sentences;
+                self.table_state.reset();
+                self.table_state.configure_bounds(&self.terms);
+
+                // Reapply POS filter settings after reset
+                self.table_state.apply_pos_settings(&self.settings_data.pos_filters);
+
+                let freq_manager =
+                    self.language_tools.as_ref().map(|lt| lt.frequency_manager.as_ref());
+                self.table_state.ensure_indices(&self.terms, &self.sentences, freq_manager);
 
                 if let Some(source_file) = &self.current_source_file {
                     self.file_modal.add_recent_file(
@@ -393,7 +442,7 @@ impl YomineApp {
                 self.original_terms.clear();
                 self.sentences = Vec::new();
                 self.current_source_file = None;
-                self.table_state.clear_sentence_indices();
+                self.table_state.reset();
             }
         }
 
@@ -420,6 +469,24 @@ impl YomineApp {
         if let Err(e) = save_json(&self.settings_data, "settings.json") {
             eprintln!("Failed to save settings: {}", e);
         }
+    }
+
+    fn apply_frequency_settings(&mut self, manager: &FrequencyManager) {
+        if let Some(states) = manager.dictionary_states() {
+            for (name, state) in states {
+                let setting =
+                    self.settings_data.frequency_weights.get(&name).cloned().unwrap_or_else(|| {
+                        FrequencyDictionarySetting { weight: state.weight, enabled: state.enabled }
+                    });
+                let weight = setting.weight.max(0.1);
+                if let Err(err) = manager.set_dictionary_state(&name, weight, setting.enabled) {
+                    eprintln!("Failed to update dictionary state '{}': {}", name, err);
+                }
+            }
+        }
+
+        self.table_state.sync_frequency_states(Some(manager));
+        self.table_state.mark_dirty();
     }
 
     fn restart_application(&self, ctx: &egui::Context) {

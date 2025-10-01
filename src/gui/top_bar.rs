@@ -14,15 +14,21 @@ use crate::{
         tasks::TaskManager,
         IgnoreList,
     },
-    dictionary::frequency_utils,
+    dictionary::{
+        frequency_manager::FrequencyManager,
+        frequency_utils,
+    },
     gui::{
         file_modal::FileModal,
         settings::{
             AnkiSettingsModal,
+            FrequencyWeightsModal,
             IgnoreListModal,
+            PosFiltersModal,
             SettingsData,
             WebSocketSettingsModal,
         },
+        table::TableState,
         websocket_manager::WebSocketManager,
     },
     persistence::get_app_data_dir,
@@ -38,6 +44,8 @@ impl TopBar {
         anki_settings_modal: &mut AnkiSettingsModal,
         websocket_settings_modal: &mut WebSocketSettingsModal,
         ignore_list_modal: &mut IgnoreListModal,
+        frequency_weights_modal: &mut FrequencyWeightsModal,
+        pos_filters_modal: &mut PosFiltersModal,
         current_settings: &SettingsData,
         websocket_manager: &WebSocketManager,
         mpv_connected: bool,
@@ -46,6 +54,8 @@ impl TopBar {
         ignore_list: Option<&Arc<Mutex<IgnoreList>>>,
         task_manager: &TaskManager,
         can_refresh: bool,
+        table_state: &TableState,
+        frequency_manager: Option<&FrequencyManager>,
     ) {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
@@ -108,6 +118,12 @@ impl TopBar {
                         if let Some(ignore_list) = ignore_list {
                             ignore_list_modal.open_modal(ignore_list);
                         }
+                    }
+                    if ui.button("Frequency Weighting").clicked() {
+                        frequency_weights_modal.open_modal(current_settings, frequency_manager);
+                    }
+                    if ui.button("Part of Speech Filters").clicked() {
+                        pos_filters_modal.open_modal(table_state.pos_snapshot());
                     }
                 });
 
