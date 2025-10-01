@@ -147,9 +147,9 @@ pub struct Word {
     pub main_word: Option<UnidicToken>, // Optional core for the word (e.g., "勉強" in "勉強します")
 }
 
-impl Into<Term> for Word {
-    fn into(self) -> Term {
-        if let Some(main_word) = self.main_word {
+impl From<Word> for Term {
+    fn from(word: Word) -> Term {
+        if let Some(main_word) = word.main_word {
             Term {
                 id: 0,
                 lemma_form: main_word.lemma_form,
@@ -157,23 +157,23 @@ impl Into<Term> for Word {
                 surface_form: main_word.surface,
                 surface_reading: main_word.surface_hatsuon.clone(),
                 is_kana: main_word.surface_hatsuon.as_str().is_kana(),
-                part_of_speech: self.part_of_speech,
-                full_segment: self.surface_form,
-                full_segment_reading: self.surface_hatsuon,
+                part_of_speech: word.part_of_speech,
+                full_segment: word.surface_form,
+                full_segment_reading: word.surface_hatsuon,
                 frequencies: HashMap::new(),
                 sentence_references: Vec::new(),
             }
         } else {
             Term {
                 id: 0,
-                lemma_form: self.lemma_form,
-                lemma_reading: self.lemma_hatsuon,
-                surface_form: self.surface_form.clone(),
-                surface_reading: self.surface_hatsuon.clone(),
-                is_kana: self.surface_hatsuon.as_str().is_kana(),
-                part_of_speech: self.part_of_speech,
-                full_segment: self.surface_form,
-                full_segment_reading: self.surface_hatsuon,
+                lemma_form: word.lemma_form,
+                lemma_reading: word.lemma_hatsuon,
+                surface_form: word.surface_form.clone(),
+                surface_reading: word.surface_hatsuon.clone(),
+                is_kana: word.surface_hatsuon.as_str().is_kana(),
+                part_of_speech: word.part_of_speech,
+                full_segment: word.surface_form,
+                full_segment_reading: word.surface_hatsuon,
                 frequencies: HashMap::new(),
                 sentence_references: Vec::new(),
             }

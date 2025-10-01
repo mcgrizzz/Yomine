@@ -51,7 +51,7 @@ impl NormalizeLongVowel for String {
     }
 }
 
-pub fn harmonic_frequency(nums: &Vec<u32>) -> Option<u32> {
+pub fn harmonic_frequency(nums: &[u32]) -> Option<u32> {
     let mut sum_of_reciprocals = 0.0;
     let mut count = 0;
 

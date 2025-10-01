@@ -9,13 +9,15 @@ use crate::{
     gui::app::LanguageTools,
 };
 
+pub type FileProcessingResult = Result<(Vec<Term>, Vec<Term>, Vec<Sentence>), String>;
+
 #[derive(Debug, Clone)]
 pub enum TaskResult {
     AnkiConnection(bool),
     AnkiModels(Result<Vec<Model>, String>),
     AnkiSampleNote { model_name: String, result: Result<HashMap<String, String>, String> },
 
-    FileProcessing(Result<(Vec<Term>, Vec<Term>, Vec<Sentence>), String>),
+    FileProcessing(FileProcessingResult),
     RequestRefresh,
     TermsRefreshed(Result<Vec<Term>, String>),
 
