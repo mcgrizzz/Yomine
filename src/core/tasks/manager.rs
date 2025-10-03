@@ -166,4 +166,9 @@ impl TaskManager {
         let (sender, _) = self.task_context();
         let _ = sender.send(TaskResult::RequestRefresh);
     }
+
+    pub fn request_save_settings(&self) {
+        let (sender, _) = self.task_context();
+        let _ = sender.send(TaskResult::RequestSaveSettings);
+    }
 }

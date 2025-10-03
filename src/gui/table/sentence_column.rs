@@ -136,6 +136,7 @@ fn ui_sentence_content(
     let surface_index = sentence_ref.1;
     let highlighted_color = app.theme.red(ctx);
     let normal_color = ctx.style().visuals.widgets.noninteractive.fg_stroke.color;
+    let highlight_color = ctx.style().visuals.widgets.noninteractive.bg_stroke.color;
     let is_expression = matches!(term.part_of_speech, POS::Expression | POS::NounExpression);
 
     ui.with_layout(egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(false), |ui| {
@@ -167,15 +168,18 @@ fn ui_sentence_content(
             );
 
             let color = if is_term {
-                blend_colors(normal_color, highlighted_color, 0.95)
+                blend_colors(highlight_color, highlighted_color, 0.85)
             } else {
-                app.theme.pos_color(pos, ctx, normal_color)
+                let pos_color = app.theme.pos_color(pos, ctx, normal_color);
+                // Heavily mute non-term colors by blending mostly with normal color
+                blend_colors(normal_color, pos_color, 0.75)
             };
 
             let text_color = if is_term {
-                blend_colors(normal_color, highlighted_color, 0.85)
+                blend_colors(highlight_color, highlighted_color, 0.85)
             } else {
-                blend_colors(normal_color, color, 0.85)
+                // Non-term text is even more muted
+                blend_colors(normal_color, color, 0.75)
             };
 
             let hover_text = match reading.as_str() {
@@ -185,9 +189,6 @@ fn ui_sentence_content(
 
             let label = egui::Label::new(RichText::new(segment_text).color(text_color).size(16.0));
             let response = ui.add(label);
-
-            // Don't draw underlines in wrapping context as they get misaligned
-            // This will be handled at a higher level if needed
 
             if let Some(hover_text) = hover_text {
                 response.on_hover_text(hover_text);

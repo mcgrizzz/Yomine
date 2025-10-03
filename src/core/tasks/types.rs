@@ -19,6 +19,7 @@ pub enum TaskResult {
 
     FileProcessing(FileProcessingResult),
     RequestRefresh,
+    RequestSaveSettings,
     TermsRefreshed(Result<Vec<Term>, String>),
 
     LanguageToolsLoaded(Result<LanguageTools, String>),
@@ -33,6 +34,7 @@ impl TaskResult {
             TaskResult::AnkiSampleNote { .. } => "anki_sample",
             TaskResult::FileProcessing(_) => "file_processing",
             TaskResult::RequestRefresh => "request_refresh",
+            TaskResult::RequestSaveSettings => "request_save_settings",
             TaskResult::TermsRefreshed(_) => "terms_refreshed",
             TaskResult::LanguageToolsLoaded(_) => "language_tools",
             TaskResult::LoadingMessage(_) => "loading_message",

@@ -46,7 +46,7 @@ impl TopBar {
         ignore_list_modal: &mut IgnoreListModal,
         frequency_weights_modal: &mut FrequencyWeightsModal,
         pos_filters_modal: &mut PosFiltersModal,
-        current_settings: &SettingsData,
+        current_settings: &mut SettingsData,
         websocket_manager: &WebSocketManager,
         mpv_connected: bool,
         anki_connected: bool,
@@ -59,7 +59,57 @@ impl TopBar {
     ) {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
-                egui::widgets::global_theme_preference_switch(ui);
+                //Just inlined the builtin so we can observe click events and save state.
+                let current_theme_pref = if current_settings.dark_mode {
+                    egui::ThemePreference::Dark
+                } else {
+                    egui::ThemePreference::Light
+                };
+
+                let new_theme_pref = if current_theme_pref == egui::ThemePreference::Dark {
+                    if ui
+                        .add(egui::Button::new("☀").frame(false))
+                        .on_hover_text("Switch to light mode")
+                        .clicked()
+                    {
+                        Some(egui::ThemePreference::Light)
+                    } else {
+                        None
+                    }
+                } else {
+                    if ui
+                        .add(egui::Button::new("🌙").frame(false))
+                        .on_hover_text("Switch to dark mode")
+                        .clicked()
+                    {
+                        Some(egui::ThemePreference::Dark)
+                    } else {
+                        None
+                    }
+                };
+
+                if let Some(new_theme) = new_theme_pref {
+                    ctx.set_theme(new_theme);
+                    current_settings.dark_mode = matches!(new_theme, egui::ThemePreference::Dark);
+                    task_manager.request_save_settings();
+                }
+
+                // Font family switcher (Sans/Serif)
+                let font_icon = "字";
+                let tooltip = if current_settings.use_serif_font {
+                    "Switch to Sans"
+                } else {
+                    "Switch to Serif"
+                };
+
+                if ui.button(font_icon).on_hover_text(tooltip).clicked() {
+                    current_settings.use_serif_font = !current_settings.use_serif_font;
+                    crate::gui::app::apply_font_family(ctx, current_settings.use_serif_font);
+                    task_manager.request_save_settings();
+                }
+
+                ui.separator();
+
                 ui.menu_button("File", |ui| {
                     if ui.button("Open New File").clicked() {
                         file_modal.open_dialog();

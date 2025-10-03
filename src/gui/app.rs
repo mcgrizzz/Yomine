@@ -155,6 +155,24 @@ impl YomineApp {
         app.setup_fonts(cc);
         app.setup_theme(cc);
 
+        // Apply saved font preference
+        apply_font_family(&cc.egui_ctx, app.settings_data.use_serif_font);
+
+        // Apply saved theme preference (set_theme switches to the registered variant)
+        cc.egui_ctx.set_theme(if app.settings_data.dark_mode {
+            egui::Theme::Dark
+        } else {
+            egui::Theme::Light
+        });
+
+        cc.egui_ctx.options_mut(|o| {
+            o.theme_preference = if app.settings_data.dark_mode {
+                egui::ThemePreference::Dark
+            } else {
+                egui::ThemePreference::Light
+            };
+        });
+
         //Make sure it opens above other windows so you can see it.
         cc.egui_ctx
             .send_viewport_cmd(egui::ViewportCommand::WindowLevel(egui::WindowLevel::AlwaysOnTop));
@@ -165,6 +183,8 @@ impl YomineApp {
     }
     fn setup_fonts(&self, cc: &eframe::CreationContext<'_>) {
         let mut fonts = egui::FontDefinitions::default();
+
+        // Register Noto Sans JP
         fonts.font_data.insert(
             "noto_sans_jp".to_owned(),
             std::sync::Arc::new(egui::FontData::from_static(include_bytes!(
@@ -172,17 +192,55 @@ impl YomineApp {
             ))),
         );
 
-        // fonts.font_data.insert(
-        //     "noto_sans_jp_bold".to_owned(),
-        //     egui::FontData::from_static(include_bytes!("../../assets/fonts/NotoSansJP-Bold.ttf"))
-        //         .into(),
-        // );
+        // Register Noto Serif JP
+        fonts.font_data.insert(
+            "noto_serif_jp".to_owned(),
+            std::sync::Arc::new(egui::FontData::from_static(include_bytes!(
+                "../../assets/fonts/NotoSerifJP-Regular.ttf"
+            ))),
+        );
+
+        // Get default egui fonts for fallback (they contain special symbols)
+        let default_fonts = egui::FontDefinitions::default();
+
+        // Create named font families for Sans with default fonts as fallback
+        let sans_family =
+            fonts.families.entry(egui::FontFamily::Name("noto_sans_jp".into())).or_default();
+        sans_family.insert(0, "noto_sans_jp".to_owned());
+        // Add default fonts for symbols
+        if let Some(default_proportional) =
+            default_fonts.families.get(&egui::FontFamily::Proportional)
+        {
+            for (i, font) in default_proportional.iter().enumerate() {
+                sans_family.insert(i + 1, font.clone());
+            }
+        }
+
+        // Create named font families for Serif with Sans and default fonts as fallback
+        let serif_family =
+            fonts.families.entry(egui::FontFamily::Name("noto_serif_jp".into())).or_default();
+        serif_family.insert(0, "noto_serif_jp".to_owned());
+        serif_family.insert(1, "noto_sans_jp".to_owned());
+
+        if let Some(default_proportional) =
+            default_fonts.families.get(&egui::FontFamily::Proportional)
+        {
+            for (i, font) in default_proportional.iter().enumerate() {
+                serif_family.insert(i + 2, font.clone());
+            }
+        }
 
         fonts
             .families
             .entry(egui::FontFamily::Proportional)
             .or_default()
             .insert(0, "noto_sans_jp".to_owned());
+
+        fonts
+            .families
+            .entry(egui::FontFamily::Proportional)
+            .or_default()
+            .insert(1, "noto_serif_jp".to_owned());
 
         fonts
             .families
@@ -199,6 +257,16 @@ impl YomineApp {
     }
 }
 
+pub fn apply_font_family(ctx: &egui::Context, use_serif: bool) {
+    ctx.all_styles_mut(|style| {
+        for (_text_style, font_id) in style.text_styles.iter_mut() {
+            font_id.family = egui::FontFamily::Name(
+                if use_serif { "noto_serif_jp" } else { "noto_sans_jp" }.into(),
+            );
+        }
+    });
+}
+
 impl eframe::App for YomineApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let task_results = self.task_manager.poll_results();
@@ -212,8 +280,6 @@ impl eframe::App for YomineApp {
         self.update_anki_status();
         self.handle_file_drops(ctx);
         self.draw_file_drop_overlay(ctx);
-
-        let current_settings = self.get_current_settings();
 
         let ignore_list_ref = self.language_tools.as_ref().map(|lt| &lt.ignore_list);
         let frequency_manager =
@@ -229,7 +295,7 @@ impl eframe::App for YomineApp {
             &mut self.ignore_list_modal,
             &mut self.frequency_weights_modal,
             &mut self.pos_filters_modal,
-            &current_settings,
+            &mut self.settings_data,
             &self.player.ws,
             self.player.mpv.is_connected(),
             self.anki_connected,
@@ -389,6 +455,9 @@ impl YomineApp {
                     }
                 }
             }
+            TaskResult::RequestSaveSettings => {
+                self.save_settings();
+            }
             _ => {}
         }
     }
@@ -462,9 +531,6 @@ impl YomineApp {
         }
     }
 
-    fn get_current_settings(&self) -> SettingsData {
-        self.settings_data.clone()
-    }
     fn save_settings(&self) {
         if let Err(e) = save_json(&self.settings_data, "settings.json") {
             eprintln!("Failed to save settings: {}", e);

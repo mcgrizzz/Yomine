@@ -87,14 +87,24 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
             }
 
             app.table_state.sync_frequency_states(freq_manager);
+            app.table_state.compute_term_column_width(ctx, &app.terms);
             controls_row(ui, app);
             ui.add_space(10.0);
 
             egui::ScrollArea::vertical().show(ui, |ui| {
+                // Enhance row background contrast for better text readability
+                let base_bg = ui.visuals().faint_bg_color;
+                ui.style_mut().visuals.faint_bg_color = if ui.visuals().dark_mode {
+                    base_bg.linear_multiply(1.4) // Make stripes slightly lighter in dark mode
+                } else {
+                    base_bg.linear_multiply(0.75) // Make stripes slightly darker in light mode
+                };
+
+                let term_width = app.table_state.term_column_width();
                 TableBuilder::new(ui)
                     .striped(true)
                     .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                    .column(Column::auto().at_least(100.0))
+                    .column(Column::exact(term_width))
                     .column(Column::remainder())
                     .column(Column::auto().at_least(40.0))
                     .column(Column::auto().at_least(40.0))

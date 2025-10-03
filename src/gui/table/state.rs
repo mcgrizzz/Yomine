@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use eframe::egui;
 use wana_kana::ConvertJapanese;
 
 use crate::{
@@ -208,6 +209,7 @@ pub struct TableState {
     pos_filters: PosFilterState,
     search: String,
     frequency_states: HashMap<String, DictionaryState>,
+    term_column_width: Option<f32>,
 }
 
 impl Default for TableState {
@@ -222,6 +224,7 @@ impl Default for TableState {
             pos_filters: PosFilterState::new(),
             search: String::new(),
             frequency_states: HashMap::new(),
+            term_column_width: None,
         }
     }
 }
@@ -254,6 +257,7 @@ impl TableState {
         self.visible_indices.clear();
         self.freq_filter = FrequencyFilter::new();
         self.pos_filters = PosFilterState::new();
+        self.term_column_width = None;
         self.dirty = true;
     }
 
@@ -400,6 +404,35 @@ impl TableState {
 
     pub fn visible_indices(&self) -> &[usize] {
         &self.visible_indices
+    }
+
+    pub fn compute_term_column_width(&mut self, ctx: &egui::Context, terms: &[Term]) {
+        if self.term_column_width.is_some() {
+            return;
+        }
+
+        let mut max_width: f32 = 100.0; // Minimum width
+        let fonts = ctx.fonts(|f| f.clone());
+
+        for term in terms {
+            let term_width = fonts
+                .layout_no_wrap(
+                    term.lemma_form.clone(),
+                    egui::FontId::proportional(14.0),
+                    egui::Color32::WHITE,
+                )
+                .size()
+                .x;
+
+            let total_width = term_width + 30.0; // 30.0 for padding
+            max_width = max_width.max(total_width);
+        }
+
+        self.term_column_width = Some(max_width.min(300.0)); // Cap at 300px
+    }
+
+    pub fn term_column_width(&self) -> f32 {
+        self.term_column_width.unwrap_or(100.0)
     }
 
     pub fn configure_bounds(&mut self, terms: &[Term]) {

@@ -34,6 +34,14 @@ pub struct SettingsData {
     pub frequency_weights: HashMap<String, FrequencyDictionarySetting>,
     #[serde(default)]
     pub pos_filters: HashMap<String, bool>,
+    #[serde(default)]
+    pub use_serif_font: bool,
+    #[serde(default = "default_true")]
+    pub dark_mode: bool,
+}
+
+const fn default_true() -> bool {
+    true
 }
 
 impl SettingsData {
@@ -43,6 +51,8 @@ impl SettingsData {
             websocket_settings: WebSocketSettings::default(),
             frequency_weights: HashMap::new(),
             pos_filters: HashMap::new(),
+            use_serif_font: false,
+            dark_mode: true,
         }
     }
 }
