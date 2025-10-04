@@ -113,9 +113,9 @@ impl PosFiltersModal {
 
                     for &(pos, enabled, is_parent) in &all_chips[start..end] {
                         if is_parent {
-                            parent_chip_pos(ui, &mut self.raw, pos);
+                            ui_parent_chip_pos(ui, &mut self.raw, pos);
                         } else {
-                            chip_pos(ui, &mut self.raw, pos, enabled);
+                            ui_chip_pos(ui, &mut self.raw, pos, enabled);
                         }
                     }
                 });
@@ -210,25 +210,31 @@ impl PosFiltersModal {
     }
 }
 
-fn parent_chip_pos(ui: &mut Ui, raw: &mut HashMap<POS, bool>, pos: POS) {
+fn ui_parent_chip_pos(ui: &mut Ui, raw: &mut HashMap<POS, bool>, pos: POS) {
     let mut on = raw.get(&pos).copied().unwrap_or(true);
-    let resp = chip_button(ui, pos.display_name(), on, true, true);
+    let resp = ui_chip_button(ui, pos.display_name(), on, true, true);
     if resp.clicked() {
         on = !on;
     }
     raw.insert(pos, on);
 }
 
-fn chip_pos(ui: &mut Ui, raw: &mut HashMap<POS, bool>, pos: POS, enabled: bool) {
+fn ui_chip_pos(ui: &mut Ui, raw: &mut HashMap<POS, bool>, pos: POS, enabled: bool) {
     let mut on = raw.get(&pos).copied().unwrap_or(true);
-    let resp = chip_button(ui, pos.display_name(), on, enabled, false);
+    let resp = ui_chip_button(ui, pos.display_name(), on, enabled, false);
     if enabled && resp.clicked() {
         on = !on;
     }
     raw.insert(pos, on);
 }
 
-fn chip_button(ui: &mut Ui, label: &str, on: bool, enabled: bool, strong: bool) -> egui::Response {
+fn ui_chip_button(
+    ui: &mut Ui,
+    label: &str,
+    on: bool,
+    enabled: bool,
+    strong: bool,
+) -> egui::Response {
     let (bg, fg, stroke) = calculate_chip_colors(ui.visuals(), on, enabled);
 
     let text = if strong {
@@ -247,7 +253,7 @@ fn chip_button(ui: &mut Ui, label: &str, on: bool, enabled: bool, strong: bool) 
     let resp = ui.add_enabled(enabled, btn);
 
     if resp.hovered() && enabled {
-        draw_hover_ring(ui, &resp);
+        ui_draw_hover_ring(ui, &resp);
     }
 
     resp
@@ -273,7 +279,7 @@ fn calculate_chip_colors(
     }
 }
 
-fn draw_hover_ring(ui: &mut Ui, resp: &egui::Response) {
+fn ui_draw_hover_ring(ui: &mut Ui, resp: &egui::Response) {
     let ring_color = ui.visuals().widgets.hovered.fg_stroke.color.linear_multiply(0.6);
     let ring = Stroke::new(1.0, ring_color);
     ui.painter().rect_stroke(

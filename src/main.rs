@@ -11,10 +11,10 @@ fn main() {
 
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1200.0, 800.0])
-            .with_min_inner_size([800.0, 600.0])
+            //.with_inner_size([825.0, 475.0])
+            .with_min_inner_size([1400.0, 805.0])
             .with_resizable(true)
-            .with_icon(icon),
+            .with_icon(icon), // Temporarily disable persistence to reset window size
         ..Default::default()
     };
 

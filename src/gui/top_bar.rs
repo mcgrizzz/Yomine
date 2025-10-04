@@ -218,6 +218,15 @@ impl TopBar {
                 }
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    // let fps = ctx.input(|i| 1.0 / i.stable_dt);
+                    // ui.label(
+                    //     egui::RichText::new(format!("{:.0} FPS", fps))
+                    //         .color(ui.visuals().weak_text_color())
+                    //         .size(11.0),
+                    // );
+
+                    // ui.separator();
+
                     Self::show_status_indicators(
                         ui,
                         websocket_manager,

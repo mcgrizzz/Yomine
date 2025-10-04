@@ -75,6 +75,26 @@ pub fn normalize_japanese_text(text: &str) -> String {
     text.to_hiragana().normalize_long_vowel().to_string()
 }
 
+pub fn text_matches_search(text: &str, query: &str) -> bool {
+    if query.is_empty() {
+        return true;
+    }
+
+    // First try normalized Japanese matching (handles romaji → hiragana, katakana → hiragana, etc.)
+    let normalized_text = normalize_japanese_text(text);
+    let normalized_query = normalize_japanese_text(query);
+
+    if normalized_text.contains(&normalized_query) {
+        return true;
+    }
+
+    // Also try case-insensitive ASCII matching for English text (e.g., POS names)
+    let text_lower = text.to_lowercase();
+    let query_lower = query.to_lowercase();
+
+    text_lower.contains(&query_lower)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

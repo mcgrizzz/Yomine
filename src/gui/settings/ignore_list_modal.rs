@@ -8,9 +8,9 @@ use egui_flex::{
     item,
     Flex,
 };
-use wana_kana::ConvertJapanese;
 
 use crate::core::{
+    utils::text_matches_search,
     IgnoreList,
     DEFAULT_IGNORED_TERMS,
 };
@@ -50,24 +50,7 @@ impl IgnoreListModal {
     }
 
     fn matches_search_term(&self, term: &str, search_query: &str) -> bool {
-        if search_query.is_empty() {
-            return true;
-        }
-
-        let search_lower = search_query.to_lowercase();
-        let term_lower = term.to_lowercase();
-
-        if term_lower.contains(&search_lower) {
-            return true;
-        }
-
-        // Convert Japanese term to romaji for search matching
-        let romaji_term = term.to_romaji().to_lowercase();
-        if romaji_term != term_lower && romaji_term.contains(&search_lower) {
-            return true;
-        }
-
-        false
+        text_matches_search(term, search_query)
     }
 
     pub fn show(&mut self, ctx: &egui::Context, ignore_list: &Arc<Mutex<IgnoreList>>) -> bool {
