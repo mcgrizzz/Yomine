@@ -71,16 +71,16 @@ impl PosFiltersModal {
                 .max_height(SCROLL_MAX_HEIGHT)
                 .auto_shrink([false, true])
                 .show(ui, |ui| {
-                    self.render_pos_chips(ui);
+                    self.ui_pos_chips(ui);
                 });
 
             ui.separator();
 
             let dirty = self.is_dirty();
-            self.render_status_bar(ui, dirty);
+            self.ui_status_bar(ui, dirty);
             ui.add_space(4.0);
 
-            result = self.render_action_buttons(ui, dirty);
+            result = self.ui_action_buttons(ui, dirty);
         });
 
         if modal.should_close() {
@@ -90,7 +90,7 @@ impl PosFiltersModal {
         result
     }
 
-    fn render_pos_chips(&mut self, ui: &mut Ui) {
+    fn ui_pos_chips(&mut self, ui: &mut Ui) {
         let all_chips = self.build_chip_list();
 
         let available_width = ui.available_width();
@@ -125,7 +125,7 @@ impl PosFiltersModal {
         });
     }
 
-    fn render_status_bar(&self, ui: &mut Ui, dirty: bool) {
+    fn ui_status_bar(&self, ui: &mut Ui, dirty: bool) {
         ui.horizontal(|ui| {
             if dirty {
                 ui.colored_label(Color32::YELLOW, "⚠");
@@ -137,7 +137,7 @@ impl PosFiltersModal {
         });
     }
 
-    fn render_action_buttons(&mut self, ui: &mut Ui, dirty: bool) -> Option<HashMap<String, bool>> {
+    fn ui_action_buttons(&mut self, ui: &mut Ui, dirty: bool) -> Option<HashMap<String, bool>> {
         let mut result = None;
 
         ui.with_layout(Layout::left_to_right(egui::Align::Center), |ui| {
