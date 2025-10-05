@@ -30,6 +30,8 @@ pub(crate) fn ui_col_sentence(
     term_index: usize,
 ) {
     row.col(|ui| {
+        super::ui_col_lines(ui, ctx, app);
+
         if term.sentence_references.is_empty() {
             return;
         }

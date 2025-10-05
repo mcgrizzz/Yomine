@@ -19,31 +19,24 @@ use super::{
         SortField,
         SortState,
     },
-    YomineApp,
 };
+use crate::gui::YomineApp;
 
 pub fn ui_header_cols(_ctx: &egui::Context, mut header: TableRow<'_, '_>, app: &mut YomineApp) {
     header.col(|ui| {
+        ui.style_mut().interaction.selectable_labels = false;
         ui.label(app.theme.heading(ui.ctx(), "Term"));
     });
-    header.col(|ui| ui_column_header_sentence(ui, app));
     header.col(|ui| {
-        ui.horizontal(|ui| {
-            let settings_button = ui
-                .add(egui::Button::new("⚙").frame(false).small())
-                .on_hover_text("Frequency Settings")
-                .on_hover_cursor(egui::CursorIcon::PointingHand);
-
-            if settings_button.clicked() {
-                let frequency_manager =
-                    app.language_tools.as_ref().map(|tools| tools.frequency_manager.as_ref());
-                app.frequency_weights_modal.open_modal(&app.settings_data, frequency_manager);
-            }
-
-            ui_column_header(ui, app, "Frequency", Some(SortField::Frequency));
-        });
+        ui.style_mut().interaction.selectable_labels = false;
+        ui_column_header_sentence(ui, app);
     });
     header.col(|ui| {
+        ui.style_mut().interaction.selectable_labels = false;
+        ui_column_header_frequency(ui, app);
+    });
+    header.col(|ui| {
+        ui.style_mut().interaction.selectable_labels = false;
         ui.horizontal(|ui| {
             let settings_button = ui
                 .add(egui::Button::new("⚙").frame(false).small())
@@ -195,7 +188,7 @@ fn ui_column_header(ui: &mut Ui, app: &mut YomineApp, title: &str, sort_field: O
                 toggle_sort_field(app, field, sort_state);
             }
 
-            if let Some(arrow) = sort_arrow_text(ui, sort_state, field, response.hovered()) {
+            if let Some(arrow) = sort_arrow_text(ui, sort_state, field, response.hovered(), app) {
                 let arrow_response = ui
                     .add(egui::Label::new(arrow).sense(Sense::click()))
                     .on_hover_cursor(egui::CursorIcon::PointingHand);
@@ -209,6 +202,38 @@ fn ui_column_header(ui: &mut Ui, app: &mut YomineApp, title: &str, sort_field: O
     } else {
         ui.label(app.theme.heading(ui.ctx(), title));
     }
+}
+
+fn draw_column_highlight(ui: &mut Ui, app: &YomineApp) {
+    let mut bg_color = app.theme.cyan(ui.ctx());
+    bg_color = bg_color.linear_multiply(0.10);
+
+    let rect = ui.available_rect_before_wrap();
+    ui.painter().rect_filled(rect, 3.0, bg_color);
+}
+
+fn ui_column_header_frequency(ui: &mut Ui, app: &mut YomineApp) {
+    let sort_state = app.table_state.sort_state();
+    let is_active = matches!(sort_state.field, Some(SortField::Frequency));
+
+    if is_active {
+        draw_column_highlight(ui, app);
+    }
+
+    ui.horizontal(|ui| {
+        let settings_button = ui
+            .add(egui::Button::new("⚙").frame(false).small())
+            .on_hover_text("Frequency Settings")
+            .on_hover_cursor(egui::CursorIcon::PointingHand);
+
+        if settings_button.clicked() {
+            let frequency_manager =
+                app.language_tools.as_ref().map(|tools| tools.frequency_manager.as_ref());
+            app.frequency_weights_modal.open_modal(&app.settings_data, frequency_manager);
+        }
+
+        ui_column_header(ui, app, "Frequency", Some(SortField::Frequency));
+    });
 }
 
 fn ui_column_header_sentence(ui: &mut Ui, app: &mut YomineApp) {
@@ -225,6 +250,10 @@ fn ui_column_header_sentence(ui: &mut Ui, app: &mut YomineApp) {
     } else {
         (SortField::Chronological, "🕒", "Chronological")
     };
+
+    if is_active {
+        draw_column_highlight(ui, app);
+    }
 
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 6.0;
@@ -261,7 +290,8 @@ fn ui_column_header_sentence(ui: &mut Ui, app: &mut YomineApp) {
             }
         }
 
-        if let Some(arrow) = sort_arrow_text(ui, sort_state, current_field, response.hovered()) {
+        if let Some(arrow) = sort_arrow_text(ui, sort_state, current_field, response.hovered(), app)
+        {
             let arrow_response = ui
                 .add(egui::Label::new(arrow).sense(Sense::click()))
                 .on_hover_cursor(egui::CursorIcon::PointingHand);
@@ -403,6 +433,7 @@ fn sort_arrow_text(
     sort_state: SortState,
     field: SortField,
     hovered: bool,
+    app: &YomineApp,
 ) -> Option<RichText> {
     let is_active = matches!(sort_state.field, Some(current) if current == field);
     if !is_active && !hovered {
@@ -412,11 +443,10 @@ fn sort_arrow_text(
     let direction =
         if is_active { sort_state.direction } else { SortState::default_direction(field) };
     let arrow = match direction {
-        SortDirection::Ascending => "⇧",
-        SortDirection::Descending => "⇩",
+        SortDirection::Ascending => "⬆",
+        SortDirection::Descending => "⬇",
     };
-    let color =
-        if is_active { ui.visuals().strong_text_color() } else { ui.visuals().weak_text_color() };
+    let color = if is_active { app.theme.cyan(ui.ctx()) } else { ui.visuals().weak_text_color() };
 
     Some(RichText::new(arrow).color(color).text_style(TextStyle::Small))
 }

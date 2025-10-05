@@ -1,6 +1,9 @@
 use eframe::egui::{
     self,
     RichText,
+    Shape,
+    Stroke,
+    Ui,
 };
 use egui_extras::{
     Column,
@@ -111,8 +114,6 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
 
                 // Pre-calculate everything we need before entering closures
                 let visible_indices = app.table_state.visible_indices().to_vec();
-                let fonts = ctx.fonts(|f| f.clone());
-                let font_id = egui::FontId::proportional(16.0);
                 let available_width = ui.available_width();
 
                 // Calculate sentence column width - subtract term, frequency, and POS columns
@@ -120,56 +121,14 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
                 let sentence_column_width =
                     (available_width - term_width - (90.0 * 2.0 + 20.0)).max(200.0);
 
-                // Pre-calculate all row heights
-                let row_heights: Vec<f32> = visible_indices
-                    .iter()
-                    .map(|&term_index| {
-                        let term = &app.terms[term_index];
-
-                        if term.sentence_references.is_empty() {
-                            46.0
-                        } else {
-                            let sentence_idx = app.table_state.get_sentence_index(term_index);
-                            if let Some(sentence_ref) = term.sentence_references.get(sentence_idx) {
-                                if let Some(sentence) = app.sentences.get(sentence_ref.0) {
-                                    let mut layout_job = egui::text::LayoutJob::default();
-                                    layout_job.wrap = egui::text::TextWrapping {
-                                        max_width: sentence_column_width,
-                                        max_rows: 10,
-                                        break_anywhere: false,
-                                        overflow_character: None,
-                                    };
-                                    layout_job.append(
-                                        &sentence.text,
-                                        0.0,
-                                        egui::TextFormat {
-                                            font_id: font_id.clone(),
-                                            color: egui::Color32::WHITE,
-                                            ..Default::default()
-                                        },
-                                    );
-
-                                    let galley = fonts.layout_job(layout_job);
-                                    let lines = galley.rows.len() as f32;
-
-                                    // Height = text height + controls height + spacing
-                                    // Measured values from egui debug mode:
-                                    // Text: 22.9 points per line
-                                    // 2.05 between line spacing
-                                    // Controls: 18.2 points
-                                    let text_height = lines * 22.9 + 2.05 * (lines - 1.0);
-                                    let controls_height = 18.2;
-                                    let spacing = 2.1; // spacing between text and controls
-                                    text_height + controls_height + spacing
-                                } else {
-                                    46.0
-                                }
-                            } else {
-                                46.0
-                            }
-                        }
-                    })
-                    .collect();
+                // Compute row heights using cached calculation
+                app.table_state.compute_row_heights(
+                    ctx,
+                    &app.terms,
+                    &app.sentences,
+                    sentence_column_width,
+                );
+                let row_heights: Vec<f32> = app.table_state.row_heights().to_vec();
 
                 TableBuilder::new(ui)
                     .striped(true)
@@ -190,7 +149,7 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
                             ui_col_term(ctx, &mut row, &term, app);
                             ui_col_sentence(ctx, &mut row, &term, app, term_index);
                             ui_col_frequency(ctx, &mut row, &term, app);
-                            ui_col_pos(ctx, &mut row, &term);
+                            ui_col_pos(ctx, &mut row, &term, app);
                         });
                     });
             });
@@ -205,6 +164,8 @@ fn ui_col_term(
     app: &mut YomineApp,
 ) {
     row.col(|ui| {
+        ui_col_lines(ui, ctx, app);
+
         let ignore_status = if let Some(ref language_tools) = app.language_tools {
             language_tools
                 .ignore_list
@@ -266,13 +227,34 @@ fn ui_col_term(
     });
 }
 
+pub(crate) fn ui_col_lines(ui: &mut Ui, ctx: &egui::Context, app: &YomineApp) {
+    let mut color = app.theme.comment(ctx);
+    color = color.linear_multiply(0.55);
+
+    let st = Stroke { width: 0.5, color };
+
+    let rect = ui.max_rect();
+    let xr = rect.x_range();
+    let yr = rect.y_range();
+
+    let shape = Shape::dashed_line(
+        &[egui::pos2(xr.min, yr.min), egui::pos2(xr.max, yr.min)],
+        st,
+        5.0, // dash length
+        2.5, // gap length
+    );
+    ui.painter().add(shape);
+}
+
 fn ui_col_frequency(
-    _ctx: &egui::Context,
+    ctx: &egui::Context,
     row: &mut egui_extras::TableRow,
     term: &Term,
     app: &YomineApp,
 ) {
     row.col(|ui| {
+        ui_col_lines(ui, ctx, app);
+
         let weighted = if let Some(manager) =
             app.language_tools.as_ref().map(|tools| tools.frequency_manager.as_ref())
         {
@@ -286,8 +268,9 @@ fn ui_col_frequency(
     });
 }
 
-fn ui_col_pos(_ctx: &egui::Context, row: &mut egui_extras::TableRow, term: &Term) {
+fn ui_col_pos(ctx: &egui::Context, row: &mut egui_extras::TableRow, term: &Term, app: &YomineApp) {
     row.col(|ui| {
+        ui_col_lines(ui, ctx, app);
         ui.label(term.part_of_speech.to_string());
     });
 }

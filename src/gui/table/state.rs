@@ -39,6 +39,8 @@ pub struct TableState {
     search: String,
     frequency_states: HashMap<String, DictionaryState>,
     term_column_width: Option<f32>,
+    cached_row_heights: Vec<f32>,
+    last_sentence_column_width: f32,
 }
 
 impl Default for TableState {
@@ -54,6 +56,8 @@ impl Default for TableState {
             search: String::new(),
             frequency_states: HashMap::new(),
             term_column_width: None,
+            cached_row_heights: Vec::new(),
+            last_sentence_column_width: 0.0,
         }
     }
 }
@@ -87,6 +91,7 @@ impl TableState {
         self.freq_filter = FrequencyFilter::new();
         self.pos_filters = PosFilterState::new();
         self.term_column_width = None;
+        self.cached_row_heights.clear();
         self.dirty = true;
     }
 
@@ -268,6 +273,77 @@ impl TableState {
 
     pub fn term_column_width(&self) -> f32 {
         self.term_column_width.unwrap_or(100.0)
+    }
+
+    pub fn compute_row_heights(
+        &mut self,
+        ctx: &egui::Context,
+        terms: &[Term],
+        sentences: &[Sentence],
+        sentence_column_width: f32,
+    ) {
+        // Check if we need to recalculate
+        if !self.cached_row_heights.is_empty()
+            && self.cached_row_heights.len() == self.visible_indices.len()
+            && (self.last_sentence_column_width - sentence_column_width).abs() < 0.5
+        {
+            return;
+        }
+
+        let fonts = ctx.fonts(|f| f.clone());
+        let font_id = egui::FontId::proportional(16.0);
+
+        self.cached_row_heights = self
+            .visible_indices
+            .iter()
+            .map(|&term_index| {
+                let term = &terms[term_index];
+
+                if term.sentence_references.is_empty() {
+                    46.0
+                } else {
+                    let sentence_idx = self.get_sentence_index(term_index);
+                    if let Some(sentence_ref) = term.sentence_references.get(sentence_idx) {
+                        if let Some(sentence) = sentences.get(sentence_ref.0) {
+                            let mut layout_job = egui::text::LayoutJob::default();
+                            layout_job.wrap = egui::text::TextWrapping {
+                                max_width: sentence_column_width,
+                                max_rows: 10,
+                                break_anywhere: false,
+                                overflow_character: None,
+                            };
+                            layout_job.append(
+                                &sentence.text,
+                                0.0,
+                                egui::TextFormat {
+                                    font_id: font_id.clone(),
+                                    color: egui::Color32::WHITE,
+                                    ..Default::default()
+                                },
+                            );
+
+                            let galley = fonts.layout_job(layout_job);
+                            let lines = galley.rows.len() as f32;
+
+                            let text_height = lines * 22.9 + 2.05 * (lines - 1.0);
+                            let controls_height = 18.2;
+                            let spacing = 2.1;
+                            text_height + controls_height + spacing
+                        } else {
+                            46.0
+                        }
+                    } else {
+                        46.0
+                    }
+                }
+            })
+            .collect();
+
+        self.last_sentence_column_width = sentence_column_width;
+    }
+
+    pub fn row_heights(&self) -> &[f32] {
+        &self.cached_row_heights
     }
 
     pub fn configure_bounds(&mut self, terms: &[Term]) {
