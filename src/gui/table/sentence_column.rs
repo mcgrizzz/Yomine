@@ -8,25 +8,21 @@ use eframe::egui::{
     Widget,
 };
 use egui_extras::TableRow;
-use wana_kana::ConvertJapanese;
 
+use super::sentence_widget::SentenceWidget;
 use crate::{
     core::{
         models::TimeStamp,
         Term,
     },
-    gui::{
-        theme::blend_colors,
-        YomineApp,
-    },
-    segmentation::word::POS,
+    gui::YomineApp,
 };
 
 //const ROW_HEIGHT: f32 = 54.0;
 const ROW_SPACING: f32 = 2.0;
 const BUTTON_SIZE: f32 = 18.0;
 
-pub(crate) fn col_sentence(
+pub(crate) fn ui_col_sentence(
     ctx: &Context,
     row: &mut TableRow,
     term: &Term,
@@ -34,17 +30,16 @@ pub(crate) fn col_sentence(
     term_index: usize,
 ) {
     row.col(|ui| {
+        super::ui_col_lines(ui, ctx, app);
+
         if term.sentence_references.is_empty() {
             return;
         }
 
         ui.style_mut().spacing.item_spacing.y = ROW_SPACING;
-        // ui.ctx().style_mut(|style| {
-        //     style.debug.debug_on_hover = true; // Hover to see widget rectangles and details
-        // });
+
         ui.vertical(|ui| {
-            ui.set_max_height(32.0);
-            ui.horizontal_centered(|ui| {
+            ui.horizontal(|ui| {
                 ui_sentence_content(ctx, ui, term, app, term_index);
             });
 
@@ -52,8 +47,6 @@ pub(crate) fn col_sentence(
                 //TODO: Nice layout where sentence nav is below sentence content in the row.
                 ui_sentence_navigation(ui, term, term_index, app);
                 ui_timestamp(ui, term, app, term_index);
-
-                // ui_sentence_content(ctx, ui, term, app, term_index);
             });
         });
     });
@@ -122,7 +115,7 @@ fn ui_sentence_content(
     ctx: &Context,
     ui: &mut Ui,
     term: &Term,
-    app: &YomineApp,
+    app: &mut YomineApp,
     term_index: usize,
 ) {
     let sentence_idx = app.table_state.get_sentence_index(term_index);
@@ -134,66 +127,18 @@ fn ui_sentence_content(
     };
 
     let surface_index = sentence_ref.1;
-    let highlighted_color = app.theme.red(ctx);
-    let normal_color = ctx.style().visuals.widgets.noninteractive.fg_stroke.color;
-    let is_expression = matches!(term.part_of_speech, POS::Expression | POS::NounExpression);
 
-    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(false), |ui| {
-        ui.spacing_mut().item_spacing.x = 0.0;
+    // Use the new SentenceWidget for consistent wrapping
+    let widget = SentenceWidget::new(
+        ctx,
+        term,
+        app,
+        &sentence_content.text,
+        &sentence_content.segments,
+        surface_index,
+    );
 
-        let term_text = if is_expression { &term.full_segment } else { &term.surface_form };
-
-        let mut segments_to_highlight = Vec::new();
-        if is_expression {
-            segments_to_highlight = find_expression_segments(
-                term_text,
-                &sentence_content.segments,
-                &sentence_content.text,
-            );
-        }
-
-        // Iterate over segments (same as existing col_sentence logic)
-        for (idx, (reading, pos, start, stop)) in sentence_content.segments.iter().enumerate() {
-            let segment_text = &sentence_content.text[*start..*stop];
-
-            let is_term = is_segment_part_of_term(
-                idx,
-                *start,
-                *stop,
-                is_expression,
-                &segments_to_highlight,
-                surface_index,
-                term_text,
-            );
-
-            let color = if is_term {
-                blend_colors(normal_color, highlighted_color, 0.95)
-            } else {
-                app.theme.pos_color(pos, ctx, normal_color)
-            };
-
-            let text_color = if is_term {
-                blend_colors(normal_color, highlighted_color, 0.85)
-            } else {
-                blend_colors(normal_color, color, 0.85)
-            };
-
-            let hover_text = match reading.as_str() {
-                "*" => None,
-                _ => Some(RichText::new(&format!("{}", reading.to_hiragana())).color(color)),
-            };
-
-            let label = egui::Label::new(RichText::new(segment_text).color(text_color).size(16.0));
-            let response = ui.add(label);
-
-            // Don't draw underlines in wrapping context as they get misaligned
-            // This will be handled at a higher level if needed
-
-            if let Some(hover_text) = hover_text {
-                response.on_hover_text(hover_text);
-            }
-        }
-    });
+    ui.add(widget);
 }
 
 /// Creates a clickable timestamp button with WebSocket integration
@@ -231,75 +176,4 @@ fn ui_timestamp_button(ui: &mut Ui, timestamp: &TimeStamp, app: &YomineApp) {
             println!("Sent seek command for timestamp: {}", &human_timestamp_start);
         }
     });
-}
-
-fn find_expression_segments(
-    term_text: &str,
-    sentence_segments: &[(String, POS, usize, usize)],
-    sentence_text: &str,
-) -> Vec<usize> {
-    let mut segments_to_highlight = Vec::new();
-    let mut current_text = String::new();
-    let mut start_idx = None;
-
-    for (idx, (_, _, start, stop)) in sentence_segments.iter().enumerate() {
-        let segment_text = &sentence_text[*start..*stop];
-        let potential_text = current_text.clone() + segment_text;
-
-        if term_text.starts_with(&potential_text) {
-            // This segment could be part of the expression
-            if start_idx.is_none() {
-                start_idx = Some(idx);
-            }
-            current_text = potential_text;
-
-            if current_text == *term_text {
-                // We found the complete expression
-                if let Some(start) = start_idx {
-                    for i in start..=idx {
-                        segments_to_highlight.push(i);
-                    }
-                }
-                break;
-            }
-        } else {
-            // Reset if this segment doesn't continue the pattern
-            current_text.clear();
-            start_idx = None;
-
-            // Check if this single segment starts the expression
-            if term_text.starts_with(segment_text) {
-                current_text = segment_text.to_string();
-                start_idx = Some(idx);
-
-                if current_text == *term_text {
-                    segments_to_highlight.push(idx);
-                    break;
-                }
-            }
-        }
-    }
-
-    segments_to_highlight
-}
-
-/// Determines if a segment belongs to a term
-fn is_segment_part_of_term(
-    idx: usize,
-    start: usize,
-    stop: usize,
-    is_expression: bool,
-    expression_segments: &[usize],
-    surface_index: usize,
-    term_text: &str,
-) -> bool {
-    if is_expression {
-        // For expressions, check if this segment index is in our highlight list
-        expression_segments.contains(&idx)
-    } else {
-        // For regular terms, use character position overlap with surface_index
-        let term_start = surface_index;
-        let term_end = term_start + term_text.len();
-        start < term_end && stop > term_start
-    }
 }

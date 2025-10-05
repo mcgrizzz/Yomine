@@ -6,11 +6,12 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 zip = { version = "4.3.0", features = ["xz"]}
-bincode = { version = "2.0.1", features = ["serde"]} 
+bincode = { version = "2.0.1", features = ["serde"]}
 dirs = "6.0.0"
-eframe = "0.32.0"
-egui_extras = "0.32.0"
+eframe = "0.32.3"
+egui_extras = "0.32.3"
 egui_flex = "0.4.0"
+egui_double_slider = { git = "https://github.com/hacknus/egui_double_slider.git" }
 futures = "0.3.31"
 futures-util = "0.3.30"
 jp-deinflector = "0.2.0"

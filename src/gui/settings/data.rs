@@ -2,6 +2,18 @@ use std::collections::HashMap;
 
 use crate::anki::FieldMapping;
 
+#[derive(Clone, serde::Serialize, serde::Deserialize, Debug)]
+pub struct FrequencyDictionarySetting {
+    pub weight: f32,
+    pub enabled: bool,
+}
+
+impl Default for FrequencyDictionarySetting {
+    fn default() -> Self {
+        Self { weight: 1.0, enabled: true }
+    }
+}
+
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct WebSocketSettings {
     pub port: u16,
@@ -18,6 +30,18 @@ pub struct SettingsData {
     pub anki_model_mappings: HashMap<String, FieldMapping>,
     #[serde(default)]
     pub websocket_settings: WebSocketSettings,
+    #[serde(default)]
+    pub frequency_weights: HashMap<String, FrequencyDictionarySetting>,
+    #[serde(default)]
+    pub pos_filters: HashMap<String, bool>,
+    #[serde(default)]
+    pub use_serif_font: bool,
+    #[serde(default = "default_true")]
+    pub dark_mode: bool,
+}
+
+const fn default_true() -> bool {
+    true
 }
 
 impl SettingsData {
@@ -25,6 +49,10 @@ impl SettingsData {
         Self {
             anki_model_mappings: HashMap::new(),
             websocket_settings: WebSocketSettings::default(),
+            frequency_weights: HashMap::new(),
+            pos_filters: HashMap::new(),
+            use_serif_font: false,
+            dark_mode: true,
         }
     }
 }

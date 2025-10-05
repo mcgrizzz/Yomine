@@ -1,13 +1,13 @@
-use std::collections::HashMap;
-
 use eframe::egui::{
     self,
     RichText,
+    Shape,
+    Stroke,
+    Ui,
 };
 use egui_extras::{
     Column,
     TableBuilder,
-    TableRow,
 };
 use wana_kana::ConvertJapanese;
 
@@ -17,69 +17,20 @@ use super::{
 };
 use crate::core::Term;
 
+mod filter;
+mod header;
+mod search;
 mod sentence_column;
+mod sentence_widget;
+mod sort;
+mod state;
 
-use sentence_column::col_sentence;
-
-pub struct TableState {
-    sort: TableSort,
-    sentence_indices: HashMap<usize, usize>, //term_index, sentence_index
-}
-
-impl Default for TableState {
-    fn default() -> Self {
-        Self { sort: TableSort::FrequencyAscending, sentence_indices: HashMap::new() }
-    }
-}
-
-impl TableState {
-    pub fn get_sentence_index(&self, term_index: usize) -> usize {
-        self.sentence_indices.get(&term_index).copied().unwrap_or(0)
-    }
-
-    pub fn next_sentence(&mut self, term_index: usize, total_sentences: usize) {
-        let current = self.get_sentence_index(term_index);
-        let next = (current + 1) % total_sentences;
-        self.sentence_indices.insert(term_index, next);
-    }
-
-    pub fn prev_sentence(&mut self, term_index: usize, total_sentences: usize) {
-        let current = self.get_sentence_index(term_index);
-        let next = if current == 0 { total_sentences - 1 } else { current - 1 };
-        self.sentence_indices.insert(term_index, next);
-    }
-
-    pub fn clear_sentence_indices(&mut self) {
-        self.sentence_indices.clear();
-    }
-}
-
-enum TableSort {
-    FrequencyDescending,
-    FrequencyAscending,
-}
-
-impl TableSort {
-    fn text(&self) -> String {
-        match &self {
-            TableSort::FrequencyAscending => "⬆".to_string(),
-            TableSort::FrequencyDescending => "⬇".to_string(),
-        }
-    }
-
-    fn click(&self) -> Self {
-        match &self {
-            TableSort::FrequencyAscending => TableSort::FrequencyDescending,
-            TableSort::FrequencyDescending => TableSort::FrequencyAscending,
-        }
-    }
-}
-
-impl Default for TableSort {
-    fn default() -> Self {
-        Self::FrequencyAscending
-    }
-}
+use header::{
+    ui_controls_row,
+    ui_header_cols,
+};
+use sentence_column::ui_col_sentence;
+pub use state::TableState;
 
 pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
     egui::CentralPanel::default().show(ctx, |ui| {
@@ -127,52 +78,78 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
                 }
             });
         } else if !app.terms.is_empty() {
-            // Display current file's parsed title as the main heading
-            if let Some(ref source_file) = app.current_source_file {
-                ui.heading(
-                    egui::RichText::new(&source_file.title)
-                        .color(app.theme.cyan(ui.ctx()))
-                        .strong(),
-                );
-            } else {
-                ui.heading("Term Table");
-            }
+            let freq_manager_handle =
+                app.language_tools.as_ref().map(|tools| tools.frequency_manager.clone());
+            let freq_manager = freq_manager_handle.as_deref();
+            app.table_state.ensure_indices(&app.terms, &app.sentences, freq_manager);
+
+            ui.horizontal_wrapped(|ui| {
+                ui.set_max_width(ui.available_width());
+                if let Some(ref source_file) = app.current_source_file {
+                    ui.heading(
+                        egui::RichText::new(&source_file.title)
+                            .color(app.theme.cyan(ui.ctx()))
+                            .strong(),
+                    );
+                } else {
+                    ui.heading("Term Table");
+                }
+            });
+
+            app.table_state.sync_frequency_states(freq_manager);
+            app.table_state.compute_term_column_width(ctx, &app.terms);
+            ui_controls_row(ui, app);
+            ui.add_space(10.0);
+
             egui::ScrollArea::vertical().show(ui, |ui| {
+                // Enhance row background contrast for better text readability
+                let base_bg = ui.visuals().faint_bg_color;
+                ui.style_mut().visuals.faint_bg_color = if ui.visuals().dark_mode {
+                    base_bg.linear_multiply(1.4) // Make stripes slightly lighter in dark mode
+                } else {
+                    base_bg.linear_multiply(0.75) // Make stripes slightly darker in light mode
+                };
+
+                let term_width = app.table_state.term_column_width();
+
+                // Pre-calculate everything we need before entering closures
+                let visible_indices = app.table_state.visible_indices().to_vec();
+                let available_width = ui.available_width();
+
+                // Calculate sentence column width - subtract term, frequency, and POS columns
+                // Frequency and POS are at least 90 points each plus spacing
+                let sentence_column_width =
+                    (available_width - term_width - (90.0 * 2.0 + 20.0)).max(200.0);
+
+                // Compute row heights using cached calculation
+                app.table_state.compute_row_heights(
+                    ctx,
+                    &app.terms,
+                    &app.sentences,
+                    sentence_column_width,
+                );
+                let row_heights: Vec<f32> = app.table_state.row_heights().to_vec();
+
                 TableBuilder::new(ui)
                     .striped(true)
+                    .resizable(false)
                     .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                    .column(Column::auto().at_least(100.0))
-                    .column(Column::remainder())
-                    .column(Column::auto().at_least(40.0))
-                    .column(Column::auto().at_least(40.0))
+                    .column(Column::exact(term_width))
+                    .column(Column::exact(sentence_column_width))
+                    .column(Column::auto().at_least(90.0))
+                    .column(Column::auto().at_least(90.0))
                     .header(25.0, |header| {
-                        header_cols(ctx, header, app);
+                        ui_header_cols(ctx, header, app);
                     })
                     .body(|body| {
-                        // let row_heights: Vec<f32> = app
-                        //     .terms
-                        //     .iter()
-                        //     .map(|t| {
-                        //         if t.sentence_references.is_empty() {
-                        //             return 36.0;
-                        //         }
+                        body.heterogeneous_rows(row_heights.iter().copied(), |mut row| {
+                            let term_index = visible_indices[row.index()];
+                            let term = app.terms[term_index].clone();
 
-                        //         let sentence = t.sentence_references.get(0).unwrap();
-                        //         let sentence_content =
-                        //             app.sentences.get(sentence.0 as usize).unwrap();
-                        //         let lines: Vec<&str> =
-                        //             sentence_content.text.trim().split("\n").collect();
-                        //         (36.0_f32).max(18.0 * (lines.len() as f32)) //Size 22.0 font is not 22 height..
-                        //     })
-                        //     .collect();
-
-                        body.rows(53.7, app.terms.len(), |mut row| {
-                            let term_index = row.index();
-                            let term = &app.terms[term_index].clone();
-                            col_term(ctx, &mut row, &term, app);
-                            col_sentence(ctx, &mut row, &term, app, term_index);
-                            col_frequency(ctx, &mut row, &term, app);
-                            col_pos(ctx, &mut row, &term, app);
+                            ui_col_term(ctx, &mut row, &term, app);
+                            ui_col_sentence(ctx, &mut row, &term, app, term_index);
+                            ui_col_frequency(ctx, &mut row, &term, app);
+                            ui_col_pos(ctx, &mut row, &term, app);
                         });
                     });
             });
@@ -180,8 +157,15 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
     });
 }
 
-fn col_term(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &mut YomineApp) {
+fn ui_col_term(
+    ctx: &egui::Context,
+    row: &mut egui_extras::TableRow,
+    term: &Term,
+    app: &mut YomineApp,
+) {
     row.col(|ui| {
+        ui_col_lines(ui, ctx, app);
+
         let ignore_status = if let Some(ref language_tools) = app.language_tools {
             language_tools
                 .ignore_list
@@ -192,7 +176,6 @@ fn col_term(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &mut Yomi
             false
         };
 
-        // Set color based on ignore status
         let term_color = if ignore_status {
             ctx.style().visuals.weak_text_color()
         } else {
@@ -218,7 +201,6 @@ fn col_term(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &mut Yomi
                 }
             });
 
-        // Context menu for ignore list operations
         response.context_menu(|ui| {
             if let Some(ref language_tools) = app.language_tools {
                 if ignore_status {
@@ -226,21 +208,17 @@ fn col_term(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &mut Yomi
                         if let Ok(mut ignore_list) = language_tools.ignore_list.lock() {
                             if let Err(e) = ignore_list.remove_term(&term.lemma_form) {
                                 eprintln!("Failed to remove term from ignore list: {}", e);
-                                // Could also show a user-facing error message
                             }
                         }
                         ui.close();
                     }
-                } else {
-                    if ui.button("Add to ignore list").clicked() {
-                        if let Ok(mut ignore_list) = language_tools.ignore_list.lock() {
-                            if let Err(e) = ignore_list.add_term(&term.lemma_form) {
-                                eprintln!("Failed to add term to ignore list: {}", e);
-                                // Could also show a user-facing error message
-                            }
+                } else if ui.button("Add to ignore list").clicked() {
+                    if let Ok(mut ignore_list) = language_tools.ignore_list.lock() {
+                        if let Err(e) = ignore_list.add_term(&term.lemma_form) {
+                            eprintln!("Failed to add term to ignore list: {}", e);
                         }
-                        ui.close();
                     }
+                    ui.close();
                 }
             } else {
                 ui.label("Language tools not loaded");
@@ -249,58 +227,50 @@ fn col_term(ctx: &egui::Context, row: &mut TableRow, term: &Term, app: &mut Yomi
     });
 }
 
-fn col_frequency(_ctx: &egui::Context, row: &mut TableRow, term: &Term, _app: &YomineApp) {
+pub(crate) fn ui_col_lines(ui: &mut Ui, ctx: &egui::Context, app: &YomineApp) {
+    let mut color = app.theme.comment(ctx);
+    color = color.linear_multiply(0.55);
+
+    let st = Stroke { width: 0.5, color };
+
+    let rect = ui.max_rect();
+    let xr = rect.x_range();
+    let yr = rect.y_range();
+
+    let shape = Shape::dashed_line(
+        &[egui::pos2(xr.min, yr.min), egui::pos2(xr.max, yr.min)],
+        st,
+        5.0, // dash length
+        2.5, // gap length
+    );
+    ui.painter().add(shape);
+}
+
+fn ui_col_frequency(
+    ctx: &egui::Context,
+    row: &mut egui_extras::TableRow,
+    term: &Term,
+    app: &YomineApp,
+) {
     row.col(|ui| {
-        if let Some(&freq) = term.frequencies.get("HARMONIC") {
-            ui.label(if freq == u32::MAX { "？".to_string() } else { freq.to_string() });
-        }
+        ui_col_lines(ui, ctx, app);
+
+        let weighted = if let Some(manager) =
+            app.language_tools.as_ref().map(|tools| tools.frequency_manager.as_ref())
+        {
+            manager.get_weighted_harmonic(&term.frequencies)
+        } else {
+            term.frequencies.get("HARMONIC").copied().unwrap_or(u32::MAX)
+        };
+
+        let display = if weighted == u32::MAX { "？".to_string() } else { weighted.to_string() };
+        ui.label(display);
     });
 }
 
-fn col_pos(_ctx: &egui::Context, row: &mut TableRow, term: &Term, _app: &YomineApp) {
-    let pos = term.part_of_speech.to_string();
-
+fn ui_col_pos(ctx: &egui::Context, row: &mut egui_extras::TableRow, term: &Term, app: &YomineApp) {
     row.col(|ui| {
-        ui.label(pos);
-    });
-}
-
-pub fn header_cols(_ctx: &egui::Context, mut header: TableRow<'_, '_>, app: &mut YomineApp) {
-    header.col(|ui| {
-        ui.label(app.theme.heading(ui.ctx(), "Term"));
-    });
-    header.col(|ui| {
-        ui.label(app.theme.heading(ui.ctx(), "Sentence"));
-    });
-    header.col(|ui| {
-        egui::Sides::new().height(25.0).show(
-            ui,
-            |ui| {
-                if ui.button(app.table_state.sort.text()).clicked() {
-                    app.table_state.sort = app.table_state.sort.click();
-                    app.terms.sort_unstable_by(|a, b| {
-                        match app.table_state.sort {
-                            TableSort::FrequencyAscending => {
-                                let freq_a = a.frequencies.get("HARMONIC").unwrap();
-                                let freq_b = b.frequencies.get("HARMONIC").unwrap();
-                                freq_a.cmp(freq_b) // Ascending order
-                            }
-                            TableSort::FrequencyDescending => {
-                                let freq_a = a.frequencies.get("HARMONIC").unwrap();
-                                let freq_b = b.frequencies.get("HARMONIC").unwrap();
-                                freq_b.cmp(freq_a) // Descending order
-                            }
-                        }
-                    });
-                }
-            },
-            |ui| {
-                ui.label(app.theme.heading(ui.ctx(), "Frequency"));
-            },
-        );
-    });
-
-    header.col(|ui| {
-        ui.label(app.theme.heading(ui.ctx(), "Part of Speech"));
+        ui_col_lines(ui, ctx, app);
+        ui.label(term.part_of_speech.to_string());
     });
 }

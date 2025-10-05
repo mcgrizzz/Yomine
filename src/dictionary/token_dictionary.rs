@@ -138,7 +138,7 @@ pub fn ensure_dictionary(
     callback_message("Downloading tokenizer model...", &progress_callback);
     let client = http_client()?;
 
-    download_with_progress(&client, url, &download_path, progress_callback.as_ref())?;
+    download_with_progress(&client, url, &download_path, progress_callback.as_deref())?;
     callback_message("Downloaded tokenizer model successfully", &progress_callback);
 
     let metadata = download_path.metadata().map_err(|e| {

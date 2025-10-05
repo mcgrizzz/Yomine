@@ -33,7 +33,7 @@ pub fn download_with_progress(
     client: &Client,
     url: &str,
     path: &Path,
-    message_callback: Option<&Box<dyn Fn(String) + Send>>,
+    message_callback: Option<&(dyn Fn(String) + Send)>,
 ) -> Result<(), YomineError> {
     let mut attempts: usize = 0;
     loop {

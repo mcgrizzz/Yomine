@@ -19,8 +19,11 @@ use super::{
     message_overlay::MessageOverlay,
     restart_modal::RestartModal,
     settings::{
+        data::FrequencyDictionarySetting,
         AnkiSettingsModal,
+        FrequencyWeightsModal,
         IgnoreListModal,
+        PosFiltersModal,
         SettingsData,
         WebSocketSettingsModal,
     },
@@ -85,6 +88,8 @@ pub struct YomineApp {
     pub anki_settings_modal: AnkiSettingsModal,
     pub websocket_settings_modal: WebSocketSettingsModal,
     pub ignore_list_modal: IgnoreListModal,
+    pub frequency_weights_modal: FrequencyWeightsModal,
+    pub pos_filters_modal: PosFiltersModal,
     pub restart_modal: RestartModal,
     pub theme: Theme,
     pub zoom: f32,
@@ -108,6 +113,8 @@ impl YomineApp {
         task_manager.load_language_tools();
 
         let mut settings_data = load_json_or_default::<SettingsData>("settings.json");
+        let mut table_state = TableState::default();
+        table_state.apply_pos_settings(&settings_data.pos_filters);
 
         for (model_name, field_mapping) in model_mapping {
             settings_data.anki_model_mappings.insert(model_name, field_mapping);
@@ -133,7 +140,7 @@ impl YomineApp {
             websocket_settings_modal: WebSocketSettingsModal::new(),
             ignore_list_modal: IgnoreListModal::new(),
             restart_modal: RestartModal::new(),
-            table_state: TableState::default(),
+            table_state,
             language_tools: None,
             terms: Vec::new(),
             original_terms: Vec::new(),
@@ -141,10 +148,30 @@ impl YomineApp {
             current_processing_file: None,
             current_source_file: None,
             task_manager: task_manager,
+            frequency_weights_modal: FrequencyWeightsModal::new(),
+            pos_filters_modal: PosFiltersModal::new(),
         };
 
         app.setup_fonts(cc);
         app.setup_theme(cc);
+
+        // Apply saved font preference
+        apply_font_family(&cc.egui_ctx, app.settings_data.use_serif_font);
+
+        // Apply saved theme preference (set_theme switches to the registered variant)
+        cc.egui_ctx.set_theme(if app.settings_data.dark_mode {
+            egui::Theme::Dark
+        } else {
+            egui::Theme::Light
+        });
+
+        cc.egui_ctx.options_mut(|o| {
+            o.theme_preference = if app.settings_data.dark_mode {
+                egui::ThemePreference::Dark
+            } else {
+                egui::ThemePreference::Light
+            };
+        });
 
         //Make sure it opens above other windows so you can see it.
         cc.egui_ctx
@@ -156,6 +183,8 @@ impl YomineApp {
     }
     fn setup_fonts(&self, cc: &eframe::CreationContext<'_>) {
         let mut fonts = egui::FontDefinitions::default();
+
+        // Register Noto Sans JP
         fonts.font_data.insert(
             "noto_sans_jp".to_owned(),
             std::sync::Arc::new(egui::FontData::from_static(include_bytes!(
@@ -163,17 +192,55 @@ impl YomineApp {
             ))),
         );
 
-        // fonts.font_data.insert(
-        //     "noto_sans_jp_bold".to_owned(),
-        //     egui::FontData::from_static(include_bytes!("../../assets/fonts/NotoSansJP-Bold.ttf"))
-        //         .into(),
-        // );
+        // Register Noto Serif JP
+        fonts.font_data.insert(
+            "noto_serif_jp".to_owned(),
+            std::sync::Arc::new(egui::FontData::from_static(include_bytes!(
+                "../../assets/fonts/NotoSerifJP-Regular.ttf"
+            ))),
+        );
+
+        // Get default egui fonts for fallback (they contain special symbols)
+        let default_fonts = egui::FontDefinitions::default();
+
+        // Create named font families for Sans with default fonts as fallback
+        let sans_family =
+            fonts.families.entry(egui::FontFamily::Name("noto_sans_jp".into())).or_default();
+        sans_family.insert(0, "noto_sans_jp".to_owned());
+        // Add default fonts for symbols
+        if let Some(default_proportional) =
+            default_fonts.families.get(&egui::FontFamily::Proportional)
+        {
+            for (i, font) in default_proportional.iter().enumerate() {
+                sans_family.insert(i + 1, font.clone());
+            }
+        }
+
+        // Create named font families for Serif with Sans and default fonts as fallback
+        let serif_family =
+            fonts.families.entry(egui::FontFamily::Name("noto_serif_jp".into())).or_default();
+        serif_family.insert(0, "noto_serif_jp".to_owned());
+        serif_family.insert(1, "noto_sans_jp".to_owned());
+
+        if let Some(default_proportional) =
+            default_fonts.families.get(&egui::FontFamily::Proportional)
+        {
+            for (i, font) in default_proportional.iter().enumerate() {
+                serif_family.insert(i + 2, font.clone());
+            }
+        }
 
         fonts
             .families
             .entry(egui::FontFamily::Proportional)
             .or_default()
             .insert(0, "noto_sans_jp".to_owned());
+
+        fonts
+            .families
+            .entry(egui::FontFamily::Proportional)
+            .or_default()
+            .insert(1, "noto_serif_jp".to_owned());
 
         fonts
             .families
@@ -190,6 +257,16 @@ impl YomineApp {
     }
 }
 
+pub fn apply_font_family(ctx: &egui::Context, use_serif: bool) {
+    ctx.all_styles_mut(|style| {
+        for (_text_style, font_id) in style.text_styles.iter_mut() {
+            font_id.family = egui::FontFamily::Name(
+                if use_serif { "noto_serif_jp" } else { "noto_sans_jp" }.into(),
+            );
+        }
+    });
+}
+
 impl eframe::App for YomineApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let task_results = self.task_manager.poll_results();
@@ -204,9 +281,9 @@ impl eframe::App for YomineApp {
         self.handle_file_drops(ctx);
         self.draw_file_drop_overlay(ctx);
 
-        let current_settings = self.get_current_settings();
-
         let ignore_list_ref = self.language_tools.as_ref().map(|lt| &lt.ignore_list);
+        let frequency_manager =
+            self.language_tools.as_ref().map(|lt| lt.frequency_manager.as_ref());
 
         let can_refresh = !self.original_terms.is_empty() && self.language_tools.is_some();
 
@@ -216,7 +293,9 @@ impl eframe::App for YomineApp {
             &mut self.anki_settings_modal,
             &mut self.websocket_settings_modal,
             &mut self.ignore_list_modal,
-            &current_settings,
+            &mut self.frequency_weights_modal,
+            &mut self.pos_filters_modal,
+            &mut self.settings_data,
             &self.player.ws,
             self.player.mpv.is_connected(),
             self.anki_connected,
@@ -224,6 +303,8 @@ impl eframe::App for YomineApp {
             ignore_list_ref,
             &self.task_manager,
             can_refresh,
+            &self.table_state,
+            frequency_manager,
         );
         if let Some(source_file) = self.file_modal.show(
             ctx,
@@ -252,6 +333,24 @@ impl eframe::App for YomineApp {
 
         if let Some(settings) = self.websocket_settings_modal.show(ctx, &mut self.player.ws) {
             self.settings_data = settings;
+            self.save_settings();
+        }
+
+        if let Some(weights) = self.frequency_weights_modal.show(ctx) {
+            self.settings_data.frequency_weights = weights;
+            if let Some(manager) =
+                self.language_tools.as_ref().map(|lt| Arc::clone(&lt.frequency_manager))
+            {
+                self.apply_frequency_settings(manager.as_ref());
+            }
+            self.save_settings();
+        }
+
+        if let Some(pos_settings) = self.pos_filters_modal.show(ctx) {
+            self.settings_data.pos_filters = pos_settings;
+            self.table_state.apply_pos_settings(&self.settings_data.pos_filters);
+            let freq_manager = self.language_tools.as_ref().map(|lt| lt.frequency_manager.as_ref());
+            self.table_state.ensure_indices(&self.terms, &self.sentences, freq_manager);
             self.save_settings();
         }
 
@@ -295,6 +394,11 @@ impl YomineApp {
                 Ok(language_tools) => {
                     self.language_tools = Some(language_tools);
                     self.message_overlay.clear_message();
+                    if let Some(manager) =
+                        self.language_tools.as_ref().map(|lt| Arc::clone(&lt.frequency_manager))
+                    {
+                        self.apply_frequency_settings(manager.as_ref());
+                    }
                 }
                 Err(e) => {
                     self.message_overlay
@@ -317,6 +421,10 @@ impl YomineApp {
                             freq_a.cmp(freq_b)
                         });
                         self.terms = new_terms;
+                        self.table_state.configure_bounds(&self.terms);
+                        let freq_manager =
+                            self.language_tools.as_ref().map(|lt| lt.frequency_manager.as_ref());
+                        self.table_state.ensure_indices(&self.terms, &self.sentences, freq_manager);
                     }
                     Err(error_msg) => {
                         self.error_modal.show_error(
@@ -347,6 +455,9 @@ impl YomineApp {
                     }
                 }
             }
+            TaskResult::RequestSaveSettings => {
+                self.save_settings();
+            }
             _ => {}
         }
     }
@@ -370,9 +481,16 @@ impl YomineApp {
                 });
 
                 self.terms = new_terms;
-
-                self.table_state.clear_sentence_indices();
                 self.sentences = new_sentences;
+                self.table_state.reset();
+                self.table_state.configure_bounds(&self.terms);
+
+                // Reapply POS filter settings after reset
+                self.table_state.apply_pos_settings(&self.settings_data.pos_filters);
+
+                let freq_manager =
+                    self.language_tools.as_ref().map(|lt| lt.frequency_manager.as_ref());
+                self.table_state.ensure_indices(&self.terms, &self.sentences, freq_manager);
 
                 if let Some(source_file) = &self.current_source_file {
                     self.file_modal.add_recent_file(
@@ -393,7 +511,7 @@ impl YomineApp {
                 self.original_terms.clear();
                 self.sentences = Vec::new();
                 self.current_source_file = None;
-                self.table_state.clear_sentence_indices();
+                self.table_state.reset();
             }
         }
 
@@ -413,13 +531,28 @@ impl YomineApp {
         }
     }
 
-    fn get_current_settings(&self) -> SettingsData {
-        self.settings_data.clone()
-    }
     fn save_settings(&self) {
         if let Err(e) = save_json(&self.settings_data, "settings.json") {
             eprintln!("Failed to save settings: {}", e);
         }
+    }
+
+    fn apply_frequency_settings(&mut self, manager: &FrequencyManager) {
+        if let Some(states) = manager.dictionary_states() {
+            for (name, state) in states {
+                let setting =
+                    self.settings_data.frequency_weights.get(&name).cloned().unwrap_or_else(|| {
+                        FrequencyDictionarySetting { weight: state.weight, enabled: state.enabled }
+                    });
+                let weight = setting.weight.max(0.1);
+                if let Err(err) = manager.set_dictionary_state(&name, weight, setting.enabled) {
+                    eprintln!("Failed to update dictionary state '{}': {}", name, err);
+                }
+            }
+        }
+
+        self.table_state.sync_frequency_states(Some(manager));
+        self.table_state.mark_dirty();
     }
 
     fn restart_application(&self, ctx: &egui::Context) {
