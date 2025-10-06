@@ -221,6 +221,22 @@ pub fn create_default_rules() -> Vec<Rule> {
             },
         },
         Rule {
+            name: "Number + Counter",
+            current: TokenMatcher {
+                pos3: Matcher::Any(vec![UnidicTag::Josuushikanou]),
+                ..Default::default()
+            },
+            next: None,
+            prev: None,
+            prev_word_pos: Matcher::Any(vec![POS::Number]),
+            action: RuleAction::MergeWithPrevious {
+                attach_prev: true,
+                attach_prev_lemma: true,
+                update_prev_pos: Some(POS::Counter),
+                main_word_policy: Some(MainWordPolicy::UseSecondToken),
+            },
+        },
+        Rule {
             name: "suru-possible + suru",
             current: TokenMatcher {
                 pos1: Matcher::Any(vec![UnidicTag::Meishi]),

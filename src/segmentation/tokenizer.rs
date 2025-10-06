@@ -231,7 +231,10 @@ pub fn extract_words(
         }
 
         sentence_terms.retain(|sentence_term| {
-            !terms.iter().any(|existing_term| existing_term.lemma_form == sentence_term.lemma_form)
+            !terms.iter().any(|existing_term| {
+                existing_term.lemma_form == sentence_term.lemma_form
+                    && existing_term.lemma_reading == sentence_term.lemma_reading
+            })
         });
 
         terms.append(&mut sentence_terms);
