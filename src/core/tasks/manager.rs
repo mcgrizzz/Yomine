@@ -17,6 +17,7 @@ use crate::{
         pipeline::{
             apply_filters,
             process_source_file,
+            FilterResult,
         },
         IgnoreList,
         SourceFile,
@@ -152,8 +153,8 @@ impl TaskManager {
         let (sender, runtime) = self.task_context();
 
         thread::spawn(move || {
-            let result: Result<Vec<Term>, String> = runtime.block_on(async {
-                apply_filters(base_terms, model_mapping, &language_tools)
+            let result: Result<FilterResult, String> = runtime.block_on(async {
+                apply_filters(base_terms, &language_tools, Some(model_mapping), None)
                     .await
                     .map_err(|e| e.to_string())
             });

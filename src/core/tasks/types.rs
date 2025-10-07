@@ -3,13 +3,14 @@ use std::collections::HashMap;
 use crate::{
     anki::Model,
     core::{
+        pipeline::FilterResult,
         Sentence,
         Term,
     },
     gui::app::LanguageTools,
 };
 
-pub type FileProcessingResult = Result<(Vec<Term>, Vec<Term>, Vec<Sentence>), String>;
+pub type FileProcessingResult = Result<(Vec<Term>, FilterResult, Vec<Sentence>), String>;
 
 #[derive(Debug, Clone)]
 pub enum TaskResult {
@@ -20,7 +21,7 @@ pub enum TaskResult {
     FileProcessing(FileProcessingResult),
     RequestRefresh,
     RequestSaveSettings,
-    TermsRefreshed(Result<Vec<Term>, String>),
+    TermsRefreshed(Result<FilterResult, String>),
 
     LanguageToolsLoaded(Result<LanguageTools, String>),
     LoadingMessage(String),

@@ -1,5 +1,8 @@
 use std::{
-    collections::HashMap,
+    collections::{
+        HashMap,
+        HashSet,
+    },
     mem,
     sync::{
         Arc,
@@ -79,6 +82,7 @@ impl std::fmt::Debug for LanguageTools {
 pub struct YomineApp {
     pub terms: Vec<Term>,
     pub original_terms: Vec<Term>, //Not filtered from ignorelist or anki
+    pub anki_filtered_terms: HashSet<String>, // Lemma forms that exist in Anki (to skip in results)
     pub sentences: Vec<Sentence>,
     pub model_mapping: HashMap<String, FieldMapping>,
     pub settings_data: SettingsData,
@@ -144,6 +148,7 @@ impl YomineApp {
             language_tools: None,
             terms: Vec::new(),
             original_terms: Vec::new(),
+            anki_filtered_terms: HashSet::new(),
             sentences: Vec::new(),
             current_processing_file: None,
             current_source_file: None,
@@ -355,7 +360,10 @@ impl eframe::App for YomineApp {
         }
 
         if let Some(language_tools) = &self.language_tools {
-            self.ignore_list_modal.show(ctx, &language_tools.ignore_list);
+            let ignore_list_changed = self.ignore_list_modal.show(ctx, &language_tools.ignore_list);
+            if ignore_list_changed {
+                self.partial_refresh();
+            }
         }
     }
 }
@@ -414,13 +422,9 @@ impl YomineApp {
             TaskResult::TermsRefreshed(result) => {
                 self.message_overlay.clear_message();
                 match result {
-                    Ok(mut new_terms) => {
-                        new_terms.sort_unstable_by(|a, b| {
-                            let freq_a = a.frequencies.get("HARMONIC").unwrap_or(&0);
-                            let freq_b = b.frequencies.get("HARMONIC").unwrap_or(&0);
-                            freq_a.cmp(freq_b)
-                        });
-                        self.terms = new_terms;
+                    Ok(filter_result) => {
+                        self.anki_filtered_terms = filter_result.anki_filtered;
+                        self.terms = filter_result.terms;
                         self.table_state.configure_bounds(&self.terms);
                         let freq_manager =
                             self.language_tools.as_ref().map(|lt| lt.frequency_manager.as_ref());
@@ -462,25 +466,48 @@ impl YomineApp {
         }
     }
 
+    pub fn partial_refresh(&mut self) {
+        // Apply ignore list + cached Anki filter (no Anki connection)
+        if let Some(language_tools) = &self.language_tools {
+            // Use async block since apply_filters is async, but won't actually await anything
+            // because we're passing cached Anki terms
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            match rt.block_on(crate::core::pipeline::apply_filters(
+                self.original_terms.clone(),
+                language_tools,
+                None,
+                Some(&self.anki_filtered_terms),
+            )) {
+                Ok(filter_result) => {
+                    self.terms = filter_result.terms;
+                    self.table_state.configure_bounds(&self.terms);
+                    let freq_manager = language_tools.frequency_manager.as_ref();
+                    self.table_state.ensure_indices(
+                        &self.terms,
+                        &self.sentences,
+                        Some(freq_manager),
+                    );
+                }
+                Err(e) => {
+                    eprintln!("Failed to reapply filters: {}", e);
+                }
+            }
+        }
+    }
+
     fn handle_processing_result(
         &mut self,
-        result: Result<(Vec<Term>, Vec<Term>, Vec<Sentence>), String>,
+        result: Result<(Vec<Term>, crate::core::pipeline::FilterResult, Vec<Sentence>), String>,
     ) {
         self.message_overlay.clear_message();
         let filename = self.current_processing_file.as_deref().unwrap_or("the selected file");
 
         match result {
-            Ok((base_terms, mut new_terms, new_sentences)) => {
+            Ok((base_terms, filter_result, new_sentences)) => {
                 self.original_terms = base_terms;
 
-                // Keep existing sort behavior
-                new_terms.sort_unstable_by(|a, b| {
-                    let freq_a = a.frequencies.get("HARMONIC").unwrap_or(&0);
-                    let freq_b = b.frequencies.get("HARMONIC").unwrap_or(&0);
-                    freq_a.cmp(freq_b)
-                });
-
-                self.terms = new_terms;
+                self.anki_filtered_terms = filter_result.anki_filtered;
+                self.terms = filter_result.terms;
                 self.sentences = new_sentences;
                 self.table_state.reset();
                 self.table_state.configure_bounds(&self.terms);
