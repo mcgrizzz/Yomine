@@ -19,7 +19,7 @@ fn main() {
     };
 
     let _ = eframe::run_native(
-        "Yomine App",
+        "Yomine",
         native_options,
         Box::new(|cc| Ok(Box::new(YomineApp::new(cc, HashMap::new())))),
     );

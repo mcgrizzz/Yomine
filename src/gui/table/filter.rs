@@ -94,15 +94,32 @@ impl FrequencyFilter {
 
     pub fn update_bounds(&mut self, min_bound: u32, max_bound: u32) {
         let max_bound = max_bound.max(min_bound);
+
+        // Check if selected values are at the current bounds
+        let min_at_bound = self.selected_min == self.min_bound;
+        let max_at_bound = self.selected_max == self.max_bound;
+
         self.min_bound = min_bound;
         self.max_bound = max_bound;
 
         if self.selected_min == 0 && self.selected_max == 0 {
+            // First time initialization
             self.selected_min = min_bound;
             self.selected_max = max_bound;
         } else {
-            self.selected_min = self.selected_min.clamp(min_bound, max_bound);
-            self.selected_max = self.selected_max.clamp(self.selected_min, max_bound);
+            // If min was at the old bound, move it to the new bound
+            if min_at_bound {
+                self.selected_min = min_bound;
+            } else {
+                self.selected_min = self.selected_min.clamp(min_bound, max_bound);
+            }
+
+            // If max was at the old bound, move it to the new bound
+            if max_at_bound {
+                self.selected_max = max_bound;
+            } else {
+                self.selected_max = self.selected_max.clamp(self.selected_min, max_bound);
+            }
         }
     }
 
