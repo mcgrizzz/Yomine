@@ -150,13 +150,14 @@ pub struct Word {
 impl From<Word> for Term {
     fn from(word: Word) -> Term {
         if let Some(main_word) = word.main_word {
+            let is_kana = main_word.surface.as_str().is_kana();
             Term {
                 id: 0,
                 lemma_form: main_word.lemma_form,
                 lemma_reading: main_word.lemma_hatsuon,
                 surface_form: main_word.surface,
                 surface_reading: main_word.surface_hatsuon.clone(),
-                is_kana: main_word.surface_hatsuon.as_str().is_kana(),
+                is_kana,
                 part_of_speech: word.part_of_speech,
                 full_segment: word.surface_form,
                 full_segment_reading: word.surface_hatsuon,
@@ -164,13 +165,14 @@ impl From<Word> for Term {
                 sentence_references: Vec::new(),
             }
         } else {
+            let is_kana = word.surface_form.as_str().is_kana();
             Term {
                 id: 0,
                 lemma_form: word.lemma_form,
                 lemma_reading: word.lemma_hatsuon,
                 surface_form: word.surface_form.clone(),
                 surface_reading: word.surface_hatsuon.clone(),
-                is_kana: word.surface_hatsuon.as_str().is_kana(),
+                is_kana,
                 part_of_speech: word.part_of_speech,
                 full_segment: word.surface_form,
                 full_segment_reading: word.surface_hatsuon,
