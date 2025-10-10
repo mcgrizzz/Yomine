@@ -209,7 +209,12 @@ pub fn extract_words(
                             .unwrap_or(0);
 
                         phrase.sentence_references.push((ord, index_in_sentence));
-                        phrase.frequencies.insert("HARMONIC".to_string(), frequency);
+                        let freq_map = frequency_manager.build_freq_map(
+                            &phrase.lemma_form,
+                            &phrase.lemma_reading,
+                            phrase.is_kana,
+                        );
+                        phrase.frequencies = freq_map;
                         sentence_terms.push(phrase);
 
                         break 'outer; // Stop on the largest phrase that satisfies the heuristic
