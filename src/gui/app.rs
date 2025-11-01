@@ -81,14 +81,25 @@ impl std::fmt::Debug for LanguageTools {
 }
 
 pub struct YomineApp {
+    // File Data
     pub terms: Vec<Term>,
     pub original_terms: Vec<Term>, //Not filtered from ignorelist or anki
     pub anki_filtered_terms: HashSet<String>, // Lemma forms that exist in Anki
     pub sentences: Vec<Sentence>,
     pub file_comprehension: f32, // Cached average comprehension across all sentences
-    pub model_mapping: HashMap<String, FieldMapping>,
+    pub current_processing_file: Option<String>,
+    pub current_source_file: Option<SourceFile>,
+
+    // Configuration 
     pub settings_data: SettingsData,
+
+    // UI State
     pub table_state: TableState,
+    pub theme: Theme,
+    pub zoom: f32,
+    pub message_overlay: MessageOverlay,
+
+    // Modals
     pub file_modal: FileModal,
     pub error_modal: ErrorModal,
     pub anki_settings_modal: AnkiSettingsModal,
@@ -97,15 +108,12 @@ pub struct YomineApp {
     pub frequency_weights_modal: FrequencyWeightsModal,
     pub pos_filters_modal: PosFiltersModal,
     pub restart_modal: RestartModal,
-    pub theme: Theme,
-    pub zoom: f32,
+
+    // External Services
+    pub language_tools: Option<LanguageTools>,
+    pub player: PlayerManager,
     pub anki_connected: bool,
     pub last_anki_check: Option<std::time::Instant>,
-    pub player: PlayerManager,
-    pub message_overlay: MessageOverlay,
-    pub language_tools: Option<LanguageTools>,
-    pub current_processing_file: Option<String>,
-    pub current_source_file: Option<SourceFile>,
     task_manager: TaskManager,
 }
 
@@ -132,22 +140,7 @@ impl YomineApp {
         let player = PlayerManager::new(mpv_manager, websocket_manager);
 
         let app = Self {
-            model_mapping: settings_data.anki_model_mappings.clone(),
-            settings_data,
-            theme: Theme::dracula(),
-            zoom: cc.egui_ctx.zoom_factor(),
-            anki_connected: false,
-            last_anki_check: None,
-            player,
-            message_overlay: MessageOverlay::new(),
-            file_modal: FileModal::new(),
-            error_modal: ErrorModal::new(),
-            anki_settings_modal: AnkiSettingsModal::new(),
-            websocket_settings_modal: WebSocketSettingsModal::new(),
-            ignore_list_modal: IgnoreListModal::new(),
-            restart_modal: RestartModal::new(),
-            table_state,
-            language_tools: None,
+            // File Data
             terms: Vec::new(),
             original_terms: Vec::new(),
             anki_filtered_terms: HashSet::new(),
@@ -155,9 +148,32 @@ impl YomineApp {
             file_comprehension: 0.0,
             current_processing_file: None,
             current_source_file: None,
-            task_manager: task_manager,
+
+            // Configuration
+            settings_data,
+
+            // UI State
+            table_state,
+            theme: Theme::dracula(),
+            zoom: cc.egui_ctx.zoom_factor(),
+            message_overlay: MessageOverlay::new(),
+
+            // Modals
+            file_modal: FileModal::new(),
+            error_modal: ErrorModal::new(),
+            anki_settings_modal: AnkiSettingsModal::new(),
+            websocket_settings_modal: WebSocketSettingsModal::new(),
+            ignore_list_modal: IgnoreListModal::new(),
             frequency_weights_modal: FrequencyWeightsModal::new(),
             pos_filters_modal: PosFiltersModal::new(),
+            restart_modal: RestartModal::new(),
+
+            // External Services
+            language_tools: None,
+            player,
+            anki_connected: false,
+            last_anki_check: None,
+            task_manager,
         };
 
         app.setup_fonts(cc);
@@ -333,7 +349,6 @@ impl eframe::App for YomineApp {
         }
 
         if let Some(settings) = self.anki_settings_modal.show(ctx) {
-            self.model_mapping = settings.anki_model_mappings.clone();
             self.settings_data = settings;
 
             if let Some(language_tools) = &mut self.language_tools {
@@ -392,7 +407,7 @@ impl YomineApp {
         if let Some(language_tools) = &self.language_tools {
             self.message_overlay.set_message("Processing file...".to_string());
             let source_file_clone = source_file.clone();
-            let model_mapping = self.model_mapping.clone();
+            let model_mapping = self.settings_data.anki_model_mappings.clone();
             self.task_manager.process_file(
                 source_file_clone,
                 model_mapping,
@@ -477,7 +492,7 @@ impl YomineApp {
                         self.task_manager.refresh_terms(
                             self.original_terms.clone(),
                             self.sentences.clone(),
-                            self.model_mapping.clone(),
+                            self.settings_data.anki_model_mappings.clone(),
                             language_tools,
                         );
                     }
