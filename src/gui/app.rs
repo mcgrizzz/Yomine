@@ -336,6 +336,10 @@ impl eframe::App for YomineApp {
             self.model_mapping = settings.anki_model_mappings.clone();
             self.settings_data = settings;
 
+            if let Some(language_tools) = &mut self.language_tools {
+                language_tools.known_interval = self.settings_data.anki_interval;
+            }
+
             self.save_settings();
         }
 
@@ -428,7 +432,7 @@ impl YomineApp {
             TaskResult::TermsRefreshed(result) => {
                 self.message_overlay.clear_message();
                 match result {
-                    Ok((filter_result, file_comprehension)) => {
+                    Ok((filter_result, sentences, file_comprehension)) => {
                         // Reconstruct original_terms from all three sets (just like in process_source_file)
                         let mut base_terms = Vec::new();
                         base_terms.extend(filter_result.terms.iter().cloned());
@@ -442,6 +446,7 @@ impl YomineApp {
                             .map(|t| t.lemma_form.clone())
                             .collect();
                         self.terms = filter_result.terms;
+                        self.sentences = sentences;
                         self.file_comprehension = file_comprehension;
                         self.table_state.configure_bounds(&self.terms);
                         let freq_manager =

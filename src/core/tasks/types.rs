@@ -21,7 +21,7 @@ pub enum TaskResult {
     FileProcessing(FileProcessingResult),
     RequestRefresh,
     RequestSaveSettings,
-    TermsRefreshed(Result<(FilterResult, f32), String>),
+    TermsRefreshed(Result<(FilterResult, Vec<Sentence>, f32), String>),
 
     LanguageToolsLoaded(Result<LanguageTools, String>),
     LoadingMessage(String),

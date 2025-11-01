@@ -14,14 +14,9 @@ use super::TaskResult;
 use crate::{
     anki::FieldMapping,
     core::{
-        pipeline::{
-            apply_filters,
-            process_source_file,
-            FilterResult,
-        },
-        IgnoreList,
-        SourceFile,
-        Term,
+        IgnoreList, Sentence, SourceFile, Term, pipeline::{
+            FilterResult, apply_filters, process_source_file
+        }
     },
     gui::LanguageTools,
 };
@@ -148,14 +143,14 @@ impl TaskManager {
     pub fn refresh_terms(
         &self,
         base_terms: Vec<Term>,
-        mut sentences: Vec<crate::core::Sentence>,
+        mut sentences: Vec<Sentence>,
         model_mapping: HashMap<String, FieldMapping>,
         language_tools: LanguageTools,
     ) {
         let (sender, runtime) = self.task_context();
 
         thread::spawn(move || {
-            let result: Result<(FilterResult, f32), String> = runtime.block_on(async {
+            let result: Result<(FilterResult, Vec<Sentence>, f32), String> = runtime.block_on(async {
                 let filter_result =
                     apply_filters(base_terms, &language_tools, Some(model_mapping), None)
                         .await
@@ -183,7 +178,7 @@ impl TaskManager {
                 };
                 println!("Overall comprehension (refresh): {:.1}%", avg_comprehension * 100.0);
 
-                Ok((filter_result, avg_comprehension))
+                Ok((filter_result, sentences, avg_comprehension))
             });
 
             let _ = sender.send(TaskResult::TermsRefreshed(result));
