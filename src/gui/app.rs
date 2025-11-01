@@ -67,6 +67,7 @@ pub struct LanguageTools {
     pub tokenizer: Arc<Tokenizer>,
     pub frequency_manager: Arc<FrequencyManager>,
     pub ignore_list: Arc<Mutex<IgnoreList>>,
+    pub known_interval: u32,
 }
 
 impl std::fmt::Debug for LanguageTools {
@@ -82,8 +83,9 @@ impl std::fmt::Debug for LanguageTools {
 pub struct YomineApp {
     pub terms: Vec<Term>,
     pub original_terms: Vec<Term>, //Not filtered from ignorelist or anki
-    pub anki_filtered_terms: HashSet<String>, // Lemma forms that exist in Anki (to skip in results)
+    pub anki_filtered_terms: HashSet<String>, // Lemma forms that exist in Anki
     pub sentences: Vec<Sentence>,
+    pub file_comprehension: f32, // Cached average comprehension across all sentences
     pub model_mapping: HashMap<String, FieldMapping>,
     pub settings_data: SettingsData,
     pub table_state: TableState,
@@ -150,6 +152,7 @@ impl YomineApp {
             original_terms: Vec::new(),
             anki_filtered_terms: HashSet::new(),
             sentences: Vec::new(),
+            file_comprehension: 0.0,
             current_processing_file: None,
             current_source_file: None,
             task_manager: task_manager,
@@ -399,7 +402,10 @@ impl YomineApp {
     fn handle_task_result(&mut self, result: TaskResult, _ctx: &egui::Context) {
         match result {
             TaskResult::LanguageToolsLoaded(result) => match result {
-                Ok(language_tools) => {
+                Ok(mut language_tools) => {
+                    // Update known_interval from settings
+                    language_tools.known_interval = self.settings_data.anki_interval;
+
                     self.language_tools = Some(language_tools);
                     self.message_overlay.clear_message();
                     if let Some(manager) =
@@ -422,9 +428,21 @@ impl YomineApp {
             TaskResult::TermsRefreshed(result) => {
                 self.message_overlay.clear_message();
                 match result {
-                    Ok(filter_result) => {
-                        self.anki_filtered_terms = filter_result.anki_filtered;
+                    Ok((filter_result, file_comprehension)) => {
+                        // Reconstruct original_terms from all three sets (just like in process_source_file)
+                        let mut base_terms = Vec::new();
+                        base_terms.extend(filter_result.terms.iter().cloned());
+                        base_terms.extend(filter_result.anki_filtered.iter().cloned());
+                        base_terms.extend(filter_result.ignore_filtered.iter().cloned());
+                        self.original_terms = base_terms;
+
+                        self.anki_filtered_terms = filter_result
+                            .anki_filtered
+                            .iter()
+                            .map(|t| t.lemma_form.clone())
+                            .collect();
                         self.terms = filter_result.terms;
+                        self.file_comprehension = file_comprehension;
                         self.table_state.configure_bounds(&self.terms);
                         let freq_manager =
                             self.language_tools.as_ref().map(|lt| lt.frequency_manager.as_ref());
@@ -453,6 +471,7 @@ impl YomineApp {
                         self.message_overlay.set_message("Refreshing terms...".to_string());
                         self.task_manager.refresh_terms(
                             self.original_terms.clone(),
+                            self.sentences.clone(),
                             self.model_mapping.clone(),
                             language_tools,
                         );
@@ -497,18 +516,20 @@ impl YomineApp {
 
     fn handle_processing_result(
         &mut self,
-        result: Result<(Vec<Term>, crate::core::pipeline::FilterResult, Vec<Sentence>), String>,
+        result: Result<(Vec<Term>, crate::core::pipeline::FilterResult, Vec<Sentence>, f32), String>,
     ) {
         self.message_overlay.clear_message();
         let filename = self.current_processing_file.as_deref().unwrap_or("the selected file");
 
         match result {
-            Ok((base_terms, filter_result, new_sentences)) => {
+            Ok((base_terms, filter_result, new_sentences, file_comprehension)) => {
                 self.original_terms = base_terms;
 
-                self.anki_filtered_terms = filter_result.anki_filtered;
+                self.anki_filtered_terms =
+                    filter_result.anki_filtered.iter().map(|t| t.lemma_form.clone()).collect();
                 self.terms = filter_result.terms;
                 self.sentences = new_sentences;
+                self.file_comprehension = file_comprehension;
                 self.table_state.reset();
                 self.table_state.configure_bounds(&self.terms);
 

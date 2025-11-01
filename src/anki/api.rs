@@ -41,8 +41,8 @@ pub struct Card {
     field_order: u32,
     fields: HashMap<String, Field>,
     css: String,
-    card_id: u64,
-    interval: u32,
+    pub card_id: u64,
+    pub interval: u32,
     note: u64,
     ord: u32,
     #[serde(rename = "type")]
@@ -122,6 +122,12 @@ pub async fn get_notes(note_ids: Vec<u64>) -> Result<Vec<Note>, reqwest::Error> 
 pub async fn get_cards(card_ids: Vec<u64>) -> Result<Vec<Card>, reqwest::Error> {
     let params = serde_json::json!({ "cards": card_ids });
     let response: ApiResponse<Vec<Card>> = make_request("cardsInfo", Some(params)).await?;
+    Ok(response.unwrap_result().unwrap_or_default())
+}
+
+pub async fn get_intervals(card_ids: Vec<u64>) -> Result<Vec<i32>, reqwest::Error> {
+    let params = serde_json::json!({ "cards": card_ids });
+    let response: ApiResponse<Vec<i32>> = make_request("getIntervals", Some(params)).await?;
     Ok(response.unwrap_result().unwrap_or_default())
 }
 

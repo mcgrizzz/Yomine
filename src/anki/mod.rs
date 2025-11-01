@@ -1,4 +1,5 @@
 pub mod api;
+pub mod comprehensibility;
 pub mod scoring;
 pub mod state;
 pub mod types;
