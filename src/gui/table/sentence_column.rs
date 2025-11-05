@@ -57,7 +57,8 @@ fn ui_timestamp(ui: &mut Ui, term: &Term, app: &YomineApp, term_index: usize) {
     let sentence_idx = app.table_state.get_sentence_index(term_index);
     let sentence_ref = &term.sentence_references[sentence_idx];
 
-    let sentence_content = match app.sentences.get(sentence_ref.0 as usize) {
+    let file_data = app.file_data.as_ref().unwrap();
+    let sentence_content = match file_data.sentences.get(sentence_ref.0 as usize) {
         Some(content) => content,
         None => return,
     };
@@ -112,15 +113,16 @@ fn ui_sentence_navigation(ui: &mut Ui, term: &Term, term_index: usize, app: &mut
     });
 }
 
-fn ui_sentence_comprehension(ui: &mut Ui, term: &Term, app: &mut YomineApp, term_index: usize) {
-    if app.anki_filtered_terms.is_empty() {
+fn ui_sentence_comprehension(ui: &mut Ui, term: &Term, app: &YomineApp, term_index: usize) {
+    let file_data = app.file_data.as_ref().unwrap();
+    if file_data.anki_filtered_terms.is_empty() {
         return;
     }
 
     let sentence_idx = app.table_state.get_sentence_index(term_index);
     let sentence_ref = &term.sentence_references[sentence_idx];
 
-    let sentence = match app.sentences.get(sentence_ref.0 as usize) {
+    let sentence = match file_data.sentences.get(sentence_ref.0 as usize) {
         Some(sent) => sent,
         None => return,
     };
@@ -157,10 +159,8 @@ fn ui_sentence_comprehension(ui: &mut Ui, term: &Term, app: &mut YomineApp, term
                 ui.ctx().style().visuals.weak_text_color().linear_multiply(0.3)
             };
 
-            let (rect, _response) = ui.allocate_exact_size(
-                egui::Vec2::new(BAR_WIDTH, 16.0),
-                egui::Sense::hover(),
-            );
+            let (rect, _response) =
+                ui.allocate_exact_size(egui::Vec2::new(BAR_WIDTH, 16.0), egui::Sense::hover());
 
             let bar_rect = egui::Rect::from_min_size(
                 egui::pos2(rect.min.x, rect.max.y - bar_height),
@@ -184,7 +184,8 @@ fn ui_sentence_content(
     let sentence_idx = app.table_state.get_sentence_index(term_index);
     let sentence_ref = &term.sentence_references[sentence_idx];
 
-    let sentence_content = match app.sentences.get(sentence_ref.0 as usize) {
+    let file_data = app.file_data.as_ref().unwrap();
+    let sentence_content = match file_data.sentences.get(sentence_ref.0 as usize) {
         Some(content) => content,
         None => return,
     };

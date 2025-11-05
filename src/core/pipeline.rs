@@ -18,7 +18,9 @@ pub struct FilterResult {
 }
 use crate::{
     anki::{
-        AnkiState, FieldMapping, comprehensibility::calculate_sentence_comprehension
+        comprehensibility::calculate_sentence_comprehension,
+        AnkiState,
+        FieldMapping,
     },
     core::{
         Sentence,
@@ -104,16 +106,14 @@ pub async fn apply_filters(
     model_mapping: Option<HashMap<String, FieldMapping>>,
     cached_anki_terms: Option<&HashSet<String>>,
 ) -> Result<FilterResult, YomineError> {
-
-    let (not_ignored, mut ignore_filtered) =
-        apply_ignore_filter(base_terms, language_tools)?;
+    let (not_ignored, mut ignore_filtered) = apply_ignore_filter(base_terms, language_tools)?;
 
     // Set comprehension = 1.0 for all ignored terms
     for term in &mut ignore_filtered {
         term.comprehension = 1.0;
     }
 
-    // Apply Anki filtering 
+    // Apply Anki filtering
     let (unknown_terms, anki_filtered) = if let Some(cached) = cached_anki_terms {
         let (unknown, known): (Vec<Term>, Vec<Term>) =
             not_ignored.into_iter().partition(|t| !cached.contains(&t.lemma_form));

@@ -40,11 +40,15 @@ use super::{
     },
 };
 use crate::{
-    anki::comprehensibility::comp_term, core::{
-        Term, utils::{
-            NormalizeLongVowel, normalize_japanese_text
-        }
-    }, dictionary::frequency_manager::FrequencyManager
+    anki::comprehensibility::comp_term,
+    core::{
+        utils::{
+            normalize_japanese_text,
+            NormalizeLongVowel,
+        },
+        Term,
+    },
+    dictionary::frequency_manager::FrequencyManager,
 };
 
 pub struct AnkiState {
@@ -62,7 +66,11 @@ impl AnkiState {
     ) -> Result<Self, reqwest::Error> {
         let start = Instant::now();
         let mut vocab = get_total_vocab(&model_mapping).await?;
-        println!("Loaded {} vocab items from Anki ({:.1}s)", vocab.len(), start.elapsed().as_secs_f32());
+        println!(
+            "Loaded {} vocab items from Anki ({:.1}s)",
+            vocab.len(),
+            start.elapsed().as_secs_f32()
+        );
 
         // Fetch card intervals and set them on vocab
         let card_ids: Vec<u64> = vocab.iter().filter_map(|v| v.card_id).collect();

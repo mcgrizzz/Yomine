@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use eframe::egui::{self, RichText};
+use eframe::egui::{
+    self,
+    RichText,
+};
 
 use super::{
     anki_service::AnkiService,
@@ -300,15 +303,11 @@ fn ui_mapping_editor(
 fn ui_known_interval_setting(ui: &mut egui::Ui, data: &mut SettingsModalData) {
     ui.horizontal(|ui| {
         ui.heading("Known Interval Threshold");
-        ui.label(
-            RichText::new("ℹ")
-                .color(ui.visuals().weak_text_color())
-                .size(12.0),
-        )
-        .on_hover_text(
-            "Cards with an interval at or above this threshold will be considered 'known' \
+        ui.label(RichText::new("ℹ").color(ui.visuals().weak_text_color()).size(12.0))
+            .on_hover_text(
+                "Cards with an interval at or above this threshold will be considered 'known' \
              for comprehensibility estimation.",
-        );
+            );
     });
     ui.add_space(5.0);
 
