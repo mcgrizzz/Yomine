@@ -55,6 +55,7 @@ fn parse_srt(srt: SRT, source_file: &SourceFile) -> Result<Vec<Sentence>, Yomine
                 segments: vec![],          // segments are generated after tokenization
                 text: text,
                 timestamp: Some(timestamp),
+                comprehension: 0.0, // Will be calculated after term matching
             }))
         })
         .collect::<Result<Vec<_>, YomineError>>()?;

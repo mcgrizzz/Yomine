@@ -23,6 +23,7 @@ use wana_kana::IsJapaneseStr;
 use super::{
     api::{
         get_field_names,
+        get_intervals,
         get_model_ids,
         get_note_ids,
         get_notes,
@@ -39,6 +40,7 @@ use super::{
     },
 };
 use crate::{
+    anki::comprehensibility::comp_term,
     core::{
         utils::{
             normalize_japanese_text,
@@ -53,25 +55,66 @@ pub struct AnkiState {
     vocab: Vec<Vocab>,
     matcher: AnkiMatcher,
     relevance_map: HashMap<String, Vec<usize>>, // Map to indices
+    known_interval: u32,                        // From settings, for calculating comprehension
 }
 
 impl AnkiState {
     pub async fn new(
         model_mapping: HashMap<String, FieldMapping>,
         frequency_manager: Arc<FrequencyManager>,
+        known_interval: u32,
     ) -> Result<Self, reqwest::Error> {
         let start = Instant::now();
-        let vocab = get_total_vocab(&model_mapping).await?;
-        let duration = start.elapsed();
-        println!("AnkiState::new - get_total_vocab took: {:?}", duration);
+        let mut vocab = get_total_vocab(&model_mapping).await?;
+        println!(
+            "Loaded {} vocab items from Anki ({:.1}s)",
+            vocab.len(),
+            start.elapsed().as_secs_f32()
+        );
+
+        // Fetch card intervals and set them on vocab
+        let card_ids: Vec<u64> = vocab.iter().filter_map(|v| v.card_id).collect();
+
+        let intervals_request_start = Instant::now();
+        let intervals = get_intervals(card_ids.clone()).await?;
+        println!(
+            "  getIntervals request: {} cards ({:.2}s)",
+            card_ids.len(),
+            intervals_request_start.elapsed().as_secs_f32()
+        );
+
+        let processing_start = Instant::now();
+        let card_intervals: HashMap<u64, i32> =
+            card_ids.into_iter().zip(intervals.into_iter()).collect();
+
+        // Set intervals on vocab items
+        let mut intervals_set = 0;
+        for vocab_item in &mut vocab {
+            if let Some(card_id) = vocab_item.card_id {
+                if let Some(&interval) = card_intervals.get(&card_id) {
+                    // Negative intervals are in seconds (learning/relearning), positive in days
+                    vocab_item.interval = Some(if interval >= 0 {
+                        interval as f32
+                    } else {
+                        interval.abs() as f32 / 86400.0
+                    });
+                    intervals_set += 1;
+                }
+            }
+        }
+        println!(
+            "  Processing intervals: {}/{} set ({:.2}s)",
+            intervals_set,
+            vocab.len(),
+            processing_start.elapsed().as_secs_f32()
+        );
 
         // Build relevance map once during initialization
         let relevance_map = Self::build_relevance_map(&vocab);
         let matcher = AnkiMatcher::new(frequency_manager);
 
-        let result = Ok(Self { vocab, matcher, relevance_map });
-        println!("AnkiState::new total time: {:?}", start.elapsed());
-        result
+        println!("AnkiState initialized ({:.1}s total)", start.elapsed().as_secs_f32());
+        Ok(Self { vocab, matcher, relevance_map, known_interval })
     }
 
     /// One time map for the anki vocab to quickly find the potential matches by key
@@ -99,8 +142,9 @@ impl AnkiState {
         term: &str,
         reading: &str,
         pos: &crate::segmentation::word::POS,
-    ) -> f32 {
+    ) -> (f32, Option<usize>) {
         let mut highest_score = 0.0;
+        let mut best_vocab_index: Option<usize> = None;
 
         // Use cached relevance map for efficient lookup
         for key in [
@@ -115,59 +159,79 @@ impl AnkiState {
                     let score = self.matcher.inclusivity_score(term, reading, vocab, pos);
 
                     if score == 1.0 {
-                        return 1.0; // Early return for perfect matches
+                        return (1.0, Some(index)); // Early return for perfect matches
                     }
                     if score > highest_score {
                         highest_score = score;
+                        best_vocab_index = Some(index);
                     }
                 }
             }
         }
 
-        highest_score
+        (highest_score, best_vocab_index)
     }
 
-    pub fn filter_existing_terms(&self, terms: Vec<Term>) -> Vec<Term> {
+    pub fn filter_existing_terms(&self, terms: Vec<Term>) -> (Vec<Term>, Vec<Term>) {
         let start = Instant::now();
 
         // Calculate scores for all terms in parallel, maintaining order
         let term_scores: Vec<(Term, f32)> = terms
             .into_par_iter()
-            .map(|term| {
+            .map(|mut term| {
                 // Check both surface and lemma forms, take the higher score
-                let surface_score = self.highest_inclusivity_score(
+                let (surface_score, surface_vocab_idx) = self.highest_inclusivity_score(
                     &term.surface_form,
                     &term.surface_reading,
                     &term.part_of_speech,
                 );
-                let lemma_score = self.highest_inclusivity_score(
+                let (lemma_score, lemma_vocab_idx) = self.highest_inclusivity_score(
                     &term.lemma_form,
                     &term.lemma_reading,
                     &term.part_of_speech,
                 );
 
-                let score = f32::max(surface_score, lemma_score);
+                let (score, vocab_idx) = if surface_score > lemma_score {
+                    (surface_score, surface_vocab_idx)
+                } else {
+                    (lemma_score, lemma_vocab_idx)
+                };
+
+                // Calculate comprehension from matched vocab interval
+                // If no match, or if matched vocab has no interval, assume interval of 1 day
+                let interval = if let Some(idx) = vocab_idx {
+                    self.vocab[idx].interval.or(Some(1.0))
+                } else {
+                    Some(1.0)
+                };
+
+                term.comprehension = comp_term(interval, self.known_interval);
+
                 (term, score)
             })
             .collect();
 
-        // Filter terms based on Anki inclusivity threshold
-        let (filtered_terms, _scores): (Vec<Term>, Vec<f32>) = term_scores
-            .into_iter()
-            .filter_map(
-                |(term, score)| {
-                    if score < KEEP_TERM_THRESHOLD {
-                        Some((term, score))
-                    } else {
-                        None
-                    }
-                },
-            )
-            .unzip();
+        // Separate into unknown (filtered) and known terms
+        let mut filtered_terms = Vec::new();
+        let mut known_terms = Vec::new();
 
-        let duration = start.elapsed();
-        println!("filter_existing_terms took: {:?}", duration);
-        filtered_terms
+        for (term, score) in term_scores {
+            if score < KEEP_TERM_THRESHOLD {
+                filtered_terms.push(term);
+            } else {
+                known_terms.push(term);
+            }
+        }
+
+        println!(
+            "Term matching: {} unknown, {} known ({:.2}s)",
+            filtered_terms.len(),
+            known_terms.len(),
+            start.elapsed().as_secs_f32()
+        );
+
+        // Return both: unknown terms and known terms (all have comprehension calculated)
+        (filtered_terms, known_terms)
     }
 }
 
@@ -175,10 +239,25 @@ pub async fn get_total_vocab(
     model_mapping: &HashMap<String, FieldMapping>,
 ) -> Result<Vec<Vocab>, reqwest::Error> {
     let deck_query = "deck:*";
+
+    let note_ids_start = Instant::now();
     let note_ids = get_note_ids(&deck_query).await?;
+    println!(
+        "  findNotes request: {} notes ({:.2}s)",
+        note_ids.len(),
+        note_ids_start.elapsed().as_secs_f32()
+    );
 
+    let notes_start = Instant::now();
     let notes = get_notes(note_ids).await?;
+    let notes_request_time = notes_start.elapsed();
+    println!(
+        "  notesInfo request: {} notes ({:.2}s)",
+        notes.len(),
+        notes_request_time.as_secs_f32()
+    );
 
+    let processing_start = Instant::now();
     let relevant_models: HashSet<&String> = model_mapping.keys().collect();
     let vocab: Vec<Vocab> = notes
         .into_par_iter()
@@ -196,6 +275,8 @@ pub async fn get_total_vocab(
                         return Some(Vocab {
                             term,
                             reading: reading.normalize_long_vowel().into_owned(),
+                            card_id: note.cards.first().copied(),
+                            interval: None, // Will be set after fetching cards
                         });
                     }
                 }
@@ -203,6 +284,12 @@ pub async fn get_total_vocab(
             None
         })
         .collect();
+
+    println!(
+        "  Processing notes: {} vocab items ({:.2}s)",
+        vocab.len(),
+        processing_start.elapsed().as_secs_f32()
+    );
 
     Ok(vocab)
 }

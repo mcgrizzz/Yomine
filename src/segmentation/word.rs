@@ -163,6 +163,7 @@ impl From<Word> for Term {
                 full_segment_reading: word.surface_hatsuon,
                 frequencies: HashMap::new(),
                 sentence_references: Vec::new(),
+                comprehension: 0.0,
             }
         } else {
             let is_kana = word.surface_form.as_str().is_kana();
@@ -178,6 +179,7 @@ impl From<Word> for Term {
                 full_segment_reading: word.surface_hatsuon,
                 frequencies: HashMap::new(),
                 sentence_references: Vec::new(),
+                comprehension: 0.0,
             }
         }
     }

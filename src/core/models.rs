@@ -101,6 +101,7 @@ pub struct Sentence {
     pub text: String,                               // Sentence content
     pub segments: Vec<(String, POS, usize, usize)>, // List of segments (reading, POS, start, end) for the sentence
     pub timestamp: Option<TimeStamp>,
+    pub comprehension: f32, // 0.0 to 1.0, average of term comprehensions
 }
 
 #[derive(serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
@@ -143,6 +144,7 @@ pub struct Term {
     pub full_segment: String, //If we have main word, this includes the non-main part of the segment, in surface form
     pub full_segment_reading: String, //If we have main word, this includes the non-main part of the segment, in surface form
     pub sentence_references: Vec<(usize, usize)>, // Vec<(sentence_id, start_index)>
+    pub comprehension: f32,           // 0.0 to 1.0, calculated from Anki interval and ignore list
 }
 
 impl Term {
@@ -168,6 +170,7 @@ impl Term {
             full_segment_reading,
             frequencies: HashMap::new(),
             sentence_references: Vec::new(),
+            comprehension: 0.0,
         }
     }
 }

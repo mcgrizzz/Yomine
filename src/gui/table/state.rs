@@ -159,6 +159,9 @@ impl TableState {
             match field {
                 SortField::Chronological => self.sentence_sort_mode = SentenceSortMode::Time,
                 SortField::SentenceCount => self.sentence_sort_mode = SentenceSortMode::Count,
+                SortField::SentenceComprehension => {
+                    self.sentence_sort_mode = SentenceSortMode::Comprehension
+                }
                 _ => {}
             }
             self.dirty = true;
@@ -174,12 +177,20 @@ impl TableState {
 
     pub fn set_sentence_sort_mode(&mut self, mode: SentenceSortMode) {
         if self.sentence_sort_mode != mode
-            || !matches!(self.sort.field, Some(SortField::Chronological | SortField::SentenceCount))
+            || !matches!(
+                self.sort.field,
+                Some(
+                    SortField::Chronological
+                        | SortField::SentenceCount
+                        | SortField::SentenceComprehension
+                )
+            )
         {
             self.sentence_sort_mode = mode;
             let target_field = match mode {
                 SentenceSortMode::Time => SortField::Chronological,
                 SentenceSortMode::Count => SortField::SentenceCount,
+                SentenceSortMode::Comprehension => SortField::SentenceComprehension,
             };
             let direction = if self.sort.field == Some(target_field) {
                 self.sort.direction
@@ -398,6 +409,8 @@ impl TableState {
                 field,
                 self.sort.direction,
                 frequency_manager,
+                sentences,
+                &self.sentence_indices,
             );
         }
 

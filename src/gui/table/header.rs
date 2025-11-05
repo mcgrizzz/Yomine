@@ -44,7 +44,7 @@ pub fn ui_header_cols(_ctx: &egui::Context, mut header: TableRow<'_, '_>, app: &
                 .on_hover_cursor(egui::CursorIcon::PointingHand);
 
             if settings_button.clicked() {
-                app.pos_filters_modal.open_modal(app.table_state.pos_snapshot());
+                app.modals.pos_filters.open_modal(app.table_state.pos_snapshot());
             }
 
             ui_column_header(ui, app, "POS", None);
@@ -91,64 +91,118 @@ pub fn ui_controls_row(ui: &mut Ui, app: &mut YomineApp) {
             });
         });
 
-        // Right side: Stats counter (float right)
+        // Right side: Comprehension and stats counter (float right)
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let visible_count = app.table_state.visible_indices().len();
-            let filtered_count = app.terms.len();
-            let total_count = app.original_terms.len();
-            let known_count = total_count.saturating_sub(filtered_count);
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = 2.0;
 
-            ui.label(
-                RichText::new(format!("{} total", total_count))
-                    .color(ui.visuals().weak_text_color())
-                    .text_style(TextStyle::Small),
-            );
+                // Overall comprehension display
+                // Only show if we have sentences and successfully fetched Anki data
+                if let Some(file_data) = &app.file_data {
+                    if !file_data.sentences.is_empty() && !file_data.anki_filtered_terms.is_empty()
+                    {
+                        ui.horizontal(|ui| {
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    let comp_pct = file_data.file_comprehension * 100.0;
 
-            ui.label(
-                RichText::new("/")
-                    .color(ui.visuals().weak_text_color())
-                    .text_style(TextStyle::Small),
-            );
+                                    // Color gradient from red (0%) to yellow to green (100%)
+                                    let base_color = if comp_pct >= 50.0 {
+                                        let t = (comp_pct - 50.0) / 50.0;
+                                        egui::Color32::from_rgb((180.0 * (1.0 - t)) as u8, 180, 60)
+                                    } else {
+                                        let t = comp_pct / 50.0;
+                                        egui::Color32::from_rgb(180, (180.0 * t) as u8, 60)
+                                    };
 
-            if known_count > 0 {
-                // Calculate ignore list and Anki filtered counts
-                let ignore_count = if let Some(ref language_tools) = app.language_tools {
-                    if let Ok(ignore_list) = language_tools.ignore_list.lock() {
-                        app.original_terms
-                            .iter()
-                            .filter(|term| ignore_list.contains(&term.lemma_form))
-                            .count()
-                    } else {
-                        0
+                                    // Desaturate by blending with gray
+                                    let color = base_color
+                                        .blend(egui::Color32::from_gray(140).gamma_multiply(0.6));
+
+                                    ui.label(
+                                        RichText::new(format!(
+                                            "Estimated comprehension: {:.1}%",
+                                            comp_pct
+                                        ))
+                                        .color(color)
+                                        .size(13.0)
+                                        .strong(),
+                                    )
+                                    .on_hover_text(
+                                        "Overall estimated comprehension across all sentences",
+                                    );
+                                },
+                            );
+                        });
                     }
-                } else {
-                    0
-                };
-                let anki_filtered = known_count.saturating_sub(ignore_count);
+                }
 
-                let known_label = ui.label(
-                    RichText::new(format!("{} known", known_count))
-                        .color(ui.visuals().weak_text_color())
-                        .text_style(TextStyle::Small),
-                );
+                // Stats counter
+                if let Some(file_data) = &app.file_data {
+                    ui.horizontal(|ui| {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let visible_count = app.table_state.visible_indices().len();
+                            let filtered_count = file_data.terms.len();
+                            let total_count = file_data.original_terms.len();
+                            let known_count = total_count.saturating_sub(filtered_count);
 
-                known_label.on_hover_ui(|ui| {
-                    ui.label(format!("Ignore list: {}", ignore_count));
-                    ui.label(format!("Anki filtered: {}", anki_filtered));
-                });
+                            ui.label(
+                                RichText::new(format!("{} total", total_count))
+                                    .color(ui.visuals().weak_text_color())
+                                    .size(12.0),
+                            );
 
-                ui.label(
-                    RichText::new("/")
-                        .color(ui.visuals().weak_text_color())
-                        .text_style(TextStyle::Small),
-                );
-            }
+                            ui.label(
+                                RichText::new("/").color(ui.visuals().weak_text_color()).size(12.0),
+                            );
 
-            ui.label(
-                RichText::new(format!("{} shown", visible_count))
-                    .color(ui.visuals().weak_text_color())
-                    .text_style(TextStyle::Small),
-            );
+                            if known_count > 0 {
+                                // Calculate ignore list and Anki filtered counts
+                                let ignore_count = if let Some(ref language_tools) =
+                                    app.language_tools
+                                {
+                                    if let Ok(ignore_list) = language_tools.ignore_list.lock() {
+                                        file_data
+                                            .original_terms
+                                            .iter()
+                                            .filter(|term| ignore_list.contains(&term.lemma_form))
+                                            .count()
+                                    } else {
+                                        0
+                                    }
+                                } else {
+                                    0
+                                };
+                                let anki_filtered = known_count.saturating_sub(ignore_count);
+
+                                let known_label = ui.label(
+                                    RichText::new(format!("{} known", known_count))
+                                        .color(ui.visuals().weak_text_color())
+                                        .size(12.0),
+                                );
+
+                                known_label.on_hover_ui(|ui| {
+                                    ui.label(format!("Ignore list: {}", ignore_count));
+                                    ui.label(format!("Anki filtered: {}", anki_filtered));
+                                });
+
+                                ui.label(
+                                    RichText::new("/")
+                                        .color(ui.visuals().weak_text_color())
+                                        .size(12.0),
+                                );
+                            }
+
+                            ui.label(
+                                RichText::new(format!("{} shown", visible_count))
+                                    .color(ui.visuals().weak_text_color())
+                                    .size(12.0),
+                            );
+                        });
+                    });
+                }
+            });
         });
     });
 }
@@ -229,7 +283,7 @@ fn ui_column_header_frequency(ui: &mut Ui, app: &mut YomineApp) {
         if settings_button.clicked() {
             let frequency_manager =
                 app.language_tools.as_ref().map(|tools| tools.frequency_manager.as_ref());
-            app.frequency_weights_modal.open_modal(&app.settings_data, frequency_manager);
+            app.modals.frequency_weights.open_modal(&app.settings_data, frequency_manager);
         }
 
         ui_column_header(ui, app, "Frequency", Some(SortField::Frequency));
@@ -241,14 +295,17 @@ fn ui_column_header_sentence(ui: &mut Ui, app: &mut YomineApp) {
 
     let is_chronological = matches!(sort_state.field, Some(SortField::Chronological));
     let is_sentence_count = matches!(sort_state.field, Some(SortField::SentenceCount));
-    let is_active = is_chronological || is_sentence_count;
+    let is_comprehension = matches!(sort_state.field, Some(SortField::SentenceComprehension));
+    let is_active = is_chronological || is_sentence_count || is_comprehension;
 
     let (current_field, icon, mode_name) = if is_chronological {
-        (SortField::Chronological, "🕒", "Chronological")
+        (SortField::Chronological, "🕒 Chronological", "Chronological")
     } else if is_sentence_count {
-        (SortField::SentenceCount, "#", "Sentence Count")
+        (SortField::SentenceCount, "# Sentence Count", "Sentence Count")
+    } else if is_comprehension {
+        (SortField::SentenceComprehension, "📊 Estimated Comprehension", "Comprehension")
     } else {
-        (SortField::Chronological, "🕒", "Chronological")
+        (SortField::Chronological, "🕒 Chronological", "Chronological")
     };
 
     if is_active {
@@ -313,12 +370,14 @@ fn ui_column_header_sentence(ui: &mut Ui, app: &mut YomineApp) {
                     .sense(Sense::click()),
                 )
                 .on_hover_cursor(egui::CursorIcon::PointingHand)
-                .on_hover_text("Switch between Chronological and Sentence Count");
+                .on_hover_text("Cycle between Chronological, Sentence Count, and Comprehension");
 
             if icon_response.clicked() {
-                // Cycle through modes while keeping direction
+                // Cycle through three modes while keeping direction
                 let next_field = if is_chronological {
                     SortField::SentenceCount
+                } else if is_sentence_count {
+                    SortField::SentenceComprehension
                 } else {
                     SortField::Chronological
                 };

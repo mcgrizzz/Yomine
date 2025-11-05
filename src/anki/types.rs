@@ -17,4 +17,9 @@ pub struct FieldMapping {
 pub struct Vocab {
     pub term: String,
     pub reading: String,
+    pub card_id: Option<u64>,
+    pub interval: Option<f32>, // Interval in days (can be fractional for learning cards)
 }
+
+//TODO: Comprehensibility via FSRS state
+//Tsunagi integration to fetch FSRS parameters

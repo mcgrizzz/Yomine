@@ -34,7 +34,9 @@ pub use state::TableState;
 
 pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
     egui::CentralPanel::default().show(ctx, |ui| {
-        if app.terms.is_empty() && !app.message_overlay.active {
+        let has_file_data = app.file_data.as_ref().map_or(false, |fd| fd.has_terms());
+
+        if !has_file_data && !app.message_overlay.active {
             ui.vertical_centered(|ui| {
                 ui.add_space(100.0);
 
@@ -74,30 +76,37 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
                     response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
                 }
                 if response.clicked() {
-                    app.file_modal.open_dialog();
+                    app.modals.file.open_dialog();
                 }
             });
-        } else if !app.terms.is_empty() {
+        } else if has_file_data {
             let freq_manager_handle =
                 app.language_tools.as_ref().map(|tools| tools.frequency_manager.clone());
             let freq_manager = freq_manager_handle.as_deref();
-            app.table_state.ensure_indices(&app.terms, &app.sentences, freq_manager);
 
+            // Access file_data for initialization - drop reference immediately
+            {
+                let file_data = app.file_data.as_ref().unwrap();
+                app.table_state.ensure_indices(
+                    &file_data.terms,
+                    &file_data.sentences,
+                    freq_manager,
+                );
+            }
+
+            // Access title in its own scope
             ui.horizontal_wrapped(|ui| {
                 ui.set_max_width(ui.available_width());
-                if let Some(ref source_file) = app.current_source_file {
-                    ui.heading(
-                        egui::RichText::new(&source_file.title)
-                            .color(app.theme.cyan(ui.ctx()))
-                            .strong(),
-                    );
-                } else {
-                    ui.heading("Term Table");
-                }
+                let title = &app.file_data.as_ref().unwrap().source_file.title;
+                ui.heading(egui::RichText::new(title).color(app.theme.cyan(ui.ctx())).strong());
             });
 
+            {
+                let file_data = app.file_data.as_ref().unwrap();
+                app.table_state.compute_term_column_width(ctx, &file_data.terms);
+            }
+
             app.table_state.sync_frequency_states(freq_manager);
-            app.table_state.compute_term_column_width(ctx, &app.terms);
             ui_controls_row(ui, app);
             ui.add_space(10.0);
 
@@ -111,8 +120,6 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
                 };
 
                 let term_width = app.table_state.term_column_width();
-
-                // Pre-calculate everything we need before entering closures
                 let visible_indices = app.table_state.visible_indices().to_vec();
                 let available_width = ui.available_width();
 
@@ -121,13 +128,16 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
                 let sentence_column_width =
                     (available_width - term_width - (90.0 * 2.0 + 20.0)).max(200.0);
 
-                // Compute row heights using cached calculation
-                app.table_state.compute_row_heights(
-                    ctx,
-                    &app.terms,
-                    &app.sentences,
-                    sentence_column_width,
-                );
+                // Compute row heights - access file_data in scope
+                {
+                    let file_data = app.file_data.as_ref().unwrap();
+                    app.table_state.compute_row_heights(
+                        ctx,
+                        &file_data.terms,
+                        &file_data.sentences,
+                        sentence_column_width,
+                    );
+                }
                 let row_heights: Vec<f32> = app.table_state.row_heights().to_vec();
 
                 TableBuilder::new(ui)
@@ -144,7 +154,8 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
                     .body(|body| {
                         body.heterogeneous_rows(row_heights.iter().copied(), |mut row| {
                             let term_index = visible_indices[row.index()];
-                            let term = app.terms[term_index].clone();
+                            // Access file_data to get the term - this is per-row, not per-frame
+                            let term = app.file_data.as_ref().unwrap().terms[term_index].clone();
 
                             ui_col_term(ctx, &mut row, &term, app);
                             ui_col_sentence(ctx, &mut row, &term, app, term_index);
@@ -157,12 +168,7 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
     });
 }
 
-fn ui_col_term(
-    ctx: &egui::Context,
-    row: &mut egui_extras::TableRow,
-    term: &Term,
-    app: &mut YomineApp,
-) {
+fn ui_col_term(ctx: &egui::Context, row: &mut egui_extras::TableRow, term: &Term, app: &YomineApp) {
     row.col(|ui| {
         ui_col_lines(ui, ctx, app);
 

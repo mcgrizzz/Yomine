@@ -10,7 +10,7 @@ use crate::{
     gui::app::LanguageTools,
 };
 
-pub type FileProcessingResult = Result<(Vec<Term>, FilterResult, Vec<Sentence>), String>;
+pub type FileProcessingResult = Result<(Vec<Term>, FilterResult, Vec<Sentence>, f32), String>;
 
 #[derive(Debug, Clone)]
 pub enum TaskResult {
@@ -21,7 +21,7 @@ pub enum TaskResult {
     FileProcessing(FileProcessingResult),
     RequestRefresh,
     RequestSaveSettings,
-    TermsRefreshed(Result<FilterResult, String>),
+    TermsRefreshed(Result<(FilterResult, Vec<Sentence>, f32), String>),
 
     LanguageToolsLoaded(Result<LanguageTools, String>),
     LoadingMessage(String),

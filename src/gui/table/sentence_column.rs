@@ -47,6 +47,7 @@ pub(crate) fn ui_col_sentence(
                 //TODO: Nice layout where sentence nav is below sentence content in the row.
                 ui_sentence_navigation(ui, term, term_index, app);
                 ui_timestamp(ui, term, app, term_index);
+                ui_sentence_comprehension(ui, term, app, term_index);
             });
         });
     });
@@ -56,7 +57,8 @@ fn ui_timestamp(ui: &mut Ui, term: &Term, app: &YomineApp, term_index: usize) {
     let sentence_idx = app.table_state.get_sentence_index(term_index);
     let sentence_ref = &term.sentence_references[sentence_idx];
 
-    let sentence_content = match app.sentences.get(sentence_ref.0 as usize) {
+    let file_data = app.file_data.as_ref().unwrap();
+    let sentence_content = match file_data.sentences.get(sentence_ref.0 as usize) {
         Some(content) => content,
         None => return,
     };
@@ -111,6 +113,67 @@ fn ui_sentence_navigation(ui: &mut Ui, term: &Term, term_index: usize, app: &mut
     });
 }
 
+fn ui_sentence_comprehension(ui: &mut Ui, term: &Term, app: &YomineApp, term_index: usize) {
+    let file_data = app.file_data.as_ref().unwrap();
+    if file_data.anki_filtered_terms.is_empty() {
+        return;
+    }
+
+    let sentence_idx = app.table_state.get_sentence_index(term_index);
+    let sentence_ref = &term.sentence_references[sentence_idx];
+
+    let sentence = match file_data.sentences.get(sentence_ref.0 as usize) {
+        Some(sent) => sent,
+        None => return,
+    };
+
+    let comprehension_pct = sentence.comprehension * 100.0;
+
+    // Color gradient from red (0%) to yellow to green (100%)
+    let base_color = if comprehension_pct >= 50.0 {
+        let t = (comprehension_pct - 50.0) / 50.0;
+        egui::Color32::from_rgb((180.0 * (1.0 - t)) as u8, 180, 60)
+    } else {
+        let t = comprehension_pct / 50.0;
+        egui::Color32::from_rgb(180, (180.0 * t) as u8, 60)
+    };
+
+    // Desaturate by blending with gray
+    let color = base_color.blend(egui::Color32::from_gray(140).gamma_multiply(0.6));
+
+    let n_bars = 5;
+    const BAR_WIDTH: f32 = 3.0;
+    const BAR_HEIGHTS: [f32; 5] = [2.5, 4.0, 6.5, 10.5, 14.5];
+
+    let filled_bars = ((comprehension_pct / (100.0 / n_bars as f32)).ceil() as usize).min(n_bars);
+
+    // bar indicator
+    let bar_response = ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 1.0;
+
+        for i in 0..n_bars {
+            let bar_height = BAR_HEIGHTS[i];
+            let bar_color = if i < filled_bars {
+                color
+            } else {
+                ui.ctx().style().visuals.weak_text_color().linear_multiply(0.3)
+            };
+
+            let (rect, _response) =
+                ui.allocate_exact_size(egui::Vec2::new(BAR_WIDTH, 16.0), egui::Sense::hover());
+
+            let bar_rect = egui::Rect::from_min_size(
+                egui::pos2(rect.min.x, rect.max.y - bar_height),
+                egui::vec2(BAR_WIDTH, bar_height),
+            );
+
+            ui.painter().rect_filled(bar_rect, egui::CornerRadius::same(1), bar_color);
+        }
+    });
+
+    bar_response.response.on_hover_text(format!("{:.0}% comprehensibility", comprehension_pct));
+}
+
 fn ui_sentence_content(
     ctx: &Context,
     ui: &mut Ui,
@@ -121,7 +184,8 @@ fn ui_sentence_content(
     let sentence_idx = app.table_state.get_sentence_index(term_index);
     let sentence_ref = &term.sentence_references[sentence_idx];
 
-    let sentence_content = match app.sentences.get(sentence_ref.0 as usize) {
+    let file_data = app.file_data.as_ref().unwrap();
+    let sentence_content = match file_data.sentences.get(sentence_ref.0 as usize) {
         Some(content) => content,
         None => return,
     };

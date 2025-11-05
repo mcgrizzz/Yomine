@@ -1,8 +1,8 @@
+mod file_data;
+mod modals;
+
 use std::{
-    collections::{
-        HashMap,
-        HashSet,
-    },
+    collections::HashMap,
     mem,
     sync::{
         Arc,
@@ -14,21 +14,16 @@ use eframe::egui::{
     self,
     Id,
 };
+use file_data::FileData;
+use modals::Modals;
 use vibrato::Tokenizer;
 
 use super::{
-    error_modal::ErrorModal,
     file_modal::FileModal,
     message_overlay::MessageOverlay,
-    restart_modal::RestartModal,
     settings::{
         data::FrequencyDictionarySetting,
-        AnkiSettingsModal,
-        FrequencyWeightsModal,
-        IgnoreListModal,
-        PosFiltersModal,
         SettingsData,
-        WebSocketSettingsModal,
     },
     table::{
         term_table,
@@ -67,6 +62,7 @@ pub struct LanguageTools {
     pub tokenizer: Arc<Tokenizer>,
     pub frequency_manager: Arc<FrequencyManager>,
     pub ignore_list: Arc<Mutex<IgnoreList>>,
+    pub known_interval: u32,
 }
 
 impl std::fmt::Debug for LanguageTools {
@@ -80,30 +76,26 @@ impl std::fmt::Debug for LanguageTools {
 }
 
 pub struct YomineApp {
-    pub terms: Vec<Term>,
-    pub original_terms: Vec<Term>, //Not filtered from ignorelist or anki
-    pub anki_filtered_terms: HashSet<String>, // Lemma forms that exist in Anki (to skip in results)
-    pub sentences: Vec<Sentence>,
-    pub model_mapping: HashMap<String, FieldMapping>,
+    // File Data
+    pub file_data: Option<FileData>,
+
+    // Configuration
     pub settings_data: SettingsData,
+
+    // UI State
     pub table_state: TableState,
-    pub file_modal: FileModal,
-    pub error_modal: ErrorModal,
-    pub anki_settings_modal: AnkiSettingsModal,
-    pub websocket_settings_modal: WebSocketSettingsModal,
-    pub ignore_list_modal: IgnoreListModal,
-    pub frequency_weights_modal: FrequencyWeightsModal,
-    pub pos_filters_modal: PosFiltersModal,
-    pub restart_modal: RestartModal,
     pub theme: Theme,
     pub zoom: f32,
+    pub message_overlay: MessageOverlay,
+
+    // Modals
+    pub modals: Modals,
+
+    // External Services
+    pub language_tools: Option<LanguageTools>,
+    pub player: PlayerManager,
     pub anki_connected: bool,
     pub last_anki_check: Option<std::time::Instant>,
-    pub player: PlayerManager,
-    pub message_overlay: MessageOverlay,
-    pub language_tools: Option<LanguageTools>,
-    pub current_processing_file: Option<String>,
-    pub current_source_file: Option<SourceFile>,
     task_manager: TaskManager,
 }
 
@@ -130,31 +122,27 @@ impl YomineApp {
         let player = PlayerManager::new(mpv_manager, websocket_manager);
 
         let app = Self {
-            model_mapping: settings_data.anki_model_mappings.clone(),
+            // File Data
+            file_data: None,
+
+            // Configuration
             settings_data,
+
+            // UI State
+            table_state,
             theme: Theme::dracula(),
             zoom: cc.egui_ctx.zoom_factor(),
+            message_overlay: MessageOverlay::new(),
+
+            // Modals
+            modals: Modals::default(),
+
+            // External Services
+            language_tools: None,
+            player,
             anki_connected: false,
             last_anki_check: None,
-            player,
-            message_overlay: MessageOverlay::new(),
-            file_modal: FileModal::new(),
-            error_modal: ErrorModal::new(),
-            anki_settings_modal: AnkiSettingsModal::new(),
-            websocket_settings_modal: WebSocketSettingsModal::new(),
-            ignore_list_modal: IgnoreListModal::new(),
-            restart_modal: RestartModal::new(),
-            table_state,
-            language_tools: None,
-            terms: Vec::new(),
-            original_terms: Vec::new(),
-            anki_filtered_terms: HashSet::new(),
-            sentences: Vec::new(),
-            current_processing_file: None,
-            current_source_file: None,
-            task_manager: task_manager,
-            frequency_weights_modal: FrequencyWeightsModal::new(),
-            pos_filters_modal: PosFiltersModal::new(),
+            task_manager,
         };
 
         app.setup_fonts(cc);
@@ -193,7 +181,7 @@ impl YomineApp {
         fonts.font_data.insert(
             "noto_sans_jp".to_owned(),
             std::sync::Arc::new(egui::FontData::from_static(include_bytes!(
-                "../../assets/fonts/NotoSansJP-Regular.ttf"
+                "../../../assets/fonts/NotoSansJP-Regular.ttf"
             ))),
         );
 
@@ -201,7 +189,7 @@ impl YomineApp {
         fonts.font_data.insert(
             "noto_serif_jp".to_owned(),
             std::sync::Arc::new(egui::FontData::from_static(include_bytes!(
-                "../../assets/fonts/NotoSerifJP-Regular.ttf"
+                "../../../assets/fonts/NotoSerifJP-Regular.ttf"
             ))),
         );
 
@@ -290,31 +278,32 @@ impl eframe::App for YomineApp {
         let frequency_manager =
             self.language_tools.as_ref().map(|lt| lt.frequency_manager.as_ref());
 
-        let can_refresh = !self.original_terms.is_empty() && self.language_tools.is_some();
+        let can_refresh = self.file_data.as_ref().map_or(false, |fd| !fd.original_terms.is_empty())
+            && self.language_tools.is_some();
 
         TopBar::show(
             ctx,
-            &mut self.file_modal,
-            &mut self.anki_settings_modal,
-            &mut self.websocket_settings_modal,
-            &mut self.ignore_list_modal,
-            &mut self.frequency_weights_modal,
-            &mut self.pos_filters_modal,
+            &mut self.modals.file,
+            &mut self.modals.anki_settings,
+            &mut self.modals.websocket_settings,
+            &mut self.modals.ignore_list,
+            &mut self.modals.frequency_weights,
+            &mut self.modals.pos_filters,
             &mut self.settings_data,
             &self.player.ws,
             self.player.mpv.is_connected(),
             self.anki_connected,
-            &mut self.restart_modal,
+            &mut self.modals.restart,
             ignore_list_ref,
             &self.task_manager,
             can_refresh,
             &self.table_state,
             frequency_manager,
         );
-        if let Some(source_file) = self.file_modal.show(
+        if let Some(source_file) = self.modals.file.show(
             ctx,
             &self.theme,
-            self.current_source_file.as_ref().map(|sf| sf.original_file.as_str()),
+            self.file_data.as_ref().map(|fd| fd.source_file.original_file.as_str()),
         ) {
             println!("File selected: {:?}", source_file.original_file);
             self.process_source_file(source_file);
@@ -322,26 +311,29 @@ impl eframe::App for YomineApp {
 
         term_table(ctx, self);
         self.message_overlay.show(ctx, &self.theme);
-        self.error_modal.show(ctx); // Handle restart modal
-        if let Some(should_restart) = self.restart_modal.show(ctx) {
+        self.modals.error.show(ctx); // Handle restart modal
+        if let Some(should_restart) = self.modals.restart.show(ctx) {
             if should_restart {
                 self.restart_application(ctx);
             }
         }
 
-        if let Some(settings) = self.anki_settings_modal.show(ctx) {
-            self.model_mapping = settings.anki_model_mappings.clone();
+        if let Some(settings) = self.modals.anki_settings.show(ctx) {
             self.settings_data = settings;
+
+            if let Some(language_tools) = &mut self.language_tools {
+                language_tools.known_interval = self.settings_data.anki_interval;
+            }
 
             self.save_settings();
         }
 
-        if let Some(settings) = self.websocket_settings_modal.show(ctx, &mut self.player.ws) {
+        if let Some(settings) = self.modals.websocket_settings.show(ctx, &mut self.player.ws) {
             self.settings_data = settings;
             self.save_settings();
         }
 
-        if let Some(weights) = self.frequency_weights_modal.show(ctx) {
+        if let Some(weights) = self.modals.frequency_weights.show(ctx) {
             self.settings_data.frequency_weights = weights;
             if let Some(manager) =
                 self.language_tools.as_ref().map(|lt| Arc::clone(&lt.frequency_manager))
@@ -351,16 +343,24 @@ impl eframe::App for YomineApp {
             self.save_settings();
         }
 
-        if let Some(pos_settings) = self.pos_filters_modal.show(ctx) {
+        if let Some(pos_settings) = self.modals.pos_filters.show(ctx) {
             self.settings_data.pos_filters = pos_settings;
             self.table_state.apply_pos_settings(&self.settings_data.pos_filters);
-            let freq_manager = self.language_tools.as_ref().map(|lt| lt.frequency_manager.as_ref());
-            self.table_state.ensure_indices(&self.terms, &self.sentences, freq_manager);
+            if let Some(file_data) = &self.file_data {
+                let freq_manager =
+                    self.language_tools.as_ref().map(|lt| lt.frequency_manager.as_ref());
+                self.table_state.ensure_indices(
+                    &file_data.terms,
+                    &file_data.sentences,
+                    freq_manager,
+                );
+            }
             self.save_settings();
         }
 
         if let Some(language_tools) = &self.language_tools {
-            let ignore_list_changed = self.ignore_list_modal.show(ctx, &language_tools.ignore_list);
+            let ignore_list_changed =
+                self.modals.ignore_list.show(ctx, &language_tools.ignore_list);
             if ignore_list_changed {
                 self.partial_refresh();
             }
@@ -372,25 +372,27 @@ impl YomineApp {
     fn process_source_file(&mut self, source_file: SourceFile) {
         println!("Processing file: {}", source_file.original_file);
 
-        self.current_source_file = Some(source_file.clone());
+        let processing_filename = std::path::Path::new(&source_file.original_file)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("Unknown file")
+            .to_string();
 
-        self.current_processing_file = Some(
-            std::path::Path::new(&source_file.original_file)
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or("Unknown file")
-                .to_string(),
-        );
+        // Create FileData with source info and placeholders for processing results
+        self.file_data = Some(FileData {
+            source_file: source_file.clone(),
+            processing_filename: Some(processing_filename),
+            terms: Vec::new(),
+            original_terms: Vec::new(),
+            anki_filtered_terms: Default::default(),
+            sentences: Vec::new(),
+            file_comprehension: 0.0,
+        });
 
         if let Some(language_tools) = &self.language_tools {
             self.message_overlay.set_message("Processing file...".to_string());
-            let source_file_clone = source_file.clone();
-            let model_mapping = self.model_mapping.clone();
-            self.task_manager.process_file(
-                source_file_clone,
-                model_mapping,
-                language_tools.clone(),
-            );
+            let model_mapping = self.settings_data.anki_model_mappings.clone();
+            self.task_manager.process_file(source_file, model_mapping, language_tools.clone());
         } else {
             println!("Language tools not loaded yet!");
         }
@@ -399,7 +401,10 @@ impl YomineApp {
     fn handle_task_result(&mut self, result: TaskResult, _ctx: &egui::Context) {
         match result {
             TaskResult::LanguageToolsLoaded(result) => match result {
-                Ok(language_tools) => {
+                Ok(mut language_tools) => {
+                    // Update known_interval from settings
+                    language_tools.known_interval = self.settings_data.anki_interval;
+
                     self.language_tools = Some(language_tools);
                     self.message_overlay.clear_message();
                     if let Some(manager) =
@@ -422,16 +427,38 @@ impl YomineApp {
             TaskResult::TermsRefreshed(result) => {
                 self.message_overlay.clear_message();
                 match result {
-                    Ok(filter_result) => {
-                        self.anki_filtered_terms = filter_result.anki_filtered;
-                        self.terms = filter_result.terms;
-                        self.table_state.configure_bounds(&self.terms);
-                        let freq_manager =
-                            self.language_tools.as_ref().map(|lt| lt.frequency_manager.as_ref());
-                        self.table_state.ensure_indices(&self.terms, &self.sentences, freq_manager);
+                    Ok((filter_result, sentences, file_comprehension)) => {
+                        if let Some(file_data) = &mut self.file_data {
+                            // Reconstruct original_terms from all three sets
+                            let mut base_terms = Vec::new();
+                            base_terms.extend(filter_result.terms.iter().cloned());
+                            base_terms.extend(filter_result.anki_filtered.iter().cloned());
+                            base_terms.extend(filter_result.ignore_filtered.iter().cloned());
+
+                            file_data.original_terms = base_terms;
+                            file_data.anki_filtered_terms = filter_result
+                                .anki_filtered
+                                .iter()
+                                .map(|t| t.lemma_form.clone())
+                                .collect();
+                            file_data.terms = filter_result.terms;
+                            file_data.sentences = sentences;
+                            file_data.file_comprehension = file_comprehension;
+
+                            self.table_state.configure_bounds(&file_data.terms);
+                            let freq_manager = self
+                                .language_tools
+                                .as_ref()
+                                .map(|lt| lt.frequency_manager.as_ref());
+                            self.table_state.ensure_indices(
+                                &file_data.terms,
+                                &file_data.sentences,
+                                freq_manager,
+                            );
+                        }
                     }
                     Err(error_msg) => {
-                        self.error_modal.show_error(
+                        self.modals.error.show_error(
                             "Refresh Error".to_string(),
                             "Unable to refresh terms".to_string().as_str(),
                             Some(&error_msg),
@@ -448,14 +475,17 @@ impl YomineApp {
                 self.anki_connected = connected;
             }
             TaskResult::RequestRefresh => {
-                if !self.original_terms.is_empty() {
-                    if let Some(language_tools) = self.language_tools.clone() {
-                        self.message_overlay.set_message("Refreshing terms...".to_string());
-                        self.task_manager.refresh_terms(
-                            self.original_terms.clone(),
-                            self.model_mapping.clone(),
-                            language_tools,
-                        );
+                if let Some(file_data) = &self.file_data {
+                    if !file_data.original_terms.is_empty() {
+                        if let Some(language_tools) = self.language_tools.clone() {
+                            self.message_overlay.set_message("Refreshing terms...".to_string());
+                            self.task_manager.refresh_terms(
+                                file_data.original_terms.clone(),
+                                file_data.sentences.clone(),
+                                self.settings_data.anki_model_mappings.clone(),
+                                language_tools,
+                            );
+                        }
                     }
                 }
             }
@@ -468,28 +498,30 @@ impl YomineApp {
 
     pub fn partial_refresh(&mut self) {
         // Apply ignore list + cached Anki filter (no Anki connection)
-        if let Some(language_tools) = &self.language_tools {
-            // Use async block since apply_filters is async, but won't actually await anything
-            // because we're passing cached Anki terms
-            let rt = tokio::runtime::Runtime::new().unwrap();
-            match rt.block_on(crate::core::pipeline::apply_filters(
-                self.original_terms.clone(),
-                language_tools,
-                None,
-                Some(&self.anki_filtered_terms),
-            )) {
-                Ok(filter_result) => {
-                    self.terms = filter_result.terms;
-                    self.table_state.configure_bounds(&self.terms);
-                    let freq_manager = language_tools.frequency_manager.as_ref();
-                    self.table_state.ensure_indices(
-                        &self.terms,
-                        &self.sentences,
-                        Some(freq_manager),
-                    );
-                }
-                Err(e) => {
-                    eprintln!("Failed to reapply filters: {}", e);
+        if let Some(file_data) = &mut self.file_data {
+            if let Some(language_tools) = &self.language_tools {
+                // Use async block since apply_filters is async, but won't actually await anything
+                // because we're passing cached Anki terms
+                let rt = tokio::runtime::Runtime::new().unwrap();
+                match rt.block_on(crate::core::pipeline::apply_filters(
+                    file_data.original_terms.clone(),
+                    language_tools,
+                    None,
+                    Some(&file_data.anki_filtered_terms),
+                )) {
+                    Ok(filter_result) => {
+                        file_data.terms = filter_result.terms;
+                        self.table_state.configure_bounds(&file_data.terms);
+                        let freq_manager = language_tools.frequency_manager.as_ref();
+                        self.table_state.ensure_indices(
+                            &file_data.terms,
+                            &file_data.sentences,
+                            Some(freq_manager),
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to reapply filters: {}", e);
+                    }
                 }
             }
         }
@@ -497,52 +529,87 @@ impl YomineApp {
 
     fn handle_processing_result(
         &mut self,
-        result: Result<(Vec<Term>, crate::core::pipeline::FilterResult, Vec<Sentence>), String>,
+        result: Result<
+            (Vec<Term>, crate::core::pipeline::FilterResult, Vec<Sentence>, f32),
+            String,
+        >,
     ) {
         self.message_overlay.clear_message();
-        let filename = self.current_processing_file.as_deref().unwrap_or("the selected file");
 
         match result {
-            Ok((base_terms, filter_result, new_sentences)) => {
-                self.original_terms = base_terms;
+            Ok((base_terms, filter_result, new_sentences, file_comprehension)) => {
+                // Create FileData with all file-related state
+                let source_file = self
+                    .file_data
+                    .as_ref()
+                    .and_then(|fd| Some(fd.source_file.clone()))
+                    .unwrap_or_else(|| {
+                        // Fallback: shouldn't happen, but handle gracefully
+                        crate::core::SourceFile {
+                            id: 0,
+                            source: None,
+                            original_file: "Unknown".to_string(),
+                            title: "Unknown".to_string(),
+                            creator: None,
+                            file_type: crate::core::models::SourceFileType::Other(
+                                "Unknown".to_string(),
+                            ),
+                        }
+                    });
 
-                self.anki_filtered_terms = filter_result.anki_filtered;
-                self.terms = filter_result.terms;
-                self.sentences = new_sentences;
+                let file_data = FileData {
+                    source_file: source_file.clone(),
+                    processing_filename: None,
+                    terms: filter_result.terms,
+                    original_terms: base_terms,
+                    anki_filtered_terms: filter_result
+                        .anki_filtered
+                        .iter()
+                        .map(|t| t.lemma_form.clone())
+                        .collect(),
+                    sentences: new_sentences,
+                    file_comprehension,
+                };
+
                 self.table_state.reset();
-                self.table_state.configure_bounds(&self.terms);
+                self.table_state.configure_bounds(&file_data.terms);
 
                 // Reapply POS filter settings after reset
                 self.table_state.apply_pos_settings(&self.settings_data.pos_filters);
 
                 let freq_manager =
                     self.language_tools.as_ref().map(|lt| lt.frequency_manager.as_ref());
-                self.table_state.ensure_indices(&self.terms, &self.sentences, freq_manager);
+                self.table_state.ensure_indices(
+                    &file_data.terms,
+                    &file_data.sentences,
+                    freq_manager,
+                );
 
-                if let Some(source_file) = &self.current_source_file {
-                    self.file_modal.add_recent_file(
-                        source_file.original_file.clone(),
-                        source_file.title.clone(),
-                        source_file.creator.clone(),
-                        self.terms.len(),
-                    );
-                }
+                self.modals.file.add_recent_file(
+                    source_file.original_file.clone(),
+                    source_file.title.clone(),
+                    source_file.creator.clone(),
+                    file_data.terms.len(),
+                );
+
+                self.file_data = Some(file_data);
             }
             Err(error_msg) => {
-                self.error_modal.show_error(
+                let filename = self
+                    .file_data
+                    .as_ref()
+                    .and_then(|fd| fd.processing_filename.as_deref())
+                    .unwrap_or("the selected file");
+
+                self.modals.error.show_error(
                     "File Load Error".to_string(),
                     &format!("Unable to load file: {}", filename),
                     Some(&error_msg),
                 );
-                self.terms = Vec::new();
-                self.original_terms.clear();
-                self.sentences = Vec::new();
-                self.current_source_file = None;
+                self.file_data = None;
                 self.table_state.reset();
             }
         }
-
-        self.current_processing_file = None;
     }
 
     fn update_anki_status(&mut self) {
@@ -612,7 +679,7 @@ impl YomineApp {
             let source_file =
                 FileModal::create_source_file_from_path_and_metadata(path, None, None);
 
-            self.file_modal.close();
+            self.modals.file.close();
             self.process_source_file(source_file);
         }
     }

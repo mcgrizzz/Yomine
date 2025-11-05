@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use eframe::egui;
+use eframe::egui::{
+    self,
+    RichText,
+};
 
 use super::{
     anki_service::AnkiService,
@@ -37,6 +40,7 @@ impl Default for SettingsModalData {
 impl SettingsModalData {
     pub fn is_dirty(&self) -> bool {
         self.temp_model_mappings != self.original_settings.anki_model_mappings
+            || self.settings.anki_interval != self.original_settings.anki_interval
     }
 }
 
@@ -102,6 +106,9 @@ impl AnkiSettingsModal {
 
         let modal = egui::Modal::new(egui::Id::new("anki_settings_modal")).show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
+                ui_known_interval_setting(ui, &mut self.data);
+                ui.separator();
+
                 ui_existing_mappings(ui, &mut self.data, &mut model_editor);
                 ui.separator();
 
@@ -291,4 +298,31 @@ fn ui_mapping_editor(
             }
         }
     });
+}
+
+fn ui_known_interval_setting(ui: &mut egui::Ui, data: &mut SettingsModalData) {
+    ui.horizontal(|ui| {
+        ui.heading("Known Interval Threshold");
+        ui.label(RichText::new("ℹ").color(ui.visuals().weak_text_color()).size(12.0))
+            .on_hover_text(
+                "Cards with an interval at or above this threshold will be considered 'known' \
+             for comprehensibility estimation.",
+            );
+    });
+    ui.add_space(5.0);
+
+    ui.horizontal(|ui| {
+        ui.label("Interval:");
+
+        ui.add(
+            egui::DragValue::new(&mut data.settings.anki_interval)
+                .speed(1.0)
+                .range(1..=365)
+                .suffix(" days"),
+        );
+
+        ui.label("(Default: 30 days)");
+    });
+
+    ui.add_space(5.0);
 }

@@ -20,6 +20,7 @@ use crate::{
             FilterResult,
         },
         IgnoreList,
+        Sentence,
         SourceFile,
         Term,
     },
@@ -107,6 +108,7 @@ impl TaskManager {
                     tokenizer,
                     frequency_manager,
                     ignore_list,
+                    known_interval: 0, // Will be set from settings after loading
                 })
             });
 
@@ -147,17 +149,45 @@ impl TaskManager {
     pub fn refresh_terms(
         &self,
         base_terms: Vec<Term>,
+        mut sentences: Vec<Sentence>,
         model_mapping: HashMap<String, FieldMapping>,
         language_tools: LanguageTools,
     ) {
         let (sender, runtime) = self.task_context();
 
         thread::spawn(move || {
-            let result: Result<FilterResult, String> = runtime.block_on(async {
-                apply_filters(base_terms, &language_tools, Some(model_mapping), None)
-                    .await
-                    .map_err(|e| e.to_string())
-            });
+            let result: Result<(FilterResult, Vec<Sentence>, f32), String> =
+                runtime.block_on(async {
+                    let filter_result =
+                        apply_filters(base_terms, &language_tools, Some(model_mapping), None)
+                            .await
+                            .map_err(|e| e.to_string())?;
+
+                    // Reconstruct all terms from filter result
+                    let mut all_terms = Vec::new();
+                    all_terms.extend(filter_result.terms.iter().cloned());
+                    all_terms.extend(filter_result.anki_filtered.iter().cloned());
+                    all_terms.extend(filter_result.ignore_filtered.iter().cloned());
+
+                    // Recalculate sentence comprehension
+                    {
+                        use crate::anki::comprehensibility::calculate_sentence_comprehension;
+                        for sentence in &mut sentences {
+                            calculate_sentence_comprehension(sentence, &all_terms);
+                        }
+                    }
+
+                    // Calculate and print overall comprehension
+                    let avg_comprehension = if !sentences.is_empty() {
+                        sentences.iter().map(|s| s.comprehension).sum::<f32>()
+                            / sentences.len() as f32
+                    } else {
+                        0.0
+                    };
+                    println!("Overall comprehension (refresh): {:.1}%", avg_comprehension * 100.0);
+
+                    Ok((filter_result, sentences, avg_comprehension))
+                });
 
             let _ = sender.send(TaskResult::TermsRefreshed(result));
         });

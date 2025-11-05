@@ -1,5 +1,10 @@
+use std::collections::HashMap;
+
 use crate::{
-    core::Term,
+    core::{
+        Sentence,
+        Term,
+    },
     dictionary::frequency_manager::FrequencyManager,
 };
 
@@ -8,6 +13,7 @@ pub enum SortField {
     Frequency,
     Chronological,
     SentenceCount,
+    SentenceComprehension,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -39,7 +45,9 @@ impl SortState {
     pub fn default_direction(field: SortField) -> SortDirection {
         match field {
             SortField::Frequency | SortField::Chronological => SortDirection::Ascending,
-            SortField::SentenceCount => SortDirection::Descending,
+            SortField::SentenceCount | SortField::SentenceComprehension => {
+                SortDirection::Descending
+            }
         }
     }
 
@@ -66,6 +74,7 @@ impl Default for SortState {
 pub enum SentenceSortMode {
     Time,
     Count,
+    Comprehension,
 }
 
 impl Default for SentenceSortMode {
@@ -80,6 +89,8 @@ pub fn sort_indices(
     field: SortField,
     direction: SortDirection,
     frequency_manager: Option<&FrequencyManager>,
+    sentences: &[Sentence],
+    sentence_indices: &HashMap<usize, usize>,
 ) {
     indices.sort_unstable_by(|&lhs, &rhs| {
         let left = &terms[lhs];
@@ -111,6 +122,13 @@ pub fn sort_indices(
                 let right_count = right.sentence_references.len();
                 left_count.cmp(&right_count)
             }
+            SortField::SentenceComprehension => {
+                let left_comp = get_sentence_comprehension(lhs, left, sentences, sentence_indices);
+                let right_comp =
+                    get_sentence_comprehension(rhs, right, sentences, sentence_indices);
+
+                left_comp.partial_cmp(&right_comp).unwrap_or(std::cmp::Ordering::Equal)
+            }
         };
 
         match direction {
@@ -118,6 +136,27 @@ pub fn sort_indices(
             SortDirection::Descending => ordering.reverse(),
         }
     });
+}
+
+fn get_sentence_comprehension(
+    term_index: usize,
+    term: &Term,
+    sentences: &[Sentence],
+    sentence_indices: &HashMap<usize, usize>,
+) -> f32 {
+    if term.sentence_references.is_empty() {
+        return 0.0;
+    }
+
+    let sentence_idx = sentence_indices.get(&term_index).copied().unwrap_or(0);
+
+    if let Some(sentence_ref) = term.sentence_references.get(sentence_idx) {
+        if let Some(sentence) = sentences.get(sentence_ref.0) {
+            return sentence.comprehension;
+        }
+    }
+
+    0.0
 }
 
 pub fn weighted_frequency(term: &Term, frequency_manager: Option<&FrequencyManager>) -> u32 {
