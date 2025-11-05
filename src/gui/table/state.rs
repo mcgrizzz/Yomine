@@ -74,6 +74,7 @@ impl TableState {
         let current = self.get_sentence_index(term_index);
         let next = (current + 1) % total_sentences;
         self.sentence_indices.insert(term_index, next);
+        self.cached_row_heights.clear(); // Invalidate cache when sentence changes
     }
 
     pub fn prev_sentence(&mut self, term_index: usize, total_sentences: usize) {
@@ -83,6 +84,7 @@ impl TableState {
         let current = self.get_sentence_index(term_index);
         let next = if current == 0 { total_sentences - 1 } else { current - 1 };
         self.sentence_indices.insert(term_index, next);
+        self.cached_row_heights.clear(); // Invalidate cache when sentence changes
     }
 
     pub fn reset(&mut self) {
