@@ -13,6 +13,8 @@ use wana_kana::ConvertJapanese;
 
 use super::{
     theme::blend_colors,
+    ActionQueue,
+    UiAction,
     YomineApp,
 };
 use crate::core::Term;
@@ -22,7 +24,7 @@ mod header;
 mod search;
 mod sentence_column;
 mod sentence_widget;
-mod sort;
+pub mod sort;
 mod state;
 
 use header::{
@@ -30,9 +32,15 @@ use header::{
     ui_header_cols,
 };
 use sentence_column::ui_col_sentence;
+pub use sort::{
+    SortDirection,
+    SortField,
+};
 pub use state::TableState;
 
 pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
+    let mut actions = ActionQueue::new();
+
     egui::CentralPanel::default().show(ctx, |ui| {
         let has_file_data = app.file_data.as_ref().map_or(false, |fd| fd.has_terms());
 
@@ -107,7 +115,7 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
             }
 
             app.table_state.sync_frequency_states(freq_manager);
-            ui_controls_row(ui, app);
+            ui_controls_row(ui, app, &mut actions);
             ui.add_space(10.0);
 
             egui::ScrollArea::vertical().show(ui, |ui| {
@@ -149,26 +157,94 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
                     .column(Column::auto().at_least(90.0))
                     .column(Column::auto().at_least(90.0))
                     .header(25.0, |header| {
-                        ui_header_cols(ctx, header, app);
+                        ui_header_cols(ctx, header, app, &mut actions);
                     })
                     .body(|body| {
+                        let file_data = app.file_data.as_ref().unwrap();
+                        let terms = &file_data.terms;
+
                         body.heterogeneous_rows(row_heights.iter().copied(), |mut row| {
                             let term_index = visible_indices[row.index()];
-                            // Access file_data to get the term - this is per-row, not per-frame
-                            let term = app.file_data.as_ref().unwrap().terms[term_index].clone();
+                            let term = &terms[term_index];
 
-                            ui_col_term(ctx, &mut row, &term, app);
-                            ui_col_sentence(ctx, &mut row, &term, app, term_index);
-                            ui_col_frequency(ctx, &mut row, &term, app);
-                            ui_col_pos(ctx, &mut row, &term, app);
+                            ui_col_term(ctx, &mut row, term, app, &mut actions);
+                            ui_col_sentence(ctx, &mut row, term, app, term_index, &mut actions);
+                            ui_col_frequency(ctx, &mut row, term, app);
+                            ui_col_pos(ctx, &mut row, term, app);
                         });
                     });
             });
         }
     });
+
+    // Execute all queued actions and repaint if needed
+    let had_actions = !actions.is_empty();
+    execute_actions(app, &mut actions);
+
+    if had_actions {
+        ctx.request_repaint();
+    }
 }
 
-fn ui_col_term(ctx: &egui::Context, row: &mut egui_extras::TableRow, term: &Term, app: &YomineApp) {
+fn execute_actions(app: &mut YomineApp, actions: &mut ActionQueue) {
+    for action in actions.drain() {
+        match action {
+            UiAction::SetSort { field, direction } => {
+                app.table_state.set_sort(field, direction);
+            }
+            UiAction::NextSentence { term_index, total_sentences } => {
+                app.table_state.next_sentence(term_index, total_sentences);
+            }
+            UiAction::PrevSentence { term_index, total_sentences } => {
+                app.table_state.prev_sentence(term_index, total_sentences);
+            }
+            UiAction::SetFrequencyRange { min, max } => {
+                app.table_state.set_frequency_range(min, max);
+            }
+            UiAction::SetIncludeUnknown(include) => {
+                app.table_state.set_include_unknown(include);
+            }
+            UiAction::SetSearch(search) => {
+                app.table_state.set_search(search);
+            }
+            UiAction::OpenPosFilters => {
+                app.modals.pos_filters.open_modal(app.table_state.pos_snapshot());
+            }
+            UiAction::OpenFrequencyWeights => {
+                let freq_manager =
+                    app.language_tools.as_ref().map(|tools| tools.frequency_manager.as_ref());
+                app.modals.frequency_weights.open_modal(&app.settings_data, freq_manager);
+            }
+            UiAction::AddToIgnoreList(term) => {
+                if let Some(ref language_tools) = app.language_tools {
+                    if let Ok(mut ignore_list) = language_tools.ignore_list.lock() {
+                        let _ = ignore_list.add_term(&term);
+                    }
+                }
+            }
+            UiAction::RemoveFromIgnoreList(term) => {
+                if let Some(ref language_tools) = app.language_tools {
+                    if let Ok(mut ignore_list) = language_tools.ignore_list.lock() {
+                        let _ = ignore_list.remove_term(&term);
+                    }
+                }
+            }
+            UiAction::SeekTimestamp { seconds, label } => {
+                if let Err(e) = app.player.seek_timestamp(seconds, &label) {
+                    eprintln!("Failed to seek timestamp: {}", e);
+                }
+            }
+        }
+    }
+}
+
+fn ui_col_term(
+    ctx: &egui::Context,
+    row: &mut egui_extras::TableRow,
+    term: &Term,
+    app: &YomineApp,
+    actions: &mut ActionQueue,
+) {
     row.col(|ui| {
         ui_col_lines(ui, ctx, app);
 
@@ -208,22 +284,14 @@ fn ui_col_term(ctx: &egui::Context, row: &mut egui_extras::TableRow, term: &Term
             });
 
         response.context_menu(|ui| {
-            if let Some(ref language_tools) = app.language_tools {
+            if app.language_tools.is_some() {
                 if ignore_status {
                     if ui.button("Remove from ignore list").clicked() {
-                        if let Ok(mut ignore_list) = language_tools.ignore_list.lock() {
-                            if let Err(e) = ignore_list.remove_term(&term.lemma_form) {
-                                eprintln!("Failed to remove term from ignore list: {}", e);
-                            }
-                        }
+                        actions.push(UiAction::RemoveFromIgnoreList(term.lemma_form.clone()));
                         ui.close();
                     }
                 } else if ui.button("Add to ignore list").clicked() {
-                    if let Ok(mut ignore_list) = language_tools.ignore_list.lock() {
-                        if let Err(e) = ignore_list.add_term(&term.lemma_form) {
-                            eprintln!("Failed to add term to ignore list: {}", e);
-                        }
-                    }
+                    actions.push(UiAction::AddToIgnoreList(term.lemma_form.clone()));
                     ui.close();
                 }
             } else {

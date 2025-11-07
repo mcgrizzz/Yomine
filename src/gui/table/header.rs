@@ -20,20 +20,29 @@ use super::{
         SortState,
     },
 };
-use crate::gui::YomineApp;
+use crate::gui::{
+    ActionQueue,
+    UiAction,
+    YomineApp,
+};
 
-pub fn ui_header_cols(_ctx: &egui::Context, mut header: TableRow<'_, '_>, app: &mut YomineApp) {
+pub fn ui_header_cols(
+    _ctx: &egui::Context,
+    mut header: TableRow<'_, '_>,
+    app: &YomineApp,
+    actions: &mut ActionQueue,
+) {
     header.col(|ui| {
         ui.style_mut().interaction.selectable_labels = false;
         ui.label(app.theme.heading(ui.ctx(), "Term"));
     });
     header.col(|ui| {
         ui.style_mut().interaction.selectable_labels = false;
-        ui_column_header_sentence(ui, app);
+        ui_column_header_sentence(ui, app, actions);
     });
     header.col(|ui| {
         ui.style_mut().interaction.selectable_labels = false;
-        ui_column_header_frequency(ui, app);
+        ui_column_header_frequency(ui, app, actions);
     });
     header.col(|ui| {
         ui.style_mut().interaction.selectable_labels = false;
@@ -44,15 +53,15 @@ pub fn ui_header_cols(_ctx: &egui::Context, mut header: TableRow<'_, '_>, app: &
                 .on_hover_cursor(egui::CursorIcon::PointingHand);
 
             if settings_button.clicked() {
-                app.modals.pos_filters.open_modal(app.table_state.pos_snapshot());
+                actions.push(UiAction::OpenPosFilters);
             }
 
-            ui_column_header(ui, app, "POS", None);
+            ui_column_header(ui, app, "POS", None, actions);
         });
     });
 }
 
-pub fn ui_controls_row(ui: &mut Ui, app: &mut YomineApp) {
+pub fn ui_controls_row(ui: &mut Ui, app: &YomineApp, actions: &mut ActionQueue) {
     let filter = app.table_state.frequency_filter();
     let mut search = app.table_state.search().to_string();
     let control_width = 350.0;
@@ -70,7 +79,7 @@ pub fn ui_controls_row(ui: &mut Ui, app: &mut YomineApp) {
                         TextEdit::singleline(&mut search).hint_text("Search terms or sentences..."),
                     );
                     if response.changed() {
-                        app.table_state.set_search(search);
+                        actions.push(UiAction::SetSearch(search.clone()));
                     }
                 });
 
@@ -80,12 +89,12 @@ pub fn ui_controls_row(ui: &mut Ui, app: &mut YomineApp) {
 
                     // Frequency Range label with controls
                     ui.horizontal(|ui| {
-                        ui_frequency_range_controls(ui, filter, app);
+                        ui_frequency_range_controls(ui, filter, app, actions);
                     });
 
                     // Slider below
                     ui.horizontal(|ui| {
-                        ui_frequency_range_slider(ui, filter, app, control_width);
+                        ui_frequency_range_slider(ui, filter, app, control_width, actions);
                     });
                 });
             });
@@ -207,7 +216,13 @@ pub fn ui_controls_row(ui: &mut Ui, app: &mut YomineApp) {
     });
 }
 
-fn ui_column_header(ui: &mut Ui, app: &mut YomineApp, title: &str, sort_field: Option<SortField>) {
+fn ui_column_header(
+    ui: &mut Ui,
+    app: &YomineApp,
+    title: &str,
+    sort_field: Option<SortField>,
+    actions: &mut ActionQueue,
+) {
     if let Some(field) = sort_field {
         let sort_state = app.table_state.sort_state();
         let is_active = matches!(sort_state.field, Some(current) if current == field);
@@ -239,7 +254,12 @@ fn ui_column_header(ui: &mut Ui, app: &mut YomineApp, title: &str, sort_field: O
             });
 
             if response.clicked() {
-                toggle_sort_field(app, field, sort_state);
+                let direction = if sort_state.field == Some(field) {
+                    sort_state.direction.reversed()
+                } else {
+                    SortState::default_direction(field)
+                };
+                actions.push(UiAction::SetSort { field, direction });
             }
 
             if let Some(arrow) = sort_arrow_text(ui, sort_state, field, response.hovered(), app) {
@@ -249,7 +269,7 @@ fn ui_column_header(ui: &mut Ui, app: &mut YomineApp, title: &str, sort_field: O
 
                 if arrow_response.clicked() && is_active {
                     let new_direction = sort_state.direction.reversed();
-                    app.table_state.set_sort(field, new_direction);
+                    actions.push(UiAction::SetSort { field, direction: new_direction });
                 }
             }
         });
@@ -266,7 +286,7 @@ fn draw_column_highlight(ui: &mut Ui, app: &YomineApp) {
     ui.painter().rect_filled(rect, 3.0, bg_color);
 }
 
-fn ui_column_header_frequency(ui: &mut Ui, app: &mut YomineApp) {
+fn ui_column_header_frequency(ui: &mut Ui, app: &YomineApp, actions: &mut ActionQueue) {
     let sort_state = app.table_state.sort_state();
     let is_active = matches!(sort_state.field, Some(SortField::Frequency));
 
@@ -281,16 +301,14 @@ fn ui_column_header_frequency(ui: &mut Ui, app: &mut YomineApp) {
             .on_hover_cursor(egui::CursorIcon::PointingHand);
 
         if settings_button.clicked() {
-            let frequency_manager =
-                app.language_tools.as_ref().map(|tools| tools.frequency_manager.as_ref());
-            app.modals.frequency_weights.open_modal(&app.settings_data, frequency_manager);
+            actions.push(UiAction::OpenFrequencyWeights);
         }
 
-        ui_column_header(ui, app, "Frequency", Some(SortField::Frequency));
+        ui_column_header(ui, app, "Frequency", Some(SortField::Frequency), actions);
     });
 }
 
-fn ui_column_header_sentence(ui: &mut Ui, app: &mut YomineApp) {
+fn ui_column_header_sentence(ui: &mut Ui, app: &YomineApp, actions: &mut ActionQueue) {
     let sort_state = app.table_state.sort_state();
 
     let is_chronological = matches!(sort_state.field, Some(SortField::Chronological));
@@ -341,9 +359,12 @@ fn ui_column_header_sentence(ui: &mut Ui, app: &mut YomineApp) {
         if response.clicked() {
             if is_active {
                 let new_direction = sort_state.direction.reversed();
-                app.table_state.set_sort(current_field, new_direction);
+                actions.push(UiAction::SetSort { field: current_field, direction: new_direction });
             } else {
-                app.table_state.set_sort(SortField::Chronological, SortDirection::Ascending);
+                actions.push(UiAction::SetSort {
+                    field: SortField::Chronological,
+                    direction: SortDirection::Ascending,
+                });
             }
         }
 
@@ -355,7 +376,7 @@ fn ui_column_header_sentence(ui: &mut Ui, app: &mut YomineApp) {
 
             if arrow_response.clicked() && is_active {
                 let new_direction = sort_state.direction.reversed();
-                app.table_state.set_sort(current_field, new_direction);
+                actions.push(UiAction::SetSort { field: current_field, direction: new_direction });
             }
         }
 
@@ -381,13 +402,19 @@ fn ui_column_header_sentence(ui: &mut Ui, app: &mut YomineApp) {
                 } else {
                     SortField::Chronological
                 };
-                app.table_state.set_sort(next_field, sort_state.direction);
+                actions
+                    .push(UiAction::SetSort { field: next_field, direction: sort_state.direction });
             }
         }
     });
 }
 
-fn ui_frequency_range_controls(ui: &mut Ui, filter: FrequencyFilter, app: &mut YomineApp) {
+fn ui_frequency_range_controls(
+    ui: &mut Ui,
+    filter: FrequencyFilter,
+    _app: &YomineApp,
+    actions: &mut ActionQueue,
+) {
     if filter.max_bound <= filter.min_bound {
         ui.label(RichText::new("No frequency data available").text_style(TextStyle::Small));
         return;
@@ -420,7 +447,10 @@ fn ui_frequency_range_controls(ui: &mut Ui, filter: FrequencyFilter, app: &mut Y
         if min_value > max_value {
             max_value = min_value;
         }
-        app.table_state.set_frequency_range(min_value.round() as u32, max_value.round() as u32);
+        actions.push(UiAction::SetFrequencyRange {
+            min: min_value.round() as u32,
+            max: max_value.round() as u32,
+        });
     }
 
     ui.label(RichText::new("Max").text_style(TextStyle::Small));
@@ -434,7 +464,10 @@ fn ui_frequency_range_controls(ui: &mut Ui, filter: FrequencyFilter, app: &mut Y
         .changed()
     {
         max_value = max_value.clamp(min_value, max_bound);
-        app.table_state.set_frequency_range(min_value.round() as u32, max_value.round() as u32);
+        actions.push(UiAction::SetFrequencyRange {
+            min: min_value.round() as u32,
+            max: max_value.round() as u32,
+        });
     }
 
     // Include unknown checkbox with compact label
@@ -444,15 +477,16 @@ fn ui_frequency_range_controls(ui: &mut Ui, filter: FrequencyFilter, app: &mut Y
         .on_hover_text("Include entries without frequency data")
         .changed()
     {
-        app.table_state.set_include_unknown(include_unknown);
+        actions.push(UiAction::SetIncludeUnknown(include_unknown));
     }
 }
 
 fn ui_frequency_range_slider(
     ui: &mut Ui,
     filter: FrequencyFilter,
-    app: &mut YomineApp,
+    _app: &YomineApp,
     width: f32,
+    actions: &mut ActionQueue,
 ) {
     if filter.max_bound <= filter.min_bound {
         return;
@@ -473,17 +507,7 @@ fn ui_frequency_range_slider(
     {
         let display_min = min_value.round() as u32;
         let display_max = max_value.round() as u32;
-        app.table_state.set_frequency_range(display_min, display_max);
-    }
-}
-
-fn toggle_sort_field(app: &mut YomineApp, field: SortField, current: SortState) {
-    if current.field == Some(field) {
-        let next_direction = current.direction.reversed();
-        app.table_state.set_sort(field, next_direction);
-    } else {
-        let default_dir = SortState::default_direction(field);
-        app.table_state.set_sort(field, default_dir);
+        actions.push(UiAction::SetFrequencyRange { min: display_min, max: display_max });
     }
 }
 

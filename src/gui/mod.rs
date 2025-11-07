@@ -1,3 +1,4 @@
+pub mod actions;
 pub mod app;
 pub mod error_modal;
 pub mod file_modal;
@@ -10,6 +11,10 @@ pub mod theme;
 pub mod top_bar;
 pub mod websocket_manager;
 
+pub use actions::{
+    ActionQueue,
+    UiAction,
+};
 pub use app::{
     LanguageTools,
     YomineApp,

@@ -8,7 +8,7 @@ use crate::{
     dictionary::frequency_manager::FrequencyManager,
 };
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SortField {
     Frequency,
     Chronological,
@@ -16,7 +16,7 @@ pub enum SortField {
     SentenceComprehension,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SortDirection {
     Ascending,
     Descending,

@@ -45,12 +45,17 @@ That's it! Yomine will segment the text, rank terms by frequency, and show you v
 ## Features
 
 - **Vocabulary extraction** from Japanese subtitle files (words and expressions)
-- **Frequency-based ranking** to prioritize terms  
+- **Frequency-based ranking** to prioritize terms
 - **Anki integration** to filter out words you already know
 - **Video player integration** (ASBPlayer and MPV) for timestamp navigation
 - **Term analysis** with readings, part-of-speech, and context sentences
 - **Multi-sentence browsing** to see multiple example sentences per term
 - **Ignore list** to hide unwanted terms from your mining results
+- **Comprehensibility scoring** - Sentence difficulty estimation based on your Anki card intervals
+- **Advanced filtering** - Filter vocabulary by part-of-speech and frequency ranges
+- **Dictionary weighting** - Customize which frequency sources are prioritized
+- **Sorting and searching** - Sort by frequency, chronological order, sentence count, or comprehension level; search for specific terms
+- **Multiple subtitle formats** - Supports SRT, ASS, and SSA subtitle files
 
 ## Installation
 
@@ -153,17 +158,17 @@ The ignore list lets you hide terms you don't want to see from your mining resul
 ## **Roadmap**
 
 ### Completed
-- [x] **Anki Integration Customization** 
+- [x] **Anki Integration Customization**
 - [x] **Prebuilt Binaries**
 - [x] **Multi-Sentence Browsing** - View multiple example sentences per term
 - [x] **Ignore List** - Hide unwanted terms from mining results
+- [x] **Comprehensibility Scoring** - Sentence difficulty estimation based on Anki intervals
+- [x] **Advanced Filtering** - Filter by part-of-speech and frequency ranges
 
 ### Planned
 - [ ] **Improved Segmentation**: Better text parsing and part-of-speech tagging
 - [ ] **More File Types**: Support for eBooks, web pages, etc.
-- [ ] **Comprehensibility Estimation**: Sentence and file-level difficulty scoring
 - [ ] **Custom Frequency Lists**: Generate dictionaries from your own content
-- [ ] **Advanced Filtering**: Filter by part-of-speech, frequency ranges, n+1 sentences
 
 ## FAQ
 

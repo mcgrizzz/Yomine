@@ -15,7 +15,11 @@ use crate::{
         models::TimeStamp,
         Term,
     },
-    gui::YomineApp,
+    gui::{
+        ActionQueue,
+        UiAction,
+        YomineApp,
+    },
 };
 
 //const ROW_HEIGHT: f32 = 54.0;
@@ -26,8 +30,9 @@ pub(crate) fn ui_col_sentence(
     ctx: &Context,
     row: &mut TableRow,
     term: &Term,
-    app: &mut YomineApp,
+    app: &YomineApp,
     term_index: usize,
+    actions: &mut ActionQueue,
 ) {
     row.col(|ui| {
         super::ui_col_lines(ui, ctx, app);
@@ -45,15 +50,21 @@ pub(crate) fn ui_col_sentence(
 
             ui.horizontal(|ui| {
                 //TODO: Nice layout where sentence nav is below sentence content in the row.
-                ui_sentence_navigation(ui, term, term_index, app);
-                ui_timestamp(ui, term, app, term_index);
+                ui_sentence_navigation(ui, term, term_index, app, actions);
+                ui_timestamp(ui, term, app, term_index, actions);
                 ui_sentence_comprehension(ui, term, app, term_index);
             });
         });
     });
 }
 
-fn ui_timestamp(ui: &mut Ui, term: &Term, app: &YomineApp, term_index: usize) {
+fn ui_timestamp(
+    ui: &mut Ui,
+    term: &Term,
+    app: &YomineApp,
+    term_index: usize,
+    actions: &mut ActionQueue,
+) {
     let sentence_idx = app.table_state.get_sentence_index(term_index);
     let sentence_ref = &term.sentence_references[sentence_idx];
 
@@ -66,7 +77,7 @@ fn ui_timestamp(ui: &mut Ui, term: &Term, app: &YomineApp, term_index: usize) {
     if let Some(timestamp) = &sentence_content.timestamp {
         let player_available = app.player.is_connected();
         if player_available {
-            ui_timestamp_button(ui, timestamp, app);
+            ui_timestamp_button(ui, timestamp, app, actions);
         } else {
             let (human_timestamp_start, _human_timestamp_stop) = timestamp.to_human_readable();
             ui.label(
@@ -78,17 +89,26 @@ fn ui_timestamp(ui: &mut Ui, term: &Term, app: &YomineApp, term_index: usize) {
     }
 }
 
-fn ui_sentence_navigation(ui: &mut Ui, term: &Term, term_index: usize, app: &mut YomineApp) {
+fn ui_sentence_navigation(
+    ui: &mut Ui,
+    term: &Term,
+    term_index: usize,
+    app: &YomineApp,
+    actions: &mut ActionQueue,
+) {
     let sentence_count = term.sentence_references.len();
     let current_index = app.table_state.get_sentence_index(term_index);
 
     ui.horizontal(|ui| {
         //let prev_atom = Atom::from("⏮").atom_size(Vec2::splat(BUTTON_SIZE));
         let prev_button = egui::Button::new("⏮").corner_radius(egui::CornerRadius::same(2)).small();
+        let prev_button_resp = ui.add_enabled(sentence_count > 1, prev_button);
+        if prev_button_resp.clicked() {
+            actions.push(UiAction::PrevSentence { term_index, total_sentences: sentence_count });
+        }
 
-        if ui.add_enabled(sentence_count > 1, prev_button).clicked() {
-            app.table_state.prev_sentence(term_index, sentence_count);
-            ui.ctx().request_repaint();
+        if prev_button_resp.hovered() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
         }
 
         ui.allocate_ui_with_layout(
@@ -105,10 +125,13 @@ fn ui_sentence_navigation(ui: &mut Ui, term: &Term, term_index: usize, app: &mut
 
         //let next_atom = Atom::from("⏭").atom_size(Vec2::splat(BUTTON_SIZE));
         let next_button = egui::Button::new("⏭").corner_radius(egui::CornerRadius::same(2)).small();
+        let next_button_resp = ui.add_enabled(sentence_count > 1, next_button);
+        if next_button_resp.clicked() {
+            actions.push(UiAction::NextSentence { term_index, total_sentences: sentence_count });
+        }
 
-        if ui.add_enabled(sentence_count > 1, next_button).clicked() {
-            app.table_state.next_sentence(term_index, sentence_count);
-            ui.ctx().request_repaint();
+        if next_button_resp.hovered() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
         }
     });
 }
@@ -178,7 +201,7 @@ fn ui_sentence_content(
     ctx: &Context,
     ui: &mut Ui,
     term: &Term,
-    app: &mut YomineApp,
+    app: &YomineApp,
     term_index: usize,
 ) {
     let sentence_idx = app.table_state.get_sentence_index(term_index);
@@ -206,7 +229,12 @@ fn ui_sentence_content(
 }
 
 /// Creates a clickable timestamp button with WebSocket integration
-fn ui_timestamp_button(ui: &mut Ui, timestamp: &TimeStamp, app: &YomineApp) {
+fn ui_timestamp_button(
+    ui: &mut Ui,
+    timestamp: &TimeStamp,
+    app: &YomineApp,
+    actions: &mut ActionQueue,
+) {
     let (seconds_start, _seconds_stop) = timestamp.to_secs();
     let (human_timestamp_start, _human_timestamp_stop) = timestamp.to_human_readable();
 
@@ -234,10 +262,14 @@ fn ui_timestamp_button(ui: &mut Ui, timestamp: &TimeStamp, app: &YomineApp) {
         let response = button.ui(ui);
 
         if response.clicked() {
-            if let Err(e) = app.player.seek_timestamp(seconds_start, &human_timestamp_start) {
-                eprintln!("Failed to seek timestamp: {}", e);
-            }
-            println!("Sent seek command for timestamp: {}", &human_timestamp_start);
+            actions.push(UiAction::SeekTimestamp {
+                seconds: seconds_start,
+                label: human_timestamp_start.clone(),
+            });
+        }
+
+        if response.hovered() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
         }
     });
 }
