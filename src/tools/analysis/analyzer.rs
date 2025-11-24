@@ -18,7 +18,10 @@ use std::{
     },
 };
 
-use wana_kana::IsJapaneseStr;
+use wana_kana::{
+    ConvertJapanese,
+    IsJapaneseStr,
+};
 use zip::{
     write::SimpleFileOptions,
     ZipWriter,
@@ -26,6 +29,7 @@ use zip::{
 
 use crate::{
     core::{
+        utils::NormalizeLongVowel,
         SourceFile,
         Term,
         YomineError,
@@ -316,39 +320,41 @@ pub fn export_yomitan_zip(
     zip.write_all(index_json.as_bytes())
         .map_err(|e| YomineError::Custom(format!("Failed to write index.json: {}", e)))?;
 
-    let mut lemma_counts: HashMap<String, u32> = HashMap::new();
-    let mut lemma_readings: HashMap<String, Vec<Option<String>>> = HashMap::new();
+    let mut filtered_frequencies: Vec<_> = result
+        .frequencies
+        .iter()
+        .filter(|(_, count)| !exclude_hapax || **count > 1)
+        .map(|((lemma, reading), count)| ((lemma.clone(), reading.clone()), *count))
+        .collect();
 
-    for ((lemma_form, reading), count) in &result.frequencies {
-        *lemma_counts.entry(lemma_form.clone()).or_insert(0) += count;
-        lemma_readings.entry(lemma_form.clone()).or_default().push(reading.clone());
-    }
+    filtered_frequencies.sort_by(|a, b| b.1.cmp(&a.1));
 
-    if exclude_hapax {
-        lemma_counts.retain(|_, count| *count > 1);
-    }
-
-    let mut sorted_lemmas: Vec<_> = lemma_counts.into_iter().collect();
-    sorted_lemmas.sort_by(|a, b| b.1.cmp(&a.1));
-
-    let counts: Vec<u32> = sorted_lemmas.iter().map(|(_, count)| *count).collect();
+    let counts: Vec<u32> = filtered_frequencies.iter().map(|(_, count)| *count).collect();
     let ranks = calculate_ranks(&counts);
 
     let mut entries: Vec<(String, String, JsonFrequencyData)> = Vec::new();
 
-    for ((lemma_form, _count), rank_value) in sorted_lemmas.iter().zip(ranks.iter()) {
-        if let Some(readings) = lemma_readings.get(lemma_form) {
-            for reading in readings {
-                let data = match reading {
-                    Some(r) => JsonFrequencyData::Nested {
-                        reading: r.clone(),
-                        frequency: JsonFrequency::Number(*rank_value),
-                    },
-                    None => JsonFrequencyData::Simple(JsonFrequency::Number(*rank_value)),
-                };
-                entries.push((lemma_form.clone(), "freq".to_string(), data));
+    for (((lemma_form, reading), _count), rank_value) in
+        filtered_frequencies.iter().zip(ranks.iter())
+    {
+        // Standardize reading: convert to hiragana and normalize long vowels
+        // Only apply normalization if lemma contains kanji (not pure kana)
+        let standardized_reading = reading.as_ref().map(|r| {
+            if lemma_form.as_str().is_kana() {
+                r.clone()
+            } else {
+                r.to_hiragana().normalize_long_vowel().to_string()
             }
-        }
+        });
+
+        let data = match standardized_reading {
+            Some(r) => JsonFrequencyData::Nested {
+                reading: r,
+                frequency: JsonFrequency::Number(*rank_value),
+            },
+            None => JsonFrequencyData::Simple(JsonFrequency::Number(*rank_value)),
+        };
+        entries.push((lemma_form.clone(), "freq".to_string(), data));
     }
 
     let term_meta_json = if pretty {
