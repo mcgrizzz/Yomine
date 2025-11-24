@@ -56,7 +56,8 @@ That's it! Yomine will segment the text, rank terms by frequency, and show you v
 - **Dictionary weighting** - Customize which frequency sources are prioritized
 - **Sorting and searching** - Sort by frequency, chronological order, sentence count, or comprehension level; search for specific terms
 - **Multiple subtitle formats** - Supports SRT, ASS, and SSA subtitle files
-
+- **Frequency Analyzer Tool** - Generate your own frequency dictionaries.
+    - Here's one I generated from around 5000 files: [Anilist Top 500](https://github.com/user-attachments/files/23732215/Anilist.Top.500.zip)
 ## Installation
 
 ### Download Prebuilt Binary (Recommended)
