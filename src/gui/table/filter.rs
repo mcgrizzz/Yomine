@@ -40,6 +40,7 @@ impl PosFilterState {
             PosToggle::new(Prefix),
             PosToggle::new(Conjunction),
             PosToggle::new(Interjection),
+            PosToggle::new(Onomatopoeia),
             PosToggle::new(Number),
             PosToggle::new(Counter),
             PosToggle::new(Symbol),

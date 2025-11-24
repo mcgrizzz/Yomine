@@ -248,6 +248,206 @@ pub fn extract_words(
     terms
 }
 
+pub fn extract_words_for_frequency(
+    mut worker: Worker<'_>,
+    sentences: &mut [Sentence],
+    frequency_manager: &FrequencyManager,
+    progress_callback: Option<&(dyn Fn(bool, usize, usize) + Sync)>,
+) -> Vec<Term> {
+    use rayon::prelude::*;
+
+    let total_sentences = sentences.len();
+
+    // Phase 1: Tokenize all sentences sequentially
+    let mut sentence_tokens: Vec<(usize, String, Vec<UnidicToken>)> =
+        Vec::with_capacity(total_sentences);
+    let report_interval = std::cmp::min(1000, std::cmp::max(1, total_sentences / 20));
+
+    for (ord, sentence) in sentences.iter().enumerate() {
+        worker.reset_sentence(&sentence.text);
+        worker.tokenize();
+
+        let tokens: Vec<UnidicToken> = worker
+            .token_iter()
+            .map(|token| {
+                let vibrato_token: VibratoToken = VibratoToken {
+                    surface: token.surface().to_string(),
+                    features: token.feature().to_string(),
+                };
+
+                let surface = vibrato_token.surface.clone();
+                let raw_token: RawToken = vibrato_token.into();
+
+                (surface, raw_token).into()
+            })
+            .collect();
+
+        sentence_tokens.push((ord, sentence.text.clone(), tokens));
+
+        // Report progress during tokenization
+        if let Some(ref callback) = progress_callback {
+            if (ord + 1) % report_interval == 0 || ord + 1 == total_sentences {
+                callback(false, ord + 1, total_sentences);
+            }
+        }
+    }
+
+    // Phase 2: Process tokens in parallel
+    use std::sync::atomic::{
+        AtomicUsize,
+        Ordering,
+    };
+    let processed_count = AtomicUsize::new(0);
+
+    let all_terms: Vec<Vec<Term>> = sentence_tokens
+        .par_iter()
+        .map(|(_ord, _sentence_text, tokens)| {
+            let words: Vec<Word> = match parse_into_words(tokens.clone()) {
+                Ok(parsed_words) => parsed_words,
+                Err(_) => Vec::new(),
+            };
+
+            let mut sentence_terms: Vec<Term> = words
+                .into_iter()
+                .filter_map(|word| {
+                    let mut term: Term = word.into();
+
+                    // Filter out blank/whitespace tokens
+                    if term.surface_form.trim().is_empty() {
+                        return None;
+                    }
+
+                    // For frequency analysis, use surface forms as lemma forms initially
+                    // Deinflection will be applied in batch later
+                    term.lemma_form = term.surface_form.clone();
+                    term.lemma_reading = term.surface_reading.clone();
+
+                    Some(term)
+                })
+                .collect();
+
+            // Phrase detection - check if phrase exists in loaded dictionaries
+            // Only add the largest matching phrase (no subphrases)
+            'outer: for start in 0..sentence_terms.len() {
+                for end in (start + 1..sentence_terms.len()).rev() {
+                    let subrange = &sentence_terms[start..=end];
+                    let mut phrase: Term = Term::from_slice(subrange);
+
+                    let freq = frequency_manager.get_harmonic_frequency_for_pair(
+                        &phrase.surface_form.normalize_long_vowel(),
+                        &phrase.surface_reading.normalize_long_vowel(),
+                    );
+
+                    if let Some(_frequency) = freq {
+                        let char_count = phrase.lemma_form.chars().count();
+                        let min_len = 4;
+
+                        if char_count < min_len {
+                            continue;
+                        }
+
+                        phrase.part_of_speech = POS::NounExpression;
+                        for term in subrange {
+                            if !matches!(
+                                term.part_of_speech,
+                                POS::Noun | POS::CompoundNoun | POS::ProperNoun
+                            ) {
+                                phrase.part_of_speech = POS::Expression;
+                                break;
+                            }
+                        }
+
+                        sentence_terms.push(phrase);
+                        break 'outer;
+                    }
+                }
+            }
+
+            // Update progress counter (phase = true)
+            let current = processed_count.fetch_add(1, Ordering::Relaxed) + 1;
+            if let Some(ref callback) = progress_callback {
+                if current % report_interval == 0 || current == total_sentences {
+                    callback(true, current, total_sentences);
+                }
+            }
+
+            sentence_terms
+        })
+        .collect();
+
+    let terms: Vec<Term> = all_terms.into_iter().flatten().collect();
+
+    terms
+}
+
+pub fn batch_deinflect_terms(
+    terms: &[Term],
+    frequency_manager: &FrequencyManager,
+) -> HashMap<(String, String), (String, String)> {
+    use std::collections::HashSet;
+
+    use rayon::prelude::*;
+
+    // Collect unique (surface_form, surface_reading, POS) tuples
+    let mut unique_surfaces: HashSet<(String, String, POS)> = HashSet::new();
+    for term in terms {
+        if term.surface_form.as_str().is_japanese() {
+            unique_surfaces.insert((
+                term.surface_form.clone(),
+                term.surface_reading.clone(),
+                term.part_of_speech.clone(),
+            ));
+        }
+    }
+
+    // Deinflect unique surfaces
+    let deinflection_map: HashMap<(String, String), (String, String)> = unique_surfaces
+        .par_iter()
+        .map(|(surface_form, surface_reading, pos)| {
+            let (lemma_form, lemma_reading) = match pos {
+                POS::Verb
+                | POS::SuruVerb
+                | POS::AdjectivalNoun
+                | POS::Adjective
+                | POS::NounExpression
+                | POS::Expression
+                | POS::Noun => {
+                    let deinflections: Vec<(String, String)> =
+                        pairwise_deinflection(surface_form, surface_reading);
+
+                    let mut sorted_deinflections: Vec<(String, String)> = deinflections
+                        .into_iter()
+                        .filter(|(word, reading)| {
+                            frequency_manager
+                                .get_harmonic_frequency_for_pair(word, reading)
+                                .is_some()
+                        })
+                        .collect();
+
+                    sorted_deinflections.sort_by_key(|(word, reading)| {
+                        frequency_manager.get_harmonic_frequency_for_pair(word, reading)
+                    });
+
+                    if !sorted_deinflections.is_empty() {
+                        sorted_deinflections[0].clone()
+                    } else {
+                        // No valid deinflection found, use surface form
+                        (surface_form.clone(), surface_reading.clone())
+                    }
+                }
+                _ => {
+                    // Other POS types don't need deinflection
+                    (surface_form.clone(), surface_reading.clone())
+                }
+            };
+
+            ((surface_form.clone(), surface_reading.clone()), (lemma_form, lemma_reading))
+        })
+        .collect();
+
+    deinflection_map
+}
+
 pub fn init_vibrato(
     dict_type: &DictType,
     progress_callback: Option<Box<dyn Fn(String) + Send>>,

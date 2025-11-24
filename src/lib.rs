@@ -7,4 +7,5 @@ pub mod parser;
 pub mod persistence;
 pub mod player;
 pub mod segmentation;
+pub mod tools;
 pub mod websocket;

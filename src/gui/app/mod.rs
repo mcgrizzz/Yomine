@@ -41,6 +41,7 @@ use crate::{
     core::{
         models::SourceFileType,
         tasks::{
+            types::FrequencyAnalysisUpdate,
             TaskManager,
             TaskResult,
         },
@@ -289,6 +290,7 @@ impl eframe::App for YomineApp {
             &mut self.modals.ignore_list,
             &mut self.modals.frequency_weights,
             &mut self.modals.pos_filters,
+            &mut self.modals.frequency_analyzer,
             &mut self.settings_data,
             &self.player.ws,
             self.player.mpv.is_connected(),
@@ -365,6 +367,8 @@ impl eframe::App for YomineApp {
                 self.partial_refresh();
             }
         }
+
+        self.modals.frequency_analyzer.show(ctx, self.language_tools.as_ref(), &self.task_manager);
     }
 }
 
@@ -398,7 +402,7 @@ impl YomineApp {
         }
     }
 
-    fn handle_task_result(&mut self, result: TaskResult, _ctx: &egui::Context) {
+    fn handle_task_result(&mut self, result: TaskResult, ctx: &egui::Context) {
         match result {
             TaskResult::LanguageToolsLoaded(result) => match result {
                 Ok(mut language_tools) => {
@@ -491,6 +495,29 @@ impl YomineApp {
             }
             TaskResult::RequestSaveSettings => {
                 self.save_settings();
+            }
+            TaskResult::FrequencyAnalysis(update) => {
+                match update {
+                    FrequencyAnalysisUpdate::Progress(progress) => {
+                        self.modals.frequency_analyzer.handle_analysis_progress(
+                            progress.current_file,
+                            progress.message,
+                            progress.file_size,
+                        );
+                        ctx.request_repaint();
+                    }
+                    FrequencyAnalysisUpdate::Complete(result) => {
+                        self.message_overlay.clear_message();
+                        self.modals.frequency_analyzer.handle_analysis_complete(result);
+                    }
+                    FrequencyAnalysisUpdate::Cancelled => {
+                        // Task was cancelled, modal already updated its state
+                        self.message_overlay.clear_message();
+                    }
+                }
+            }
+            TaskResult::FrequencyExport(result) => {
+                self.modals.frequency_analyzer.handle_export_complete(result);
             }
             _ => {}
         }

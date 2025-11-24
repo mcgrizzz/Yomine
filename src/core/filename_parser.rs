@@ -38,8 +38,8 @@ fn parse_tv_show(filename: &str) -> Option<MediaType> {
     let patterns = vec![
         // "Show.Name.S01E02.1080p.mkv"
         r"(?i)(.+?)[\.\s\-\_\[\]]*[Ss](\d{1,2})[Ee](\d{1,3})(?:[\.\s\-\_]*(.+))?",
-        // "Show Name episode 12"
-        r"(?i)(.+?)[\.\s\-\_\[\]]*(?:episode|ep)[\.\s\-\_]*(\d{1,3})(?:[\.\s\-\_]*(.+))?",
+        // "Show Name E001 [NF].srt" or "Show Name episode 12"
+        r"(?i)(.+?)[\.\s\-\_\[\]]*(?:episode|ep|e)[\.\s\-\_]*(\d{1,3})(?:[\.\s\-\_]*(.+))?",
         // "Show Name 12 (Special)" Non season
         r"(?i)(.+?)[\s\-]+(\d{1,3})(?:\s+\((.+?)\)|\s+(.+?))?$",
     ];
@@ -233,6 +233,17 @@ mod tests {
             assert_eq!(source, Some("Netflix".to_string()));
         } else {
             panic!("Expected TvShow, got {:?}", tv_result);
+        }
+
+        // Test TV show with E001 format
+        let slam_dunk_result = parse_filename("Slam Dunk E001 [NF].srt");
+        if let MediaType::TvShow { title, season, episode, source } = slam_dunk_result {
+            assert_eq!(title, "Slam Dunk");
+            assert_eq!(season, None);
+            assert_eq!(episode, Some(1));
+            assert_eq!(source, None);
+        } else {
+            panic!("Expected TvShow, got {:?}", slam_dunk_result);
         }
 
         // Test movie parsing

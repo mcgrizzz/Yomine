@@ -20,6 +20,7 @@ use crate::{
     },
     gui::{
         file_modal::FileModal,
+        frequency_analyzer::FrequencyAnalyzerModal,
         settings::{
             AnkiSettingsModal,
             FrequencyWeightsModal,
@@ -46,6 +47,7 @@ impl TopBar {
         ignore_list_modal: &mut IgnoreListModal,
         frequency_weights_modal: &mut FrequencyWeightsModal,
         pos_filters_modal: &mut PosFiltersModal,
+        frequency_analyzer_modal: &mut FrequencyAnalyzerModal,
         current_settings: &mut SettingsData,
         websocket_manager: &WebSocketManager,
         mpv_connected: bool,
@@ -174,6 +176,12 @@ impl TopBar {
                     }
                     if ui.button("Part of Speech Filters").clicked() {
                         pos_filters_modal.open_modal(table_state.pos_snapshot());
+                    }
+                });
+
+                ui.menu_button("Tools", |ui| {
+                    if ui.button("Frequency Analyzer").clicked() {
+                        frequency_analyzer_modal.open_modal();
                     }
                 });
 

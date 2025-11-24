@@ -11,6 +11,7 @@ use crate::segmentation::word::POS;
 pub enum SourceFileType {
     SRT,
     SSA,
+    TXT,
     Other(String),
 }
 
@@ -22,11 +23,16 @@ impl SourceFileType {
             match extension.to_lowercase().as_str() {
                 "srt" => SourceFileType::SRT,
                 "ass" | "ssa" => SourceFileType::SSA,
+                "txt" => SourceFileType::TXT,
                 other => SourceFileType::Other(other.to_uppercase()),
             }
         } else {
             SourceFileType::Other(String::new())
         }
+    }
+
+    pub fn supported_extensions() -> &'static [&'static str] {
+        &["srt", "ass", "ssa", "txt"]
     }
 
     #[inline]

@@ -183,11 +183,11 @@ impl PosFiltersModal {
             (POS::SuruVerb, noun_on, false),
         ]);
 
-        all_chips.push((POS::Number, true, true));
-        let number_on = self.raw.get(&POS::Number).copied().unwrap_or(true);
-        all_chips.push((POS::Counter, number_on, false));
-
         all_chips.extend([
+            (POS::Interjection, true, false),
+            (POS::Onomatopoeia, true, false),
+            (POS::Number, true, false),
+            (POS::Counter, true, false),
             (POS::Verb, true, false),
             (POS::Copula, true, false),
             (POS::Adjective, true, false),
@@ -197,7 +197,6 @@ impl PosFiltersModal {
             (POS::Suffix, true, false),
             (POS::Pronoun, true, false),
             (POS::Conjunction, true, false),
-            (POS::Interjection, true, false),
             (POS::Adverb, true, false),
             (POS::Determiner, true, false),
             (POS::Symbol, true, false),
@@ -322,6 +321,7 @@ fn all_pos_variants() -> &'static [POS] {
         Prefix,
         Conjunction,
         Interjection,
+        Onomatopoeia,
         Number,
         Counter,
         Symbol,
