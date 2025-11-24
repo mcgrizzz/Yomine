@@ -53,13 +53,27 @@ impl CacheFrequencyData {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct DictionaryIndex {
     pub title: String,
     pub revision: String,
 
     pub format: Option<u8>, //Must have one
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<u8>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none", rename = "frequencyMode")]
+    pub frequency_mode: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]

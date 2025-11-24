@@ -1,3 +1,5 @@
+use wana_kana::IsJapaneseStr;
+
 use super::{
     rule_matcher::{
         MainWordPolicy,
@@ -5,6 +7,7 @@ use super::{
         Rule,
         RuleAction,
         TokenMatcher,
+        WordMatcher,
     },
     unidic_tags::UnidicTag,
     word::POS,
@@ -33,7 +36,7 @@ pub fn create_default_rules() -> Vec<Rule> {
                 pos1: Matcher::Any(vec![UnidicTag::Jodoushi]),
                 ..Default::default()
             }),
-            prev_word_pos: Matcher::None,
+            prev_word: WordMatcher::None,
             action: RuleAction::MergeWithPrevious {
                 attach_prev: true,
                 attach_prev_lemma: true,
@@ -53,7 +56,7 @@ pub fn create_default_rules() -> Vec<Rule> {
                 pos1: Matcher::Any(vec![UnidicTag::Doushi]),
                 ..Default::default()
             }),
-            prev_word_pos: Matcher::None,
+            prev_word: WordMatcher::None,
             action: RuleAction::MergeWithPrevious {
                 attach_prev: true,
                 attach_prev_lemma: true,
@@ -71,7 +74,7 @@ pub fn create_default_rules() -> Vec<Rule> {
             },
             next: None,
             prev: None,
-            prev_word_pos: Matcher::Any(vec![POS::Verb, POS::SuruVerb]),
+            prev_word: WordMatcher::PosAny(vec![POS::Verb, POS::SuruVerb]),
             action: RuleAction::MergeWithPrevious {
                 attach_prev: true,
                 attach_prev_lemma: true,
@@ -95,7 +98,7 @@ pub fn create_default_rules() -> Vec<Rule> {
                 pos1: Matcher::Any(vec![UnidicTag::Keiyoushi]),
                 ..Default::default()
             }),
-            prev_word_pos: Matcher::None,
+            prev_word: WordMatcher::None,
             action: RuleAction::MergeWithPrevious {
                 attach_prev: true,
                 attach_prev_lemma: true,
@@ -115,7 +118,7 @@ pub fn create_default_rules() -> Vec<Rule> {
                 pos1: Matcher::Any(vec![UnidicTag::Keiyoushi]),
                 ..Default::default()
             }),
-            prev_word_pos: Matcher::None,
+            prev_word: WordMatcher::None,
             action: RuleAction::MergeWithPrevious {
                 attach_prev: true,
                 attach_prev_lemma: true,
@@ -136,7 +139,7 @@ pub fn create_default_rules() -> Vec<Rule> {
                 pos2: Matcher::Any(vec![UnidicTag::Koyuumeishi]),
                 ..Default::default()
             }),
-            prev_word_pos: Matcher::Not(vec![POS::CompoundNoun]),
+            prev_word: WordMatcher::PosNot(vec![POS::CompoundNoun]),
             action: RuleAction::MergeWithPrevious {
                 attach_prev: true,
                 attach_prev_lemma: true,
@@ -155,7 +158,7 @@ pub fn create_default_rules() -> Vec<Rule> {
                 ..Default::default()
             }),
             prev: None,
-            prev_word_pos: Matcher::None,
+            prev_word: WordMatcher::None,
             action: RuleAction::CreateWord {
                 eat_next: true,
                 eat_next_lemma: true,
@@ -176,7 +179,28 @@ pub fn create_default_rules() -> Vec<Rule> {
                 pos1: Matcher::Any(vec![UnidicTag::Doushi]),
                 ..Default::default()
             }),
-            prev_word_pos: Matcher::None,
+            prev_word: WordMatcher::None,
+            action: RuleAction::MergeWithPrevious {
+                attach_prev: true,
+                attach_prev_lemma: true,
+                update_prev_pos: None,
+                main_word_policy: None,
+            },
+        },
+        Rule {
+            name: "Tari/Dari-form binding",
+            current: TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Joshi]),
+                pos2: Matcher::Any(vec![UnidicTag::Fukujoshi]),
+                surface: Matcher::Any(vec!["たり".to_string(), "だり".to_string()]),
+                ..Default::default()
+            },
+            next: None,
+            prev: Some(TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Doushi]),
+                ..Default::default()
+            }),
+            prev_word: WordMatcher::None,
             action: RuleAction::MergeWithPrevious {
                 attach_prev: true,
                 attach_prev_lemma: true,
@@ -195,7 +219,7 @@ pub fn create_default_rules() -> Vec<Rule> {
                 pos1: Matcher::Any(vec![UnidicTag::Meishi]),
                 ..Default::default()
             }),
-            prev_word_pos: Matcher::None,
+            prev_word: WordMatcher::None,
             action: RuleAction::MergeWithPrevious {
                 attach_prev: true,
                 attach_prev_lemma: true,
@@ -212,7 +236,7 @@ pub fn create_default_rules() -> Vec<Rule> {
             },
             next: None,
             prev: None,
-            prev_word_pos: Matcher::Any(vec![POS::Number]),
+            prev_word: WordMatcher::PosAny(vec![POS::Number]),
             action: RuleAction::MergeWithPrevious {
                 attach_prev: true,
                 attach_prev_lemma: true,
@@ -228,7 +252,7 @@ pub fn create_default_rules() -> Vec<Rule> {
             },
             next: None,
             prev: None,
-            prev_word_pos: Matcher::Any(vec![POS::Number]),
+            prev_word: WordMatcher::PosAny(vec![POS::Number]),
             action: RuleAction::MergeWithPrevious {
                 attach_prev: true,
                 attach_prev_lemma: true,
@@ -248,7 +272,7 @@ pub fn create_default_rules() -> Vec<Rule> {
                 ..Default::default()
             }),
             prev: None,
-            prev_word_pos: Matcher::None,
+            prev_word: WordMatcher::None,
             action: RuleAction::CreateWord {
                 eat_next: true,
                 eat_next_lemma: true,
@@ -269,7 +293,7 @@ pub fn create_default_rules() -> Vec<Rule> {
                 ..Default::default()
             }),
             prev: None,
-            prev_word_pos: Matcher::None,
+            prev_word: WordMatcher::None,
             action: RuleAction::CreateWord {
                 eat_next: true,
                 eat_next_lemma: true,
@@ -290,12 +314,86 @@ pub fn create_default_rules() -> Vec<Rule> {
                 ..Default::default()
             }),
             prev: None,
-            prev_word_pos: Matcher::None,
+            prev_word: WordMatcher::None,
             action: RuleAction::CreateWord {
                 eat_next: true,
                 eat_next_lemma: true,
                 pos: POS::AdjectivalNoun,
                 main_word_policy: Some(MainWordPolicy::UseFirstToken),
+            },
+        },
+        // this is good for names that get split wrong...
+        Rule {
+            name: "Consecutive Katakana Binding",
+            current: TokenMatcher {
+                custom_predicate: Some(|token| token.surface.as_str().is_katakana()),
+                ..Default::default()
+            },
+            next: None,
+            prev: None,
+            prev_word: WordMatcher::Predicate(|word| word.surface_form.as_str().is_katakana()),
+            action: RuleAction::MergeWithPrevious {
+                attach_prev: true,
+                attach_prev_lemma: true,
+                update_prev_pos: None,
+                main_word_policy: None,
+            },
+        },
+        //Expensive rule... But should catch a bunch of the terms that usually spam our table.
+        Rule {
+            name: "Repetitive Katakana Onomatopoeia",
+            current: TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Meishi, UnidicTag::Kandoushi]),
+                pos2: Matcher::Any(vec![UnidicTag::Futsuumeishi, UnidicTag::Ippan]),
+                custom_predicate: Some(|token| {
+                    if !token.surface.as_str().is_katakana() {
+                        return false;
+                    }
+
+                    let chars: Vec<char> = token.surface.chars().collect();
+                    if chars.len() < 3 {
+                        return false; // Too short
+                    }
+
+                    // Check for 3+ consecutive repetitions of 1-2 character patterns
+                    for pattern_len in 1..=2 {
+                        if chars.len() < pattern_len * 3 {
+                            continue;
+                        }
+
+                        for start in 0..=(chars.len() - pattern_len * 3) {
+                            let pattern: Vec<char> = chars[start..start + pattern_len].to_vec();
+                            let mut consecutive_matches = 1;
+
+                            let mut pos = start + pattern_len;
+                            while pos + pattern_len <= chars.len() {
+                                if chars[pos..pos + pattern_len] == pattern[..] {
+                                    consecutive_matches += 1;
+                                    pos += pattern_len;
+                                } else {
+                                    break;
+                                }
+                            }
+
+                            // 3+ repetitions = likely sound effect
+                            if consecutive_matches >= 3 {
+                                return true;
+                            }
+                        }
+                    }
+
+                    false
+                }),
+                ..Default::default()
+            },
+            next: None,
+            prev: None,
+            prev_word: WordMatcher::None,
+            action: RuleAction::CreateWord {
+                eat_next: false,
+                eat_next_lemma: false,
+                pos: POS::Onomatopoeia,
+                main_word_policy: None,
             },
         },
     ]

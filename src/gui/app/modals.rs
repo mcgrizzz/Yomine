@@ -1,6 +1,7 @@
 use crate::gui::{
     error_modal::ErrorModal,
     file_modal::FileModal,
+    frequency_analyzer::FrequencyAnalyzerModal,
     restart_modal::RestartModal,
     settings::{
         AnkiSettingsModal,
@@ -20,6 +21,7 @@ pub struct Modals {
     pub frequency_weights: FrequencyWeightsModal,
     pub pos_filters: PosFiltersModal,
     pub restart: RestartModal,
+    pub frequency_analyzer: FrequencyAnalyzerModal,
 }
 
 impl Default for Modals {
@@ -33,6 +35,7 @@ impl Default for Modals {
             frequency_weights: FrequencyWeightsModal::new(),
             pos_filters: PosFiltersModal::new(),
             restart: RestartModal::new(),
+            frequency_analyzer: FrequencyAnalyzerModal::new(),
         }
     }
 }

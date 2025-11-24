@@ -27,7 +27,11 @@ static KANA_READING_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 static STRIP_INLINE_TAGS: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)</?(?:b|i|u)>").expect("Failed to compile inline_strip_tags regex")
+    // Matches:
+    // - HTML-style tags: <b>, <i>, <u>, <font ...>, etc.
+    // - ASS/SSA style overrides: {\...}
+    Regex::new(r"(?i)</?(?:b|i|u|font)[^>]*>|\{\\[^}]*\}")
+        .expect("Failed to compile inline_strip_tags regex")
 });
 
 fn parse_srt(srt: SRT, source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
@@ -92,10 +96,61 @@ fn read_ssa(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
     parse_srt(srt, source_file)
 }
 
+pub fn read_txt(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
+    let raw_text = fs::read_to_string(&source_file.original_file)?;
+    let raw_text = raw_text.trim_start_matches('\u{feff}');
+
+    static SENTENCE_SPLIT_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"([。！？｡!?.]+)").expect("Failed to compile sentence split regex")
+    });
+
+    let mut sentences = Vec::new();
+    let mut sentence_id = 0;
+
+    for line in raw_text.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        let parts: Vec<&str> = SENTENCE_SPLIT_REGEX.split(line).collect();
+
+        for part in parts {
+            let part = part.trim();
+            if part.is_empty() {
+                continue;
+            }
+
+            // Remove kana readings in parentheses (e.g., 漢字（かんじ）)
+            let text = KANA_READING_REGEX.replace_all(part, "");
+            let text = text.trim().to_string();
+
+            if !text.is_empty() {
+                sentences.push(Sentence {
+                    id: sentence_id,
+                    source_id: source_file.id,
+                    segments: vec![],
+                    text,
+                    timestamp: None,
+                    comprehension: 0.0,
+                });
+                sentence_id += 1;
+            }
+        }
+    }
+
+    if sentences.is_empty() {
+        return Err(YomineError::Custom("No text found in the file.".to_string()));
+    }
+
+    Ok(sentences)
+}
+
 pub fn read(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
     match source_file.file_type {
         SourceFileType::SRT => read_srt(source_file),
         SourceFileType::SSA => read_ssa(source_file),
+        SourceFileType::TXT => read_txt(source_file),
         SourceFileType::Other(ref format) => Err(YomineError::UnsupportedFileType(format.clone())),
     }
 }

@@ -18,16 +18,11 @@ use crate::core::{
     YomineError,
 };
 
-/**
- * Allows us to write rules instead of lots of nested logic which can become unwieldy.
- *
- */
-
 #[derive(Clone)]
 pub enum Matcher<T> {
-    None,        // Always matches (default)
-    Any(Vec<T>), // Matches if any of the contained values match
-    Not(Vec<T>), // Matches if none of the contained values match
+    None,
+    Any(Vec<T>),
+    Not(Vec<T>),
 }
 
 impl<T: PartialEq> Matcher<T> {
@@ -46,7 +41,30 @@ impl<T> Default for Matcher<T> {
     }
 }
 
-#[derive(Default)]
+pub enum WordMatcher {
+    None,
+    PosAny(Vec<POS>),
+    PosNot(Vec<POS>),
+    Predicate(fn(&Word) -> bool),
+}
+
+impl WordMatcher {
+    pub fn matches(&self, word: &Word) -> bool {
+        match self {
+            WordMatcher::None => true,
+            WordMatcher::PosAny(poses) => poses.iter().any(|p| p == &word.part_of_speech),
+            WordMatcher::PosNot(poses) => poses.iter().all(|p| p != &word.part_of_speech),
+            WordMatcher::Predicate(pred) => pred(word),
+        }
+    }
+}
+
+impl Default for WordMatcher {
+    fn default() -> Self {
+        WordMatcher::None
+    }
+}
+
 pub struct TokenMatcher {
     pub pos1: Matcher<UnidicTag>,
     pub pos2: Matcher<UnidicTag>,
@@ -55,6 +73,22 @@ pub struct TokenMatcher {
     pub surface: Matcher<String>,
     pub conjugation_type: Matcher<UnidicTag>,
     pub conjugation_form: Matcher<UnidicTag>,
+    pub custom_predicate: Option<fn(&UnidicToken) -> bool>,
+}
+
+impl Default for TokenMatcher {
+    fn default() -> Self {
+        TokenMatcher {
+            pos1: Matcher::None,
+            pos2: Matcher::None,
+            pos3: Matcher::None,
+            pos4: Matcher::None,
+            surface: Matcher::None,
+            conjugation_type: Matcher::None,
+            conjugation_form: Matcher::None,
+            custom_predicate: None,
+        }
+    }
 }
 
 impl TokenMatcher {
@@ -66,6 +100,7 @@ impl TokenMatcher {
             && self.surface.matches(&token.surface)
             && self.conjugation_type.matches(&token.conjugation_type)
             && self.conjugation_form.matches(&token.conjugation_form)
+            && self.custom_predicate.map_or(true, |pred| pred(token))
     }
 }
 
@@ -97,7 +132,7 @@ pub struct Rule {
     pub current: TokenMatcher,
     pub next: Option<TokenMatcher>,
     pub prev: Option<TokenMatcher>,
-    pub prev_word_pos: Matcher<POS>,
+    pub prev_word: WordMatcher,
     pub action: RuleAction,
 }
 
@@ -107,13 +142,10 @@ pub fn process_tokens(tokens: Vec<UnidicToken>, rules: &[Rule]) -> Result<Vec<Wo
     let mut prev_token: Option<UnidicToken> = None;
 
     while let Some(current_token) = tokens_iter.next() {
-        let prev_word_pos = words.last().map(|w| &w.part_of_speech);
         let next_token = tokens_iter.peek();
 
-        // Try to find a matching rule
         let mut rule_applied = false;
         for rule in rules {
-            // Check all rule conditions
             let current_matches = rule.current.matches(&current_token);
 
             let next_matches = match (&rule.next, next_token) {
@@ -128,12 +160,11 @@ pub fn process_tokens(tokens: Vec<UnidicToken>, rules: &[Rule]) -> Result<Vec<Wo
                 (None, _) => true,
             };
 
-            let prev_word_matches = match prev_word_pos {
-                Some(word_pos) => rule.prev_word_pos.matches(word_pos),
-                None => matches!(rule.prev_word_pos, Matcher::None),
+            let prev_word_matches = match words.last() {
+                Some(word) => rule.prev_word.matches(word),
+                None => matches!(rule.prev_word, WordMatcher::None),
             };
 
-            // If all conditions match, apply the rule
             if current_matches && next_matches && prev_token_matches && prev_word_matches {
                 match &rule.action {
                     RuleAction::CreateWord { eat_next, eat_next_lemma, pos, main_word_policy } => {
