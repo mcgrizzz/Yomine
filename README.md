@@ -89,7 +89,11 @@ Yomine uses frequency dictionaries to rank vocabulary by importance and improve 
 
 More dictionaries: [Marv's collection](https://drive.google.com/drive/folders/1xURpMJN7HTtSLuVs9ZtIbE7MDRCdoU29) and [Shoui's collection](https://drive.google.com/drive/folders/1g1drkFzokc8KNpsPHoRmDJ4OtMTWFuXi)
 
-**Note**: Always download frequency dictionaries from trusted sources to avoid corrupted or malicious files. If you can't find a specific dictionary, consider generating your own using tools mentioned in Yomitan's documentation or community guides. You may want to ask around on the [TMW Discord](https://learnjapanese.moe/join/) as well.
+**Generate Your Own:**
+
+You can also generate your own custom frequency dictionaries directly inside Yomine using the built-in **Frequency Analyzer** tool.
+
+**Note**: Always download frequency dictionaries from trusted sources to avoid corrupted or malicious files. If you can't find a specific dictionary, consider generating your own. You may want to ask around on the [TMW Discord](https://learnjapanese.moe/join/) as well.
 
 ### Setting Up Anki Integration
 
@@ -167,11 +171,12 @@ The ignore list lets you hide terms you don't want to see from your mining resul
 - [x] **Ignore List** - Hide unwanted terms from mining results
 - [x] **Comprehensibility Scoring** - Sentence difficulty estimation based on Anki intervals
 - [x] **Advanced Filtering** - Filter by part-of-speech and frequency ranges
+- [x] **Custom Frequency Lists**: Generate dictionaries from your own content
 
 ### Planned
 - [ ] **Improved Segmentation**: Better text parsing and part-of-speech tagging
 - [ ] **More File Types**: Support for eBooks, web pages, etc.
-- [ ] **Custom Frequency Lists**: Generate dictionaries from your own content
+
 
 ## FAQ
 
