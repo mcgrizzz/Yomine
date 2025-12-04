@@ -25,6 +25,8 @@ use super::{
         data::FrequencyDictionarySetting,
         SettingsData,
     },
+    setup_banner::SetupBanner,
+    setup_checklist_modal::SetupAction,
     table::{
         term_table,
         TableState,
@@ -50,7 +52,10 @@ use crate::{
         SourceFile,
         Term,
     },
-    dictionary::frequency_manager::FrequencyManager,
+    dictionary::{
+        frequency_manager::FrequencyManager,
+        frequency_utils,
+    },
     persistence::{
         load_json_or_default,
         save_json,
@@ -291,17 +296,26 @@ impl eframe::App for YomineApp {
             &mut self.modals.frequency_weights,
             &mut self.modals.pos_filters,
             &mut self.modals.frequency_analyzer,
+            &mut self.modals.setup_checklist,
+            &mut self.modals.restart,
             &mut self.settings_data,
             &self.player.ws,
             self.player.mpv.is_connected(),
             self.anki_connected,
-            &mut self.modals.restart,
             ignore_list_ref,
             &self.task_manager,
             can_refresh,
             &self.table_state,
             frequency_manager,
         );
+
+        let banner_clicked =
+            SetupBanner::show(ctx, self.language_tools.as_ref(), &self.settings_data);
+
+        if banner_clicked {
+            self.modals.setup_checklist.open_modal();
+        }
+
         if let Some(source_file) = self.modals.file.show(
             ctx,
             &self.theme,
@@ -358,6 +372,29 @@ impl eframe::App for YomineApp {
                 );
             }
             self.save_settings();
+        }
+
+        if let Some(action) = self.modals.setup_checklist.show(
+            ctx,
+            self.language_tools.as_ref(),
+            self.anki_connected,
+            &self.player,
+            &self.settings_data,
+        ) {
+            match action {
+                SetupAction::OpenUrl(url) => {
+                    let _ = open::that(&url);
+                }
+                SetupAction::OpenAnkiSettings => {
+                    self.modals.anki_settings.open_settings(self.settings_data.clone(), ctx);
+                }
+                SetupAction::LoadFrequencyDictionary => {
+                    frequency_utils::load_frequency_dictionaries(&mut self.modals.restart);
+                }
+                SetupAction::OpenWebSocketSettings => {
+                    self.modals.websocket_settings.open_settings(self.settings_data.clone());
+                }
+            }
         }
 
         if let Some(language_tools) = &self.language_tools {
