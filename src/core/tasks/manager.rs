@@ -162,7 +162,8 @@ impl TaskManager {
                 });
 
                 let tokenizer = Arc::new(
-                    init_vibrato(&dict_type, Some(progress_callback)).map_err(|e| e.to_string())?,
+                    init_vibrato(&dict_type, Some(progress_callback.clone()))
+                        .map_err(|e| e.to_string())?,
                 );
 
                 let _ = sender.send(TaskResult::LoadingMessage(
@@ -170,7 +171,7 @@ impl TaskManager {
                 ));
 
                 let frequency_manager = Arc::new(
-                    frequency_manager::process_frequency_dictionaries()
+                    frequency_manager::process_frequency_dictionaries(Some(progress_callback))
                         .map_err(|e| e.to_string())?,
                 );
 

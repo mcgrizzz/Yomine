@@ -347,13 +347,86 @@ fn extract_zip(zip_path: &Path, extract_to: &Path) -> Result<(), YomineError> {
     Ok(())
 }
 
-pub fn process_frequency_dictionaries() -> Result<FrequencyManager, YomineError> {
+fn ensure_default_frequency_dict(
+    progress_callback: Option<&(dyn Fn(String) + Send)>,
+) -> Option<String> {
+    use crate::core::http::try_download_from_urls;
+
+    const DEFAULT_FREQ_DICT_URLS: &[&str] = &[
+        "https://github.com/Kuuuube/yomitan-dictionaries/raw/main/dictionaries/JPDB_v2.2_Frequency_Kana_2024-10-13.zip",
+        "https://drive.google.com/uc?export=download&id=1K8IRAcdwQqi_GI17XZ_VCQzq2RoHSWrB",
+    ];
+    const DEFAULT_FREQ_DICT_NAME: &str = "JPDB_v2.2_Frequency_Kana";
+
+    let freq_dict_dir = get_frequency_dict_dir();
+    let zip_path = freq_dict_dir.join(format!("{}.zip", DEFAULT_FREQ_DICT_NAME));
+    let extract_dir = freq_dict_dir.join(DEFAULT_FREQ_DICT_NAME);
+
+    if extract_dir.exists() && extract_dir.join("index.json").exists() {
+        return None;
+    }
+
+    if let Ok(entries) = fs::read_dir(&freq_dict_dir) {
+        let has_any_dict = entries.filter_map(|e| e.ok()).any(|e| {
+            let path = e.path();
+            path.is_dir() && path.join("index.json").exists()
+        });
+
+        if has_any_dict {
+            return None;
+        }
+    }
+
+    println!("No frequency dictionaries found. Downloading default dictionary...");
+
+    if let Err(e) = fs::create_dir_all(&freq_dict_dir) {
+        eprintln!("Failed to create frequency dictionary directory: {}", e);
+        return Some(format!("Could not create directory: {}", e));
+    }
+
+    match try_download_from_urls(DEFAULT_FREQ_DICT_URLS, &zip_path, &[&zip_path], progress_callback)
+    {
+        Ok(_) => {
+            println!("Downloaded default frequency dictionary");
+
+            match extract_zip(&zip_path, &extract_dir) {
+                Ok(_) => {
+                    println!("Default frequency dictionary ready");
+                    fs::remove_file(&zip_path).ok();
+                    None
+                }
+                Err(e) => {
+                    eprintln!("Failed to extract frequency dictionary: {}", e);
+                    Some(format!("Extraction failed: {}", e))
+                }
+            }
+        }
+        Err(error_summary) => {
+            eprintln!("Failed to download default frequency dictionary from all sources");
+            Some(error_summary)
+        }
+    }
+}
+
+pub fn process_frequency_dictionaries(
+    progress_callback: Option<Box<dyn Fn(String) + Send>>,
+) -> Result<FrequencyManager, YomineError> {
     let manager = Mutex::new(FrequencyManager::new(None));
     let start = Instant::now();
 
     println!("Loading frequency dictionaries...");
     let dir_path = get_frequency_dict_dir();
     fs::create_dir_all(&dir_path)?;
+
+    let warning_message = ensure_default_frequency_dict(progress_callback.as_deref());
+    if let Some(msg) = &warning_message {
+        eprintln!("Warning: Failed to auto-download frequency dictionary: {}", msg);
+    }
+
+    if let Some(ref callback) = progress_callback {
+        callback("Loading Frequency Dictionaries...".to_string());
+    }
+
     for entry in fs::read_dir(&dir_path)
         .map_err(|e| YomineError::Custom(format!("Failed to read directory: {}", e)))?
     {
@@ -441,5 +514,10 @@ pub fn process_frequency_dictionaries() -> Result<FrequencyManager, YomineError>
     let total_duration = start.elapsed();
     println!("Total processing time: {:?}", total_duration);
 
-    Ok(manager.into_inner().unwrap())
+    let manager_inner = manager.into_inner().unwrap();
+    if manager_inner.dictionaries.is_empty() {
+        eprintln!("Warning: No frequency dictionaries loaded. The app will continue but term frequencies will not be available.");
+    }
+
+    Ok(manager_inner)
 }

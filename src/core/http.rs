@@ -120,6 +120,76 @@ pub fn download_with_progress(
     }
 }
 
+pub fn try_download_from_urls(
+    urls: &[&str],
+    download_path: &Path,
+    cleanup_paths: &[&Path],
+    progress_callback: Option<&(dyn Fn(String) + Send)>,
+) -> Result<(), String> {
+    use std::fs;
+
+    if urls.is_empty() {
+        return Err("No URLs provided".to_string());
+    }
+
+    let mut all_errors = Vec::new();
+
+    for (index, url) in urls.iter().enumerate() {
+        for path in cleanup_paths {
+            fs::remove_file(path).ok();
+            fs::remove_dir_all(path).ok();
+        }
+
+        if let Some(callback) = progress_callback {
+            callback(format!("Downloading from source {} of {}...", index + 1, urls.len()));
+        }
+
+        let client = match http_client() {
+            Ok(c) => c,
+            Err(e) => {
+                all_errors.push(format!(
+                    "Source {}: Failed to create HTTP client - {}",
+                    index + 1,
+                    e
+                ));
+                continue;
+            }
+        };
+
+        match download_with_progress(&client, url, download_path, progress_callback) {
+            Ok(_) => match download_path.metadata() {
+                Ok(metadata) if metadata.len() > 0 => {
+                    if let Some(callback) = progress_callback {
+                        callback("Download successful".to_string());
+                    }
+                    return Ok(());
+                }
+                Ok(_) => {
+                    all_errors.push(format!("Source {}: Downloaded file is empty", index + 1));
+                    continue;
+                }
+                Err(e) => {
+                    all_errors.push(format!(
+                        "Source {}: Failed to verify download - {}",
+                        index + 1,
+                        e
+                    ));
+                    continue;
+                }
+            },
+            Err(e) => {
+                all_errors.push(format!("Source {}: Download failed - {}", index + 1, e));
+                if let Some(callback) = progress_callback {
+                    callback(format!("Failed from source {}, trying next...", index + 1));
+                }
+                continue;
+            }
+        }
+    }
+
+    Err(all_errors.join("\n"))
+}
+
 fn ensure_success(resp: &Response) -> Result<(), YomineError> {
     if !resp.status().is_success() {
         return Err(YomineError::Custom(format!(
