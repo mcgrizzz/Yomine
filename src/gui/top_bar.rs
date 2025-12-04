@@ -29,6 +29,7 @@ use crate::{
             SettingsData,
             WebSocketSettingsModal,
         },
+        setup_checklist_modal::SetupChecklistModal,
         table::TableState,
         websocket_manager::WebSocketManager,
     },
@@ -48,11 +49,11 @@ impl TopBar {
         frequency_weights_modal: &mut FrequencyWeightsModal,
         pos_filters_modal: &mut PosFiltersModal,
         frequency_analyzer_modal: &mut FrequencyAnalyzerModal,
+        setup_checklist_modal: &mut SetupChecklistModal,
         current_settings: &mut SettingsData,
         websocket_manager: &WebSocketManager,
         mpv_connected: bool,
         anki_connected: bool,
-        restart_modal: &mut crate::gui::restart_modal::RestartModal,
         ignore_list: Option<&Arc<Mutex<IgnoreList>>>,
         task_manager: &TaskManager,
         can_refresh: bool,
@@ -118,33 +119,8 @@ impl TopBar {
                     }
 
                     if ui.button("Load New Frequency Dictionaries").clicked() {
-                        match frequency_utils::handle_frequency_dictionary_copy() {
-                            Ok(count) => {
-                                if count > 0 {
-                                    println!("Successfully added {} frequency dictionaries", count);
-                                    restart_modal.show_restart_dialog(format!(
-                                        "Successfully added {} frequency dictionaries. \
-                                         Please restart the application load them.",
-                                        count
-                                    ));
-                                } else {
-                                    println!(
-                                        "No new frequency dictionaries were selected or loaded"
-                                    );
-                                    restart_modal.show_info_dialog(
-                                        "No new frequency dictionaries were selected. \
-                                         No changes were made.",
-                                    );
-                                }
-                            }
-                            Err(e) => {
-                                eprintln!("Failed to load frequency dictionaries: {}", e);
-                                restart_modal.show_info_dialog(format!(
-                                    "Failed to load frequency dictionaries: {}",
-                                    e
-                                ));
-                            }
-                        }
+                        frequency_utils::load_frequency_dictionaries(task_manager);
+                        ui.close();
                     }
 
                     if ui.button("Open Data Folder").clicked() {
@@ -176,6 +152,10 @@ impl TopBar {
                     }
                     if ui.button("Part of Speech Filters").clicked() {
                         pos_filters_modal.open_modal(table_state.pos_snapshot());
+                    }
+                    if ui.button("Setup Checklist").clicked() {
+                        setup_checklist_modal.open_modal();
+                        ui.close();
                     }
                 });
 

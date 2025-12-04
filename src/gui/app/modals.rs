@@ -2,7 +2,6 @@ use crate::gui::{
     error_modal::ErrorModal,
     file_modal::FileModal,
     frequency_analyzer::FrequencyAnalyzerModal,
-    restart_modal::RestartModal,
     settings::{
         AnkiSettingsModal,
         FrequencyWeightsModal,
@@ -10,6 +9,7 @@ use crate::gui::{
         PosFiltersModal,
         WebSocketSettingsModal,
     },
+    setup_checklist_modal::SetupChecklistModal,
 };
 
 pub struct Modals {
@@ -20,8 +20,8 @@ pub struct Modals {
     pub ignore_list: IgnoreListModal,
     pub frequency_weights: FrequencyWeightsModal,
     pub pos_filters: PosFiltersModal,
-    pub restart: RestartModal,
     pub frequency_analyzer: FrequencyAnalyzerModal,
+    pub setup_checklist: SetupChecklistModal,
 }
 
 impl Default for Modals {
@@ -34,8 +34,8 @@ impl Default for Modals {
             ignore_list: IgnoreListModal::new(),
             frequency_weights: FrequencyWeightsModal::new(),
             pos_filters: PosFiltersModal::new(),
-            restart: RestartModal::new(),
             frequency_analyzer: FrequencyAnalyzerModal::new(),
+            setup_checklist: SetupChecklistModal::new(),
         }
     }
 }

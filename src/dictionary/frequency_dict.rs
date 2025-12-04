@@ -1,5 +1,9 @@
 use std::collections::HashMap;
 
+use rayon::iter::{
+    IntoParallelIterator,
+    ParallelIterator,
+};
 use serde::Deserialize;
 
 use super::{
@@ -18,25 +22,39 @@ pub struct FrequencyDictionary {
 
 impl FrequencyDictionary {
     pub fn new(title: String, revision: String, term_meta_list: Vec<TermMetaBankV3>) -> Self {
-        let mut terms = HashMap::new();
+        // Build HashMap<String, Vec<CacheFrequencyData>> in parallel.
+        let terms: HashMap<String, Vec<CacheFrequencyData>> = term_meta_list
+            .into_par_iter()
+            .fold(
+                || HashMap::<String, Vec<CacheFrequencyData>>::new(),
+                |mut map, term_meta| {
+                    if let Some(json_freq_data) = term_meta.data {
+                        let mut cache_freq_data: CacheFrequencyData = json_freq_data.into();
 
-        //Do reading normalization here so we don't ever have to compute again.
-        for term_meta in term_meta_list {
-            if let Some(json_freq_data) = term_meta.data {
-                let mut cache_freq_data: CacheFrequencyData = json_freq_data.into();
+                        // Normalize the long vowel of the reading if it exists
+                        if let Some(reading) = cache_freq_data.reading() {
+                            let normalized_reading = reading.normalize_long_vowel().into_owned();
+                            cache_freq_data.set_reading(normalized_reading);
+                        }
 
-                // Normalize the long vowel of the reading if it exists
-                if let Some(reading) = cache_freq_data.reading() {
-                    let normalized_reading = reading.normalize_long_vowel().into_owned();
-                    cache_freq_data.set_reading(normalized_reading);
-                }
+                        // Normalize the long vowel of the term/key
+                        let normalized_term = term_meta.term.normalize_long_vowel().into_owned();
 
-                // Normalize the long vowel of the term/key
-                let normalized_term = term_meta.term.normalize_long_vowel().into_owned();
+                        map.entry(normalized_term).or_default().push(cache_freq_data);
+                    }
 
-                terms.entry(normalized_term).or_insert_with(Vec::new).push(cache_freq_data);
-            }
-        }
+                    map
+                },
+            )
+            .reduce(
+                || HashMap::<String, Vec<CacheFrequencyData>>::new(),
+                |mut acc, mut map| {
+                    for (term, mut list) in map.drain() {
+                        acc.entry(term).or_default().append(&mut list);
+                    }
+                    acc
+                },
+            );
 
         FrequencyDictionary { title, revision, terms }
     }

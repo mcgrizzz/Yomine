@@ -25,7 +25,7 @@ impl Default for WebSocketSettings {
     }
 }
 
-#[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct SettingsData {
     pub anki_model_mappings: HashMap<String, FieldMapping>,
     #[serde(default = "default_interval")]
@@ -50,8 +50,8 @@ const fn default_true() -> bool {
     true
 }
 
-impl SettingsData {
-    pub fn new() -> Self {
+impl Default for SettingsData {
+    fn default() -> Self {
         Self {
             anki_model_mappings: HashMap::new(),
             anki_interval: default_interval(),

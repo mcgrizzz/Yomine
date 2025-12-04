@@ -16,9 +16,9 @@ pub struct WebSocketSettingsData {
 impl Default for WebSocketSettingsData {
     fn default() -> Self {
         Self {
-            settings: SettingsData::new(),
+            settings: SettingsData::default(),
             temp_websocket_settings: WebSocketSettings::default(),
-            original_settings: SettingsData::new(),
+            original_settings: SettingsData::default(),
         }
     }
 }

@@ -1,7 +1,10 @@
 use std::fs;
 
 use crate::{
-    core::errors::YomineError,
+    core::{
+        errors::YomineError,
+        tasks::TaskManager,
+    },
     dictionary::frequency_manager::get_frequency_dict_dir,
 };
 
@@ -66,5 +69,21 @@ pub fn handle_frequency_dictionary_copy() -> Result<usize, YomineError> {
         Ok(copied_count)
     } else {
         Ok(0)
+    }
+}
+
+pub fn load_frequency_dictionaries(task_manager: &TaskManager) {
+    match handle_frequency_dictionary_copy() {
+        Ok(count) => {
+            if count > 0 {
+                println!("Successfully added {} frequency dictionaries. Reloading...", count);
+                task_manager.reload_frequency_dictionaries();
+            } else {
+                println!("No new frequency dictionaries were selected.");
+            }
+        }
+        Err(e) => {
+            eprintln!("Failed to load frequency dictionaries: {}", e);
+        }
     }
 }

@@ -35,7 +35,10 @@ pub enum FrequencyAnalysisUpdate {
 pub enum TaskResult {
     AnkiConnection(bool),
     AnkiModels(Result<Vec<Model>, String>),
-    AnkiSampleNote { model_name: String, result: Result<HashMap<String, String>, String> },
+    AnkiSampleNote {
+        model_name: String,
+        result: Result<HashMap<String, String>, String>,
+    },
 
     FileProcessing(FileProcessingResult),
     RequestRefresh,
@@ -47,6 +50,9 @@ pub enum TaskResult {
 
     FrequencyAnalysis(FrequencyAnalysisUpdate),
     FrequencyExport(Result<String, String>),
+    FrequencyDictionariesReloaded(
+        Result<std::sync::Arc<crate::dictionary::frequency_manager::FrequencyManager>, String>,
+    ),
 }
 
 impl TaskResult {
@@ -67,6 +73,7 @@ impl TaskResult {
                 FrequencyAnalysisUpdate::Cancelled => "frequency_analysis_cancelled",
             },
             TaskResult::FrequencyExport(_) => "frequency_export",
+            TaskResult::FrequencyDictionariesReloaded(_) => "frequency_dictionaries_reloaded",
         }
     }
 }

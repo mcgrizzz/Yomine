@@ -10,9 +10,6 @@ pub enum YomineError {
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
 
-    #[error("HJson error: {0}")]
-    HJson(#[from] serde_hjson::Error),
-
     #[error("Regex error: {0}")]
     Regex(#[from] regex::Error),
 
