@@ -30,9 +30,9 @@ pub struct SettingsModalData {
 impl Default for SettingsModalData {
     fn default() -> Self {
         Self {
-            settings: SettingsData::new(),
+            settings: SettingsData::default(),
             temp_model_mappings: HashMap::new(),
-            original_settings: SettingsData::new(),
+            original_settings: SettingsData::default(),
         }
     }
 }
@@ -167,7 +167,7 @@ impl AnkiSettingsModal {
                     self.data.settings = self.data.original_settings.clone();
                 } else if reset_clicked {
                     self.data.temp_model_mappings.clear();
-                    self.data.settings = SettingsData::new();
+                    self.data.settings = SettingsData::default();
                 }
             })
         });
