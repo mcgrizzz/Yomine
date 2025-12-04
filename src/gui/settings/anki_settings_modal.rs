@@ -112,11 +112,7 @@ impl AnkiSettingsModal {
                 ui_existing_mappings(ui, &mut self.data, &mut model_editor);
                 ui.separator();
 
-                ui.heading(if model_editor.is_editing {
-                    "Edit Model Mapping"
-                } else {
-                    "Add Model Mapping"
-                });
+                ui.heading(if model_editor.is_editing { "Edit Notetype" } else { "Add Notetype" });
                 ui.add_space(1.0);
                 ui_connection_status(ui, &mut anki_service, ctx);
                 ui.add_space(5.0);
@@ -194,13 +190,13 @@ fn ui_existing_mappings(
     data: &mut SettingsModalData,
     model_editor: &mut ModelMappingEditor,
 ) {
-    ui.heading("Current Model Mappings");
+    ui.heading("Current Notetypes");
     ui.add_space(5.0);
 
     let mut to_remove = None;
     for (model_name, field_mapping) in &data.temp_model_mappings.clone() {
         ui.horizontal(|ui| {
-            ui.label("Model:");
+            ui.label("Notetype:");
             ui.strong(
                 egui::RichText::new(model_name).color(egui::Color32::from_rgb(100, 200, 255)),
             );

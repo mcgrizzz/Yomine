@@ -44,7 +44,7 @@ pub fn ui_connection_status(
                 egui::Button::new(if anki_service.is_loading_models {
                     "Refreshing..."
                 } else {
-                    "Refresh Models"
+                    "Refresh Notetypes"
                 }),
             )
             .clicked()
@@ -63,7 +63,7 @@ pub fn ui_model_selection(
     ctx: &egui::Context,
 ) {
     ui.horizontal(|ui| {
-        ui.label("Model Name:");
+        ui.label("Notetype:");
         let previous_model = model_editor.model_name.clone();
         egui::ComboBox::from_id_salt("model_name_combo")
             .selected_text(&model_editor.model_name)
