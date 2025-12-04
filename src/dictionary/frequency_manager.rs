@@ -10,18 +10,11 @@ use std::{
         Write,
     },
     path::Path,
-    sync::{
-        Mutex,
-        RwLock,
-    },
+    sync::RwLock,
     time::Instant,
     u32,
 };
 
-use rayon::iter::{
-    ParallelBridge,
-    ParallelIterator,
-};
 use regex::Regex;
 use wana_kana::IsJapaneseStr;
 use zip::ZipArchive;
@@ -411,7 +404,7 @@ fn ensure_default_frequency_dict(
 pub fn process_frequency_dictionaries(
     progress_callback: Option<Box<dyn Fn(String) + Send>>,
 ) -> Result<FrequencyManager, YomineError> {
-    let manager = Mutex::new(FrequencyManager::new(None));
+    let mut manager = FrequencyManager::new(None);
     let start = Instant::now();
 
     println!("Loading frequency dictionaries...");
@@ -445,17 +438,23 @@ pub fn process_frequency_dictionaries(
         }
     }
 
-    fs::read_dir(&dir_path)?.filter_map(|e| e.ok()).par_bridge().for_each(|entry| {
-        let path = entry.path();
-        if !path.is_dir() {
-            return;
-        }
+    let dict_dirs: Vec<_> = fs::read_dir(&dir_path)?
+        .filter_map(|e| e.ok())
+        .filter(|entry| entry.path().is_dir())
+        .collect();
 
+    let total_dicts = dict_dirs.len();
+    let mut cache_hits = 0;
+    let mut cache_rebuilds = 0;
+
+    for (idx, entry) in dict_dirs.iter().enumerate() {
+        let path = entry.path();
         let cache_path = path.join("cache.bin");
 
         // Parse index.json to get metadata
         if let Ok(Some(index)) = parse_index_json(&path) {
             let dict_name = index.title.clone();
+            let progress_num = idx + 1;
 
             // Try loading from cache
             let load_start = Instant::now();
@@ -469,9 +468,17 @@ pub fn process_frequency_dictionaries(
                             duration,
                             cached_dict.terms.len()
                         );
-                        let mut manager_guard = manager.lock().unwrap();
-                        manager_guard.add_dictionary(dict_name, cached_dict);
-                        return;
+
+                        if let Some(ref callback) = progress_callback {
+                            callback(format!(
+                                "Loading dictionary '{}' {}/{} ",
+                                dict_name, progress_num, total_dicts,
+                            ));
+                        }
+
+                        manager.add_dictionary(dict_name, cached_dict);
+                        cache_hits += 1;
+                        continue;
                     } else {
                         println!(
                             "Revision mismatch for '{}': cache={}, index={}",
@@ -488,6 +495,13 @@ pub fn process_frequency_dictionaries(
             }
 
             // Cache miss or invalid, build from JSON
+            if let Some(ref callback) = progress_callback {
+                callback(format!(
+                    "Building dictionary '{}' {}/{}",
+                    dict_name, progress_num, total_dicts,
+                ));
+            }
+
             let build_start = Instant::now();
             if let Ok(term_meta_list) = parse_term_meta_bank(&path) {
                 let freq_dict =
@@ -496,8 +510,8 @@ pub fn process_frequency_dictionaries(
                 println!("Built '{}' from JSON in {:?}", dict_name, build_duration);
 
                 // Add to manager
-                let mut manager_guard = manager.lock().unwrap();
-                manager_guard.add_dictionary(dict_name.clone(), freq_dict.clone());
+                manager.add_dictionary(dict_name.clone(), freq_dict.clone());
+                cache_rebuilds += 1;
 
                 // Save to cache
                 if let Err(e) = save_cached_dict(&freq_dict, &cache_path) {
@@ -509,15 +523,15 @@ pub fn process_frequency_dictionaries(
         } else {
             println!("Skipping {:?} due to unsupported format version.", path);
         }
-    });
+    }
 
     let total_duration = start.elapsed();
     println!("Total processing time: {:?}", total_duration);
+    println!("Cache performance: {} hits, {} rebuilds", cache_hits, cache_rebuilds);
 
-    let manager_inner = manager.into_inner().unwrap();
-    if manager_inner.dictionaries.is_empty() {
+    if manager.dictionaries.is_empty() {
         eprintln!("Warning: No frequency dictionaries loaded. The app will continue but term frequencies will not be available.");
     }
 
-    Ok(manager_inner)
+    Ok(manager)
 }
