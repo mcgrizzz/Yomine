@@ -5,7 +5,6 @@ pub mod file_modal;
 pub mod frequency_analyzer;
 pub mod message_overlay;
 pub mod recent_files;
-pub mod restart_modal;
 pub mod settings;
 pub mod setup_banner;
 pub mod setup_checklist_modal;

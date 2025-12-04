@@ -197,6 +197,33 @@ impl TaskManager {
         });
     }
 
+    pub fn reload_frequency_dictionaries(&self) {
+        let (sender, _runtime) = self.task_context();
+
+        thread::spawn(move || {
+            use std::sync::Arc;
+
+            use crate::dictionary::frequency_manager;
+
+            let _ = sender.send(TaskResult::LoadingMessage(
+                "Reloading frequency dictionaries...".to_string(),
+            ));
+
+            let sender_clone = sender.clone();
+            let progress_callback = Box::new(move |message: String| {
+                let _ = sender_clone.send(TaskResult::LoadingMessage(message));
+            });
+
+            let result =
+                match frequency_manager::process_frequency_dictionaries(Some(progress_callback)) {
+                    Ok(new_manager) => Ok(Arc::new(new_manager)),
+                    Err(e) => Err(e.to_string()),
+                };
+
+            let _ = sender.send(TaskResult::FrequencyDictionariesReloaded(result));
+        });
+    }
+
     pub fn refresh_terms(
         &self,
         base_terms: Vec<Term>,

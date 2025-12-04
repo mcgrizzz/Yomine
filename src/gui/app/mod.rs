@@ -297,7 +297,6 @@ impl eframe::App for YomineApp {
             &mut self.modals.pos_filters,
             &mut self.modals.frequency_analyzer,
             &mut self.modals.setup_checklist,
-            &mut self.modals.restart,
             &mut self.settings_data,
             &self.player.ws,
             self.player.mpv.is_connected(),
@@ -327,12 +326,7 @@ impl eframe::App for YomineApp {
 
         term_table(ctx, self);
         self.message_overlay.show(ctx, &self.theme);
-        self.modals.error.show(ctx); // Handle restart modal
-        if let Some(should_restart) = self.modals.restart.show(ctx) {
-            if should_restart {
-                self.restart_application(ctx);
-            }
-        }
+        self.modals.error.show(ctx);
 
         if let Some(settings) = self.modals.anki_settings.show(ctx) {
             self.settings_data = settings;
@@ -389,7 +383,7 @@ impl eframe::App for YomineApp {
                     self.modals.anki_settings.open_settings(self.settings_data.clone(), ctx);
                 }
                 SetupAction::LoadFrequencyDictionary => {
-                    frequency_utils::load_frequency_dictionaries(&mut self.modals.restart);
+                    frequency_utils::load_frequency_dictionaries(&self.task_manager);
                 }
                 SetupAction::OpenWebSocketSettings => {
                     self.modals.websocket_settings.open_settings(self.settings_data.clone());
@@ -556,6 +550,40 @@ impl YomineApp {
             TaskResult::FrequencyExport(result) => {
                 self.modals.frequency_analyzer.handle_export_complete(result);
             }
+            TaskResult::FrequencyDictionariesReloaded(result) => {
+                self.message_overlay.clear_message();
+
+                match result {
+                    Ok(new_freq_manager) => {
+                        if let Some(language_tools) = &mut self.language_tools {
+                            language_tools.frequency_manager = new_freq_manager.clone();
+
+                            self.apply_frequency_settings(new_freq_manager.as_ref());
+
+                            self.table_state.mark_dirty();
+                            if let Some(file_data) = &self.file_data {
+                                self.table_state.ensure_indices(
+                                    &file_data.terms,
+                                    &file_data.sentences,
+                                    Some(new_freq_manager.as_ref()),
+                                );
+                            }
+
+                            println!(
+                                "Successfully reloaded {} frequency dictionaries!",
+                                new_freq_manager.get_dictionary_names().len()
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        self.modals.error.show_error(
+                            "Reload Error".to_string(),
+                            "Failed to reload frequency dictionaries",
+                            Some(&e),
+                        );
+                    }
+                }
+            }
             _ => {}
         }
     }
@@ -711,23 +739,6 @@ impl YomineApp {
 
         self.table_state.sync_frequency_states(Some(manager));
         self.table_state.mark_dirty();
-    }
-
-    fn restart_application(&self, ctx: &egui::Context) {
-        // Get the current executable path
-        if let Ok(current_exe) = std::env::current_exe() {
-            // Start a new instance of the application
-            if let Err(e) = std::process::Command::new(&current_exe).spawn() {
-                eprintln!("Failed to restart application: {}", e);
-            } else {
-                // Close the current instance
-                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-            }
-        } else {
-            eprintln!("Failed to get current executable path for restart");
-            // Fallback to just closing the application
-            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-        }
     }
 
     fn handle_file_drops(&mut self, ctx: &egui::Context) {

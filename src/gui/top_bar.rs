@@ -50,7 +50,6 @@ impl TopBar {
         pos_filters_modal: &mut PosFiltersModal,
         frequency_analyzer_modal: &mut FrequencyAnalyzerModal,
         setup_checklist_modal: &mut SetupChecklistModal,
-        restart_modal: &mut crate::gui::restart_modal::RestartModal,
         current_settings: &mut SettingsData,
         websocket_manager: &WebSocketManager,
         mpv_connected: bool,
@@ -120,7 +119,8 @@ impl TopBar {
                     }
 
                     if ui.button("Load New Frequency Dictionaries").clicked() {
-                        frequency_utils::load_frequency_dictionaries(restart_modal);
+                        frequency_utils::load_frequency_dictionaries(task_manager);
+                        ui.close();
                     }
 
                     if ui.button("Open Data Folder").clicked() {

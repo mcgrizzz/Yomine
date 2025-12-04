@@ -1,9 +1,11 @@
 use std::fs;
 
 use crate::{
-    core::errors::YomineError,
+    core::{
+        errors::YomineError,
+        tasks::TaskManager,
+    },
     dictionary::frequency_manager::get_frequency_dict_dir,
-    gui::restart_modal::RestartModal,
 };
 
 pub fn copy_frequency_dictionaries(
@@ -70,27 +72,18 @@ pub fn handle_frequency_dictionary_copy() -> Result<usize, YomineError> {
     }
 }
 
-pub fn load_frequency_dictionaries(restart_modal: &mut RestartModal) {
+pub fn load_frequency_dictionaries(task_manager: &TaskManager) {
     match handle_frequency_dictionary_copy() {
         Ok(count) => {
             if count > 0 {
-                println!("Successfully added {} frequency dictionaries", count);
-                restart_modal.show_restart_dialog(format!(
-                    "Successfully added {} frequency dictionaries. \
-                     Please restart the application to load them.",
-                    count
-                ));
+                println!("Successfully added {} frequency dictionaries. Reloading...", count);
+                task_manager.reload_frequency_dictionaries();
             } else {
-                println!("No new frequency dictionaries were selected or loaded");
-                restart_modal.show_info_dialog(
-                    "No new frequency dictionaries were selected. \
-                     No changes were made.",
-                );
+                println!("No new frequency dictionaries were selected.");
             }
         }
         Err(e) => {
             eprintln!("Failed to load frequency dictionaries: {}", e);
-            restart_modal.show_info_dialog(format!("Failed to load frequency dictionaries: {}", e));
         }
     }
 }
