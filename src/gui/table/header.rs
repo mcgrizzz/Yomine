@@ -1,5 +1,6 @@
 use eframe::egui::{
     self,
+    Color32,
     DragValue,
     Frame,
     Margin,
@@ -416,7 +417,11 @@ fn ui_frequency_range_controls(
     actions: &mut ActionQueue,
 ) {
     if filter.max_bound <= filter.min_bound {
-        ui.label(RichText::new("No frequency data available").text_style(TextStyle::Small));
+        ui.label(
+            RichText::new("No frequency data available")
+                .text_style(TextStyle::Heading)
+                .color(Color32::RED),
+        );
         return;
     }
 
