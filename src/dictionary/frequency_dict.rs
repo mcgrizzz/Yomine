@@ -48,7 +48,6 @@ impl FrequencyDictionary {
             )
             .reduce(
                 || HashMap::<String, Vec<CacheFrequencyData>>::new(),
-                
                 |mut acc, mut map| {
                     for (term, mut list) in map.drain() {
                         acc.entry(term).or_default().append(&mut list);
