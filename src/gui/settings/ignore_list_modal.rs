@@ -35,6 +35,8 @@ pub struct IgnoreListModal {
     temp_files: Vec<IgnoreFile>,
     original_files: Vec<IgnoreFile>,
     file_term_counts: HashMap<String, usize>,
+    export_error: Option<String>,
+    export_success: bool,
 }
 
 impl Default for IgnoreListModal {
@@ -54,6 +56,8 @@ impl IgnoreListModal {
             temp_files: Vec::new(),
             original_files: Vec::new(),
             file_term_counts: HashMap::new(),
+            export_error: None,
+            export_success: false,
         }
     }
 
@@ -61,6 +65,8 @@ impl IgnoreListModal {
         self.open = true;
         self.new_term.clear();
         self.search_filter.clear();
+        self.export_error = None;
+        self.export_success = false;
 
         if let Ok(list) = ignore_list.lock() {
             self.temp_terms = list.get_all_terms();
@@ -133,12 +139,38 @@ impl IgnoreListModal {
             });
             ui.add_space(5.0);
 
+            if let Some(error_msg) = &self.export_error {
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new("⚠").color(egui::Color32::from_rgb(255, 100, 100)),
+                    );
+                    ui.label(
+                        egui::RichText::new(format!("Export failed: {}", error_msg))
+                            .color(egui::Color32::from_rgb(255, 100, 100)),
+                    );
+                });
+                ui.add_space(8.0);
+            } else if self.export_success {
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new("✓").color(egui::Color32::from_rgb(100, 200, 100)),
+                    );
+                    ui.label(
+                        egui::RichText::new("Terms exported successfully")
+                            .color(egui::Color32::from_rgb(100, 200, 100)),
+                    );
+                });
+                ui.add_space(8.0);
+            }
+
             ui.horizontal(|ui| {
                 let is_dirty = self.is_dirty();
                 let save_clicked =
                     ui.add_enabled(is_dirty, egui::Button::new("Save Settings")).clicked();
                 let cancel_clicked =
                     ui.add_enabled(is_dirty, egui::Button::new("Cancel")).clicked();
+
+                let export_clicked = ui.button("Export...").clicked();
 
                 let mut reset_clicked = false;
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -172,6 +204,19 @@ impl IgnoreListModal {
                 } else if reset_clicked {
                     self.temp_terms = DEFAULT_IGNORED_TERMS.iter().map(|s| s.to_string()).collect();
                     self.temp_files.clear();
+                }
+
+                if export_clicked {
+                    match self.export_terms() {
+                        Ok(()) => {
+                            self.export_error = None;
+                            self.export_success = true;
+                        }
+                        Err(error_msg) => {
+                            self.export_error = Some(error_msg);
+                            self.export_success = false;
+                        }
+                    }
                 }
             });
         });
@@ -520,5 +565,21 @@ impl IgnoreListModal {
             .inner;
 
         file_to_refresh_result
+    }
+
+    fn export_terms(&self) -> Result<(), String> {
+        let date = chrono::Local::now().format("%Y-%m-%d");
+        let default_filename = format!("yomine_ignored_terms_{}.txt", date);
+
+        let path = rfd::FileDialog::new()
+            .add_filter("Text files", &["txt"])
+            .set_file_name(&default_filename)
+            .save_file()
+            .ok_or_else(|| "Export cancelled".to_string())?;
+
+        let content = self.temp_terms.join("\n");
+        std::fs::write(&path, content).map_err(|e| format!("Failed to write file: {}", e))?;
+
+        Ok(())
     }
 }

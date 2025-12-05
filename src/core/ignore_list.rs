@@ -14,7 +14,7 @@ use crate::persistence::get_app_data_dir;
 
 pub const DEFAULT_IGNORED_TERMS: &[&str] = &[
     "の", "は", "に", "へ", "を", "て", "が", "だ", "た", "と", "から", "も", "で", "か", "です",
-    "ね", "な",
+    "ね", "な", "ん", "し", "お",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

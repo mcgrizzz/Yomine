@@ -9,7 +9,6 @@ use egui_extras::{
     Column,
     TableBuilder,
 };
-use wana_kana::ConvertJapanese;
 
 use super::{
     theme::blend_colors,
@@ -266,22 +265,44 @@ fn ui_col_term(
             blend_colors(normal_color, highlighted_color, 0.8)
         };
 
-        let response = ui
-            .label(RichText::new(&term.lemma_form).color(term_color).size(22.0))
-            .on_hover_ui(|ui| {
-                ui.set_min_width(75.0);
-                ui.label(app.theme.heading(ui.ctx(), &term.lemma_reading.to_hiragana()));
-                ui.label(app.theme.heading(ui.ctx(), &term.lemma_reading.to_katakana()));
+        let ctrl_held = ctx.input(|i| i.modifiers.ctrl || i.modifiers.command);
 
-                ui.separator();
-                if ignore_status {
-                    ui.label(
-                        egui::RichText::new("This term is ignored")
-                            .color(ctx.style().visuals.weak_text_color())
-                            .size(12.0),
-                    );
-                }
-            });
+        let label = egui::Label::new(RichText::new(&term.lemma_form).color(term_color).size(22.0))
+            .sense(egui::Sense::click())
+            .selectable(!ctrl_held);
+
+        let response = ui.add(label).on_hover_ui(|ui| {
+            ui.set_min_width(75.0);
+            ui.label(app.theme.heading(ui.ctx(), &term.lemma_reading));
+
+            ui.separator();
+            ui.add_space(4.0);
+
+            let mut text = "Ctrl+Click to ignore";
+
+            if ignore_status {
+                text = "Ctrl+Click to UNDO ignore";
+            }
+
+            ui.label(
+                egui::RichText::new(text)
+                    .color(ctx.style().visuals.weak_text_color())
+                    .size(10.0)
+                    .italics(),
+            );
+        });
+
+        if response.clicked() && ctrl_held {
+            if ignore_status {
+                actions.push(UiAction::RemoveFromIgnoreList(term.lemma_form.clone()));
+            } else {
+                actions.push(UiAction::AddToIgnoreList(term.lemma_form.clone()));
+            }
+        }
+
+        if response.hovered() && ctrl_held {
+            ctx.set_cursor_icon(egui::CursorIcon::PointingHand);
+        }
 
         response.context_menu(|ui| {
             if app.language_tools.is_some() {
