@@ -9,7 +9,6 @@ use egui_extras::{
     Column,
     TableBuilder,
 };
-use wana_kana::ConvertJapanese;
 
 use super::{
     theme::blend_colors,
