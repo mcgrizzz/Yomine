@@ -34,9 +34,8 @@ The macOS and Linux binaries have not been extensively tested.
 ## Quick Start
 
 1. **Download** the latest release for your platform from [Releases](https://github.com/mcgrizzz/Yomine/releases)
-2. **Download Frequency Dictionaries** - [Frequency Dictionaries](#setting-up-frequency-dictionaries)
-3. **Connect to Anki** - [Anki Setup](#setting-up-anki-integration)
-4. **Connect to a Video Player** - Either:
+2. **Connect to Anki** - [Anki Setup](#setting-up-anki-integration)
+3. **Connect to a Video Player** - Either:
    - **ASBPlayer**: In ASBPlayer, `MISC` -> `Enable WebSocket client`
    - **MPV**: Start MPV with `--input-ipc-server=/tmp/mpv-socket`
 
@@ -75,7 +74,7 @@ That's it! Yomine will segment the text, rank terms by frequency, and show you v
 
 ### Setting Up Frequency Dictionaries
 
-Yomine uses frequency dictionaries to rank vocabulary by importance and improve text segmentation.
+Yomine uses frequency dictionaries to rank vocabulary by importance and improve text segmentation. It will automatically download **[JPDB v2.2 Frequency Kana](https://github.com/Kuuuube/yomitan-dictionaries/?tab=readme-ov-file#jpdb-v22-frequency-kana-recommended)**. Though you can add as many as you like, toggle and weigh them however you like. 
 
 **Adding Dictionaries:**
 1. In Yomine, go to **File → Load New Frequency Dictionaries**
@@ -83,7 +82,7 @@ Yomine uses frequency dictionaries to rank vocabulary by importance and improve 
 3. Restart when prompted
 
 **Recommended Dictionaries:**
-- **[JPDB v2.2 Frequency Kana](https://github.com/Kuuuube/yomitan-dictionaries/?tab=readme-ov-file#jpdb-v22-frequency-kana-recommended)**: **★ If you only add one, add this one. ★**
+- **[JPDB v2.2 Frequency Kana](https://github.com/Kuuuube/yomitan-dictionaries/?tab=readme-ov-file#jpdb-v22-frequency-kana-recommended)**: **★ Automagically downloaded and installed ★**
 - **[BCCWJ](https://github.com/Kuuuube/yomitan-dictionaries/?tab=readme-ov-file#bccwj-suw-luw-combined)**: Based on the Balanced Corpus of Contemporary Written Japanese
 - **[CC100](https://drive.google.com/file/d/1_AYh1VtCq0cj1hXtFO15zRuPUUhUCSHD/view?usp=sharing)**: List from Common Crawl data
 
