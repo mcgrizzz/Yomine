@@ -271,26 +271,30 @@ fn ui_col_term(
             .sense(egui::Sense::click())
             .selectable(!ctrl_held);
 
-        let response = ui.add(label).on_hover_ui(|ui| {
-            ui.set_min_width(75.0);
-            ui.label(app.theme.heading(ui.ctx(), &term.lemma_reading));
+        let mut response = ui.add(label);
 
-            ui.separator();
-            ui.add_space(4.0);
+        if !ctrl_held {
+            response = response.on_hover_ui(|ui| {
+                ui.set_min_width(75.0);
+                ui.label(app.theme.heading(ui.ctx(), &term.lemma_reading));
 
-            let mut text = "Ctrl+Click to ignore";
+                ui.separator();
+                ui.add_space(4.0);
 
-            if ignore_status {
-                text = "Ctrl+Click to UNDO ignore";
-            }
+                let mut text = "Ctrl+Click to ignore";
 
-            ui.label(
-                egui::RichText::new(text)
-                    .color(ctx.style().visuals.weak_text_color())
-                    .size(10.0)
-                    .italics(),
-            );
-        });
+                if ignore_status {
+                    text = "Ctrl+Click to UNDO ignore";
+                }
+
+                ui.label(
+                    egui::RichText::new(text)
+                        .color(ctx.style().visuals.weak_text_color())
+                        .size(10.0)
+                        .italics(),
+                );
+            });
+        }
 
         if response.clicked() && ctrl_held {
             if ignore_status {
