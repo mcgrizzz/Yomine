@@ -2,6 +2,7 @@ pub mod errors;
 pub mod filename_parser;
 pub mod http;
 pub mod ignore_list;
+pub mod media_server;
 pub mod models;
 pub mod pipeline;
 pub mod tasks;

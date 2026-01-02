@@ -35,12 +35,16 @@ use super::{
         set_theme,
         Theme,
     },
-    top_bar::TopBar,
+    top_bar::{
+        TopBar,
+        TopBarAction,
+    },
     websocket_manager::WebSocketManager,
 };
 use crate::{
     anki::FieldMapping,
     core::{
+        media_server::MediaServerStream,
         models::SourceFileType,
         tasks::{
             types::FrequencyAnalysisUpdate,
@@ -102,6 +106,7 @@ pub struct YomineApp {
     pub player: PlayerManager,
     pub anki_connected: bool,
     pub last_anki_check: Option<std::time::Instant>,
+    // pub last_mpv_connected: bool,
     task_manager: TaskManager,
 }
 
@@ -148,6 +153,7 @@ impl YomineApp {
             player,
             anki_connected: false,
             last_anki_check: None,
+            // last_mpv_connected: false,
             task_manager,
         };
 
@@ -276,6 +282,14 @@ impl eframe::App for YomineApp {
 
         // Update the combined player (handles both MPV and WebSocket)
         self.player.update(self.settings_data.websocket_settings.port);
+        
+        // let mpv_connected = self.player.mpv.is_connected();
+        // if mpv_connected && !self.last_mpv_connected {
+        //     println!("[MPV] Connection established, automatically checking for subtitles...");
+        //     self.load_from_mpv();
+        // }
+        // self.last_mpv_connected = mpv_connected;
+
         self.update_anki_status();
         self.handle_file_drops(ctx);
         self.draw_file_drop_overlay(ctx);
@@ -287,7 +301,7 @@ impl eframe::App for YomineApp {
         let can_refresh = self.file_data.as_ref().map_or(false, |fd| !fd.original_terms.is_empty())
             && self.language_tools.is_some();
 
-        TopBar::show(
+        if let Some(action) = TopBar::show(
             ctx,
             &mut self.modals.file,
             &mut self.modals.anki_settings,
@@ -306,7 +320,11 @@ impl eframe::App for YomineApp {
             can_refresh,
             &self.table_state,
             frequency_manager,
-        );
+        ) {
+            match action {
+                TopBarAction::LoadFromMpv => self.load_from_mpv(),
+            }
+        }
 
         let banner_clicked =
             SetupBanner::show(ctx, self.language_tools.as_ref(), &self.settings_data);
@@ -322,6 +340,10 @@ impl eframe::App for YomineApp {
         ) {
             println!("File selected: {:?}", source_file.original_file);
             self.process_source_file(source_file);
+        }
+
+        if let Some(track) = self.modals.subtitle_select.show(ctx) {
+            self.load_subtitle_resource(&track.download_url);
         }
 
         term_table(ctx, self);
@@ -756,6 +778,287 @@ impl YomineApp {
 
             self.modals.file.close();
             self.process_source_file(source_file);
+        }
+    }
+
+    fn load_from_mpv(&mut self) {
+        if !self.player.mpv.is_connected() {
+            println!("[MPV Load] MPV is not connected.");
+            self.modals.error.show_error(
+                "MPV Error".to_string(),
+                "MPV is not connected".to_string().as_str(),
+                None::<String>,
+            );
+            return;
+        }
+
+        println!("[MPV Load] Starting load process...");
+
+        let is_japanese = |lang: &str, title: &str| -> bool {
+            let l = lang.to_lowercase();
+            let t = title.to_lowercase();
+            l == "jpn" || l == "ja" || l == "jp" || 
+            t.contains("japanese") || t.contains("日本語") || t.contains("jp") || t.contains("ja")
+        };
+
+        // 1. Try to find an active external subtitle track
+        match self.player.mpv.get_property("track-list") {
+            Ok(track_list) => {
+                if let Some(tracks) = track_list.as_array() {
+                    for (index, track) in tracks.iter().enumerate() {
+                        // Check if it's a selected subtitle track
+                        if track["type"] == "sub" && track["selected"] == true {
+                            let lang = track["lang"].as_str().unwrap_or("");
+                            let title = track["title"].as_str().unwrap_or("");
+                            
+                            if !is_japanese(lang, title) {
+                                println!("[MPV Load] Selected track at index {} is not Japanese ({}/{}). Skipping auto-load.", index, lang, title);
+                                continue;
+                            }
+
+                            println!("[MPV Load] Found selected Japanese subtitle track at index {}.", index);
+                            // Check for external-filename first
+                            if let Some(filename) = track["external-filename"].as_str() {
+                                println!("[MPV Load] Found 'external-filename': {}", filename);
+                                self.load_subtitle_resource(filename);
+                                return;
+                            }
+                            
+                            // Fallback to 'filename' if it's marked as external
+                            if track["external"] == true {
+                                 if let Some(filename) = track["filename"].as_str() {
+                                    println!("[MPV Load] Found 'filename' (marked external): {}", filename);
+                                    self.load_subtitle_resource(filename);
+                                    return;
+                                 }
+                            }
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                println!("[MPV Load] Failed to get track-list: {}", e);
+            }
+        }
+
+        // 2. Fallback: Check "path" property (video/file path)
+        match self.player.mpv.get_property_string("path") {
+            Ok(path_str) => {
+                println!("[MPV Load] Retrieved path: {}", path_str);
+                let path = std::path::PathBuf::from(&path_str);
+                
+                // If the path itself is a subtitle file
+                let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+                if ["srt", "ass", "ssa", "txt"].contains(&ext.as_str()) {
+                     println!("[MPV Load] Path identified as subtitle file (extension: {}).", ext);
+                     self.load_subtitle_resource(&path_str);
+                     return;
+                }
+
+                // Check for Emby/Jellyfin stream
+                if path_str.starts_with("http://") || path_str.starts_with("https://") {
+                     if let Some(stream) = MediaServerStream::try_parse(&path_str) {
+                         println!("[MPV Load] Detected Media Server Stream: {:?}", stream);
+                         match stream.fetch_subtitles() {
+                             Ok(tracks) => {
+                                 // Filter for Japanese tracks
+                                 let jp_tracks: Vec<_> = tracks.into_iter().filter(|t| {
+                                     is_japanese(&t.language, &t.title)
+                                 }).collect();
+
+                                 println!("[MPV Load] Found {} Japanese subtitle tracks via API.", jp_tracks.len());
+                                 
+                                 if jp_tracks.len() == 1 {
+                                     println!("[MPV Load] Only one Japanese track found. Loading automatically.");
+                                     self.load_subtitle_resource(&jp_tracks[0].download_url);
+                                     return;
+                                 } else if jp_tracks.len() > 1 {
+                                     println!("[MPV Load] Multiple Japanese tracks found. Opening selector.");
+                                     self.modals.subtitle_select.open(jp_tracks);
+                                     return;
+                                 } else {
+                                     println!("[MPV Load] No Japanese subtitles found via Media Server API.");
+                                 }
+                             },
+                             Err(e) => {
+                                 println!("[MPV Load] Failed to fetch subtitles from Media Server: {}", e);
+                                 self.modals.error.show_error(
+                                    "API Error".to_string(),
+                                    "Failed to fetch subtitles from Media Server".to_string().as_str(),
+                                    Some(&e),
+                                );
+                             }
+                         }
+                     }
+                }
+
+                // If it's a local file, try to find a sibling subtitle
+                if !path_str.starts_with("http://") && !path_str.starts_with("https://") {
+                    // Try to resolve absolute path if it's relative
+                    let path = if path.is_absolute() || path_str.starts_with(r"\\") || (path_str.starts_with(r"\") && !path_str.starts_with(r"\\")) {
+                        // Absolute path or UNC path (including single backslash variant)
+                        path
+                    } else {
+                        // Try to get MPV working directory
+                        match self.player.mpv.get_property_string("working-directory") {
+                            Ok(wd) => {
+                                println!("[MPV Load] Working directory: {}", wd);
+                                std::path::Path::new(&wd).join(path)
+                            },
+                            Err(e) => {
+                                println!("[MPV Load] Failed to get working-directory: {}", e);
+                                path // Fallback to as-is
+                            }
+                        }
+                    };
+                    
+                    println!("[MPV Load] Resolved absolute path: {}", path.display());
+
+                    if path.exists() {
+                        // Attempt to find subtitle with same name
+                        println!("[MPV Load] File exists. Checking for sibling subtitles...");
+                        let mut sub_found = false;
+                        for sub_ext in ["srt", "ass", "ssa", "txt"] {
+                            let mut sub_path = path.clone();
+                            sub_path.set_extension(sub_ext);
+                            if sub_path.exists() {
+                                println!("[MPV Load] Found sibling subtitle: {}", sub_path.display());
+                                self.load_subtitle_resource(&sub_path.to_string_lossy());
+                                sub_found = true;
+                                break;
+                            }
+                        }
+
+                        if !sub_found {
+                             println!("[MPV Load] No sibling subtitle found.");
+                             self.modals.error.show_error(
+                                "File Load Error".to_string(),
+                                "No external subtitle track found. Tried to find local sibling file but failed.".to_string().as_str(),
+                                Some(&format!("Video Path: {}", path.display())),
+                            );
+                        }
+                    } else {
+                         println!("[MPV Load] Resolved path does not exist or is not accessible.");
+                         self.modals.error.show_error(
+                            "File Load Error".to_string(),
+                            "MPV reported path does not exist or is not accessible. Check network connectivity if using UNC paths.".to_string().as_str(),
+                            Some(&path_str),
+                        );
+                    }
+                } else {
+                     println!("[MPV Load] Path is a URL, and no external track found. Cannot infer subtitle.");
+                     self.modals.error.show_error(
+                        "File Load Error".to_string(),
+                        "No external subtitle track found for this stream.".to_string().as_str(),
+                        Some(&path_str),
+                    );
+                }
+            }
+            Err(e) => {
+                println!("[MPV Load] Failed to get path: {}", e);
+                self.modals.error.show_error(
+                    "MPV Error".to_string(),
+                    "Failed to get path from MPV".to_string().as_str(),
+                    Some(&e.to_string()),
+                );
+            }
+        }
+    }
+
+    fn load_subtitle_resource(&mut self, path_str: &str) {
+        println!("[MPV Load] Loading resource: {}", path_str);
+        
+        // Normalize UNC paths (convert forward slashes to backslashes on Windows)
+        // Also fix single leading backslash that MPV sometimes reports
+        let normalized_path = if path_str.starts_with(r"\\") || path_str.starts_with("//") {
+            path_str.replace("/", r"\")
+        } else if path_str.starts_with(r"\") && !path_str.starts_with(r"\\") {
+            // Single leading backslash - likely a UNC path missing one backslash
+            format!(r"\{}", path_str)
+        } else {
+            path_str.to_string()
+        };
+        
+        if normalized_path.starts_with("http://") || normalized_path.starts_with("https://") {
+             // It's a URL, download it
+             self.message_overlay.set_message("Downloading subtitle...".to_string());
+             
+             match reqwest::blocking::get(path_str) {
+                 Ok(mut response) => {
+                     // Try to guess extension
+                     // Strip query parameters for extension guessing
+                     let clean_path = path_str.split('?').next().unwrap_or(path_str);
+                     let url_path = std::path::Path::new(clean_path);
+                     let ext = url_path.extension().and_then(|e| e.to_str()).unwrap_or("srt");
+                     
+                     println!("[MPV Load] Guessed extension '{}' from URL '{}'", ext, clean_path);
+
+                     // Validate extension, default to srt if unknown
+                     let safe_ext = if ["srt", "ass", "ssa", "txt"].contains(&ext.to_lowercase().as_str()) { 
+                         ext 
+                     } else { 
+                         // Check content-type header if available? 
+                         // For now, just default to srt as it's most common for streams
+                         "srt" 
+                     };
+
+                     let temp_dir = std::env::temp_dir();
+                     let temp_filename = format!("yomine_mpv_{}.{}", uuid::Uuid::new_v4(), safe_ext);
+                     let temp_file_path = temp_dir.join(temp_filename);
+                     
+                     println!("[MPV Load] Downloading to temp file: {}", temp_file_path.display());
+
+                     match std::fs::File::create(&temp_file_path) {
+                         Ok(mut file) => {
+                             if let Err(e) = response.copy_to(&mut file) {
+                                  println!("[MPV Load] Download failed: {}", e);
+                                  self.message_overlay.clear_message();
+                                  self.modals.error.show_error("Download Error".to_string(), "Failed to save subtitle".to_string().as_str(), Some(&e.to_string()));
+                                  return;
+                             }
+                             println!("[MPV Load] Download successful.");
+                             self.message_overlay.clear_message();
+                             
+                             let source_file = FileModal::create_source_file_from_path_and_metadata(
+                                 &temp_file_path,
+                                 None,
+                                 None
+                             );
+                             self.process_source_file(source_file);
+                         }
+                         Err(e) => {
+                             println!("[MPV Load] Failed to create temp file: {}", e);
+                             self.message_overlay.clear_message();
+                             self.modals.error.show_error("IO Error".to_string(), "Failed to create temp file".to_string().as_str(), Some(&e.to_string()));
+                         }
+                     }
+                 }
+                 Err(e) => {
+                     println!("[MPV Load] Network request failed: {}", e);
+                     self.message_overlay.clear_message();
+                     self.modals.error.show_error("Network Error".to_string(), "Failed to download subtitle".to_string().as_str(), Some(&e.to_string()));
+                 }
+             }
+        } else {
+            // Local file or UNC path
+            let path = std::path::PathBuf::from(&normalized_path);
+            if path.exists() {
+                 println!("[MPV Load] File exists (local or network). Processing...");
+                 let source_file = FileModal::create_source_file_from_path_and_metadata(&path, None, None);
+                 self.process_source_file(source_file);
+            } else {
+                 println!("[MPV Load] File does not exist or is not accessible: {}", path.display());
+                 let error_detail = if normalized_path.starts_with(r"\\") {
+                     format!("Network path not accessible: {}\nCheck network connectivity and permissions.", normalized_path)
+                 } else {
+                     format!("Local path not found: {}", normalized_path)
+                 };
+                 self.modals.error.show_error(
+                    "File Error".to_string(), 
+                    "Subtitle file reported by MPV does not exist or is not accessible.".to_string().as_str(), 
+                    Some(&error_detail)
+                );
+            }
         }
     }
 

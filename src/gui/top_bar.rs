@@ -37,6 +37,10 @@ use crate::{
     websocket::ServerState,
 };
 
+pub enum TopBarAction {
+    LoadFromMpv,
+}
+
 pub struct TopBar;
 
 impl TopBar {
@@ -59,7 +63,8 @@ impl TopBar {
         can_refresh: bool,
         table_state: &TableState,
         frequency_manager: Option<&FrequencyManager>,
-    ) {
+    ) -> Option<TopBarAction> {
+        let mut action = None;
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
                 //Just inlined the builtin so we can observe click events and save state.
@@ -116,6 +121,13 @@ impl TopBar {
                 ui.menu_button("File", |ui| {
                     if ui.button("Open New File").clicked() {
                         file_modal.open_dialog();
+                    }
+
+                    if mpv_connected {
+                        if ui.button("Load from MPV").clicked() {
+                            action = Some(TopBarAction::LoadFromMpv);
+                            ui.close();
+                        }
                     }
 
                     if ui.button("Load New Frequency Dictionaries").clicked() {
@@ -224,6 +236,7 @@ impl TopBar {
                 });
             });
         });
+        action
     }
 
     fn show_status_indicators(
