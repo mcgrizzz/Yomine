@@ -10,6 +10,7 @@ use crate::gui::{
         WebSocketSettingsModal,
     },
     setup_checklist_modal::SetupChecklistModal,
+    subtitle_select_modal::SubtitleSelectModal,
 };
 
 pub struct Modals {
@@ -22,6 +23,7 @@ pub struct Modals {
     pub pos_filters: PosFiltersModal,
     pub frequency_analyzer: FrequencyAnalyzerModal,
     pub setup_checklist: SetupChecklistModal,
+    pub subtitle_select: SubtitleSelectModal,
 }
 
 impl Default for Modals {
@@ -36,6 +38,7 @@ impl Default for Modals {
             pos_filters: PosFiltersModal::new(),
             frequency_analyzer: FrequencyAnalyzerModal::new(),
             setup_checklist: SetupChecklistModal::new(),
+            subtitle_select: SubtitleSelectModal::new(),
         }
     }
 }

@@ -98,6 +98,122 @@ impl MpvManager {
         self.cleanup_old_requests(now);
     }
 
+    pub fn get_property(&self, property: &str) -> Result<serde_json::Value, YomineError> {
+        if !self.is_connected() {
+            return Err(YomineError::Custom("MPV is not connected".into()));
+        }
+
+        let request_id = self.request_counter.fetch_add(1, Ordering::SeqCst);
+        let command = MpvCommand {
+            command: vec![
+                serde_json::Value::String("get_property".to_string()),
+                serde_json::Value::String(property.to_string()),
+            ],
+            request_id,
+        };
+
+        let payload = format!(
+            "{}\n",
+            serde_json::to_string(&command).map_err(|e| YomineError::Custom(format!(
+                "Failed to serialize MPV command: {}",
+                e
+            )))?
+        );
+
+        let mut connection = self.create_connection()?;
+        connection
+            .write_all(payload.as_bytes())
+            .map_err(|e| YomineError::Custom(format!("Failed to write to MPV IPC: {}", e)))?;
+
+        let mut buf = [0u8; MPV_BUFFER_SIZE];
+        match connection.read(&mut buf) {
+            Ok(n) if n > 0 => {
+                let resp_str = String::from_utf8_lossy(&buf[..n]);
+
+                for line in resp_str.lines() {
+                    if let Ok(resp) = serde_json::from_str::<MpvResponse>(line) {
+                        if resp.request_id == Some(request_id) {
+                            if resp.error == "success" {
+                                return Ok(resp.data.unwrap_or(serde_json::Value::Null));
+                            } else {
+                                return Err(YomineError::Custom(format!(
+                                    "MPV returned error: {}",
+                                    resp.error
+                                )));
+                            }
+                        }
+                    }
+                }
+                Err(YomineError::Custom("No matching response from MPV".into()))
+            }
+            Ok(_) => Err(YomineError::Custom("Empty response from MPV".into())),
+            Err(e) => Err(YomineError::Custom(format!(
+                "Failed to read response from MPV: {}",
+                e
+            ))),
+        }
+    }
+
+    pub fn get_property_string(&self, property: &str) -> Result<String, YomineError> {
+        if !self.is_connected() {
+            return Err(YomineError::Custom("MPV is not connected".into()));
+        }
+
+        let request_id = self.request_counter.fetch_add(1, Ordering::SeqCst);
+        let command = MpvCommand {
+            command: vec![
+                serde_json::Value::String("get_property".to_string()),
+                serde_json::Value::String(property.to_string()),
+            ],
+            request_id,
+        };
+
+        let payload = format!(
+            "{}\n",
+            serde_json::to_string(&command).map_err(|e| YomineError::Custom(format!(
+                "Failed to serialize MPV command: {}",
+                e
+            )))?
+        );
+
+        let mut connection = self.create_connection()?;
+        connection
+            .write_all(payload.as_bytes())
+            .map_err(|e| YomineError::Custom(format!("Failed to write to MPV IPC: {}", e)))?;
+
+        let mut buf = [0u8; MPV_BUFFER_SIZE];
+        match connection.read(&mut buf) {
+            Ok(n) if n > 0 => {
+                let resp_str = String::from_utf8_lossy(&buf[..n]);
+
+                for line in resp_str.lines() {
+                    if let Ok(resp) = serde_json::from_str::<MpvResponse>(line) {
+                        if resp.request_id == Some(request_id) {
+                            if resp.error == "success" {
+                                return match resp.data {
+                                    Some(serde_json::Value::String(s)) => Ok(s),
+                                    Some(v) => Ok(v.to_string()),
+                                    None => Ok(String::new()),
+                                };
+                            } else {
+                                return Err(YomineError::Custom(format!(
+                                    "MPV returned error: {}",
+                                    resp.error
+                                )));
+                            }
+                        }
+                    }
+                }
+                Err(YomineError::Custom("No matching response from MPV".into()))
+            }
+            Ok(_) => Err(YomineError::Custom("Empty response from MPV".into())),
+            Err(e) => Err(YomineError::Custom(format!(
+                "Failed to read response from MPV: {}",
+                e
+            ))),
+        }
+    }
+
     pub fn seek_timestamp(&self, seconds: f32, timestamp_str: &str) -> Result<(), YomineError> {
         if !self.is_connected() {
             return Err(YomineError::Custom("MPV is not connected".into()));
