@@ -124,7 +124,7 @@ impl TopBar {
                     }
 
                     if mpv_connected {
-                        if ui.button("Load from MPV").clicked() {
+                        if ui.button("Load Subtitle from MPV").clicked() {
                             action = Some(TopBarAction::LoadFromMpv);
                             ui.close();
                         }
