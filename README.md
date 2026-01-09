@@ -14,7 +14,8 @@
 
 # Yomine
 
-A Japanese vocabulary mining tool designed to help language learners extract and study words from subtitle files. It integrates with ASBPlayer and MPV for timestamp navigation, ranks terms by frequency, and supports Anki integration to filter out known words.
+### **A Japanese vocabulary mining tool** for extracting the most useful words from real content.
+It analyzes subtitle files, integrates with **ASBPlayer**/**MPV** for direct video navigation, provides **flexible ranking and filtering**, and automatically hides words you already know using **Anki**.
 
 Written in Rust 🦀
 
