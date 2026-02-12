@@ -1,8 +1,3 @@
-use wana_kana::{
-    ConvertJapanese,
-    IsJapaneseStr,
-};
-
 use super::{
     token_models::UnidicToken,
     unidic_tags::UnidicTag,
@@ -14,7 +9,7 @@ use super::{
     word_rules::create_default_rules,
 };
 use crate::core::{
-    utils::NormalizeLongVowel,
+    utils::normalize_reading,
     YomineError,
 };
 
@@ -277,34 +272,11 @@ pub fn process_tokens(tokens: Vec<UnidicToken>, rules: &[Rule]) -> Result<Vec<Wo
         if !rule_applied {
             let pos = get_default_pos(&current_token);
 
-            //Tokenizer outputs
-            let (surface_hatsuon, lemma_hatsuon) = if current_token.surface.as_str().is_katakana() {
-                (
-                    current_token.surface_hatsuon.clone().to_katakana(),
-                    current_token.lemma_hatsuon.clone().to_katakana(),
-                )
-            } else {
-                (
-                    current_token
-                        .surface_hatsuon
-                        .clone()
-                        .to_hiragana()
-                        .normalize_long_vowel()
-                        .into_owned(),
-                    current_token
-                        .lemma_hatsuon
-                        .clone()
-                        .to_hiragana()
-                        .normalize_long_vowel()
-                        .into_owned(),
-                )
-            };
-
             let word = Word {
                 surface_form: current_token.surface.clone(),
-                surface_hatsuon,
+                surface_hatsuon: current_token.surface_hatsuon.clone(),
                 lemma_form: current_token.lemma_form.clone(),
-                lemma_hatsuon,
+                lemma_hatsuon: current_token.lemma_hatsuon.clone(),
                 part_of_speech: pos,
                 tokens: vec![current_token.clone()],
                 main_word: None,
@@ -312,6 +284,19 @@ pub fn process_tokens(tokens: Vec<UnidicToken>, rules: &[Rule]) -> Result<Vec<Wo
 
             words.push(word);
             prev_token = Some(current_token);
+        }
+    }
+
+    // Normalize readings for all words
+    for word in &mut words {
+        word.surface_hatsuon = normalize_reading(&word.surface_form, &word.surface_hatsuon);
+        word.lemma_hatsuon = normalize_reading(&word.surface_form, &word.lemma_hatsuon);
+
+        if let Some(main_word) = &mut word.main_word {
+            main_word.surface_hatsuon =
+                normalize_reading(&main_word.surface, &main_word.surface_hatsuon);
+            main_word.lemma_hatsuon =
+                normalize_reading(&main_word.surface, &main_word.lemma_hatsuon);
         }
     }
 

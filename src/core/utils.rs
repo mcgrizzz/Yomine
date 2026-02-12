@@ -75,6 +75,15 @@ pub fn normalize_japanese_text(text: &str) -> String {
     text.to_hiragana().normalize_long_vowel().to_string()
 }
 
+/// Normalize reading based on the surface form
+pub fn normalize_reading(surface: &str, reading: &str) -> String {
+    if surface.is_katakana() {
+        reading.to_katakana()
+    } else {
+        reading.to_hiragana().normalize_long_vowel().into_owned()
+    }
+}
+
 pub fn text_matches_search(text: &str, query: &str) -> bool {
     if query.is_empty() {
         return true;
