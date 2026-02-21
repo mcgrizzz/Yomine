@@ -44,6 +44,7 @@ use crate::{
     core::{
         utils::{
             normalize_japanese_text,
+            FilterKana,
             NormalizeLongVowel,
         },
         Term,
@@ -274,7 +275,7 @@ pub async fn get_total_vocab(
 
                         return Some(Vocab {
                             term,
-                            reading: reading.normalize_long_vowel().into_owned(),
+                            reading: reading.filter_kana().normalize_long_vowel().into_owned(),
                             card_id: note.cards.first().copied(),
                             interval: None, // Will be set after fetching cards
                         });
