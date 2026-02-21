@@ -10,6 +10,10 @@ pub trait NormalizeLongVowel {
     fn normalize_long_vowel(&self) -> Cow<'_, str>;
 }
 
+pub trait FilterKana {
+    fn filter_kana(&self) -> Cow<'_, str>;
+}
+
 //とおい -> とうい AND  けいたい -> けいたい
 impl NormalizeLongVowel for str {
     fn normalize_long_vowel(&self) -> Cow<'_, str> {
@@ -48,6 +52,12 @@ impl NormalizeLongVowel for str {
 impl NormalizeLongVowel for String {
     fn normalize_long_vowel(&self) -> Cow<'_, str> {
         self.as_str().normalize_long_vowel()
+    }
+}
+
+impl FilterKana for String {
+    fn filter_kana(&self) -> Cow<'_, str> {
+        self.as_str().chars().filter(|&c| is_char_kana(c)).collect()
     }
 }
 
@@ -102,80 +112,6 @@ pub fn text_matches_search(text: &str, query: &str) -> bool {
     let query_lower = query.to_lowercase();
 
     text_lower.contains(&query_lower)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_pairwise_deinflection_comprehensive() {
-        let word = "行った";
-        let reading = "いった";
-        let result = pairwise_deinflection(word, reading);
-        let expected = vec![
-            ("行った".to_string(), "いった".to_string()),
-            ("行く".to_string(), "いく".to_string()),
-            ("行う".to_string(), "いう".to_string()), // We filter out weird results later
-            ("行つ".to_string(), "いつ".to_string()),
-            ("行る".to_string(), "いる".to_string()),
-            ("行っる".to_string(), "いっる".to_string()),
-        ];
-        assert_eq!(result, expected, "Irregular verb deinflection failed");
-
-        let word = "読ませられる";
-        let reading = "よませられる";
-        let result = pairwise_deinflection(word, reading);
-        let expected = vec![
-            ("読ませられる".to_string(), "よませられる".to_string()),
-            ("読まする".to_string(), "よまする".to_string()),
-            ("読ませる".to_string(), "よませる".to_string()),
-            ("読ませらる".to_string(), "よませらる".to_string()),
-            ("読む".to_string(), "よむ".to_string()),
-            ("読ます".to_string(), "よます".to_string()),
-        ];
-        assert_eq!(result, expected, "Causative/passive verb deinflection failed");
-
-        let word = "思いました";
-        let reading = "おもいました";
-        let result = pairwise_deinflection(word, reading);
-        let expected = vec![
-            ("思いました".to_string(), "おもいました".to_string()),
-            ("思う".to_string(), "おもう".to_string()),
-            ("思いる".to_string(), "おもいる".to_string()),
-            ("思います".to_string(), "おもいます".to_string()),
-            ("思いまする".to_string(), "おもいまする".to_string()),
-            ("思いましる".to_string(), "おもいましる".to_string()),
-        ];
-        assert_eq!(result, expected, "Polite verb form deinflection failed");
-    }
-
-    #[test]
-    fn test_pairwise_deinflection_adjective_forms() {
-        let test_cases = vec![
-            ("近く", "ちかく", "近い", "ちかい"),
-            ("高く", "たかく", "高い", "たかい"),
-            ("早く", "はやく", "早い", "はやい"),
-            ("美しく", "うつくしく", "美しい", "うつくしい"),
-        ];
-
-        for (inflected, inflected_reading, base, base_reading) in test_cases {
-            let result = pairwise_deinflection(inflected, inflected_reading);
-
-            let contains_base_form = result.iter().any(|(w, r)| w == base && r == base_reading);
-            assert!(contains_base_form,
-                "Expected to find base adjective form '{}' with reading '{}' in deinflection results for '{}': {:?}", 
-                base, base_reading, inflected, result);
-
-            let contains_original =
-                result.iter().any(|(w, r)| w == inflected && r == inflected_reading);
-            assert!(
-                contains_original,
-                "Expected to find original form '{}' with reading '{}' in results: {:?}",
-                inflected, inflected_reading, result
-            );
-        }
-    }
 }
 
 use serde::{
@@ -256,5 +192,79 @@ where
             "expected a number or numeric string, got: {}",
             value
         ))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pairwise_deinflection_comprehensive() {
+        let word = "行った";
+        let reading = "いった";
+        let result = pairwise_deinflection(word, reading);
+        let expected = vec![
+            ("行った".to_string(), "いった".to_string()),
+            ("行く".to_string(), "いく".to_string()),
+            ("行う".to_string(), "いう".to_string()), // We filter out weird results later
+            ("行つ".to_string(), "いつ".to_string()),
+            ("行る".to_string(), "いる".to_string()),
+            ("行っる".to_string(), "いっる".to_string()),
+        ];
+        assert_eq!(result, expected, "Irregular verb deinflection failed");
+
+        let word = "読ませられる";
+        let reading = "よませられる";
+        let result = pairwise_deinflection(word, reading);
+        let expected = vec![
+            ("読ませられる".to_string(), "よませられる".to_string()),
+            ("読まする".to_string(), "よまする".to_string()),
+            ("読ませる".to_string(), "よませる".to_string()),
+            ("読ませらる".to_string(), "よませらる".to_string()),
+            ("読む".to_string(), "よむ".to_string()),
+            ("読ます".to_string(), "よます".to_string()),
+        ];
+        assert_eq!(result, expected, "Causative/passive verb deinflection failed");
+
+        let word = "思いました";
+        let reading = "おもいました";
+        let result = pairwise_deinflection(word, reading);
+        let expected = vec![
+            ("思いました".to_string(), "おもいました".to_string()),
+            ("思う".to_string(), "おもう".to_string()),
+            ("思いる".to_string(), "おもいる".to_string()),
+            ("思います".to_string(), "おもいます".to_string()),
+            ("思いまする".to_string(), "おもいまする".to_string()),
+            ("思いましる".to_string(), "おもいましる".to_string()),
+        ];
+        assert_eq!(result, expected, "Polite verb form deinflection failed");
+    }
+
+    #[test]
+    fn test_pairwise_deinflection_adjective_forms() {
+        let test_cases = vec![
+            ("近く", "ちかく", "近い", "ちかい"),
+            ("高く", "たかく", "高い", "たかい"),
+            ("早く", "はやく", "早い", "はやい"),
+            ("美しく", "うつくしく", "美しい", "うつくしい"),
+        ];
+
+        for (inflected, inflected_reading, base, base_reading) in test_cases {
+            let result = pairwise_deinflection(inflected, inflected_reading);
+
+            let contains_base_form = result.iter().any(|(w, r)| w == base && r == base_reading);
+            assert!(contains_base_form,
+                "Expected to find base adjective form '{}' with reading '{}' in deinflection results for '{}': {:?}", 
+                base, base_reading, inflected, result);
+
+            let contains_original =
+                result.iter().any(|(w, r)| w == inflected && r == inflected_reading);
+            assert!(
+                contains_original,
+                "Expected to find original form '{}' with reading '{}' in results: {:?}",
+                inflected, inflected_reading, result
+            );
+        }
     }
 }
