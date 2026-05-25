@@ -273,14 +273,14 @@ fn calculate_chip_colors(
         (
             vis.widgets.inactive.bg_fill.gamma_multiply(0.85),
             vis.weak_text_color(),
-            Stroke::new(1.0, vis.weak_text_color()),
+            Stroke::new(1.0_f32, vis.weak_text_color()),
         )
     }
 }
 
 fn ui_draw_hover_ring(ui: &mut Ui, resp: &egui::Response) {
     let ring_color = ui.visuals().widgets.hovered.fg_stroke.color.linear_multiply(0.6);
-    let ring = Stroke::new(1.0, ring_color);
+    let ring = Stroke::new(1.0_f32, ring_color);
     ui.painter().rect_stroke(
         resp.rect.expand(HOVER_RING_EXPAND),
         CornerRadius::same(HOVER_RING_ROUNDING as u8),

@@ -55,7 +55,7 @@ impl MessageOverlay {
                     ui.style_mut().visuals.window_fill =
                         egui::Color32::from_rgba_premultiplied(0, 0, 0, 150);
                     ui.style_mut().visuals.window_stroke =
-                        egui::Stroke::new(2.0, theme.red(ui.ctx()));
+                        egui::Stroke::new(2.0_f32, theme.red(ui.ctx()));
 
                     ui.centered_and_justified(|ui| {
                         ui.add(egui::Spinner::new());

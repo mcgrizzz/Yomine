@@ -264,7 +264,7 @@ impl IgnoreListModal {
                                 // Checkbox
                                 let mut enabled = file.enabled;
                                 ui.style_mut().visuals.widgets.inactive.bg_stroke =
-                                    egui::Stroke::new(1.0, ui.visuals().text_color());
+                                    egui::Stroke::new(1.0_f32, ui.visuals().text_color());
                                 if ui.checkbox(&mut enabled, "").changed() {
                                     action = Some(FileAction::Toggle(*idx, enabled));
                                 }
