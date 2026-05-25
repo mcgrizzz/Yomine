@@ -137,7 +137,7 @@ pub fn extract_words(
         }));
 
         //Add phrases without filtering the terms for now
-        'outer: for start in 0..sentence_terms.len() {
+        for start in 0..sentence_terms.len() {
             for end in (start + 1..sentence_terms.len()).rev() {
                 let subrange = &sentence_terms[start..=end];
                 let mut phrase: Term = Term::from_slice(subrange);
@@ -217,7 +217,11 @@ pub fn extract_words(
                         phrase.frequencies = freq_map;
                         sentence_terms.push(phrase);
 
-                        break 'outer; // Stop on the largest phrase that satisfies the heuristic
+                        // Largest phrase at this start position is accepted; move to next start.
+                        // (Was previously `break 'outer`, which stopped after the first phrase
+                        // in the sentence — preventing detection of e.g. 土曜日 when an earlier
+                        // 実は had already been accepted.)
+                        break;
                     }
                 }
             }
@@ -327,8 +331,8 @@ pub fn extract_words_for_frequency(
                 .collect();
 
             // Phrase detection - check if phrase exists in loaded dictionaries
-            // Only add the largest matching phrase (no subphrases)
-            'outer: for start in 0..sentence_terms.len() {
+            // Adds the largest matching phrase at each starting position.
+            for start in 0..sentence_terms.len() {
                 for end in (start + 1..sentence_terms.len()).rev() {
                     let subrange = &sentence_terms[start..=end];
                     let mut phrase: Term = Term::from_slice(subrange);
@@ -358,7 +362,8 @@ pub fn extract_words_for_frequency(
                         }
 
                         sentence_terms.push(phrase);
-                        break 'outer;
+                        // Move to next start position (was `break 'outer`).
+                        break;
                     }
                 }
             }
