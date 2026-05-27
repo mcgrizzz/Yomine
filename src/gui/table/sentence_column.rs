@@ -82,7 +82,7 @@ fn ui_timestamp(
             let (human_timestamp_start, _human_timestamp_stop) = timestamp.to_human_readable();
             ui.label(
                 RichText::new(&human_timestamp_start)
-                    .color(ui.ctx().style().visuals.weak_text_color())
+                    .color(ui.ctx().global_style().visuals.weak_text_color())
                     .size(11.0),
             );
         }
@@ -179,7 +179,7 @@ fn ui_sentence_comprehension(ui: &mut Ui, term: &Term, app: &YomineApp, term_ind
             let bar_color = if i < filled_bars {
                 color
             } else {
-                ui.ctx().style().visuals.weak_text_color().linear_multiply(0.3)
+                ui.ctx().global_style().visuals.weak_text_color().linear_multiply(0.3)
             };
 
             let (rect, _response) =

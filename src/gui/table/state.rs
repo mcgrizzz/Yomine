@@ -262,24 +262,26 @@ impl TableState {
             return;
         }
 
-        let mut max_width: f32 = 100.0; // Minimum width
-        let fonts = ctx.fonts(|f| f.clone());
+        let visible_indices = &self.visible_indices;
+        let max_width = ctx.fonts_mut(|fonts| {
+            let mut max_width: f32 = 100.0; // Minimum width
+            for &term_index in visible_indices {
+                if let Some(term) = terms.get(term_index) {
+                    let term_width = fonts
+                        .layout_no_wrap(
+                            term.lemma_form.clone(),
+                            egui::FontId::proportional(22.0), // Match the actual rendering size in col_term
+                            egui::Color32::WHITE,
+                        )
+                        .size()
+                        .x;
 
-        for &term_index in &self.visible_indices {
-            if let Some(term) = terms.get(term_index) {
-                let term_width = fonts
-                    .layout_no_wrap(
-                        term.lemma_form.clone(),
-                        egui::FontId::proportional(22.0), // Match the actual rendering size in col_term
-                        egui::Color32::WHITE,
-                    )
-                    .size()
-                    .x;
-
-                let total_width = term_width + 30.0; // 30.0 for padding
-                max_width = max_width.max(total_width);
+                    let total_width = term_width + 30.0; // 30.0 for padding
+                    max_width = max_width.max(total_width);
+                }
             }
-        }
+            max_width
+        });
 
         self.term_column_width = Some(max_width.min(300.0)); // Cap at 300px
     }
@@ -303,20 +305,25 @@ impl TableState {
             return;
         }
 
-        let fonts = ctx.fonts(|f| f.clone());
-        let font_id = egui::FontId::proportional(16.0);
-
-        self.cached_row_heights = self
+        // Pre-compute sentence indices outside the fonts() closure so the closure
+        // doesn't need to borrow `self` (which would conflict with the assignment below).
+        let row_inputs: Vec<(usize, usize)> = self
             .visible_indices
             .iter()
-            .map(|&term_index| {
-                let term = &terms[term_index];
+            .map(|&term_index| (term_index, self.get_sentence_index(term_index)))
+            .collect();
 
-                if term.sentence_references.is_empty() {
-                    46.0
-                } else {
-                    let sentence_idx = self.get_sentence_index(term_index);
-                    if let Some(sentence_ref) = term.sentence_references.get(sentence_idx) {
+        let font_id = egui::FontId::proportional(16.0);
+
+        self.cached_row_heights = ctx.fonts_mut(|fonts| {
+            row_inputs
+                .into_iter()
+                .map(|(term_index, sentence_idx)| {
+                    let term = &terms[term_index];
+
+                    if term.sentence_references.is_empty() {
+                        46.0
+                    } else if let Some(sentence_ref) = term.sentence_references.get(sentence_idx) {
                         if let Some(sentence) = sentences.get(sentence_ref.0) {
                             let mut layout_job = egui::text::LayoutJob::default();
                             layout_job.wrap = egui::text::TextWrapping {
@@ -348,9 +355,9 @@ impl TableState {
                     } else {
                         46.0
                     }
-                }
-            })
-            .collect();
+                })
+                .collect()
+        });
 
         self.last_sentence_column_width = sentence_column_width;
     }

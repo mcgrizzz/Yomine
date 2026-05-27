@@ -60,7 +60,7 @@ impl TopBar {
         table_state: &TableState,
         frequency_manager: Option<&FrequencyManager>,
     ) {
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+        egui::Panel::top("top_panel").show(ctx, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
                 //Just inlined the builtin so we can observe click events and save state.
                 let current_theme_pref = if current_settings.dark_mode {

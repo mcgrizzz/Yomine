@@ -19,7 +19,7 @@ impl SetupBanner {
 
         let mut clicked = false;
 
-        egui::TopBottomPanel::top("setup_banner").exact_height(30.0).show(ctx, |ui| {
+        egui::Panel::top("setup_banner").exact_size(30.0).show(ctx, |ui| {
             let banner_color = egui::Color32::from_rgb(180, 140, 0);
             let frame = egui::Frame::NONE.fill(banner_color);
 

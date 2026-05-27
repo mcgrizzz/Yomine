@@ -48,8 +48,8 @@ impl<'a> SentenceWidget<'a> {
         surface_index: usize,
     ) -> Self {
         let highlighted_color = app.theme.red(ctx);
-        let normal_color = ctx.style().visuals.widgets.noninteractive.fg_stroke.color;
-        let highlight_color = ctx.style().visuals.widgets.noninteractive.bg_stroke.color;
+        let normal_color = ctx.global_style().visuals.widgets.noninteractive.fg_stroke.color;
+        let highlight_color = ctx.global_style().visuals.widgets.noninteractive.bg_stroke.color;
         let is_expression = matches!(term.part_of_speech, POS::Expression | POS::NounExpression);
 
         let term_text =

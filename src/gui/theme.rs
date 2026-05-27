@@ -44,7 +44,7 @@ impl Theme {
 
     /// Get the current theme variant based on the UI context
     fn current_theme(&self, ctx: &egui::Context) -> &ThemeDetails {
-        let is_dark_mode = ctx.style().visuals.dark_mode;
+        let is_dark_mode = ctx.global_style().visuals.dark_mode;
         if is_dark_mode {
             self.dark().unwrap()
         } else {

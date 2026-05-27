@@ -267,6 +267,8 @@ pub fn apply_font_family(ctx: &egui::Context, use_serif: bool) {
 }
 
 impl eframe::App for YomineApp {
+    fn ui(&mut self, _ui: &mut egui::Ui, _frame: &mut eframe::Frame) {}
+
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let task_results = self.task_manager.poll_results();
 

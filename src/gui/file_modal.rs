@@ -58,7 +58,7 @@ impl FileModal {
 
         let modal = egui::Modal::new(egui::Id::new("file_modal")).show(ctx, |ui| {
             // Get the actual window size, not just available UI space
-            let window_rect = ctx.input(|i| i.screen_rect());
+            let window_rect = ctx.input(|i| i.content_rect());
             let modal_width = Self::calculate_modal_width(window_rect.width());
 
             ui.set_width(modal_width);

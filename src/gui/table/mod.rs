@@ -73,7 +73,7 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
                 let label = egui::Label::new(
                     egui::RichText::new("Open New File")
                         .size(14.0)
-                        .color(ctx.style().visuals.weak_text_color()),
+                        .color(ctx.global_style().visuals.weak_text_color()),
                 )
                 .sense(egui::Sense::click());
 
@@ -258,10 +258,10 @@ fn ui_col_term(
         };
 
         let term_color = if ignore_status {
-            ctx.style().visuals.weak_text_color()
+            ctx.global_style().visuals.weak_text_color()
         } else {
             let highlighted_color = app.theme.red(ctx);
-            let normal_color = ctx.style().visuals.widgets.noninteractive.fg_stroke.color;
+            let normal_color = ctx.global_style().visuals.widgets.noninteractive.fg_stroke.color;
             blend_colors(normal_color, highlighted_color, 0.8)
         };
 
@@ -289,7 +289,7 @@ fn ui_col_term(
 
                 ui.label(
                     egui::RichText::new(text)
-                        .color(ctx.style().visuals.weak_text_color())
+                        .color(ctx.global_style().visuals.weak_text_color())
                         .size(10.0)
                         .italics(),
                 );

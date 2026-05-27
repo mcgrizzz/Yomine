@@ -29,10 +29,10 @@ impl MessageOverlay {
                 .order(egui::Order::Foreground)
                 .fixed_pos(egui::Pos2::new(0.0, 0.0))
                 .show(ctx, |ui| {
-                    let screen_size = ui.ctx().screen_rect().size();
-                    ui.allocate_space(screen_size);
+                    let content_rect = ui.ctx().input(|i| i.content_rect());
+                    ui.allocate_space(content_rect.size());
                     ui.painter().rect_filled(
-                        ui.ctx().screen_rect(),
+                        content_rect,
                         0.0,
                         egui::Color32::from_black_alpha(120),
                     );
