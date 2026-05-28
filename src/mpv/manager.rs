@@ -20,6 +20,8 @@ use std::{
     },
 };
 
+#[cfg(unix)]
+use super::types::MPV_SOCKET_TIMEOUT_MS;
 use super::types::{
     default_mpv_endpoint,
     ConnectionState,
