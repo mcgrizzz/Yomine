@@ -114,21 +114,14 @@ impl TaskManager {
         });
     }
 
-    pub fn process_file(
-        &self,
-        source_file: SourceFile,
-        model_mapping: HashMap<String, FieldMapping>,
-        language_tools: LanguageTools,
-    ) {
+    pub fn process_file(&self, source_file: SourceFile, language_tools: LanguageTools) {
         let (sender, runtime) = self.task_context();
 
         thread::spawn(move || {
             use crate::core::pipeline::process_source_file;
 
             let result = runtime.block_on(async {
-                process_source_file(&source_file, model_mapping, &language_tools)
-                    .await
-                    .map_err(|e| e.to_string())
+                process_source_file(&source_file, &language_tools).await.map_err(|e| e.to_string())
             });
 
             let _ = sender.send(TaskResult::FileProcessing(result));
@@ -234,11 +227,14 @@ impl TaskManager {
         let (sender, runtime) = self.task_context();
 
         thread::spawn(move || {
-            use crate::core::pipeline::apply_filters;
+            use crate::core::pipeline::{
+                apply_filters,
+                AnkiFilter,
+            };
             let result: Result<(FilterResult, Vec<Sentence>, f32), String> =
                 runtime.block_on(async {
                     let filter_result =
-                        apply_filters(base_terms, &language_tools, Some(model_mapping), None)
+                        apply_filters(base_terms, &language_tools, AnkiFilter::Live(model_mapping))
                             .await
                             .map_err(|e| e.to_string())?;
 

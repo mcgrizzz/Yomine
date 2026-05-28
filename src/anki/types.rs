@@ -13,7 +13,7 @@ pub struct FieldMapping {
     pub reading_field: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Vocab {
     pub term: String,
     pub reading: String,

@@ -54,6 +54,7 @@ impl TopBar {
         websocket_manager: &WebSocketManager,
         mpv_connected: bool,
         anki_connected: bool,
+        anki_fetching: bool,
         ignore_list: Option<&Arc<Mutex<IgnoreList>>>,
         task_manager: &TaskManager,
         can_refresh: bool,
@@ -220,6 +221,7 @@ impl TopBar {
                         websocket_manager,
                         mpv_connected,
                         anki_connected,
+                        anki_fetching,
                     );
                 });
             });
@@ -231,6 +233,7 @@ impl TopBar {
         websocket_manager: &WebSocketManager,
         mpv_connected: bool,
         anki_connected: bool,
+        anki_fetching: bool,
     ) {
         let server_state = websocket_manager.get_server_state();
         let asbplayer_connected = websocket_manager.has_clients();
@@ -283,12 +286,21 @@ impl TopBar {
             egui::Color32::from_rgb(200, 80, 80)
         };
 
-        let anki_tooltip =
-            if anki_connected { "Connected to Anki" } else { "Not Connected to Anki" };
+        let anki_tooltip = if anki_fetching {
+            "Syncing with Anki..."
+        } else if anki_connected {
+            "Connected to Anki"
+        } else {
+            "Not Connected to Anki"
+        };
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 2.0;
             ui.small("Anki").on_hover_text(anki_tooltip);
-            ui.small(egui::RichText::new("●").color(anki_color)).on_hover_text(anki_tooltip);
+            if anki_fetching {
+                ui.add(egui::Spinner::new().size(10.0)).on_hover_text(anki_tooltip);
+            } else {
+                ui.small(egui::RichText::new("●").color(anki_color)).on_hover_text(anki_tooltip);
+            }
         });
     }
 }
