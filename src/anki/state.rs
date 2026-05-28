@@ -52,6 +52,8 @@ use crate::{
     dictionary::frequency_manager::FrequencyManager,
 };
 
+const ANKI_VOCAB_CACHE: &str = "anki_vocab_cache.json";
+
 pub struct AnkiState {
     vocab: Vec<Vocab>,
     matcher: AnkiMatcher,
@@ -110,12 +112,38 @@ impl AnkiState {
             processing_start.elapsed().as_secs_f32()
         );
 
-        // Build relevance map once during initialization
-        let relevance_map = Self::build_relevance_map(&vocab);
-        let matcher = AnkiMatcher::new(frequency_manager);
+        // Persist the freshly fetched vocab so it can be reused offline / for fast loads
+        if let Err(e) = crate::persistence::save_json(&vocab, ANKI_VOCAB_CACHE) {
+            eprintln!("Failed to save Anki vocab cache: {}", e);
+        }
 
         println!("AnkiState initialized ({:.1}s total)", start.elapsed().as_secs_f32());
-        Ok(Self { vocab, matcher, relevance_map, known_interval })
+        Ok(Self::from_vocab(vocab, frequency_manager, known_interval))
+    }
+
+    /// Build an `AnkiState` from an already-fetched vocab list (no network).
+    fn from_vocab(
+        vocab: Vec<Vocab>,
+        frequency_manager: Arc<FrequencyManager>,
+        known_interval: u32,
+    ) -> Self {
+        let relevance_map = Self::build_relevance_map(&vocab);
+        let matcher = AnkiMatcher::new(frequency_manager);
+        Self { vocab, matcher, relevance_map, known_interval }
+    }
+
+    /// Build an `AnkiState` from the on-disk vocab cache, if one exists. Returns
+    /// `None` when no cache is present so callers can fall back gracefully.
+    pub fn from_cache(
+        frequency_manager: Arc<FrequencyManager>,
+        known_interval: u32,
+    ) -> Option<Self> {
+        let vocab: Vec<Vocab> = crate::persistence::load_json_or_default(ANKI_VOCAB_CACHE);
+        if vocab.is_empty() {
+            return None;
+        }
+        println!("Loaded {} vocab items from Anki cache", vocab.len());
+        Some(Self::from_vocab(vocab, frequency_manager, known_interval))
     }
 
     /// One time map for the anki vocab to quickly find the potential matches by key

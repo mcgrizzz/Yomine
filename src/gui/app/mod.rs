@@ -101,6 +101,7 @@ pub struct YomineApp {
     pub language_tools: Option<LanguageTools>,
     pub player: PlayerManager,
     pub anki_connected: bool,
+    pub anki_fetching: bool,
     pub last_anki_check: Option<std::time::Instant>,
     task_manager: TaskManager,
 }
@@ -147,6 +148,7 @@ impl YomineApp {
             language_tools: None,
             player,
             anki_connected: false,
+            anki_fetching: false,
             last_anki_check: None,
             task_manager,
         };
@@ -303,6 +305,7 @@ impl eframe::App for YomineApp {
             &self.player.ws,
             self.player.mpv.is_connected(),
             self.anki_connected,
+            self.anki_fetching,
             ignore_list_ref,
             &self.task_manager,
             can_refresh,
@@ -428,8 +431,7 @@ impl YomineApp {
 
         if let Some(language_tools) = &self.language_tools {
             self.message_overlay.set_message("Processing file...".to_string());
-            let model_mapping = self.settings_data.anki_model_mappings.clone();
-            self.task_manager.process_file(source_file, model_mapping, language_tools.clone());
+            self.task_manager.process_file(source_file, language_tools.clone());
         } else {
             println!("Language tools not loaded yet!");
         }
@@ -463,6 +465,7 @@ impl YomineApp {
 
             TaskResult::TermsRefreshed(result) => {
                 self.message_overlay.clear_message();
+                self.anki_fetching = false;
                 match result {
                     Ok((filter_result, sentences, file_comprehension)) => {
                         if let Some(file_data) = &mut self.file_data {
@@ -522,6 +525,7 @@ impl YomineApp {
                                 self.settings_data.anki_model_mappings.clone(),
                                 language_tools,
                             );
+                            self.anki_fetching = true;
                         }
                     }
                 }
@@ -595,13 +599,14 @@ impl YomineApp {
         if let Some(file_data) = &mut self.file_data {
             if let Some(language_tools) = &self.language_tools {
                 // Use async block since apply_filters is async, but won't actually await anything
-                // because we're passing cached Anki terms
+                // because we're passing a known-lemma set (no Anki connection).
                 let rt = tokio::runtime::Runtime::new().unwrap();
                 match rt.block_on(crate::core::pipeline::apply_filters(
                     file_data.original_terms.clone(),
                     language_tools,
-                    None,
-                    Some(&file_data.anki_filtered_terms),
+                    crate::core::pipeline::AnkiFilter::KnownLemmas(
+                        file_data.anki_filtered_terms.clone(),
+                    ),
                 )) {
                     Ok(filter_result) => {
                         file_data.terms = filter_result.terms;
@@ -687,6 +692,26 @@ impl YomineApp {
                 );
 
                 self.file_data = Some(file_data);
+
+                // The table is now populated from the cached Anki snapshot. If Anki is
+                // reachable, refresh against live data in the background and update in place.
+                if self.anki_connected {
+                    let refresh = self.file_data.as_ref().and_then(|fd| {
+                        (!fd.original_terms.is_empty())
+                            .then(|| (fd.original_terms.clone(), fd.sentences.clone()))
+                    });
+                    if let (Some((terms, sentences)), Some(language_tools)) =
+                        (refresh, self.language_tools.clone())
+                    {
+                        self.task_manager.refresh_terms(
+                            terms,
+                            sentences,
+                            self.settings_data.anki_model_mappings.clone(),
+                            language_tools,
+                        );
+                        self.anki_fetching = true;
+                    }
+                }
             }
             Err(error_msg) => {
                 let filename = self
