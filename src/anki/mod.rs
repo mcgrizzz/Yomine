@@ -8,6 +8,7 @@ pub use state::{
     get_models,
     get_sample_note_for_model,
     get_total_vocab,
+    has_cached_vocab,
     wait_awake,
     AnkiState,
 };

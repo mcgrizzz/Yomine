@@ -12,7 +12,10 @@ use crate::{
         Term,
     },
     gui::app::LanguageTools,
-    tools::analysis::FrequencyAnalysisResult,
+    tools::{
+        analysis::FrequencyAnalysisResult,
+        knowledge_summary::KnowledgeSummary,
+    },
 };
 
 pub type FileProcessingResult = Result<(Vec<Term>, FilterResult, Vec<Sentence>, f32), String>;
@@ -53,6 +56,8 @@ pub enum TaskResult {
     FrequencyDictionariesReloaded(
         Result<std::sync::Arc<crate::dictionary::frequency_manager::FrequencyManager>, String>,
     ),
+
+    KnowledgeSummary(KnowledgeSummary),
 }
 
 impl TaskResult {
@@ -74,6 +79,7 @@ impl TaskResult {
             },
             TaskResult::FrequencyExport(_) => "frequency_export",
             TaskResult::FrequencyDictionariesReloaded(_) => "frequency_dictionaries_reloaded",
+            TaskResult::KnowledgeSummary(_) => "knowledge_summary",
         }
     }
 }

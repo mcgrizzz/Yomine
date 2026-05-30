@@ -18,6 +18,7 @@ use super::{
 };
 use crate::core::Term;
 
+mod controls;
 mod filter;
 mod header;
 mod search;
@@ -25,17 +26,20 @@ mod sentence_column;
 mod sentence_widget;
 pub mod sort;
 mod state;
+mod summary;
 
-use header::{
-    ui_controls_row,
-    ui_header_cols,
-};
+use controls::ui_controls_row;
+use header::ui_header_cols;
 use sentence_column::ui_col_sentence;
 pub use sort::{
     SortDirection,
     SortField,
 };
 pub use state::TableState;
+use summary::{
+    ui_current_file_summary,
+    ui_knowledge_profile,
+};
 
 pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
     let mut actions = ActionQueue::new();
@@ -101,20 +105,24 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
                 );
             }
 
-            // Access title in its own scope
-            ui.horizontal_wrapped(|ui| {
-                ui.set_max_width(ui.available_width());
-                let title = &app.file_data.as_ref().unwrap().source_file.title;
-                ui.heading(egui::RichText::new(title).color(app.theme.cyan(ui.ctx())).strong());
-            });
-
             {
                 let file_data = app.file_data.as_ref().unwrap();
                 app.table_state.compute_term_column_width(ctx, &file_data.terms);
             }
 
             app.table_state.sync_frequency_states(freq_manager);
-            ui_controls_row(ui, app, &mut actions);
+
+            // Header block: title, current-file summary and controls stacked tightly on the
+            // left; the overall knowledge profile top-aligned on the right of the same row.
+            ui.horizontal_top(|ui| {
+                ui.vertical(|ui| {
+                    let title = &app.file_data.as_ref().unwrap().source_file.title;
+                    ui.heading(egui::RichText::new(title).color(app.theme.cyan(ui.ctx())).strong());
+                    ui_current_file_summary(ui, app);
+                    ui_controls_row(ui, app, &mut actions);
+                });
+                ui_knowledge_profile(ui, app);
+            });
             ui.add_space(10.0);
 
             egui::ScrollArea::vertical().show(ui, |ui| {

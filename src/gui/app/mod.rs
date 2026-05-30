@@ -61,6 +61,7 @@ use crate::{
         save_json,
     },
     player::PlayerManager,
+    tools::knowledge_summary::KnowledgeSummary,
 };
 
 #[derive(Clone)]
@@ -104,6 +105,12 @@ pub struct YomineApp {
     pub anki_fetching: bool,
     pub last_anki_check: Option<std::time::Instant>,
     task_manager: TaskManager,
+
+    // Global JLPT / frequency knowledge coverage (Anki vs. reference lists)
+    pub knowledge_summary: Option<KnowledgeSummary>,
+    knowledge_summary_computing: bool,
+    knowledge_summary_attempted: bool,
+    last_knowledge_summary_check: Option<std::time::Instant>,
 }
 
 impl YomineApp {
@@ -151,6 +158,10 @@ impl YomineApp {
             anki_fetching: false,
             last_anki_check: None,
             task_manager,
+            knowledge_summary: None,
+            knowledge_summary_computing: false,
+            knowledge_summary_attempted: false,
+            last_knowledge_summary_check: None,
         };
 
         app.setup_fonts(cc);
@@ -281,6 +292,7 @@ impl eframe::App for YomineApp {
         // Update the combined player (handles both MPV and WebSocket)
         self.player.update(self.settings_data.websocket_settings.port);
         self.update_anki_status();
+        self.maybe_compute_knowledge_summary();
         self.handle_file_drops(ctx);
         self.draw_file_drop_overlay(ctx);
 
@@ -340,6 +352,8 @@ impl eframe::App for YomineApp {
                 language_tools.known_interval = self.settings_data.anki_interval;
             }
 
+            // Field mappings or known-interval may have changed; recompute coverage.
+            self.knowledge_summary_attempted = false;
             self.save_settings();
         }
 
@@ -355,6 +369,8 @@ impl eframe::App for YomineApp {
             {
                 self.apply_frequency_settings(manager.as_ref());
             }
+            // Frequency bands depend on enabled dictionaries/weights; recompute coverage.
+            self.knowledge_summary_attempted = false;
             self.save_settings();
         }
 
@@ -466,6 +482,8 @@ impl YomineApp {
             TaskResult::TermsRefreshed(result) => {
                 self.message_overlay.clear_message();
                 self.anki_fetching = false;
+                // Live refresh just rewrote the Anki vocab cache; recompute coverage from it.
+                self.knowledge_summary_attempted = false;
                 match result {
                     Ok((filter_result, sentences, file_comprehension)) => {
                         if let Some(file_data) = &mut self.file_data {
@@ -556,6 +574,10 @@ impl YomineApp {
             TaskResult::FrequencyExport(result) => {
                 self.modals.frequency_analyzer.handle_export_complete(result);
             }
+            TaskResult::KnowledgeSummary(summary) => {
+                self.knowledge_summary_computing = false;
+                self.knowledge_summary = Some(summary);
+            }
             TaskResult::FrequencyDictionariesReloaded(result) => {
                 self.message_overlay.clear_message();
 
@@ -565,6 +587,9 @@ impl YomineApp {
                             language_tools.frequency_manager = new_freq_manager.clone();
 
                             self.apply_frequency_settings(new_freq_manager.as_ref());
+
+                            // Dictionaries changed; recompute frequency-band coverage.
+                            self.knowledge_summary_attempted = false;
 
                             self.table_state.mark_dirty();
                             if let Some(file_data) = &self.file_data {
@@ -729,6 +754,39 @@ impl YomineApp {
                 self.table_state.reset();
             }
         }
+    }
+
+    /// Kick off a background recompute of the global JLPT/frequency knowledge summary
+    /// when Anki data is available and we don't already have a result in flight.
+    fn maybe_compute_knowledge_summary(&mut self) {
+        if self.knowledge_summary_computing || self.knowledge_summary_attempted {
+            return;
+        }
+        // Resolve tools *before* the throttle below: starting the poll timer while they're
+        // still loading lets the first ready frame land inside the throttle window, so the
+        // cached summary wouldn't load until a later event (e.g. a live refresh) forced it.
+        let Some(language_tools) = &self.language_tools else {
+            return;
+        };
+        let frequency_manager = language_tools.frequency_manager.clone();
+        let known_interval = language_tools.known_interval;
+
+        // The cache may not exist yet (no Anki sync); throttle so we don't stat it every frame.
+        if let Some(last) = self.last_knowledge_summary_check {
+            if last.elapsed().as_secs() < 5 {
+                return;
+            }
+        }
+        self.last_knowledge_summary_check = Some(std::time::Instant::now());
+
+        // Reads the shared Anki vocab cache (offline); only meaningful once it exists.
+        if !crate::anki::has_cached_vocab() {
+            return;
+        }
+
+        self.task_manager.compute_knowledge_summary(frequency_manager, known_interval);
+        self.knowledge_summary_computing = true;
+        self.knowledge_summary_attempted = true;
     }
 
     fn update_anki_status(&mut self) {

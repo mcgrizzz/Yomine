@@ -307,6 +307,23 @@ impl TaskManager {
         });
     }
 
+    pub fn compute_knowledge_summary(
+        &self,
+        frequency_manager: Arc<crate::dictionary::frequency_manager::FrequencyManager>,
+        known_interval: u32,
+    ) {
+        let (sender, _runtime) = self.task_context();
+
+        thread::spawn(move || {
+            let summary = crate::tools::knowledge_summary::compute_knowledge_summary(
+                frequency_manager,
+                known_interval,
+            );
+
+            let _ = sender.send(TaskResult::KnowledgeSummary(summary));
+        });
+    }
+
     pub fn export_frequency(
         &self,
         result: crate::tools::analysis::FrequencyAnalysisResult,
