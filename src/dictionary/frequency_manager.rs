@@ -62,7 +62,7 @@ impl FrequencyManager {
         states.entry(name).or_insert(DictionaryState { weight: 1.0, enabled: true });
     }
 
-    fn get_enabled_dictionaries(&self) -> Vec<&FrequencyDictionary> {
+    pub fn get_enabled_dictionaries(&self) -> Vec<&FrequencyDictionary> {
         let states = self.states.read().expect("frequency states poisoned");
         self.dictionaries
             .iter()

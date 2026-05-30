@@ -2,6 +2,7 @@ pub mod anki;
 pub mod core;
 pub mod dictionary;
 pub mod gui;
+pub mod jlpt;
 pub mod mpv;
 pub mod parser;
 pub mod persistence;

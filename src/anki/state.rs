@@ -209,32 +209,21 @@ impl AnkiState {
             .into_par_iter()
             .map(|mut term| {
                 // Check both surface and lemma forms, take the higher score
-                let (surface_score, surface_vocab_idx) = self.highest_inclusivity_score(
+                let (surface_score, surface_comp) = self.match_form(
                     &term.surface_form,
                     &term.surface_reading,
                     &term.part_of_speech,
                 );
-                let (lemma_score, lemma_vocab_idx) = self.highest_inclusivity_score(
-                    &term.lemma_form,
-                    &term.lemma_reading,
-                    &term.part_of_speech,
-                );
+                let (lemma_score, lemma_comp) =
+                    self.match_form(&term.lemma_form, &term.lemma_reading, &term.part_of_speech);
 
-                let (score, vocab_idx) = if surface_score > lemma_score {
-                    (surface_score, surface_vocab_idx)
+                let (score, comprehension) = if surface_score > lemma_score {
+                    (surface_score, surface_comp)
                 } else {
-                    (lemma_score, lemma_vocab_idx)
+                    (lemma_score, lemma_comp)
                 };
 
-                // Calculate comprehension from matched vocab interval
-                // If no match, or if matched vocab has no interval, assume interval of 1 day
-                let interval = if let Some(idx) = vocab_idx {
-                    self.vocab[idx].interval.or(Some(1.0))
-                } else {
-                    Some(1.0)
-                };
-
-                term.comprehension = comp_term(interval, self.known_interval);
+                term.comprehension = comprehension;
 
                 (term, score)
             })
@@ -262,6 +251,47 @@ impl AnkiState {
         // Return both: unknown terms and known terms (all have comprehension calculated)
         (filtered_terms, known_terms)
     }
+
+    /// Inclusivity score + comprehension (0..1) for one word form against its best Anki
+    /// match. Unmatched forms fall back to a 1-day interval — the exact rule used for
+    /// per-term/sentence/file comprehension. Shared so there's a single source of truth.
+    fn match_form(
+        &self,
+        word: &str,
+        reading: &str,
+        pos: &crate::segmentation::word::POS,
+    ) -> (f32, f32) {
+        let (score, vocab_idx) = self.highest_inclusivity_score(word, reading, pos);
+        let interval = if let Some(idx) = vocab_idx {
+            self.vocab[idx].interval.or(Some(1.0))
+        } else {
+            Some(1.0)
+        };
+        (score, comp_term(interval, self.known_interval))
+    }
+
+    /// Estimated comprehension (0..1) for a bare dictionary headword. No Anki match → 0
+    /// (unlike in-context terms, it gets no 1-day baseline). POS is unknown for a headword,
+    /// so a content-word POS is assumed.
+    pub fn word_comprehension(&self, term: &str, reading: &str) -> f32 {
+        let (score, comprehension) =
+            self.match_form(term, reading, &crate::segmentation::word::POS::Noun);
+        if score < KEEP_TERM_THRESHOLD {
+            0.0
+        } else {
+            comprehension
+        }
+    }
+
+    /// The cached Anki vocab this state was built from (term, reading, interval).
+    pub fn vocab(&self) -> &[Vocab] {
+        &self.vocab
+    }
+}
+
+/// Whether an Anki vocab snapshot has been written to disk.
+pub fn has_cached_vocab() -> bool {
+    crate::persistence::data_file_exists(ANKI_VOCAB_CACHE)
 }
 
 pub async fn get_total_vocab(

@@ -219,6 +219,9 @@ Yomine is licensed under [MIT](LICENSE-MIT) OR [Apache-2.0](LICENSE-APACHE)
 * Noto Sans/Serif JP fonts - [SIL Open Font License](https://openfontlicense.org/open-font-license-official-text/)
   * Thanks to https://github.com/r-40021/noto-sans-jp for the converted font without intersection issues.
 
+**Data Sources:**
+* JLPT N5–N1 vocabulary data is derived from [coolmule0/JLPT-N5-N1-Japanese-Vocabulary-Anki](https://github.com/coolmule0/JLPT-N5-N1-Japanese-Vocabulary-Anki/), which is based on [Jonathan Waller's JLPT resources](https://www.tanos.co.uk/jlpt/).
+
 ---
 
 Happy Mining! ⛏️ 頑張りましょう！
