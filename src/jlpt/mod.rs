@@ -1,5 +1,7 @@
 use serde::Deserialize;
 
+use crate::segmentation::word::POS;
+
 const JLPT_JSON: &str = include_str!("../../assets/jlpt_vocab.json");
 
 #[derive(Deserialize, Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -33,6 +35,7 @@ pub struct JlptEntry {
     pub kanji: String,
     pub kana: String,
     pub level: JlptLevel,
+    pub pos: POS,
 }
 
 pub struct JlptDatabase {

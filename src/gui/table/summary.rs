@@ -7,18 +7,72 @@ use eframe::egui::{
 };
 
 use crate::{
-    gui::YomineApp,
-    tools::knowledge_summary::BandStats,
+    gui::{
+        ActionQueue,
+        UiAction,
+        YomineApp,
+    },
+    tools::knowledge_summary::{
+        BandStats,
+        KnowledgeMode,
+    },
 };
 
-/// Overall knowledge profile, right-aligned and top-anchored so it can sit inline with the
-/// file title on the right of the title row.
-pub fn ui_knowledge_profile(ui: &mut Ui, app: &YomineApp) {
+/// Rendered width of a bar label in the given font.
+fn label_width(ui: &Ui, text: &str, font: &egui::FontId) -> f32 {
+    ui.painter().layout_no_wrap(text.to_owned(), font.clone(), Color32::WHITE).size().x
+}
+
+pub fn ui_knowledge_profile(ui: &mut Ui, app: &YomineApp, actions: &mut ActionQueue) {
+    // Skip the card entirely when there's nothing to show, so we don't draw an empty box.
+    let Some(summary) = &app.knowledge_summary else {
+        return;
+    };
+    if summary.jlpt.is_empty() && summary.frequency.is_empty() {
+        return;
+    }
+
+    // egui has no shrink-to-content vertical layout... a top-down column always claims the full
+    // available width, which would stretch the framed card across the whole column. The bars are
+    // fixed-width with short static labels, so pin the card to the widest row's width. That width
+    // only changes if the set of bands does, so its cached
+    let width_id =
+        egui::Id::new(("knowledge_card_width", summary.jlpt.len(), summary.frequency.len()));
+    let card_width = ui.data(|d| d.get_temp::<f32>(width_id)).unwrap_or_else(|| {
+        let font = egui::FontId::monospace(11.0);
+        let jlpt_w: f32 = summary
+            .jlpt
+            .iter()
+            .map(|(level, _)| label_width(ui, level.label(), &font) + 3.0 + 40.0)
+            .sum::<f32>()
+            + 6.0 * summary.jlpt.len().saturating_sub(1) as f32;
+        let freq_w: f32 = summary
+            .frequency
+            .iter()
+            .map(|(label, _)| label_width(ui, label, &font) + 3.0 + 28.0)
+            .sum::<f32>()
+            + 6.0 * summary.frequency.len().saturating_sub(1) as f32;
+        let width = jlpt_w.max(freq_w) + 1.0;
+        ui.data_mut(|d| d.insert_temp(width_id, width));
+        width
+    });
+
+    // Right-to-left outer layout pins the card to the right; Align::Max inside right-aligns the
+    // rows. Note Align::Max makes child `ui.horizontal`s right-to-left (egui's
+    // prefer_right_to_left), which the rows below account for by iterating in reverse.
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-        ui.vertical(|ui| {
-            ui.spacing_mut().item_spacing.y = 2.0;
-            ui_knowledge_summary(ui, app);
-        });
+        egui::Frame::new()
+            .fill(ui.visuals().faint_bg_color)
+            .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
+            .corner_radius(4.0)
+            .inner_margin(8.0)
+            .show(ui, |ui| {
+                ui.with_layout(egui::Layout::top_down(egui::Align::Max), |ui| {
+                    ui.set_width(card_width);
+                    ui.spacing_mut().item_spacing.y = 2.0;
+                    ui_knowledge_summary(ui, app, actions);
+                });
+            });
     });
 }
 
@@ -97,67 +151,80 @@ pub fn ui_current_file_summary(ui: &mut Ui, app: &YomineApp) {
     });
 }
 
-/// Right-aligned section title that groups the readouts beneath it.
-fn section_header(ui: &mut Ui, text: &str) {
+fn ui_mode_header(ui: &mut Ui, app: &YomineApp, actions: &mut ActionQueue) {
+    let mode = app.knowledge_summary_mode;
+    let hover = format!("Switch to {}", mode.toggled().title());
+
     ui.horizontal(|ui| {
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(RichText::new(text).color(ui.visuals().text_color()).size(11.0).strong());
-        });
+        let title = ui
+            .add(
+                egui::Label::new(
+                    RichText::new(mode.title())
+                        .color(ui.visuals().text_color())
+                        .size(14.0)
+                        .strong(),
+                )
+                .sense(Sense::click()),
+            )
+            .on_hover_cursor(egui::CursorIcon::PointingHand)
+            .on_hover_text(hover.as_str());
+
+        let button = ui
+            .add(egui::Button::new(RichText::new("⇄").size(13.0)).frame(false).small())
+            .on_hover_cursor(egui::CursorIcon::PointingHand)
+            .on_hover_text(hover.as_str());
+
+        if button.clicked() || title.clicked() {
+            actions.push(UiAction::ToggleKnowledgeMode);
+        }
     });
 }
 
-/// Compact global JLPT / frequency coverage bars, derived from total Anki knowledge.
-fn ui_knowledge_summary(ui: &mut Ui, app: &YomineApp) {
+fn ui_knowledge_summary(ui: &mut Ui, app: &YomineApp, actions: &mut ActionQueue) {
     let Some(summary) = &app.knowledge_summary else {
         return;
     };
-    if summary.jlpt.is_empty() && summary.frequency.is_empty() {
-        return;
-    }
 
-    section_header(ui, "Anki Coverage");
+    ui_mode_header(ui, app, actions);
+
+    let frac = |stats: &BandStats| match app.knowledge_summary_mode {
+        KnowledgeMode::Coverage => stats.coverage,
+        KnowledgeMode::Estimate => stats.comprehension,
+    };
 
     if !summary.jlpt.is_empty() {
         ui.horizontal(|ui| {
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.spacing_mut().item_spacing.x = 6.0;
-                for (level, stats) in summary.jlpt.iter().rev() {
-                    coverage_mini_bar(ui, level.label(), stats, 40.0, false);
-                }
-            });
+            ui.spacing_mut().item_spacing.x = 6.0;
+            for (level, stats) in summary.jlpt.iter().rev() {
+                coverage_mini_bar(ui, level.label(), stats, frac(stats), 40.0, false);
+            }
         });
     }
 
     if !summary.frequency.is_empty() {
         ui.horizontal(|ui| {
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.spacing_mut().item_spacing.x = 6.0;
-                for (label, stats) in summary.frequency.iter().rev() {
-                    coverage_mini_bar(ui, label, stats, 28.0, true);
-                }
-            });
+            ui.spacing_mut().item_spacing.x = 6.0;
+            for (label, stats) in summary.frequency.iter().rev() {
+                coverage_mini_bar(ui, label, stats, frac(stats), 28.0, true);
+            }
         });
     }
 }
 
-/// One labelled coverage bar: `label` to the left, a filled bar of `bar_width` to the right.
-/// `label_in_hover` keeps the label as a prefix in the tooltip (useful for the frequency
-/// ranges); the JLPT bars omit it since the level name is already obvious from context.
 fn coverage_mini_bar(
     ui: &mut Ui,
     text: &str,
     stats: &BandStats,
+    value: f32,
     bar_width: f32,
     label_in_hover: bool,
 ) {
-    let frac = stats.comprehension.clamp(0.0, 1.0);
+    let frac = value.clamp(0.0, 1.0);
     let color = coverage_color(frac * 100.0);
 
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 3.0;
 
-        // The parent row uses a right-to-left layout, so the bar is allocated first
-        // (right side) and the label second (left side) to render as "N5 ████".
         let bg = ui.visuals().extreme_bg_color;
         let (rect, response) = ui.allocate_exact_size(egui::vec2(bar_width, 9.0), Sense::hover());
         let painter = ui.painter();

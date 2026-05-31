@@ -1,6 +1,7 @@
 use core::fmt;
 use std::collections::HashMap;
 
+use serde::Deserialize;
 use wana_kana::IsJapaneseStr;
 
 use super::{
@@ -9,7 +10,7 @@ use super::{
 };
 use crate::core::Term;
 
-#[derive(PartialEq, Clone, Copy, Debug, Hash, Eq)]
+#[derive(PartialEq, Clone, Copy, Debug, Hash, Eq, Deserialize)]
 pub enum POS {
     Noun,
     ProperNoun,

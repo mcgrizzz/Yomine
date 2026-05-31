@@ -61,7 +61,10 @@ use crate::{
         save_json,
     },
     player::PlayerManager,
-    tools::knowledge_summary::KnowledgeSummary,
+    tools::knowledge_summary::{
+        KnowledgeMode,
+        KnowledgeSummary,
+    },
 };
 
 #[derive(Clone)]
@@ -111,6 +114,7 @@ pub struct YomineApp {
     knowledge_summary_computing: bool,
     knowledge_summary_attempted: bool,
     last_knowledge_summary_check: Option<std::time::Instant>,
+    pub knowledge_summary_mode: KnowledgeMode,
 }
 
 impl YomineApp {
@@ -162,6 +166,7 @@ impl YomineApp {
             knowledge_summary_computing: false,
             knowledge_summary_attempted: false,
             last_knowledge_summary_check: None,
+            knowledge_summary_mode: KnowledgeMode::default(),
         };
 
         app.setup_fonts(cc);

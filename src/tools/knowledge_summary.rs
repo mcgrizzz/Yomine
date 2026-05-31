@@ -14,6 +14,8 @@ use crate::{
 
 #[derive(Debug, Clone, Default)]
 pub struct BandStats {
+    /// Fraction (0..1) of the band's words present in Anki, regardless of study state.
+    pub coverage: f32,
     /// Average estimated comprehension (0..1) across the band's words, using the same
     /// per-word `comp_term` estimate as sentence/file comprehension.
     pub comprehension: f32,
@@ -22,9 +24,37 @@ pub struct BandStats {
 }
 
 impl BandStats {
-    fn averaged(comprehension_sum: f32, total: usize) -> Self {
-        let comprehension = if total > 0 { comprehension_sum / total as f32 } else { 0.0 };
-        Self { comprehension, total }
+    fn averaged(coverage_sum: f32, comprehension_sum: f32, total: usize) -> Self {
+        let (coverage, comprehension) = if total > 0 {
+            (coverage_sum / total as f32, comprehension_sum / total as f32)
+        } else {
+            (0.0, 0.0)
+        };
+        Self { coverage, comprehension, total }
+    }
+}
+
+/// Which estimate the knowledge widget shows: raw Anki presence vs the graded comprehension.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum KnowledgeMode {
+    #[default]
+    Coverage,
+    Estimate,
+}
+
+impl KnowledgeMode {
+    pub fn title(self) -> &'static str {
+        match self {
+            Self::Coverage => "Anki Coverage",
+            Self::Estimate => "Estimated Knowledge",
+        }
+    }
+
+    pub fn toggled(self) -> Self {
+        match self {
+            Self::Coverage => Self::Estimate,
+            Self::Estimate => Self::Coverage,
+        }
     }
 }
 
@@ -64,15 +94,18 @@ pub fn compute_knowledge_summary(
     {
         let db = JlptDatabase::load();
         for level in JlptLevel::ALL {
+            let mut coverage_sum = 0.0;
             let mut comprehension_sum = 0.0;
             let mut total = 0;
             for entry in db.entries_for_level(level) {
                 // Kana-only entries have an empty kanji form; match on the kana instead.
                 let term = if entry.kanji.is_empty() { &entry.kana } else { &entry.kanji };
-                comprehension_sum += anki.word_comprehension(term, &entry.kana);
+                let (in_anki, comp) = anki.word_stats(term, &entry.kana, &entry.pos);
+                coverage_sum += in_anki as u8 as f32;
+                comprehension_sum += comp;
                 total += 1;
             }
-            summary.jlpt.push((level, BandStats::averaged(comprehension_sum, total)));
+            summary.jlpt.push((level, BandStats::averaged(coverage_sum, comprehension_sum, total)));
         }
     }
 
@@ -87,12 +120,14 @@ pub fn compute_knowledge_summary(
             .max()
             .unwrap_or(0);
 
+        let mut coverage_sums = vec![0.0_f32; FREQUENCY_BANDS.len()];
         let mut comprehension_sums = vec![0.0_f32; FREQUENCY_BANDS.len()];
         for vocab in anki.vocab() {
             if let Some(rank) =
                 frequency_manager.get_harmonic_frequency_for_pair(&vocab.term, &vocab.reading)
             {
                 if let Some(band) = band_for_rank(rank) {
+                    coverage_sums[band] += 1.0;
                     comprehension_sums[band] += comp_term(vocab.interval, known_interval);
                 }
             }
@@ -104,8 +139,11 @@ pub fn compute_knowledge_summary(
                 continue; // Band lies beyond the dictionary's size.
             }
             let size = (hi - *lo + 1) as usize;
+            let coverage = (coverage_sums[idx] / size as f32).clamp(0.0, 1.0);
             let comprehension = (comprehension_sums[idx] / size as f32).clamp(0.0, 1.0);
-            summary.frequency.push((label.to_string(), BandStats { comprehension, total: size }));
+            summary
+                .frequency
+                .push((label.to_string(), BandStats { coverage, comprehension, total: size }));
         }
     }
 
