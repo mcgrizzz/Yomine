@@ -24,6 +24,9 @@ pub enum UiAction {
 
     // Player
     SeekTimestamp { seconds: f32, label: String },
+
+    // Knowledge widget
+    ToggleKnowledgeMode,
 }
 
 pub struct ActionQueue {

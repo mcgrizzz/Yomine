@@ -121,7 +121,7 @@ pub fn term_table(ctx: &egui::Context, app: &mut YomineApp) {
                     ui_current_file_summary(ui, app);
                     ui_controls_row(ui, app, &mut actions);
                 });
-                ui_knowledge_profile(ui, app);
+                ui_knowledge_profile(ui, app, &mut actions);
             });
             ui.add_space(10.0);
 
@@ -240,6 +240,9 @@ fn execute_actions(app: &mut YomineApp, actions: &mut ActionQueue) {
                 if let Err(e) = app.player.seek_timestamp(seconds, &label) {
                     eprintln!("Failed to seek timestamp: {}", e);
                 }
+            }
+            UiAction::ToggleKnowledgeMode => {
+                app.knowledge_summary_mode = app.knowledge_summary_mode.toggled();
             }
         }
     }

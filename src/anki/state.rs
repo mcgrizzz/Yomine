@@ -270,26 +270,26 @@ impl AnkiState {
         (score, comp_term(interval, self.known_interval))
     }
 
-    /// Estimated comprehension (0..1) for a bare dictionary headword. No Anki match → 0
-    /// (unlike in-context terms, it gets no 1-day baseline). POS is unknown for a headword,
-    /// so a content-word POS is assumed.
-    pub fn word_comprehension(&self, term: &str, reading: &str) -> f32 {
-        let (score, comprehension) =
-            self.match_form(term, reading, &crate::segmentation::word::POS::Noun);
+    /// (in_anki, estimated comprehension)
+    pub fn word_stats(
+        &self,
+        term: &str,
+        reading: &str,
+        pos: &crate::segmentation::word::POS,
+    ) -> (bool, f32) {
+        let (score, comprehension) = self.match_form(term, reading, pos);
         if score < KEEP_TERM_THRESHOLD {
-            0.0
+            (false, 0.0)
         } else {
-            comprehension
+            (true, comprehension)
         }
     }
 
-    /// The cached Anki vocab this state was built from (term, reading, interval).
     pub fn vocab(&self) -> &[Vocab] {
         &self.vocab
     }
 }
 
-/// Whether an Anki vocab snapshot has been written to disk.
 pub fn has_cached_vocab() -> bool {
     crate::persistence::data_file_exists(ANKI_VOCAB_CACHE)
 }
