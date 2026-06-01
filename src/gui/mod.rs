@@ -11,13 +11,13 @@ pub mod setup_checklist_modal;
 pub mod table;
 pub mod theme;
 pub mod top_bar;
-pub mod websocket_manager;
 
 pub use actions::{
     ActionQueue,
     UiAction,
 };
-pub use app::{
-    LanguageTools,
-    YomineApp,
-};
+pub use app::YomineApp;
+
+// `LanguageTools` now lives in `core`; re-exported here so existing `gui::LanguageTools`
+// references keep resolving.
+pub use crate::core::LanguageTools;

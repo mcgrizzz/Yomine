@@ -23,11 +23,11 @@ use crate::{
     anki::FieldMapping,
     core::{
         pipeline::FilterResult,
+        LanguageTools,
         Sentence,
         SourceFile,
         Term,
     },
-    gui::LanguageTools,
 };
 
 pub struct TaskManager {
@@ -140,7 +140,6 @@ impl TaskManager {
                     frequency_manager,
                     token_dictionary::DictType,
                 },
-                gui::app::LanguageTools,
                 segmentation::tokenizer::init_vibrato,
             };
 

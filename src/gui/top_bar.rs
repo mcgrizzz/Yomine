@@ -31,10 +31,12 @@ use crate::{
         },
         setup_checklist_modal::SetupChecklistModal,
         table::TableState,
-        websocket_manager::WebSocketManager,
     },
     persistence::get_app_data_dir,
-    websocket::ServerState,
+    websocket::{
+        ServerState,
+        WebSocketManager,
+    },
 };
 
 pub struct TopBar;

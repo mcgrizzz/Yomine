@@ -33,11 +33,11 @@ use crate::{
         FieldMapping,
     },
     core::{
+        LanguageTools,
         Sentence,
         SourceFile,
         Term,
     },
-    gui::LanguageTools,
     parser,
     segmentation::tokenizer::extract_words,
 };
