@@ -5,6 +5,7 @@ pub mod ignore_list;
 pub mod language_tools;
 pub mod models;
 pub mod pipeline;
+pub mod settings;
 #[cfg(feature = "gui")]
 pub mod tasks;
 pub mod utils;
@@ -20,4 +21,10 @@ pub use models::{
     Sentence,
     SourceFile,
     Term,
+};
+pub use settings::{
+    AnkiModelInfo,
+    FrequencyDictionarySetting,
+    SettingsData,
+    WebSocketSettings,
 };

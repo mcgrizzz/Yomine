@@ -20,7 +20,51 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
 - **Phase A (Decouple engine) — ✅ COMPLETE & VERIFIED** (T001–T012). Engine builds
   `cargo check --no-default-features` (no egui compiled); egui app builds (`cargo check`);
   `cargo test` green (6 pass). Toolchain: rustc **1.96** (egui 0.34.3 needs ≥1.92).
-- **NEXT: Phase B / T013 — Tauri scaffold + IPC.** Begins with `cargo install tauri-cli`.
+- **Phase B scaffold — DONE, COMPILE-BLOCKED on system libs:**
+  - `tauri-cli` v2.11.2 installed. `src-tauri` crate scaffolded (T013): `Cargo.toml`
+    (`yomine { default-features = false }`, tauri 2 + dialog/opener plugins), `build.rs`,
+    `src/{main,lib}.rs`, `tauri.conf.json` (window 1400×805, frontendDist `ui/build`,
+    devUrl :5173, beforeDev/Build → `pnpm` in `ui`), `capabilities/default.json`, icon set
+    in `icons/` (generated from a squared `assets/icon.png`). Root `Cargo.toml` now lists
+    `members = [".", "src-tauri"]`.
+  - SvelteKit frontend scaffolded under `src-tauri/ui` (T014): adapter-static SPA
+    (`+layout.ts` prerender/ssr=false), vite tuned for Tauri (:5173), `pnpm install` +
+    `pnpm build` **green** → `ui/build/index.html` produced. Placeholder `+page.svelte`.
+  - Plugins added in code (T015): `tauri-plugin-dialog`/`-opener` registered in `lib.rs`;
+    capabilities grant `core:default`, `dialog:default`, `opener:default`.
+- **✅ BLOCKER RESOLVED.** WebKitGTK dev libs installed by the user (Ubuntu 22.04). A second,
+  upstream issue surfaced: cargo greedily resolved `tauri-runtime` 2.11.2 / `wry` 0.53.5, which
+  are incompatible with `tauri-runtime-wry` 2.9.3 (newest compatible with `tauri` 2.9.5 on
+  Linux) — E0046 (`eval_script_with_callback` not implemented) + E0277 (dropped `Sync` bound).
+  **Fix:** pinned the whole stack to the matched 2.11.2 set —
+  `tauri-runtime = "=2.11.2"` / `wry = "=0.55.1"` (with `tauri` resolving to 2.11.2,
+  `tauri-runtime-wry` 2.11.2, `webkit2gtk` 2.0.2) in `src-tauri/Cargo.toml` (commented; the
+  three runtime crates must bump together). Build matrix **all green**: `cargo build -p yomine-tauri` ✓;
+  `cargo build -p yomine --no-default-features` ✓; `cargo build -p yomine` (egui) ✓.
+- **Settings decoupling — DONE** (prerequisite for T016/T019/T040, mirrors T004/T006):
+  `SettingsData`/`WebSocketSettings`/`FrequencyDictionarySetting`/`AnkiModelInfo` moved from
+  `gui/settings/data.rs` to new neutral `src/core/settings.rs`, re-exported from `core` and
+  from `gui::settings::data` (so all gui call sites still resolve). `AnkiModelInfo` gained
+  serde. `ModelMappingEditor` (egui editor state) stayed in gui. Engine builds gui-off ✓;
+  egui builds gui-on ✓.
+- **IPC foundation — DONE (T016–T018), compiles green.** `src-tauri/src/{state,events,dto}.rs`
+  written and wired into `lib.rs` (manages `Mutex<AppState>`). `cargo build -p yomine-tauri` ✓
+  (26 transient "field never read" warnings — `AppState`/DTO fields are consumed by the command
+  layer in T019–T021; they clear as commands land).
+- **Player isolation — DONE** (`src-tauri/src/player_task.rs`, maintainer-approved; see T016
+  note). Spawned in `lib.rs` setup; `PlayerHandle` managed in tauri state. This covers the
+  **player half of T020** (mode switch + `player-status` emit) and the backend for T035 (seek)
+  / T041 (`set_websocket_port` → `PlayerHandle::set_port`). Added `tokio`
+  (`sync`/`time`/`macros`) to `src-tauri/Cargo.toml`. Compiles green (27 transient dead-code
+  warnings — consumed by the command layer).
+- **NEXT: T019** (lifecycle commands: `load_language_tools`, `get_pos_catalog`, `get_settings`,
+  `save_settings`), then the rest of T020 (anki poll + knowledge recompute loop), T021
+  (`process_file`/`open_file_dialog`), T022 (`main.rs` register commands), T023/T024 (frontend
+  ipc.ts + stores), → T025 (verify round trip). Engine refs confirmed:
+  `pipeline::process_source_file` returns
+  `(Vec<Term>, FilterResult, Vec<Sentence>, f32)`; `PlayerManager::new(MpvManager::new(),
+  WebSocketManager::new(port))`; `persistence::{load_json_or_default,save_json}`;
+  `POS::{as_key,display_name}`; `tools::analysis::FrequencyAnalysisResult`.
 - Pre-existing (not part of this work): `src/tests/segmentation_regression.rs` is orphaned
   (nothing declares `mod tests;`, so it never runs); 3 egui `Panel::show` deprecation warnings.
 
@@ -74,21 +118,31 @@ all IPC types serialize. Verifies the three-command build matrix in quickstart.m
 **Goal**: A Tauri window that completes one real round trip (open file → term count), with the
 command/event layer and background loop in place. Implements contracts/.
 
-- [ ] T013 Install Tauri tooling: `cargo install tauri-cli --version "^2"`. Scaffold `src-tauri`
+- [x] T013 Install Tauri tooling: `cargo install tauri-cli --version "^2"`. Scaffold `src-tauri`
       (Tauri v2) as a workspace member depending on `yomine { default-features = false }`.
-- [ ] T014 Scaffold SvelteKit under `src-tauri/ui` with `@sveltejs/adapter-static` in SPA mode
+      (Done; build verification pending WebKitGTK system libs — see Progress blocker.)
+- [x] T014 Scaffold SvelteKit under `src-tauri/ui` with `@sveltejs/adapter-static` in SPA mode
       (`prerender`/`ssr=false`); wire `tauri.conf.json` `build.frontendDist`/`devUrl` and
-      `beforeDevCommand`/`beforeBuildCommand` to pnpm.
-- [ ] T015 Add Tauri plugins: `tauri-plugin-dialog` (file open), `tauri-plugin-opener` (open URL),
-      `tauri-plugin-fs` if needed; register capabilities/permissions.
-- [ ] T016 Implement `AppState` in `src-tauri/src/state.rs`: `Mutex`-guarded struct holding
-      `Option<LanguageTools>`, `SettingsData`, `PlayerManager`, current `FileData`
+      `beforeDevCommand`/`beforeBuildCommand` to pnpm. (`pnpm build` green.)
+- [x] T015 Add Tauri plugins: `tauri-plugin-dialog` (file open), `tauri-plugin-opener` (open URL),
+      `tauri-plugin-fs` if needed; register capabilities/permissions. (dialog+opener registered;
+      fs deferred until a command needs it.)
+- [x] T016 Implement `AppState` in `src-tauri/src/state.rs`: `Mutex`-guarded struct holding
+      `Option<LanguageTools>`, `SettingsData`, current `FileData`
       (terms/sentences/comprehension), analyzer cancel token + last `FrequencyAnalysisResult`.
-- [ ] T017 Implement `src-tauri/src/events.rs`: event-name constants + payload structs mirroring
+      (Managed as `Mutex<AppState>` in `lib.rs`; settings loaded from `settings.json` at start.)
+      **Design change (maintainer-approved):** `PlayerManager` is NOT in `AppState` — it is
+      owned solely by a dedicated task (`src-tauri/src/player_task.rs`) and reached via a
+      channel handle (`PlayerHandle`, managed separately). Rationale: `PlayerManager::update()`
+      does blocking-ish I/O on a ~250ms timer (socket reconnect, WS server restart); isolating
+      it means a player tick never contends with the state lock. `seek`/`status` carry a
+      `oneshot` reply; `set_port` is fire-and-forget. The task emits `player-status` on change.
+- [x] T017 Implement `src-tauri/src/events.rs`: event-name constants + payload structs mirroring
       contracts/events.md (`AnkiStatus`, `PlayerStatus`, `LoadingMessage`, `FileLoadResult`, …).
-- [ ] T018 Define the `SentenceDto` + `FileLoadResult` mapping in the backend (data-model.md):
+      (`names` const module; `LanguageToolsStatus` serializes to the TS union shape.)
+- [x] T018 Define the `SentenceDto` + `FileLoadResult` mapping in the backend (data-model.md):
       convert `Sentence` → `SentenceDto` (timestamp → secs+labels via `TimeStamp::to_secs`/
-      `to_human_readable`).
+      `to_human_readable`). (In `src-tauri/src/dto.rs`; also `SegmentDto`, `TimeStampDto`, `PosInfo`.)
 - [ ] T019 Implement lifecycle commands (`src-tauri/src/commands/lifecycle.rs`):
       `load_language_tools` (Channel progress, loads into AppState, emits
       `language-tools-status`), `get_pos_catalog`, `get_settings`, `save_settings`.
