@@ -1,0 +1,142 @@
+/* Global theme + shell (T026). Tokens mirror the egui Dracula palette
+ * (src/gui/theme.rs: `ThemeDetails::dracula` / `dracula_light`) so the web UI
+ * matches the reference app. Dark is the default; `:root[data-theme='light']`
+ * swaps the layered backgrounds + accents. The active theme is driven by
+ * `settings.dark_mode` in +layout.svelte. */
+
+:root {
+	/* layered surfaces (darkest → lightest) */
+	--bg-darker: #191a21;
+	--bg-dark: #212335;
+	--bg: #282a36;
+	--bg-light: #343642;
+	--bg-lighter: #424550;
+
+	--fg: #f8f8f2;
+	--selection: #44475a;
+	--comment: #6272a4;
+
+	/* accents */
+	--red: #ff5555;
+	--orange: #ffb86c;
+	--yellow: #f1fa8c;
+	--green: #50fa7b;
+	--blue: #62a0ea;
+	--purple: #bd93f9;
+	--cyan: #8be9fd;
+	--pink: #ff79c6;
+
+	/* POS label colors (egui Theme::pos_color groups) */
+	--pos-verb: var(--blue);
+	--pos-noun: var(--green);
+	--pos-adjective: var(--orange);
+	--pos-adverb: var(--purple);
+	--pos-particle: var(--comment);
+	--pos-other: var(--fg);
+
+	--border: var(--bg-lighter);
+	--radius: 6px;
+
+	color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+	--bg-darker: #ebebe6;
+	--bg-dark: #f5f5f0;
+	--bg: #f8f8f2;
+	--bg-light: #fffffa;
+	--bg-lighter: #ffffff;
+
+	--fg: #282a36;
+	--selection: #c8c8dc;
+	--comment: #788aa0;
+
+	--red: #c85050;
+	--orange: #dc965a;
+	--yellow: #dce678;
+	--green: #50c878;
+	--blue: #4682b4;
+	--purple: #9678dc;
+	--cyan: #50bee6;
+	--pink: #e682c8;
+
+	--border: #d6d6cc;
+
+	color-scheme: light;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	margin: 0;
+	height: 100%;
+}
+
+body {
+	background: var(--bg);
+	color: var(--fg);
+	font-family: 'Noto Sans JP', system-ui, sans-serif;
+	font-size: 14px;
+	line-height: 1.5;
+	-webkit-font-smoothing: antialiased;
+}
+
+/* Serif toggle (T027 bundles the faces; this class is the switch). */
+body.font-serif {
+	font-family: 'Noto Serif JP', Georgia, serif;
+}
+
+button {
+	font: inherit;
+	color: var(--fg);
+	background: var(--bg-light);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	padding: 0.4rem 0.8rem;
+	cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+	background: var(--bg-lighter);
+}
+
+button:disabled {
+	opacity: 0.55;
+	cursor: default;
+}
+
+a {
+	color: var(--blue);
+}
+
+::selection {
+	background: var(--selection);
+}
+
+::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+::-webkit-scrollbar-thumb {
+	background: var(--bg-lighter);
+	border-radius: 5px;
+}
+::-webkit-scrollbar-track {
+	background: var(--bg-dark);
+}
+
+/* App shell: fixed top bar over a scrolling main region. */
+.app-shell {
+	display: grid;
+	grid-template-rows: auto 1fr;
+	height: 100vh;
+	overflow: hidden;
+}
+
+.app-main {
+	overflow: auto;
+	padding: 1.25rem 1.5rem;
+}

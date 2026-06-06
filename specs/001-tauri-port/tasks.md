@@ -66,10 +66,21 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
   warnings — later-task commands consume them); `cargo build -p yomine --no-default-features` ✓;
   `cargo build -p yomine` (egui) ✓ (3 pre-existing warnings); `cargo test` ✓ (6 pass);
   `pnpm build` ✓ → `ui/build` produced.
-- **NEXT: T025 verify + Phase C shell (T026).** T025 is code-complete but needs an **interactive
-  `cargo tauri dev`** run (load an SRT → confirm the term count renders) to tick — I can't drive
-  the GUI from here. Then start Phase C: T026 app shell/theme (consume `settings.dark_mode`),
-  T028 top bar, T029 `TermTable` (replace the placeholder `<ul>` in `+page.svelte`).
+- **Phase C in progress: T026 (shell/theme) + T029 (term table) DONE — uncommitted.** Both build
+  green (`pnpm build` ✓, `pnpm check` clean except the pre-existing vite.config.ts debt). The
+  working tree holds these as two units on top of the pushed `fb939f3` (T019–T024): T026 =
+  `app.css` + `+layout.svelte` + `+page.svelte` shell; T029 = `lib/components/TermTable.svelte` +
+  `+page.svelte` wiring. `+page.svelte` and `tasks.md` carry deltas from both.
+- **NEXT options (all unblocked except T028):**
+  - **T030** [US1] sentence view — expandable furigana (`<ruby>`) per term from
+    `SentenceDto.segments`; multi-sentence browsing via `sentence_references`. (Highest MVP value.)
+  - **T037** [US4] table controls — interactive sort/search/POS filter/freq-range (client-side on
+    the term list; `TermTable.harmonic` is exported for the freq sort).
+  - **Backend commands for T028** — `list_anki_models`, `list_dictionaries`/`set_dictionary_state`,
+    `get_setup_status`, ignore-list get/add/remove, `get_anki_status`/`get_player_status`,
+    `seek_timestamp`/`set_websocket_port` (player wrappers over the existing `PlayerHandle`).
+    Required before the top bar / modals (T028, US3, US5) can be built.
+  - **T025 verify** still needs an interactive `cargo tauri dev` (maintainer).
 - **Deferred (tracked, intentional):**
   - Auto-`refresh_terms`/`terms-refreshed` on a live Anki connection → **US2/T033** (backend keeps
     `base_terms` ready; `onTermsRefreshed` listener already wired in the store).
@@ -201,8 +212,11 @@ stories render inside it.
 
 ### Shell (prerequisite for all stories)
 
-- [ ] T026 App shell + theme `src-tauri/ui/src/routes/+page.svelte` + `app.css`: dark/light
-      theme (from `settings.dark_mode`), layout matching egui's information architecture.
+- [x] T026 App shell + theme: `src/app.css` (theme tokens mirroring the egui **Dracula** palette —
+      `dracula`/`dracula_light` from `src/gui/theme.rs` — dark default, `:root[data-theme='light']`
+      override) + `+layout.svelte` (applies dark/light + serif class from `settings`) +
+      `+page.svelte` restructured into the `.app-shell` top-bar/main IA. Round trip still works.
+      `pnpm build` ✓. (Full menu = T028; virtualized table = T029; font faces = T027.)
 - [ ] T027 [P] Fonts: bundle Noto Sans/Serif JP as `@font-face`; serif/sans toggle → CSS class
       driven by `settings.use_serif_font`.
 - [ ] T028 Top bar `lib/components/TopBar.svelte`: menu entries opening the modals (file, anki,
@@ -211,9 +225,12 @@ stories render inside it.
 
 ### US1 — Mine vocabulary from a file (P1) 🎯 MVP
 
-- [ ] T029 [US1] `TermTable.svelte`: virtualized rows (e.g. `@tanstack/svelte-virtual`); columns
-      term/reading/POS/frequency(`frequencies.HARMONIC`)/sentence-count/comprehension. Default
-      sort = frequency, mirroring `gui/table` defaults.
+- [x] T029 [US1] `lib/components/TermTable.svelte`: columns term(+reading)/POS/frequency
+      (`frequencies.HARMONIC`, `？` at u32::MAX)/sentence-count/comprehension; POS colored per
+      egui `Theme::pos_color` groups; labels from `posCatalog`. Default sort = frequency ascending
+      (most-frequent first), mirroring `gui/table` `SortState::default`. Wired into `+page.svelte`.
+      **Deferred:** virtualization (`@tanstack/svelte-virtual`) — plain render for now (fine for
+      typical files; revisit if a large file janks); interactive sort/filter/search = T037.
 - [ ] T030 [US1] `SentenceView.svelte`: render `SentenceDto.segments` as `<ruby><rt>` furigana
       over the Japanese text; expandable per term (multi-sentence browsing via
       `sentence_references`).
