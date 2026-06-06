@@ -1,3 +1,5 @@
+mod background;
+mod commands;
 mod dto;
 mod events;
 mod player_task;
@@ -22,11 +24,23 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(Mutex::new(AppState::new(settings)))
+        .invoke_handler(tauri::generate_handler![
+            commands::lifecycle::load_language_tools,
+            commands::lifecycle::get_pos_catalog,
+            commands::lifecycle::get_settings,
+            commands::lifecycle::save_settings,
+            commands::file::open_file_dialog,
+            commands::file::process_file,
+            commands::file::get_terms,
+        ])
         .setup(move |app| {
             // The player runs in its own task that solely owns `PlayerManager`;
             // commands reach it through this handle (no shared lock).
             let player = player_task::spawn(app.handle().clone(), websocket_port);
             app.manage(player);
+
+            // Ambient Anki/knowledge polling (player connectivity is handled above).
+            background::spawn(app.handle().clone());
             Ok(())
         })
         .run(tauri::generate_context!())

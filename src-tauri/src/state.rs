@@ -35,9 +35,13 @@ use yomine::{
 #[derive(Default)]
 pub struct FileData {
     pub source_file: Option<SourceFile>,
-    /// All terms (visible + Anki-filtered + ignore-filtered), as the pipeline
-    /// returns them. Filtering for display happens client-side (research R6).
+    /// The minable (unknown) terms shown in the table — `filter_result.terms`.
+    /// Display-side refinement (POS/search/sort/range) happens client-side (R6).
     pub terms: Vec<Term>,
+    /// All terms (visible + Anki-filtered + ignore-filtered) as the pipeline
+    /// returns them; kept so a live Anki refresh can re-partition without
+    /// re-segmenting (mirrors egui's `FileData::original_terms`).
+    pub base_terms: Vec<Term>,
     pub sentences: Vec<Sentence>,
     pub file_comprehension: f32,
 }
@@ -51,6 +55,11 @@ pub struct AppState {
     pub analysis_cancel: Arc<AtomicBool>,
     /// Kept for `export_analysis`; only a preview DTO is sent to the UI.
     pub last_analysis: Option<FrequencyAnalysisResult>,
+    /// Set when an input to the knowledge summary changes (settings save, dict
+    /// reload, live Anki refresh); the background task recomputes and clears it.
+    /// Starts `true` so the first cached summary loads once tools are ready.
+    /// Mirrors egui's `knowledge_summary_attempted` reset (R5).
+    pub knowledge_dirty: Arc<AtomicBool>,
 }
 
 impl AppState {
@@ -61,6 +70,7 @@ impl AppState {
             file: FileData::default(),
             analysis_cancel: Arc::new(AtomicBool::new(false)),
             last_analysis: None,
+            knowledge_dirty: Arc::new(AtomicBool::new(true)),
         }
     }
 }

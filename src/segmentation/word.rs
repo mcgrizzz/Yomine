@@ -137,6 +137,38 @@ impl POS {
             _ => None,
         }
     }
+
+    /// Every variant, in display order. Canonical source for POS catalogs/filters.
+    pub fn all() -> &'static [POS] {
+        use POS::*;
+        &[
+            Noun,
+            ProperNoun,
+            CompoundNoun,
+            NounExpression,
+            Pronoun,
+            Adjective,
+            AdjectivalNoun,
+            Adverb,
+            Determiner,
+            Preposition,
+            Postposition,
+            Verb,
+            SuruVerb,
+            Copula,
+            Suffix,
+            Prefix,
+            Conjunction,
+            Interjection,
+            Onomatopoeia,
+            Number,
+            Counter,
+            Symbol,
+            Expression,
+            Other,
+            Unknown,
+        ]
+    }
 }
 
 // impl fmt::Display for POS {

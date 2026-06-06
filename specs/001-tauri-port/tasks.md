@@ -57,14 +57,33 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
   / T041 (`set_websocket_port` → `PlayerHandle::set_port`). Added `tokio`
   (`sync`/`time`/`macros`) to `src-tauri/Cargo.toml`. Compiles green (27 transient dead-code
   warnings — consumed by the command layer).
-- **NEXT: T019** (lifecycle commands: `load_language_tools`, `get_pos_catalog`, `get_settings`,
-  `save_settings`), then the rest of T020 (anki poll + knowledge recompute loop), T021
-  (`process_file`/`open_file_dialog`), T022 (`main.rs` register commands), T023/T024 (frontend
-  ipc.ts + stores), → T025 (verify round trip). Engine refs confirmed:
-  `pipeline::process_source_file` returns
-  `(Vec<Term>, FilterResult, Vec<Sentence>, f32)`; `PlayerManager::new(MpvManager::new(),
-  WebSocketManager::new(port))`; `persistence::{load_json_or_default,save_json}`;
-  `POS::{as_key,display_name}`; `tools::analysis::FrequencyAnalysisResult`.
+- **Command layer + frontend round-trip — DONE (T019–T024), all builds green.** New files:
+  `src-tauri/src/commands/{mod,lifecycle,file}.rs`, `src-tauri/src/background.rs`,
+  `src-tauri/ui/src/lib/ipc.ts`, `src-tauri/ui/src/lib/stores/index.ts`; `+page.svelte` is now a
+  real (placeholder) round-trip surface. Core change: added canonical `POS::all()` in
+  `src/segmentation/word.rs`. `AppState` gained `knowledge_dirty: Arc<AtomicBool>` and `FileData`
+  gained `base_terms`. Build matrix: `cargo build -p yomine-tauri` ✓ (13 transient dead-code
+  warnings — later-task commands consume them); `cargo build -p yomine --no-default-features` ✓;
+  `cargo build -p yomine` (egui) ✓ (3 pre-existing warnings); `cargo test` ✓ (6 pass);
+  `pnpm build` ✓ → `ui/build` produced.
+- **NEXT: T025 verify + Phase C shell (T026).** T025 is code-complete but needs an **interactive
+  `cargo tauri dev`** run (load an SRT → confirm the term count renders) to tick — I can't drive
+  the GUI from here. Then start Phase C: T026 app shell/theme (consume `settings.dark_mode`),
+  T028 top bar, T029 `TermTable` (replace the placeholder `<ul>` in `+page.svelte`).
+- **Deferred (tracked, intentional):**
+  - Auto-`refresh_terms`/`terms-refreshed` on a live Anki connection → **US2/T033** (backend keeps
+    `base_terms` ready; `onTermsRefreshed` listener already wired in the store).
+  - `analyzer` store → **US6/T047**. Remaining commands (anki/player/dict/analyzer/knowledge/misc
+    wrappers) land with their UI tasks and append to the `invoke_handler` list in `lib.rs`.
+  - **Pre-existing scaffold debt (T014, not mine):** `pnpm check` reports 4 errors in
+    `vite.config.ts` (`process` global needs `@types/node`). Doesn't block `pnpm build`; fix before
+    T053 (CI) by adding `@types/node` or `import process from 'node:process'`.
+- Engine refs confirmed: `pipeline::process_source_file` → `(Vec<Term>, FilterResult,
+  Vec<Sentence>, f32)`; `init_vibrato(&DictType::Unidic, cb)` / `process_frequency_dictionaries(cb)`
+  / `IgnoreList::load()` (loader trio); `anki::api::get_version()` + `anki::has_cached_vocab()`;
+  `knowledge_summary::compute_knowledge_summary(Arc<FrequencyManager>, u32)`;
+  `FrequencyManager::{dictionary_states, set_dictionary_state}` (interior-mutable, `&self`);
+  `persistence::{load_json_or_default, save_json}`; `POS::{all, as_key, display_name}`.
 - Pre-existing (not part of this work): `src/tests/segmentation_regression.rs` is orphaned
   (nothing declares `mod tests;`, so it never runs); 3 egui `Panel::show` deprecation warnings.
 
@@ -143,24 +162,33 @@ command/event layer and background loop in place. Implements contracts/.
 - [x] T018 Define the `SentenceDto` + `FileLoadResult` mapping in the backend (data-model.md):
       convert `Sentence` → `SentenceDto` (timestamp → secs+labels via `TimeStamp::to_secs`/
       `to_human_readable`). (In `src-tauri/src/dto.rs`; also `SegmentDto`, `TimeStampDto`, `PosInfo`.)
-- [ ] T019 Implement lifecycle commands (`src-tauri/src/commands/lifecycle.rs`):
+- [x] T019 Implement lifecycle commands (`src-tauri/src/commands/lifecycle.rs`):
       `load_language_tools` (Channel progress, loads into AppState, emits
-      `language-tools-status`), `get_pos_catalog`, `get_settings`, `save_settings`.
-- [ ] T020 Implement the background task (`src-tauri/src/background.rs`): ~5s Anki poll →
-      `anki-status`; player mode switch (`PlayerManager::update`) → `player-status`; knowledge
-      summary recompute → `knowledge-summary`. Start it in `main.rs` setup with the same
-      throttles egui used.
-- [ ] T021 Implement `process_file` + `get_terms` (`commands/file.rs`) calling
-      `pipeline::process_source_file`; return `FileLoadResult`; if Anki reachable, spawn
-      `refresh_terms` and emit `terms-refreshed`. Implement `open_file_dialog` via dialog plugin.
-- [ ] T022 Implement `src-tauri/src/main.rs`: Tauri builder, manage `AppState`, register all
-      commands, start background task. Window config (size/title/icon) from tauri.conf.json.
-- [ ] T023 [P] Frontend IPC layer `src-tauri/ui/src/lib/ipc.ts`: typed wrappers over
-      `invoke`/`listen`/`Channel`; mirror TS types from data-model.md.
-- [ ] T024 [P] Frontend stores `src-tauri/ui/src/lib/stores/`: `terms`, `settings`, `status`,
-      `overlay`, `knowledge`, `analyzer`; hydrate on startup per contracts/events.md.
+      `language-tools-status`), `get_pos_catalog`, `get_settings`, `save_settings`. (Added a
+      canonical `POS::all()` in core for the catalog; weights propagate via shared
+      `commands::apply_frequency_weights`, mirroring egui's `apply_frequency_settings`.)
+- [x] T020 Implement the background task (`src-tauri/src/background.rs`): ~5s Anki poll →
+      `anki-status`; knowledge summary recompute → `knowledge-summary`. (Player mode switch is
+      handled by `player_task` already; not duplicated here.) Started in `lib.rs` setup with the
+      same 5s throttle egui used; recompute is gated by `AppState.knowledge_dirty` (set on
+      settings save, mirroring egui's `knowledge_summary_attempted` reset).
+- [x] T021 Implement `process_file` + `get_terms` (`commands/file.rs`) calling
+      `pipeline::process_source_file`; return `FileLoadResult`. `open_file_dialog` via dialog
+      plugin. **Deferred to US2/T033:** the auto-`refresh_terms`/`terms-refreshed` on a live Anki
+      connection — `FileData` now keeps `base_terms` so that lands cleanly later.
+- [x] T022 Register commands in `lib.rs` invoke_handler (`main.rs` is the thin entry that calls
+      `run()`); `AppState` managed, background + player tasks started. The handler currently lists
+      the 7 implemented commands and grows as US2–US7 commands land.
+- [x] T023 [P] Frontend IPC layer `src-tauri/ui/src/lib/ipc.ts`: typed wrappers over
+      `invoke`/`listen`/`Channel`; TS types mirror data-model.md. (Only the 7 registered commands
+      are wrapped, so startup hydration can't call a missing command.)
+- [x] T024 [P] Frontend stores `src-tauri/ui/src/lib/stores/index.ts`: `languageToolsStatus`,
+      `ankiStatus`, `playerStatus`, `overlay`, `fileResult`, `knowledge`, `settings`,
+      `posCatalog`, `lastError` + a `hydrate()` that wires events and loads tools.
+      (`analyzer` store deferred to US6/T047 — nothing hydrates it at startup.)
 - [ ] T025 **Verify Phase B**: `cargo tauri dev` opens; startup loads tools (progress shows);
       `process_file` on a real SRT returns a term count rendered in a placeholder list.
+      (Code complete + builds green; **needs an interactive `cargo tauri dev` run** to tick.)
 
 **Checkpoint**: IPC foundation proven end-to-end; UI stories can proceed in parallel.
 
