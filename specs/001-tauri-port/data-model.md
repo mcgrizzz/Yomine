@@ -40,15 +40,18 @@ frequency column and band; `sentence_references.len()` gives the sentence-count 
 ## Sentence  (from `core::models::Sentence` — add serde, but ship a DTO for the timestamp)
 
 `Sentence.segments` is `Vec<(String /*reading*/, POS, usize /*start*/, usize /*end*/)>` over
-`text`; the frontend maps each segment to a `<ruby>` span. `Sentence.timestamp` is
-`Option<TimeStamp>` wrapping `time::Time` — do **not** serialize `time::Time`; expose a DTO:
+`text`; the frontend maps each segment to a `<ruby>` span. The DTO ships each segment's
+**pre-sliced `surface`** (so the UI never slices `text` by UTF-8 byte offset in JS) and its
+`reading` **already converted to hiragana**; `start`/`end` (byte offsets) are retained for the
+in-sentence term-highlight overlap test. `Sentence.timestamp` is `Option<TimeStamp>` wrapping
+`time::Time` — do **not** serialize `time::Time`; expose a DTO:
 
 ```
 SentenceDto {
   id: usize,
   source_id: u32,
   text: string,
-  segments: array<{ reading: string, pos: POS, start: usize, end: usize }>,
+  segments: array<{ surface: string, reading: string /* hiragana */, pos: POS, start: usize, end: usize }>,
   timestamp: { start_secs: f32, end_secs: f32, start_label: string, end_label: string } | null,
   comprehension: f32,
 }

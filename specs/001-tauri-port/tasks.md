@@ -82,15 +82,50 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
   Two uncommitted units: **toolchain** (`package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`)
   and **T030** (`Cargo.toml`, `dto.rs`, `ipc.ts`, `pos.ts`, `SentenceView.svelte`,
   `TermTable.svelte`, `+page.svelte`, `stores/index.ts`).
+- **SPEC CORRECTION (2026-06-07).** Maintainer review found the table drifted from egui: sentence
+  must be **inline** in each row (not an expander) and the term reading must be **furigana above**
+  the word. Also `spec.md` lacked the **no-file landing state** (FR-001 now covers it). Edited
+  `spec.md` (US1 desc/AS1/AS2, FR-001, FR-003), `quickstart.md` (#1), and re-scoped **T029/T030 →
+  `[~]` (rework to inline "lean first pass")**, **T031** (landing state + recent files). Recent
+  files were already specced (FR-001) — they need a `get_recent_files` command + the file UI.
+- **T029/T030 REWORK DONE (2026-06-07) — code-complete in WSL, NOT frontend-verified, uncommitted.**
+  Restructured to the egui inline layout: `TermTable.svelte` now renders four columns
+  **Term │ Sentence │ Frequency │ POS** with the lemma's reading as `<ruby><rt>` **furigana above**
+  the word; the example sentence renders **inline** in each row (no expander, no `<button>`/caret/
+  `expandedKey`). `SentenceView.svelte` reduced to a single-occurrence inline renderer
+  (furigana over kanji, term highlighted red); the nav/timestamp/comprehension meta row was
+  **removed** and the prop changed `occurrences: Occurrence[]` → `occurrence: Occurrence` (TermTable
+  resolves the term's first resolvable `sentence_reference`). Reused as-is: `harmonic` sort, `？`
+  sentinel, `posColor`, `posCatalog` labels, byte-offset highlight, the `SegmentDto` enrichment.
+  `+page.svelte` wiring unchanged. The deferred nav + per-sentence comprehension indicator are now
+  filed as **T030b** (US1 sentence polish). **Furigana fix:** ruby must sit over **kanji only**, not
+  okurigana (心ない → こころ over 心, ない bare). Added `ui/src/lib/furigana.ts` (`furiganaParts` —
+  splits surface+hiragana reading into kanji/kana runs, kana runs are verbatim anchors into the
+  reading; whole-over-whole fallback for unalignable irregular readings) + a shared
+  `ui/src/lib/components/Furigana.svelte` (renders the parts inline, color inherits). Both the term
+  column and `SentenceView` now render via `Furigana` (SentenceView dropped its own `hasKanji`
+  whole-segment ruby). **Overhang fix (2nd pass):** readings wider than their kanji were overhanging
+  into the next word and merging (警戒+心 → "けいかいこころ"). `Furigana` now emits ONE `<ruby>` per
+  word with alternating base/`<rt>` pairs (empty `<rt>` over okurigana) and wraps it in an
+  `inline-block` box so each word's reading centers over itself and can't overhang the neighbor;
+  lines still break between words. Also `ruby-align: space-around` so a reading narrower than its
+  base (jukugo like 警戒→けいかい, or a whole-word fallback) spreads across the region it covers
+  instead of bunching in the centre (WebKit's old default). **Frontend not built in WSL** (must not touch Windows `node_modules`) — verify
+  via `cargo tauri dev` on Windows (folds into T032).
 - **NEXT options (all unblocked except T028):**
+  - **T031** [US1] file open + drag-drop + **no-file landing state** — needs the new
+    `get_recent_files` backend command (reuse `gui/recent_files.rs`); replaces the bare
+    "Open a subtitle…" placeholder. **Likely the immediate next build.**
   - **T032** [US1] **verify** US1 against egui (term count/order/readings/POS/frequencies; furigana
     renders) — interactive, maintainer.
   - **T037** [US4] table controls — interactive sort/search/POS filter/freq-range (client-side on
     the term list; `TermTable.harmonic` is exported for the freq sort).
-  - **Backend commands for T028** — `list_anki_models`, `list_dictionaries`/`set_dictionary_state`,
+  - **Backend commands still to implement** — `get_recent_files` (FR-001 landing/open flow, reuse
+    `gui/recent_files.rs`), `list_anki_models`, `list_dictionaries`/`set_dictionary_state`,
     `get_setup_status`, ignore-list get/add/remove, `get_anki_status`/`get_player_status`,
     `seek_timestamp`/`set_websocket_port` (player wrappers over the existing `PlayerHandle`).
-    Required before the top bar / modals (T028, US3, US5) can be built.
+    Most are required before the top bar / modals (T028, US3, US5); `get_recent_files` is needed
+    for T031's landing state.
   - **T025 verify** still needs an interactive `cargo tauri dev` (maintainer).
 - **Deferred (tracked, intentional):**
   - Auto-`refresh_terms`/`terms-refreshed` on a live Anki connection → **US2/T033** (backend keeps
@@ -208,9 +243,11 @@ command/event layer and background loop in place. Implements contracts/.
       `ankiStatus`, `playerStatus`, `overlay`, `fileResult`, `knowledge`, `settings`,
       `posCatalog`, `lastError` + a `hydrate()` that wires events and loads tools.
       (`analyzer` store deferred to US6/T047 — nothing hydrates it at startup.)
-- [ ] T025 **Verify Phase B**: `cargo tauri dev` opens; startup loads tools (progress shows);
-      `process_file` on a real SRT returns a term count rendered in a placeholder list.
-      (Code complete + builds green; **needs an interactive `cargo tauri dev` run** to tick.)
+- [x] T025 **Verify Phase B**: `cargo tauri dev` opens; startup loads tools (progress shows);
+      `process_file` on a real SRT renders the term list. ✓ Verified on Windows — opened an SRT,
+      208 terms / 335 sentences / 51% comprehension rendered. (Two bring-up bugs fixed: dialog
+      call moved inside try/catch + error banner; rows re-keyed off `lemma_form+reading` since
+      `Term.id` isn't unique.)
 
 **Checkpoint**: IPC foundation proven end-to-end; UI stories can proceed in parallel.
 
@@ -236,25 +273,42 @@ stories render inside it.
 
 ### US1 — Mine vocabulary from a file (P1) 🎯 MVP
 
-- [x] T029 [US1] `lib/components/TermTable.svelte`: columns term(+reading)/POS/frequency
-      (`frequencies.HARMONIC`, `？` at u32::MAX)/sentence-count/comprehension; POS colored per
-      egui `Theme::pos_color` groups; labels from `posCatalog`. Default sort = frequency ascending
-      (most-frequent first), mirroring `gui/table` `SortState::default`. Wired into `+page.svelte`.
-      **Deferred:** virtualization (`@tanstack/svelte-virtual`) — plain render for now (fine for
-      typical files; revisit if a large file janks); interactive sort/filter/search = T037.
-- [x] T030 [US1] `lib/components/SentenceView.svelte`: renders `SentenceDto.segments` as inline
-      `<ruby><rt>` furigana (kanji spans only), POS-colored, with the term's own segments
-      highlighted; browses multiple occurrences (prev/next). Rows in `TermTable` are now
-      expandable (`<button>` rows) to reveal it. **Backend enrichment:** `SegmentDto` gained a
-      pre-sliced `surface` + hiragana-converted `reading` (added `wana_kana` to the tauri crate)
-      so the UI never byte-slices UTF-8 in JS; occurrence resolution is index-based + byte-offset
-      highlight, mirroring egui (`sentence_column.rs` uses `sentences[ref.0]`, `ref.1` = offset).
-      Shared `lib/pos.ts` `posColor` now used by both table and sentence view.
-      **Note:** expression highlighting is approximate (egui has special `find_expression_segments`
-      matching); refine if needed. Needs a `cargo tauri dev` rebuild to see (DTO changed).
-- [ ] T031 [US1] File open + drag-drop: `open_file_dialog`→`process_file`; Tauri
-      `onDragDropEvent` for drops (O2); loading overlay from `overlayStore`; error modal on
-      failure (don't clobber existing results).
+> **SPEC CORRECTION (2026-06-07, maintainer review):** egui shows the example sentence **inline**
+> in each row (Term │ Sentence │ Frequency │ POS), not behind an expander; the term's reading is
+> furigana **above** the word. The original tasks said "expand a term," which drove an expandable
+> build (committed in `a92800b`/T030). T029/T030 below are re-scoped to the inline "lean first
+> pass" the maintainer chose; the existing components are largely reused, restructured.
+- [x] T029 [US1] (rework) `lib/components/TermTable.svelte` — **rework to the egui inline row shape**:
+      four columns **Term │ Sentence │ Frequency │ POS** (drop the separate sentence-count /
+      comprehension columns — those move into the Sentence cell / nav, deferred). Term cell shows
+      the lemma with its reading as **furigana above** it (not a side column). Default sort =
+      frequency ascending. **Reuse (already done & correct):** `harmonic` sort, `？` at u32::MAX,
+      `posColor` groups, `posCatalog` labels, frequency formatting. **Remove:** row-expansion
+      (`<button>` toggle, `expandedKey`). **Deferred:** virtualization (`@tanstack/svelte-virtual`);
+      interactive sort/filter/search = T037.
+- [x] T030 [US1] (rework) `lib/components/SentenceView.svelte` — **render inline in each table row** (not an
+      expander): `SentenceDto.segments` as `<ruby><rt>` furigana (kanji spans only), POS-colored,
+      term's own segments highlighted. **Reuse (done & correct):** the furigana/highlight rendering,
+      the `SegmentDto.surface` + hiragana `reading` backend enrichment (`wana_kana` in the tauri
+      crate; UI never byte-slices UTF-8), index-based occurrence resolution + byte-offset highlight
+      (mirrors `sentence_column.rs`: `sentences[ref.0]`, `ref.1`=offset), shared `lib/pos.ts`.
+      **Deferred per "lean first pass":** clickable timestamp→seek = **US3/T035**; per-sentence
+      comprehension indicator + ◀ n/m ▶ multi-sentence nav = a **US1 sentence-polish follow-up**
+      (now **T030b**). **Note:** expression highlighting is approximate (egui
+      has special `find_expression_segments`).
+- [ ] T030b [US1] (sentence polish) Re-add the deferred per-sentence affordances under the inline
+      sentence cell (egui `sentence_column.rs`): the **◀ n/m ▶ multi-sentence nav** (browse a term's
+      multiple `sentence_references` in place — the old `SentenceView` already resolved them
+      index-based) and the **per-sentence comprehension indicator** (egui's 5-bar gradient, shown
+      only once Anki filtering is active). Restores AS2's "browsed in place" + comprehension
+      conveyance. Clickable timestamp→seek stays in **US3/T035**. Split out of T029/T030 by the
+      2026-06-07 maintainer "lean first pass" call.
+- [ ] T031 [US1] File open + drag-drop + **no-file landing state (FR-001)**:
+      `open_file_dialog`→`process_file`; Tauri `onDragDropEvent` for drops (O2); loading overlay
+      from `overlayStore`; error banner on failure (don't clobber existing results — done).
+      Landing state (egui parity): "no file loaded" message + "drop a file anytime" hint + an
+      "Open file" action surfacing **recent files** (needs a `get_recent_files` backend command
+      reusing `gui/recent_files.rs`, O3). Replaces the current bare "Open a subtitle…" placeholder.
 - [ ] T032 [US1] **Verify** against egui: same term count/order/readings/POS/frequencies; furigana
       renders; drag-drop parity.
 

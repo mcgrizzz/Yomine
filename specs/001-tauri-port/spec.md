@@ -28,10 +28,12 @@ text rendering. Re-platforming is the only goal — no new analysis features are
 ### User Story 1 - Mine vocabulary from a subtitle file (Priority: P1)
 
 A learner opens a Japanese subtitle file (SRT, ASS/SSA) or a plain-text file. The app segments
-the text, extracts unique words and multi-word expressions, ranks them by frequency, and
-shows a table of terms with their dictionary (lemma) form, reading, part of speech, frequency,
-how many example sentences contain them, and a comprehension estimate. The learner can expand
-a term to read its example sentence(s) with readings shown over the Japanese.
+the text, extracts unique words and multi-word expressions, ranks them by frequency, and shows a
+table whose rows pair each term — its dictionary (lemma) form with the reading shown as furigana
+above it — with frequency, part of speech, and an example sentence shown **inline in the row**,
+rendered with readings over the Japanese and the term itself highlighted. A term that appears in
+several sentences can have them browsed in place; the count and a comprehension estimate are
+conveyed.
 
 **Why this priority**: This is the core value of Yomine and the minimum viable product. Every
 other story builds on having a ranked term table from a file.
@@ -42,10 +44,12 @@ ordering, readings, parts of speech, and frequency values match the egui app on 
 **Acceptance Scenarios**:
 
 1. **Given** the app is open and language tools have loaded, **When** the learner opens a
-   supported subtitle file, **Then** a ranked table of unknown terms appears with reading,
-   part of speech, frequency, sentence count, and comprehension columns.
-2. **Given** a term in the table, **When** the learner expands it, **Then** its example
-   sentence(s) are shown with furigana-style readings over the Japanese text.
+   supported subtitle file, **Then** a ranked table of unknown terms appears, each row pairing the
+   term (its reading shown as furigana above the lemma) and an inline example sentence with the
+   term's frequency and part of speech.
+2. **Given** a populated table, **When** the learner reads a row, **Then** the term's example
+   sentence is shown inline with furigana-style readings over the Japanese text and the term
+   highlighted; a term with multiple example sentences can have them browsed in place.
 3. **Given** an unsupported or unreadable file, **When** the learner tries to open it, **Then**
    the app shows a clear error and leaves any previously loaded results intact.
 4. **Given** the app is launched, **When** the learner drags a supported file onto the window,
@@ -200,14 +204,19 @@ coverage/estimate values match the egui knowledge summary for the same data.
 ### Functional Requirements
 
 - **FR-001**: The app MUST open SRT, ASS/SSA, and TXT files via a file dialog and via
-  drag-and-drop, and MUST list and reopen recent files with their metadata.
+  drag-and-drop, and MUST list and reopen recent files with their metadata. Before any file is
+  loaded, the app MUST present a no-file landing state that states no file is loaded, notes a file
+  can be dropped on the window at any time, and offers an action to open a file (surfacing the
+  recent-files list).
 - **FR-002**: The app MUST segment Japanese text and extract deduplicated terms and multi-word
   expressions with lemma form, reading, part of speech, per-dictionary frequencies, the
   sentences that reference them, and a comprehension value — producing the same results as the
   current engine.
-- **FR-003**: The app MUST present terms in a table with reading, part of speech, frequency,
-  sentence count, and comprehension, and MUST render example sentences with readings displayed
-  over the Japanese text.
+- **FR-003**: The app MUST present terms in a table, each row pairing the term — its lemma with
+  the reading shown as furigana above it — with its frequency and part of speech, and MUST render
+  the term's example sentence(s) **inline in the row** with readings displayed over the Japanese
+  text and the term highlighted; the example-sentence count and a comprehension estimate are
+  conveyed, and rows are not hidden behind an expander.
 - **FR-004**: The app MUST support sorting (frequency, chronological, sentence count,
   comprehension), filtering by part of speech and by frequency-rank range, and text search over
   terms, with results equivalent to the current app.

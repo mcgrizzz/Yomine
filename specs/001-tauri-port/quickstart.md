@@ -51,7 +51,9 @@ cargo tauri build     # produces .msi/.exe (Win), .dmg/.app (macOS), .AppImage/.
 For the **same** input file, Anki state, and enabled dictionaries, confirm equality:
 
 1. **US1 Mining**: open an SRT → identical term count, ordering, readings, POS, frequencies;
-   expand a term → sentences render with furigana; drag-and-drop opens the same way.
+   each row shows its example sentence inline with furigana over the Japanese and the term
+   highlighted (furigana also over the term in the Term column); drag-and-drop opens the same way;
+   the no-file landing state matches egui (message + drag-drop hint + open/recent files).
 2. **US2 Anki**: with a mapped note type, same terms hidden, same comprehension %; cached load
    then live background refresh updates in place; works offline.
 3. **US3 Player**: asbplayer connected → timestamp click seeks; MPV preferred when both present;

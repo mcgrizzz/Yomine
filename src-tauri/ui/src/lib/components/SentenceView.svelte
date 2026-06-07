@@ -6,104 +6,49 @@
 
 	const encoder = new TextEncoder();
 	const byteLen = (s: string): number => encoder.encode(s).length;
-	// CJK ideographs (ext. A + unified + compatibility) — only kanji spans get furigana.
-	const hasKanji = (s: string): boolean => /[㐀-鿿豈-﫿]/.test(s);
 </script>
 
 <script lang="ts">
-	// Sentence view (T030): the term's example sentence with inline `<ruby>`
-	// furigana, the term's own segments highlighted (egui shows the reading on
-	// hover; the web upgrades to furigana). Browses multiple occurrences.
+	// Sentence view (T030, inline): renders a term's example sentence inside its
+	// table row with kanji-only `<ruby>` furigana (via Furigana) and the term's
+	// own segments highlighted red (egui shows the reading on hover; the web
+	// upgrades to furigana). One sentence per row — multi-sentence nav + the
+	// comprehension indicator + the clickable timestamp are a deferred US1
+	// sentence-polish follow-up (T030b; timestamp→seek is US3/T035).
 	import { posColor } from '$lib/pos';
+	import Furigana from './Furigana.svelte';
 
-	let { occurrences, term }: { occurrences: Occurrence[]; term: Term } = $props();
+	let { occurrence, term }: { occurrence: Occurrence; term: Term } = $props();
 
-	let idx = $state(0);
-	const current = $derived(occurrences[Math.min(idx, occurrences.length - 1)]);
-	// The term's surface span [start, end) in the current sentence (egui uses
+	// The term's surface span [start, end) in the sentence (egui uses
 	// `full_segment` for expressions, else `surface_form`).
 	const isExpression = $derived(
 		term.part_of_speech === 'Expression' || term.part_of_speech === 'NounExpression'
 	);
 	const termEnd = $derived(
-		current ? current.start + byteLen(isExpression ? term.full_segment : term.surface_form) : 0
+		occurrence.start + byteLen(isExpression ? term.full_segment : term.surface_form)
 	);
 
 	const isTermSeg = (seg: { start: number; end: number }): boolean =>
-		!!current && seg.start < termEnd && seg.end > current.start;
+		seg.start < termEnd && seg.end > occurrence.start;
 </script>
 
-{#if current}
-	<div class="sentence-view">
-		<p class="sentence" lang="ja">
-			{#each current.sentence.segments as seg, i (i)}
-				{@const isTerm = isTermSeg(seg)}
-				{@const color = isTerm ? 'var(--red)' : posColor(seg.pos)}
-				{#if hasKanji(seg.surface) && seg.reading && seg.reading !== seg.surface}
-					<ruby class:term={isTerm} style="color: {color}"
-						>{seg.surface}<rt>{seg.reading}</rt></ruby
-					>
-				{:else}
-					<span class:term={isTerm} style="color: {color}">{seg.surface}</span>
-				{/if}
-			{/each}
-		</p>
-
-		<div class="meta">
-			{#if current.sentence.timestamp}
-				<span class="time">{current.sentence.timestamp.start_label}</span>
-			{/if}
-			<span class="comp">{Math.round(current.sentence.comprehension * 100)}% comprehension</span>
-			{#if occurrences.length > 1}
-				<span class="nav">
-					<button onclick={() => (idx = Math.max(0, idx - 1))} disabled={idx === 0}>‹</button>
-					{idx + 1}/{occurrences.length}
-					<button
-						onclick={() => (idx = Math.min(occurrences.length - 1, idx + 1))}
-						disabled={idx >= occurrences.length - 1}>›</button
-					>
-				</span>
-			{/if}
-		</div>
-	</div>
-{/if}
+<p class="sentence" lang="ja">
+	{#each occurrence.sentence.segments as seg, i (i)}
+		{@const isTerm = isTermSeg(seg)}
+		<span class:term={isTerm} style="color: {isTerm ? 'var(--red)' : posColor(seg.pos)}"
+			><Furigana surface={seg.surface} reading={seg.reading} /></span
+		>
+	{/each}
+</p>
 
 <style>
-	.sentence-view {
-		padding: 0.5rem 0.75rem 0.75rem;
-	}
 	.sentence {
-		margin: 0 0 0.5rem;
-		font-size: 1.5rem;
-		line-height: 2.1;
-	}
-	.sentence ruby rt {
-		font-size: 0.5em;
-		color: var(--comment);
-		font-weight: 400;
+		margin: 0;
+		font-size: 1.4rem;
+		line-height: 2;
 	}
 	.sentence .term {
 		font-weight: 700;
-	}
-	.meta {
-		display: flex;
-		align-items: center;
-		gap: 1rem;
-		font-size: 0.8rem;
-		color: var(--comment);
-	}
-	.time {
-		color: var(--cyan);
-		font-variant-numeric: tabular-nums;
-	}
-	.nav {
-		display: flex;
-		align-items: center;
-		gap: 0.4rem;
-		font-variant-numeric: tabular-nums;
-	}
-	.nav button {
-		padding: 0 0.4rem;
-		line-height: 1.4;
 	}
 </style>

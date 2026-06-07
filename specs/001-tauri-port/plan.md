@@ -139,9 +139,10 @@ must leave `gui` to satisfy Principle IV.
   builds the engine alone; tests green.
 - **Phase B — Tauri scaffold + IPC**: `src-tauri` + SvelteKit; `AppState`; port `TaskManager`
   methods to async commands + events; background loops. Verify a real round trip.
-- **Phase C — Port UI to parity**: shell/theme/fonts/top bar; term table (virtualized, columns,
-  sort/filter/search, furigana sentences, multi-sentence, ignore, seek); all modals; knowledge
-  widget. Verify each against egui.
+- **Phase C — Port UI to parity**: shell/theme/fonts/top bar; term table (egui inline rows —
+  Term+furigana-above │ inline Sentence │ Freq │ POS; columns, sort/filter/search, furigana
+  sentences, multi-sentence, ignore, seek; virtualization deferred until a large file needs it);
+  all modals; knowledge widget. Verify each against egui.
 - **Phase D — Package & sign off**: bundle resources; Tauri bundler in CI replacing egui release
   workflows; parity checklist sign-off; decide egui retirement.
 
