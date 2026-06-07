@@ -22,6 +22,7 @@
   "dependencies": {
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "~2.6.0",
-    "@tauri-apps/plugin-opener": "~2.4.0"
+    "@tauri-apps/plugin-opener": "~2.4.0",
+    "wanakana": "^5.3.1"
   }
 }

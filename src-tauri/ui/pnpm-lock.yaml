@@ -17,6 +17,9 @@ importers:
       '@tauri-apps/plugin-opener':
         specifier: ~2.4.0
         version: 2.4.0
+      wanakana:
+        specifier: ^5.3.1
+        version: 5.3.1
     devDependencies:
       '@sveltejs/adapter-static':
         specifier: ^3.0.6
@@ -625,6 +628,10 @@ packages:
       vite:
         optional: true
 
+  wanakana@5.3.1:
+    resolution: {integrity: sha512-OSDqupzTlzl2LGyqTdhcXcl6ezMiFhcUwLBP8YKaBIbMYW1wAwDvupw2T9G9oVaKT9RmaSpyTXjxddFPUcFFIw==}
+    engines: {node: '>=12'}
+
   zimmerframe@1.1.4:
     resolution: {integrity: sha512-B58NGBEoc8Y9MWWCQGl/gq9xBCe4IiKM0a2x7GZdQKOW5Exr8S1W24J6OgM1njK8xCRGvAJIL/MxXHf6SkmQKQ==}
 
@@ -1069,5 +1076,7 @@ snapshots:
   vitefu@1.1.3(vite@6.4.3):
     optionalDependencies:
       vite: 6.4.3
+
+  wanakana@5.3.1: {}
 
   zimmerframe@1.1.4: {}

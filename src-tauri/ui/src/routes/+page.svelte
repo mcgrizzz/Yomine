@@ -11,6 +11,7 @@
 		languageToolsStatus,
 		overlay,
 		fileResult,
+		visibleTerms,
 		recentFiles,
 		dragHovering,
 		ankiStatus,
@@ -18,6 +19,7 @@
 		lastError
 	} from '$lib/stores';
 	import TermTable from '$lib/components/TermTable.svelte';
+	import TableControls from '$lib/components/TableControls.svelte';
 
 	onMount(hydrate);
 
@@ -80,7 +82,8 @@
 				{$fileResult.sentences.length} sentences ·
 				{Math.round($fileResult.file_comprehension * 100)}% comprehension
 			</p>
-			<TermTable terms={$fileResult.terms} sentences={$fileResult.sentences} />
+			<TableControls />
+			<TermTable terms={$visibleTerms} sentences={$fileResult.sentences} />
 		{:else}
 			<div class="landing">
 				<h1 class="landing-title">No File Loaded</h1>

@@ -139,11 +139,45 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
   ✓ · `-p yomine --no-default-features` ✓ · `-p yomine` (egui) ✓. **Verify the frontend via
   `cargo tauri dev` on Windows** (folds into T032): dialog open, recent-file click, and native drop
   all route through `loadAndStore`; the landing list populates after the first load.
+- **T032 DONE — VERIFIED on Windows (maintainer, 2026-06-07).** US1 passes against egui (term
+  count/order/readings/POS/frequencies; furigana; landing state + recent files + drag-drop). T031
+  committed as `dc0ba36`; working tree clean at the start of the T037 session.
+- **T037 DONE (2026-06-07) — code-complete in WSL, frontend NOT built (Windows `node_modules`),
+  uncommitted.** Client-side term-table controls (US4), mirroring `gui/table/{sort,filter,search}.rs`.
+  **New `lib/table.ts`** (pure): `harmonic` (moved out of `TermTable`'s module script — the `"HARMONIC"`
+  key is `get_weighted_harmonic`, so it equals egui's `weighted_frequency`), `SortField`
+  (frequency/chronological/sentenceCount/comprehension) + `defaultDir` (freq/chrono asc, count/comp
+  desc — egui parity), `freqBounds` (= `configure_bounds`, lower bound floored at 1), `matchesSearch`
+  (term forms/readings/POS + sentence text; case-insensitive + katakana→hiragana fold), and
+  `applyControls` (filter→sort, = `recompute_indices`). **`stores/index.ts`:** control writables
+  `tableSearch`/`tableSort`/`posEnabled`/`freqFilter` + a `visibleTerms` derived; `posEnabled` seeded
+  from `settings.pos_filters` (missing key = enabled, = `is_enabled` default); `freqFilter` re-derived
+  on every `fileResult` change (selection resets to full range). **New `TableControls.svelte`:** search
+  box, sort `<select>` + ▲/▼ direction toggle, POS multiselect `<details>` popover (All/None +
+  per-POS checkboxes from `posCatalog`), dual frequency `<input type=range>` (min/max, mutually
+  clamped) + "?" include-unknown toggle, and an `N / total shown` counter. **`TermTable.svelte`** now
+  renders the pre-filtered/sorted `terms` (`{#each terms}`, no internal sort) and imports `harmonic`
+  from `lib/table`. **`+page.svelte`** renders `<TableControls/>` above `<TermTable terms={$visibleTerms}/>`.
+  **Behavior delta to verify (T039):** egui's freq filter defaults `include_unknown=false`, so
+  unknown-frequency ('？') terms are now **hidden by default** (revealed via "?"); the meta line still
+  shows the full minable count, the controls counter shows the visible subset. **Search parity (full):**
+  `matchesSearch` is a faithful port of `core::utils::text_matches_search` — it normalizes via the
+  `wanakana` JS package (`toHiragana`: romaji→kana + katakana→kana) plus a hand-port of
+  `normalize_long_vowel` (o-row+お→う / e-row+え→い on all-hiragana strings), then an ASCII fallback.
+  `wanakana` is the library `wana_kana` (Rust, the engine's) was ported from, so romaji/kana/kanji/
+  English all match egui (residual risk only on exotic romaji edge cases between JS 5.3.1 / Rust 4.0.0).
+  **New runtime dep `wanakana@^5.3.1`** added to `src-tauri/ui/package.json` → **run `pnpm install` on
+  Windows before `cargo tauri dev`** (updates `pnpm-lock.yaml`; commit as a toolchain unit). Also
+  added `optimizeDeps.include: ['wanakana']` to `vite.config.ts` so a fresh install is pre-bundled
+  without a manual dev restart.
+  **VERIFIED on Windows (maintainer, 2026-06-07):** search works incl. romaji (`jinsei`→人生's reading),
+  kana, kanji; freq/POS filters apply alongside search (a known term like 人生 is correctly absent
+  because it's filtered out of the minable set, not a search bug). Remaining T039 parity sweep
+  (sort/filter/ignore vs egui) still open.
 - **NEXT options (all unblocked except T028):**
-  - **T032** [US1] **verify** US1 against egui (term count/order/readings/POS/frequencies; furigana
-    renders; landing state + recent files + drag-drop parity) — interactive, maintainer.
-  - **T037** [US4] table controls — interactive sort/search/POS filter/freq-range (client-side on
-    the term list; `TermTable.harmonic` is exported for the freq sort).
+  - **T038/T039** [US4] ignore list (right-click → `add_to_ignore_list` + modal) and the US4 parity
+    verify (sort/filter/search/ignore yield the same visible set as egui).
+  - **T030b** [US1] deferred sentence polish (◀ n/m ▶ multi-sentence nav + per-sentence comprehension).
   - **Backend commands still to implement** — `list_anki_models`,
     `list_dictionaries`/`set_dictionary_state`, `get_setup_status`, ignore-list get/add/remove,
     `get_anki_status`/`get_player_status`, `seek_timestamp`/`set_websocket_port` (player wrappers
@@ -351,7 +385,7 @@ stories render inside it.
 
 ### US4 — Refine & search (P2)
 
-- [ ] T037 [US4] Table controls `lib/components/TableControls.svelte`: sort selector (frequency,
+- [x] T037 [US4] Table controls `lib/components/TableControls.svelte`: sort selector (frequency,
       chronological, sentence count, comprehension), search box, POS multiselect filter, and a
       frequency-range double-slider. All operate client-side on `termsStore` (research R6),
       mirroring `gui/table/{sort,filter,search}.rs`.

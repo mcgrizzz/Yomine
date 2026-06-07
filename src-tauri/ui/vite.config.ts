@@ -7,6 +7,12 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig({
 	plugins: [sveltekit()],
 
+	// Pre-bundle wanakana (search normalization) so a fresh `pnpm install` is
+	// picked up without a manual dev-server restart / re-optimization.
+	optimizeDeps: {
+		include: ['wanakana']
+	},
+
 	// prevent Vite from obscuring Rust errors
 	clearScreen: false,
 	server: {

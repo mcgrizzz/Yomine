@@ -1,0 +1,233 @@
+<script lang="ts">
+	// Term-table controls (T037, US4): search, sort, POS filter, and a frequency
+	// range — all client-side, writing the control stores that `visibleTerms`
+	// derives from. Mirrors egui's controls row + POS-filter menu.
+	import { get } from 'svelte/store';
+	import {
+		tableSearch,
+		tableSort,
+		posEnabled,
+		posCatalog,
+		freqFilter,
+		visibleTerms,
+		fileResult
+	} from '$lib/stores';
+	import { SORT_FIELDS, defaultDir, type SortField } from '$lib/table';
+
+	// Picking a column resets to that column's natural direction (egui parity);
+	// the arrow button flips it.
+	function setField(field: SortField) {
+		tableSort.set({ field, dir: defaultDir(field) });
+	}
+	function toggleDir() {
+		tableSort.update((s) => ({ ...s, dir: s.dir === 'asc' ? 'desc' : 'asc' }));
+	}
+
+	const posTotal = $derived($posCatalog.length);
+	const posOn = $derived($posCatalog.filter((p) => $posEnabled[p.key] !== false).length);
+
+	function setPos(key: string, on: boolean) {
+		posEnabled.update((m) => ({ ...m, [key]: on }));
+	}
+	function setAllPos(on: boolean) {
+		posEnabled.update((m) => {
+			const next = { ...m };
+			for (const p of get(posCatalog)) next[p.key] = on;
+			return next;
+		});
+	}
+
+	function setFreqMin(v: number) {
+		freqFilter.update((f) => (f ? { ...f, min: Math.min(v, f.max) } : f));
+	}
+	function setFreqMax(v: number) {
+		freqFilter.update((f) => (f ? { ...f, max: Math.max(v, f.min) } : f));
+	}
+	function setUnknown(on: boolean) {
+		freqFilter.update((f) => (f ? { ...f, includeUnknown: on } : f));
+	}
+</script>
+
+<div class="controls">
+	<input
+		class="search"
+		type="search"
+		bind:value={$tableSearch}
+		placeholder="Search terms or sentences..."
+	/>
+
+	<div class="group">
+		<span class="lbl">Sort</span>
+		<select value={$tableSort.field} onchange={(e) => setField(e.currentTarget.value as SortField)}>
+			{#each SORT_FIELDS as f (f.value)}
+				<option value={f.value}>{f.label}</option>
+			{/each}
+		</select>
+		<button class="dir" onclick={toggleDir} title="Toggle sort direction">
+			{$tableSort.dir === 'asc' ? '▲' : '▼'}
+		</button>
+	</div>
+
+	<details class="pos">
+		<summary>POS ({posOn}/{posTotal})</summary>
+		<div class="pos-menu">
+			<div class="pos-actions">
+				<button onclick={() => setAllPos(true)}>All</button>
+				<button onclick={() => setAllPos(false)}>None</button>
+			</div>
+			{#each $posCatalog as p (p.key)}
+				<label class="pos-row">
+					<input
+						type="checkbox"
+						checked={$posEnabled[p.key] !== false}
+						onchange={(e) => setPos(p.key, e.currentTarget.checked)}
+					/>
+					<span>{p.display_name}</span>
+				</label>
+			{/each}
+		</div>
+	</details>
+
+	{#if $freqFilter && $freqFilter.hi > $freqFilter.lo}
+		<div class="group freq">
+			<span class="lbl">Freq</span>
+			<input
+				type="range"
+				min={$freqFilter.lo}
+				max={$freqFilter.hi}
+				value={$freqFilter.min}
+				oninput={(e) => setFreqMin(e.currentTarget.valueAsNumber)}
+				aria-label="Minimum frequency"
+			/>
+			<input
+				type="range"
+				min={$freqFilter.lo}
+				max={$freqFilter.hi}
+				value={$freqFilter.max}
+				oninput={(e) => setFreqMax(e.currentTarget.valueAsNumber)}
+				aria-label="Maximum frequency"
+			/>
+			<span class="range-val">{$freqFilter.min}–{$freqFilter.max}</span>
+			<label class="unknown" title="Include entries without frequency data">
+				<input
+					type="checkbox"
+					checked={$freqFilter.includeUnknown}
+					onchange={(e) => setUnknown(e.currentTarget.checked)}
+				/>
+				?
+			</label>
+		</div>
+	{:else if $freqFilter}
+		<span class="no-freq">No frequency data</span>
+	{/if}
+
+	<span class="spacer"></span>
+	<span class="count">{$visibleTerms.length} / {$fileResult?.terms.length ?? 0} shown</span>
+</div>
+
+<style>
+	.controls {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.6rem 0.9rem;
+		margin-bottom: 0.75rem;
+		font-size: 0.85rem;
+	}
+	.search {
+		flex: 1 1 14rem;
+		min-width: 12rem;
+		padding: 0.35rem 0.55rem;
+	}
+	.group {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+	.lbl {
+		color: var(--comment);
+		text-transform: uppercase;
+		font-size: 0.7rem;
+		letter-spacing: 0.03em;
+	}
+	.dir {
+		padding: 0.2rem 0.45rem;
+		line-height: 1;
+	}
+	.pos {
+		position: relative;
+	}
+	.pos > summary {
+		cursor: pointer;
+		list-style: none;
+		padding: 0.3rem 0.6rem;
+		background: var(--bg-light);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		color: var(--fg);
+	}
+	.pos > summary::-webkit-details-marker {
+		display: none;
+	}
+	.pos-menu {
+		position: absolute;
+		z-index: 15;
+		top: calc(100% + 0.25rem);
+		left: 0;
+		min-width: 12rem;
+		max-height: 18rem;
+		overflow-y: auto;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+		padding: 0.5rem;
+		background: var(--bg-dark);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+	}
+	.pos-actions {
+		display: flex;
+		gap: 0.4rem;
+		padding-bottom: 0.35rem;
+		margin-bottom: 0.25rem;
+		border-bottom: 1px solid var(--border);
+	}
+	.pos-actions button {
+		flex: 1;
+		padding: 0.2rem 0;
+		font-size: 0.75rem;
+	}
+	.pos-row {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+	.freq input[type='range'] {
+		width: 6rem;
+	}
+	.range-val {
+		color: var(--comment);
+		font-variant-numeric: tabular-nums;
+	}
+	.unknown {
+		display: flex;
+		align-items: center;
+		gap: 0.2rem;
+		color: var(--comment);
+		cursor: pointer;
+	}
+	.no-freq {
+		color: var(--red);
+	}
+	.spacer {
+		flex: 1;
+	}
+	.count {
+		color: var(--comment);
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+</style>

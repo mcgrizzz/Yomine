@@ -1,24 +1,11 @@
-<script lang="ts" module>
-	import type { Term } from '$lib/ipc';
-
-	/** Sentinel the engine uses for "no frequency data" (u32::MAX). */
-	const NO_FREQ = 4294967295;
-
-	/** Combined frequency rank; missing/sentinel sorts last. Reused by T037 sort. */
-	export function harmonic(term: Term): number {
-		const v = term.frequencies.HARMONIC;
-		return v === undefined || v === NO_FREQ ? Infinity : v;
-	}
-</script>
-
 <script lang="ts">
 	// Term table (T029/T030, inline): the US1 mining surface, mirroring egui's
 	// four-column layout — Term │ Sentence │ Frequency │ POS. The term shows its
 	// reading as furigana above the lemma; the example sentence renders inline in
-	// the row (always visible, no expander). Rows sort by frequency ascending
-	// (most frequent first), matching egui's default; interactive sort/filter/
-	// search land in T037.
-	import type { SentenceDto } from '$lib/ipc';
+	// the row (always visible, no expander). Rows arrive already filtered and
+	// sorted by `visibleTerms` (driven by `TableControls`, T037).
+	import type { SentenceDto, Term } from '$lib/ipc';
+	import { harmonic } from '$lib/table';
 	import { posCatalog } from '$lib/stores';
 	import { posColor } from '$lib/pos';
 	import Furigana from './Furigana.svelte';
@@ -28,8 +15,6 @@
 
 	// key → display label ("Postposition" → "Particle"), from get_pos_catalog.
 	const posLabels = $derived(Object.fromEntries($posCatalog.map((p) => [p.key, p.display_name])));
-
-	const sorted = $derived([...terms].sort((a, b) => harmonic(a) - harmonic(b)));
 
 	// `Term.id` is not unique (the engine doesn't assign distinct ids); the pipeline
 	// dedups by (lemma_form, hiragana reading), so this pair is a stable unique key.
@@ -59,7 +44,7 @@
 		<span class="num">Frequency</span>
 		<span>POS</span>
 	</div>
-	{#each sorted as term (termKey(term))}
+	{#each terms as term (termKey(term))}
 		{@const occ = firstOccurrence(term)}
 		<div class="row">
 			<span class="term" lang="ja"><Furigana surface={term.lemma_form} reading={term.lemma_reading} /></span>

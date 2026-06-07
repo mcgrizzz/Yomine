@@ -2,8 +2,9 @@
 // the single source of truth (Constitution); stores are a local mirror, hydrated
 // on startup and kept live by the event subscriptions wired in `hydrate()`.
 
-import { get, writable } from 'svelte/store';
+import { derived, get, writable } from 'svelte/store';
 import * as ipc from '$lib/ipc';
+import { applyControls, freqBounds, type SortDir, type SortField } from '$lib/table';
 
 /** Tools lifecycle; the UI gates file actions on `ready`. */
 export const languageToolsStatus = writable<ipc.LanguageToolsStatus>('loading');
@@ -36,6 +37,58 @@ const isSupportedPath = (path: string): boolean => {
 export const knowledge = writable<ipc.KnowledgeSummary | null>(null);
 export const settings = writable<ipc.SettingsData | null>(null);
 export const posCatalog = writable<ipc.PosInfo[]>([]);
+
+// ---- Term-table controls (T037): client-side search / sort / POS / frequency.
+// Components read `visibleTerms`; the controls write these. -------------------
+
+/** Free-text query (term forms, readings, POS, and sentence text). */
+export const tableSearch = writable('');
+
+/** Active sort column + direction; defaults to egui's frequency-ascending. */
+export const tableSort = writable<{ field: SortField; dir: SortDir }>({
+	field: 'frequency',
+	dir: 'asc'
+});
+
+/** POS-key → enabled. Seeded from `settings.pos_filters`; missing key = enabled. */
+export const posEnabled = writable<Record<string, boolean>>({});
+
+/** Frequency filter: `lo`/`hi` are the data bounds (slider extent), `min`/`max` the selection. */
+export interface FreqFilterState {
+	lo: number;
+	hi: number;
+	min: number;
+	max: number;
+	includeUnknown: boolean;
+}
+export const freqFilter = writable<FreqFilterState | null>(null);
+
+// Re-derive the frequency bounds whenever the term set changes (new file or an
+// Anki refresh), mirroring egui's `configure_bounds`. Selection resets to the
+// full range; unknown-frequency terms start hidden (egui's `include_unknown=false`),
+// revealed via the "?" toggle.
+fileResult.subscribe((r) => {
+	if (!r) {
+		freqFilter.set(null);
+		return;
+	}
+	const { min, max } = freqBounds(r.terms);
+	freqFilter.set({ lo: min, hi: max, min, max, includeUnknown: false });
+});
+
+/** The filtered + sorted term list the table renders (pure function of the controls). */
+export const visibleTerms = derived(
+	[fileResult, tableSearch, tableSort, posEnabled, freqFilter],
+	([$file, $search, $sort, $pos, $freq]) =>
+		$file
+			? applyControls($file.terms, $file.sentences, {
+					search: $search,
+					sort: $sort,
+					pos: $pos,
+					freq: $freq
+				})
+			: []
+);
 
 /** Last surfaced error (for a modal); `null` once dismissed. */
 export const lastError = writable<ipc.ErrorPayload | null>(null);
@@ -81,6 +134,7 @@ export async function hydrate(): Promise<void> {
 		ipc.getRecentFiles()
 	]);
 	settings.set(loadedSettings);
+	posEnabled.set({ ...loadedSettings.pos_filters });
 	posCatalog.set(catalog);
 	fileResult.set(currentFile);
 	recentFiles.set(recents);
