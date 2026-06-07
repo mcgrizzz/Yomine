@@ -32,6 +32,7 @@ pub fn run() {
             commands::file::open_file_dialog,
             commands::file::process_file,
             commands::file::get_terms,
+            commands::file::get_recent_files,
         ])
         .setup(move |app| {
             // The player runs in its own task that solely owns `PlayerManager`;

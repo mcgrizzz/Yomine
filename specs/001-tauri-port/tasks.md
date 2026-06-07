@@ -112,20 +112,43 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
   base (jukugo like 警戒→けいかい, or a whole-word fallback) spreads across the region it covers
   instead of bunching in the centre (WebKit's old default). **Frontend not built in WSL** (must not touch Windows `node_modules`) — verify
   via `cargo tauri dev` on Windows (folds into T032).
+- **T031 DONE (2026-06-07) — backend builds green, frontend NOT built in WSL, uncommitted.**
+  Landing state + recent files + drag-drop. **Backend:** moved `gui/recent_files.rs` → neutral
+  `core/recent_files.rs` (re-exported from `core` and from `gui::recent_files` so egui call sites
+  still resolve — mirrors the settings/`LanguageTools` decoupling; needed because the Tauri crate
+  builds `--no-default-features` and never compiles `gui`). Added `get_recent_files` command
+  (loads the shared `recent_files.json`, `get_valid_files`, most-recent-first) + `record_recent_file`
+  helper now called inside `process_file` (egui parity: `add_recent_file` with `terms.len()`), and
+  registered `get_recent_files` in `lib.rs`. **Frontend:** `ipc.ts` gained `RecentFileEntry`,
+  `getRecentFiles()`, `onFileDrop()` (Tauri `getCurrentWebview().onDragDropEvent`); `stores`
+  refactored `openAndProcessFile` → shared `loadAndStore(path)` + `openRecentFile(path)`, added a
+  `recentFiles` store (hydrated + refreshed after each load) and drag-drop wiring in `hydrate`;
+  `+page.svelte` replaced the bare placeholder with the egui-parity landing block ("No File Loaded"
+  cyan / `ファイルがまだ読み込まれていません` orange / drag-drop hint / "Open New File" / recent-files
+  list with title·filename·term-count·creator·date·size). **Drag-over overlay + scroll (refinement):**
+  egui shows a "📥 Drop to open" modal while a *supported* file hovers (`draw_file_drop_overlay`);
+  mirrored it — `ipc.onDragDrop` now exposes enter/drop/leave, the store tracks a `dragHovering`
+  flag (true when a dragged path matches `srt/ass/ssa/txt`, drop loads the first supported path),
+  and `+page.svelte` renders a `pointer-events:none` `.drop-overlay`. The welcome screen no longer
+  scrolls the whole main: `.landing` is `height:100%` and only the recents `<ul>` scrolls
+  (`flex:1;min-height:0;overflow-y:auto`), matching egui's `ScrollArea::max_height(200)`. Recent
+  rows also carry a `title={file_path}` tooltip. Drag-drop is **gated on tools-ready**
+  (`get(languageToolsStatus) === 'ready'`) so an early drop during the "Loading language tools…"
+  splash shows no overlay and doesn't load (backend `process_file` also guards as a backstop).
+  Build matrix: `cargo build -p yomine-tauri`
+  ✓ · `-p yomine --no-default-features` ✓ · `-p yomine` (egui) ✓. **Verify the frontend via
+  `cargo tauri dev` on Windows** (folds into T032): dialog open, recent-file click, and native drop
+  all route through `loadAndStore`; the landing list populates after the first load.
 - **NEXT options (all unblocked except T028):**
-  - **T031** [US1] file open + drag-drop + **no-file landing state** — needs the new
-    `get_recent_files` backend command (reuse `gui/recent_files.rs`); replaces the bare
-    "Open a subtitle…" placeholder. **Likely the immediate next build.**
   - **T032** [US1] **verify** US1 against egui (term count/order/readings/POS/frequencies; furigana
-    renders) — interactive, maintainer.
+    renders; landing state + recent files + drag-drop parity) — interactive, maintainer.
   - **T037** [US4] table controls — interactive sort/search/POS filter/freq-range (client-side on
     the term list; `TermTable.harmonic` is exported for the freq sort).
-  - **Backend commands still to implement** — `get_recent_files` (FR-001 landing/open flow, reuse
-    `gui/recent_files.rs`), `list_anki_models`, `list_dictionaries`/`set_dictionary_state`,
-    `get_setup_status`, ignore-list get/add/remove, `get_anki_status`/`get_player_status`,
-    `seek_timestamp`/`set_websocket_port` (player wrappers over the existing `PlayerHandle`).
-    Most are required before the top bar / modals (T028, US3, US5); `get_recent_files` is needed
-    for T031's landing state.
+  - **Backend commands still to implement** — `list_anki_models`,
+    `list_dictionaries`/`set_dictionary_state`, `get_setup_status`, ignore-list get/add/remove,
+    `get_anki_status`/`get_player_status`, `seek_timestamp`/`set_websocket_port` (player wrappers
+    over the existing `PlayerHandle`). Most are required before the top bar / modals (T028, US3, US5).
+    (`get_recent_files` landed with T031.)
   - **T025 verify** still needs an interactive `cargo tauri dev` (maintainer).
 - **Deferred (tracked, intentional):**
   - Auto-`refresh_terms`/`terms-refreshed` on a live Anki connection → **US2/T033** (backend keeps
@@ -303,7 +326,8 @@ stories render inside it.
       only once Anki filtering is active). Restores AS2's "browsed in place" + comprehension
       conveyance. Clickable timestamp→seek stays in **US3/T035**. Split out of T029/T030 by the
       2026-06-07 maintainer "lean first pass" call.
-- [ ] T031 [US1] File open + drag-drop + **no-file landing state (FR-001)**:
+- [~] T031 [US1] File open + drag-drop + **no-file landing state (FR-001)** — code-complete,
+      frontend pending Windows verify (folds into T032):
       `open_file_dialog`→`process_file`; Tauri `onDragDropEvent` for drops (O2); loading overlay
       from `overlayStore`; error banner on failure (don't clobber existing results — done).
       Landing state (egui parity): "no file loaded" message + "drop a file anytime" hint + an

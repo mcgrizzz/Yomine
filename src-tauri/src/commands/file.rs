@@ -8,13 +8,23 @@ use tauri::{
     State,
 };
 use tauri_plugin_dialog::DialogExt;
-use yomine::core::{
-    filename_parser,
-    models::{
-        SourceFile,
-        SourceFileType,
+use yomine::{
+    core::{
+        filename_parser,
+        models::{
+            SourceFile,
+            SourceFileType,
+        },
+        pipeline::process_source_file,
+        recent_files::{
+            RecentFileEntry,
+            RecentFiles,
+        },
     },
-    pipeline::process_source_file,
+    persistence::{
+        load_json_or_default,
+        save_json,
+    },
 };
 
 use crate::{
@@ -100,6 +110,10 @@ pub async fn process_file(
     let (base_terms, filter_result, sentences, file_comprehension) =
         process_source_file(&source_file, &tools).await.map_err(|e| e.to_string())?;
 
+    // Record the file in the shared `recent_files.json` (same store as egui) so it
+    // appears on the landing state, mirroring egui's `add_recent_file`.
+    record_recent_file(&source_file, filter_result.terms.len());
+
     let mut guard = state.lock().unwrap();
     guard.file = FileData {
         source_file: Some(source_file),
@@ -119,4 +133,27 @@ pub async fn process_file(
 #[tauri::command]
 pub fn get_terms(state: State<'_, Mutex<AppState>>) -> Option<FileLoadResult> {
     load_result(&state.lock().unwrap().file)
+}
+
+/// Add (or refresh) a file in the shared recent-files store. Failures are logged,
+/// not surfaced — a recent-files write must never fail an otherwise-good load.
+fn record_recent_file(source_file: &SourceFile, term_count: usize) {
+    let mut recent = load_json_or_default::<RecentFiles>("recent_files.json");
+    recent.add_file(
+        source_file.original_file.clone(),
+        source_file.title.clone(),
+        source_file.creator.clone(),
+        term_count,
+    );
+    if let Err(e) = save_json(&recent, "recent_files.json") {
+        eprintln!("Failed to save recent files: {e}");
+    }
+}
+
+/// Recent files for the landing state (FR-001), most-recent first. Only entries
+/// whose path still exists are returned (egui's `get_valid_files`).
+#[tauri::command]
+pub fn get_recent_files() -> Vec<RecentFileEntry> {
+    let recent = load_json_or_default::<RecentFiles>("recent_files.json");
+    recent.get_valid_files().into_iter().cloned().collect()
 }

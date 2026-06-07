@@ -4,6 +4,7 @@
 
 import { invoke, Channel } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
 
 // ---------------------------------------------------------------------------
 // Wire types (mirror specs/001-tauri-port/data-model.md)
@@ -72,6 +73,17 @@ export interface FileLoadResult {
 	terms: Term[];
 	sentences: SentenceDto[];
 	file_comprehension: number;
+}
+
+/** A previously-opened file for the landing state (mirrors `RecentFileEntry`). */
+export interface RecentFileEntry {
+	file_path: string;
+	title: string;
+	creator: string | null;
+	/** RFC3339 timestamp. */
+	last_opened: string;
+	file_size: number | null;
+	term_count: number | null;
 }
 
 export interface PosInfo {
@@ -179,6 +191,30 @@ export async function processFile(
 /** The currently loaded file, or `null` if none. */
 export function getTerms(): Promise<FileLoadResult | null> {
 	return invoke('get_terms');
+}
+
+/** Recently-opened files (existing paths only), most-recent first. */
+export function getRecentFiles(): Promise<RecentFileEntry[]> {
+	return invoke('get_recent_files');
+}
+
+export interface DragDropHandlers {
+	/** A drag entered the window; `paths` are the files being dragged. */
+	onEnter?: (paths: string[]) => void;
+	/** Files were dropped on the window. */
+	onDrop?: (paths: string[]) => void;
+	/** The drag left the window without dropping. */
+	onLeave?: () => void;
+}
+
+/** Native OS drag-drop onto the window (the `over` event is ignored). */
+export function onDragDrop(handlers: DragDropHandlers): Promise<UnlistenFn> {
+	return getCurrentWebview().onDragDropEvent((event) => {
+		const p = event.payload;
+		if (p.type === 'enter') handlers.onEnter?.(p.paths);
+		else if (p.type === 'drop') handlers.onDrop?.(p.paths);
+		else if (p.type === 'leave') handlers.onLeave?.();
+	});
 }
 
 // ---------------------------------------------------------------------------
