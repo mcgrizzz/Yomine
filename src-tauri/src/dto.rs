@@ -7,6 +7,7 @@ use serde::{
     Deserialize,
     Serialize,
 };
+use wana_kana::ConvertJapanese;
 use yomine::{
     core::models::{
         Sentence,
@@ -16,9 +17,14 @@ use yomine::{
     segmentation::word::POS,
 };
 
-/// One `<ruby>` span over the sentence text: a reading + POS covering `[start,end)`.
+/// One `<ruby>` span over the sentence text: the surface slice, its reading +
+/// POS, and the original `[start,end)` byte offsets. `surface` is pre-sliced and
+/// `reading` pre-converted to hiragana (egui's `.to_hiragana()`), so the UI never
+/// has to slice the sentence by UTF-8 byte offsets in JS. `start`/`end` are kept
+/// for the in-sentence term highlight (numeric overlap test on the frontend).
 #[derive(Serialize, Deserialize, Clone)]
 pub struct SegmentDto {
+    pub surface: String,
     pub reading: String,
     pub pos: POS,
     pub start: usize,
@@ -47,11 +53,13 @@ pub struct SentenceDto {
 
 impl SentenceDto {
     pub fn from_sentence(s: &Sentence) -> Self {
+        let text = &s.text;
         let segments = s
             .segments
             .iter()
             .map(|(reading, pos, start, end)| SegmentDto {
-                reading: reading.clone(),
+                surface: text[*start..*end].to_string(),
+                reading: reading.to_hiragana(),
                 pos: *pos,
                 start: *start,
                 end: *end,

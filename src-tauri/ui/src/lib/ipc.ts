@@ -30,8 +30,12 @@ export interface Term {
 }
 
 export interface SegmentDto {
+	/** Pre-sliced surface text for this span. */
+	surface: string;
+	/** Reading in hiragana (furigana). */
 	reading: string;
 	pos: Pos;
+	/** UTF-8 byte offsets into the sentence text (for the term-overlap test). */
 	start: number;
 	end: number;
 }

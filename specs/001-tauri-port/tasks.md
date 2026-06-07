@@ -71,9 +71,20 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
   working tree holds these as two units on top of the pushed `fb939f3` (T019–T024): T026 =
   `app.css` + `+layout.svelte` + `+page.svelte` shell; T029 = `lib/components/TermTable.svelte` +
   `+page.svelte` wiring. `+page.svelte` and `tasks.md` carry deltas from both.
+- **T030 DONE — verified working on Windows (`cargo tauri dev`), uncommitted.** Opened a real SRT
+  → 208 terms / 335 sentences / 51% comprehension render; row expansion shows the furigana
+  sentence view. Two bugs fixed during bring-up: (1) `openAndProcessFile` had the dialog call
+  outside its try/catch → failures were silent; now wrapped, and `+page` surfaces `lastError` in a
+  banner. (2) `Term.id` is **not unique** (engine doesn't assign distinct ids), so the keyed
+  `{#each}` crashed (`each_key_duplicate`); rows now key on `lemma_form + reading` (unique
+  post-dedup, stable across the re-sort T037 adds) and expansion tracks that key.
+  Frontend is **not built in WSL** (must not touch the Windows `node_modules`); verified by running.
+  Two uncommitted units: **toolchain** (`package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`)
+  and **T030** (`Cargo.toml`, `dto.rs`, `ipc.ts`, `pos.ts`, `SentenceView.svelte`,
+  `TermTable.svelte`, `+page.svelte`, `stores/index.ts`).
 - **NEXT options (all unblocked except T028):**
-  - **T030** [US1] sentence view — expandable furigana (`<ruby>`) per term from
-    `SentenceDto.segments`; multi-sentence browsing via `sentence_references`. (Highest MVP value.)
+  - **T032** [US1] **verify** US1 against egui (term count/order/readings/POS/frequencies; furigana
+    renders) — interactive, maintainer.
   - **T037** [US4] table controls — interactive sort/search/POS filter/freq-range (client-side on
     the term list; `TermTable.harmonic` is exported for the freq sort).
   - **Backend commands for T028** — `list_anki_models`, `list_dictionaries`/`set_dictionary_state`,
@@ -231,9 +242,16 @@ stories render inside it.
       (most-frequent first), mirroring `gui/table` `SortState::default`. Wired into `+page.svelte`.
       **Deferred:** virtualization (`@tanstack/svelte-virtual`) — plain render for now (fine for
       typical files; revisit if a large file janks); interactive sort/filter/search = T037.
-- [ ] T030 [US1] `SentenceView.svelte`: render `SentenceDto.segments` as `<ruby><rt>` furigana
-      over the Japanese text; expandable per term (multi-sentence browsing via
-      `sentence_references`).
+- [x] T030 [US1] `lib/components/SentenceView.svelte`: renders `SentenceDto.segments` as inline
+      `<ruby><rt>` furigana (kanji spans only), POS-colored, with the term's own segments
+      highlighted; browses multiple occurrences (prev/next). Rows in `TermTable` are now
+      expandable (`<button>` rows) to reveal it. **Backend enrichment:** `SegmentDto` gained a
+      pre-sliced `surface` + hiragana-converted `reading` (added `wana_kana` to the tauri crate)
+      so the UI never byte-slices UTF-8 in JS; occurrence resolution is index-based + byte-offset
+      highlight, mirroring egui (`sentence_column.rs` uses `sentences[ref.0]`, `ref.1` = offset).
+      Shared `lib/pos.ts` `posColor` now used by both table and sentence view.
+      **Note:** expression highlighting is approximate (egui has special `find_expression_segments`
+      matching); refine if needed. Needs a `cargo tauri dev` rebuild to see (DTO changed).
 - [ ] T031 [US1] File open + drag-drop: `open_file_dialog`→`process_file`; Tauri
       `onDragDropEvent` for drops (O2); loading overlay from `overlayStore`; error modal on
       failure (don't clobber existing results).

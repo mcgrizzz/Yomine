@@ -11,7 +11,8 @@
 		overlay,
 		fileResult,
 		ankiStatus,
-		playerStatus
+		playerStatus,
+		lastError
 	} from '$lib/stores';
 	import TermTable from '$lib/components/TermTable.svelte';
 
@@ -55,11 +56,20 @@
 				{$fileResult.sentences.length} sentences ·
 				{Math.round($fileResult.file_comprehension * 100)}% comprehension
 			</p>
-			<TermTable terms={$fileResult.terms} />
+			<TermTable terms={$fileResult.terms} sentences={$fileResult.sentences} />
 		{:else}
 			<p class="muted">Open a subtitle or text file to start mining.</p>
 		{/if}
 	</main>
+
+	{#if $lastError}
+		<div class="error-banner" role="alert">
+			<strong>{$lastError.title}</strong>
+			<span>{$lastError.message}</span>
+			{#if $lastError.detail}<span class="detail">{$lastError.detail}</span>{/if}
+			<button onclick={() => lastError.set(null)} aria-label="Dismiss">✕</button>
+		</div>
+	{/if}
 
 	{#if $overlay}
 		<div class="overlay">{$overlay}</div>
@@ -111,6 +121,32 @@
 	}
 	.error {
 		color: var(--red);
+	}
+	.error-banner {
+		position: fixed;
+		left: 50%;
+		bottom: 1rem;
+		transform: translateX(-50%);
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		max-width: 90vw;
+		padding: 0.6rem 0.9rem;
+		background: var(--bg-light);
+		border: 1px solid var(--red);
+		border-radius: var(--radius);
+		color: var(--fg);
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+	}
+	.error-banner strong {
+		color: var(--red);
+	}
+	.error-banner .detail {
+		color: var(--comment);
+		font-size: 0.85rem;
+	}
+	.error-banner button {
+		padding: 0.1rem 0.4rem;
 	}
 	.overlay {
 		position: fixed;

@@ -68,13 +68,14 @@ export async function hydrate(): Promise<void> {
 
 /** Open the native dialog, process the chosen file, and store the result. */
 export async function openAndProcessFile(): Promise<void> {
-	const path = await ipc.openFileDialog();
-	if (!path) return;
-	overlay.set('Processing file…');
 	try {
+		const path = await ipc.openFileDialog();
+		if (!path) return;
+		overlay.set('Processing file…');
 		const result = await ipc.processFile(path, (msg) => overlay.set(msg.message));
 		fileResult.set(result);
 	} catch (err) {
+		console.error('[yomine] open/process failed', err);
 		lastError.set({ title: 'Failed to open file', message: String(err), detail: null });
 	} finally {
 		overlay.set(null);
