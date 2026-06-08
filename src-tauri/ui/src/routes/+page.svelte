@@ -8,6 +8,7 @@
 		hydrate,
 		openAndProcessFile,
 		openRecentFile,
+		openIgnoreModal,
 		languageToolsStatus,
 		overlay,
 		fileResult,
@@ -20,6 +21,7 @@
 	} from '$lib/stores';
 	import TermTable from '$lib/components/TermTable.svelte';
 	import TableControls from '$lib/components/TableControls.svelte';
+	import IgnoreListModal from '$lib/components/IgnoreListModal.svelte';
 
 	onMount(hydrate);
 
@@ -61,8 +63,10 @@
 	<header class="topbar">
 		<span class="brand">Yomine</span>
 		<!-- TODO(T028): full menu — file, anki, websocket, ignore list, freq weights,
-		     POS filters, analyzer, setup checklist. -->
+		     POS filters, analyzer, setup checklist. The buttons below are interim
+		     openers that T028 folds into the proper menu. -->
 		<button onclick={openAndProcessFile} disabled={!toolsReady}>Open file…</button>
+		<button onclick={openIgnoreModal} disabled={!toolsReady}>Ignore list…</button>
 		<span class="spacer"></span>
 		<span class="status">
 			<span class="chip" class:on={$ankiStatus.connected}>Anki</span>
@@ -123,6 +127,8 @@
 			</div>
 		{/if}
 	</main>
+
+	<IgnoreListModal />
 
 	{#if $lastError}
 		<div class="error-banner" role="alert">

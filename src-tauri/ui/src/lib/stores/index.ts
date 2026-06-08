@@ -90,6 +90,36 @@ export const visibleTerms = derived(
 			: []
 );
 
+// ---- Ignore list (T038) ----------------------------------------------------
+
+/** The ignore list's lemma forms (newest first); backs the ignore-list modal. */
+export const ignoreList = writable<string[]>([]);
+
+/** Whether the ignore-list modal is open. */
+export const ignoreModalOpen = writable(false);
+
+/** Open the ignore-list modal, hydrating its terms from the backend. */
+export async function openIgnoreModal(): Promise<void> {
+	ignoreList.set(await ipc.getIgnoreList());
+	ignoreModalOpen.set(true);
+}
+
+/**
+ * Add a term's lemma to the ignore list (e.g. a row's right-click action). The
+ * backend re-filters and returns the updated file; if it does, the table updates.
+ */
+export async function addToIgnore(lemma: string): Promise<void> {
+	const result = await ipc.addToIgnoreList(lemma);
+	if (result) fileResult.set(result);
+}
+
+/** Remove a lemma from the ignore list (the modal); re-filter the table in place. */
+export async function removeFromIgnore(lemma: string): Promise<void> {
+	const result = await ipc.removeFromIgnoreList(lemma);
+	ignoreList.set(get(ignoreList).filter((t) => t !== lemma));
+	if (result) fileResult.set(result);
+}
+
 /** Last surfaced error (for a modal); `null` once dismissed. */
 export const lastError = writable<ipc.ErrorPayload | null>(null);
 

@@ -34,9 +34,19 @@ file_comprehension: f32 }`.
 
 | Command | Args | Returns | Maps to | Notes |
 |---------|------|---------|---------|-------|
-| `get_ignore_list` | — | `array<string>` | `IgnoreList` | Lemma forms. |
-| `add_to_ignore_list` | `lemma: string` | `FileLoadResult` | right-click action + `partial_refresh` | Adds + reapplies filters (no Anki connection) and returns updated terms. |
-| `remove_from_ignore_list` | `lemma: string` | `FileLoadResult` | ignore-list modal | Removes + reapplies. |
+| `get_ignore_list` | — | `array<string>` | `IgnoreList::get_all_terms` | Manual lemma forms only (not file-sourced). |
+| `add_to_ignore_list` | `lemma: string` | `FileLoadResult \| null` | right-click action + `partial_refresh` | Adds + persists + reapplies filters (no Anki connection); returns updated terms (null if no file loaded). The row context action stays immediate (not staged). |
+| `remove_from_ignore_list` | `lemma: string` | `FileLoadResult \| null` | — | Immediate remove + reapply. Retained for API completeness; the modal removes via staged `save_ignore_list` instead. |
+| `get_ignore_list_full` | — | `IgnoreListView` | `IgnoreListModal::open_modal` | Hydrates the modal: manual terms + file pills with per-file `exists` + `term_count`. |
+| `import_ignore_file` | — | `IgnoreFileView \| null` | `FileAction::Add` | Opens a `.txt` open dialog (`tauri-plugin-dialog`), loads its terms, returns `{ path, enabled: true, exists, term_count }`; null if cancelled. Frontend pushes it to the staged file list. |
+| `refresh_ignore_file` | `path: string` | `IgnoreFileView` | `FileAction::Refresh` | Re-reads a file's `term_count`/`exists` for display. The persisted cache reload happens on save. |
+| `save_ignore_list` | `terms: array<string>`, `files: array<IgnoreFile>` | `FileLoadResult \| null` | "Save Settings" | `set_terms` + `set_files` + `reload_file_cache`, reapply filters, return updated terms (null if no file loaded). The modal's single commit point (staged Save/Cancel). |
+| `get_default_ignored_terms` | — | `array<string>` | "Restore Default" | `DEFAULT_IGNORED_TERMS`. Frontend stages defaults + clears files; persisted on save. |
+| `export_ignore_list` | `terms: array<string>` | `string \| null` | "Export…" / `export_terms` | Opens a `.txt` save dialog, writes the (possibly unsaved) staged terms newline-joined; returns the path or null if cancelled. |
+
+`IgnoreFile = { path: string, enabled: boolean }` (the persisted shape; engine `IgnoreFile`).
+`IgnoreFileView = IgnoreFile & { exists: boolean, term_count: number }` (display-only DTO).
+`IgnoreListView = { terms: array<string>, files: array<IgnoreFileView> }`.
 
 ## Anki
 

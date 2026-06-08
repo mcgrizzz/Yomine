@@ -43,7 +43,7 @@ use crate::{
 const DEFAULT_SOURCE_FILE_ID: u32 = 3;
 
 /// Build a `FileLoadResult` from the stored file state (sentences → DTOs).
-fn load_result(file: &FileData) -> Option<FileLoadResult> {
+pub(crate) fn load_result(file: &FileData) -> Option<FileLoadResult> {
     let source_file = file.source_file.clone()?;
     Some(FileLoadResult {
         source_file,
@@ -114,11 +114,17 @@ pub async fn process_file(
     // appears on the landing state, mirroring egui's `add_recent_file`.
     record_recent_file(&source_file, filter_result.terms.len());
 
+    // Lemmas Anki already knew — kept so an ignore-list change can re-filter
+    // without re-querying Anki (mirrors egui's `anki_filtered_terms`).
+    let anki_known_lemmas =
+        filter_result.anki_filtered.iter().map(|t| t.lemma_form.clone()).collect();
+
     let mut guard = state.lock().unwrap();
     guard.file = FileData {
         source_file: Some(source_file),
         terms: filter_result.terms,
         base_terms,
+        anki_known_lemmas,
         sentences,
         file_comprehension,
     };

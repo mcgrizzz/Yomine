@@ -11,9 +11,12 @@
 //! `player_task`) and reached over a channel, so its periodic blocking I/O never
 //! contends with this lock.
 
-use std::sync::{
-    atomic::AtomicBool,
-    Arc,
+use std::{
+    collections::HashSet,
+    sync::{
+        atomic::AtomicBool,
+        Arc,
+    },
 };
 
 use yomine::{
@@ -42,6 +45,11 @@ pub struct FileData {
     /// returns them; kept so a live Anki refresh can re-partition without
     /// re-segmenting (mirrors egui's `FileData::original_terms`).
     pub base_terms: Vec<Term>,
+    /// Lemma forms Anki already knew (from `filter_result.anki_filtered`). Kept so
+    /// an ignore-list change can re-filter without re-querying Anki — passed as
+    /// `AnkiFilter::KnownLemmas` so known terms stay filtered out (mirrors egui's
+    /// `FileData::anki_filtered_terms`, used by `partial_refresh`).
+    pub anki_known_lemmas: HashSet<String>,
     pub sentences: Vec<Sentence>,
     pub file_comprehension: f32,
 }

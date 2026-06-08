@@ -33,6 +33,9 @@ pub fn run() {
             commands::file::process_file,
             commands::file::get_terms,
             commands::file::get_recent_files,
+            commands::ignore::get_ignore_list,
+            commands::ignore::add_to_ignore_list,
+            commands::ignore::remove_from_ignore_list,
         ])
         .setup(move |app| {
             // The player runs in its own task that solely owns `PlayerManager`;

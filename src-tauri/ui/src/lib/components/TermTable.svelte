@@ -6,12 +6,29 @@
 	// sorted by `visibleTerms` (driven by `TableControls`, T037).
 	import type { SentenceDto, Term } from '$lib/ipc';
 	import { harmonic } from '$lib/table';
-	import { posCatalog } from '$lib/stores';
+	import { addToIgnore, posCatalog } from '$lib/stores';
 	import { posColor } from '$lib/pos';
 	import Furigana from './Furigana.svelte';
 	import SentenceView, { type Occurrence } from './SentenceView.svelte';
 
 	let { terms, sentences }: { terms: Term[]; sentences: SentenceDto[] } = $props();
+
+	// Right-click "Add to ignore list" (egui parity). Visible rows are never already
+	// ignored (ignored terms are filtered out), so the menu only offers "add"; removal
+	// lives in the ignore-list modal. Closes on the next click/scroll anywhere.
+	let menu = $state<{ x: number; y: number; lemma: string } | null>(null);
+
+	function openMenu(e: MouseEvent, term: Term) {
+		e.preventDefault();
+		// Don't let the window `contextmenu` handler (which closes the menu) see this.
+		e.stopPropagation();
+		menu = { x: e.clientX, y: e.clientY, lemma: term.lemma_form };
+	}
+
+	function ignoreFromMenu() {
+		if (menu) addToIgnore(menu.lemma);
+		menu = null;
+	}
 
 	// key → display label ("Postposition" → "Particle"), from get_pos_catalog.
 	const posLabels = $derived(Object.fromEntries($posCatalog.map((p) => [p.key, p.display_name])));
@@ -47,7 +64,14 @@
 	{#each terms as term (termKey(term))}
 		{@const occ = firstOccurrence(term)}
 		<div class="row">
-			<span class="term" lang="ja"><Furigana surface={term.lemma_form} reading={term.lemma_reading} /></span>
+			<span
+					class="term"
+					lang="ja"
+					role="button"
+					tabindex="-1"
+					oncontextmenu={(e) => openMenu(e, term)}
+					><Furigana surface={term.lemma_form} reading={term.lemma_reading} /></span
+				>
 			<div class="sentence">
 				{#if occ}
 					<SentenceView occurrence={occ} {term} />
@@ -62,6 +86,18 @@
 		</div>
 	{/each}
 </div>
+
+{#if menu}
+	<div class="ctx-menu" style="left: {menu.x}px; top: {menu.y}px;">
+		<button type="button" onclick={ignoreFromMenu}>Add to ignore list</button>
+	</div>
+{/if}
+
+<svelte:window
+	onclick={() => (menu = null)}
+	onscroll={() => (menu = null)}
+	oncontextmenu={() => (menu = null)}
+/>
 
 <style>
 	.table {
@@ -102,5 +138,29 @@
 	}
 	.empty {
 		color: var(--comment);
+	}
+	.ctx-menu {
+		position: fixed;
+		z-index: 100;
+		background: var(--bg-dark);
+		border: 1px solid var(--border);
+		border-radius: 4px;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+		padding: 0.25rem;
+	}
+	.ctx-menu button {
+		display: block;
+		width: 100%;
+		padding: 0.4rem 0.75rem;
+		background: none;
+		border: none;
+		color: var(--fg);
+		text-align: left;
+		cursor: pointer;
+		border-radius: 3px;
+		font-size: 0.9rem;
+	}
+	.ctx-menu button:hover {
+		background: var(--bg-light);
 	}
 </style>

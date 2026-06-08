@@ -198,6 +198,21 @@ export function getRecentFiles(): Promise<RecentFileEntry[]> {
 	return invoke('get_recent_files');
 }
 
+/** The ignore list's lemma forms, newest first. */
+export function getIgnoreList(): Promise<string[]> {
+	return invoke('get_ignore_list');
+}
+
+/** Add a lemma to the ignore list; returns the re-filtered file, or `null` if none loaded. */
+export function addToIgnoreList(lemma: string): Promise<FileLoadResult | null> {
+	return invoke('add_to_ignore_list', { lemma });
+}
+
+/** Remove a lemma from the ignore list; returns the re-filtered file, or `null` if none loaded. */
+export function removeFromIgnoreList(lemma: string): Promise<FileLoadResult | null> {
+	return invoke('remove_from_ignore_list', { lemma });
+}
+
 export interface DragDropHandlers {
 	/** A drag entered the window; `paths` are the files being dragged. */
 	onEnter?: (paths: string[]) => void;

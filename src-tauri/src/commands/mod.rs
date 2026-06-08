@@ -5,6 +5,7 @@
 //! work → lock again to store. The lock is **never** held across an `.await`.
 
 pub mod file;
+pub mod ignore;
 pub mod lifecycle;
 
 use std::collections::HashMap;

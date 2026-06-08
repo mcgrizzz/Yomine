@@ -225,8 +225,13 @@ coverage/estimate values match the egui knowledge summary for the same data.
   refresh when Anki is reachable.
 - **FR-006**: The app MUST let the user map Anki note types to term and reading fields, offer
   field guesses, and show live Anki connection status.
-- **FR-007**: The app MUST maintain an ignore list (add via term context action, manage via a
-  dedicated view) that hides terms from current and future results and persists across sessions.
+- **FR-007**: The app MUST maintain an ignore list that hides terms from current and future
+  results and persists across sessions. Terms are added via a term context action (immediate) and
+  managed via a dedicated view that, at egui parity, MUST support: adding a term manually,
+  searching/filtering the listed terms, importing term lists from text files (each toggleable,
+  refreshable, and removable, with a per-file term count and a missing-file indicator), staged
+  editing (Save/Cancel with a modified indicator), restoring the default ignore set, and exporting
+  the terms to a text file.
 - **FR-008**: The app MUST connect to a video player — asbplayer via a local WebSocket server
   and MPV via its IPC socket — seek to sentence timestamps, prefer MPV when both are available,
   and report when no player is connected.
