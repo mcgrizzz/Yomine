@@ -92,6 +92,25 @@ pub struct FileLoadResult {
     pub file_comprehension: f32,
 }
 
+/// One file pill in the ignore-list modal: the persisted `IgnoreFile` fields
+/// (`path`, `enabled`) plus the display-only `exists` + `term_count` the modal
+/// renders (contracts/commands.md `IgnoreFileView`).
+#[derive(Serialize, Deserialize, Clone)]
+pub struct IgnoreFileView {
+    pub path: String,
+    pub enabled: bool,
+    pub exists: bool,
+    pub term_count: usize,
+}
+
+/// Full ignore-list state that hydrates the modal (`IgnoreListView`): the manual
+/// lemma terms plus the file pills. Mirrors egui's `IgnoreListModal::open_modal`.
+#[derive(Serialize, Deserialize, Clone)]
+pub struct IgnoreListView {
+    pub terms: Vec<String>,
+    pub files: Vec<IgnoreFileView>,
+}
+
 /// Static POS metadata for filter/label rendering (`get_pos_catalog`). `key` is
 /// `POS::as_key()` (matches `settings.pos_filters` keys); `display_name` is the label.
 #[derive(Serialize, Deserialize, Clone)]

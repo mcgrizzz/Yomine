@@ -153,6 +153,23 @@ FrequencyAnalysisResult { /* whatever export needs; ship a results-preview DTO:
 `AnalysisProgressDto` is the streamed progress payload (R5). The full
 `FrequencyAnalysisResult` stays in `AppState` for export; only a preview DTO goes to the UI.
 
+## Ignore list  (modal DTOs, from `core::ignore_list` — see contracts/commands.md)
+
+The modal stages edits locally and persists once via `save_ignore_list` (egui's
+`temp_terms`/`temp_files` + "Save Settings"). `IgnoreFile` is the persisted shape; the
+`*View` types add display-only metadata the modal renders.
+
+```
+IgnoreFile     { path: string, enabled: bool }                 // persisted (engine IgnoreFile)
+IgnoreFileView { path, enabled, exists: bool, term_count: usize } // file pill (display-only)
+IgnoreListView { terms: string[], files: IgnoreFileView[] }    // hydrates the modal
+```
+
+`term_count` is the file's line count (0 when missing/unreadable, matching egui's count map
+which only records on a successful read). `save_ignore_list(terms, files: IgnoreFile[])` and
+`export_ignore_list(terms)` take plain shapes; `import_ignore_file`/`refresh_ignore_file`
+return an `IgnoreFileView`.
+
 ## Status payloads (events, see contracts/events.md)
 
 ```

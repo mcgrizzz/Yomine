@@ -110,7 +110,7 @@ function normalizeJapaneseText(text: string): string {
  * the normalized-Japanese pass (romaji/katakana → hiragana + long-vowel fold),
  * then a case-insensitive ASCII fallback (e.g. English POS names).
  */
-function textMatches(text: string, query: string): boolean {
+export function textMatches(text: string, query: string): boolean {
 	if (normalizeJapaneseText(text).includes(normalizeJapaneseText(query))) return true;
 	return text.toLowerCase().includes(query.toLowerCase());
 }

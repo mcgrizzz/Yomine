@@ -208,9 +208,46 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
   section (`get_ignore_list_full`/`import_ignore_file`/`refresh_ignore_file`/`save_ignore_list`/
   `get_default_ignored_terms`/`export_ignore_list` + `IgnoreFile`/`IgnoreFileView`/`IgnoreListView`),
   and an updated T039 verify. T038b is not yet implemented.
+- **T038b DONE (2026-06-07) — backend builds green in WSL (`cargo build -p yomine-tauri` ✓, exit 0,
+  only the pre-existing transient dead-code warnings); frontend code-complete but NOT built (Windows
+  `node_modules`), uncommitted.** Ignore-list modal → full egui parity
+  (`src/gui/settings/ignore_list_modal.rs`). **Backend (6 new commands in `commands/ignore.rs`,
+  registered in `lib.rs`; DTOs in `dto.rs`):** `get_ignore_list_full` → `IgnoreListView` (manual
+  terms + file pills, each with `exists` + `term_count` via a `file_view` helper using
+  `IgnoreList::{file_exists, load_terms_from_file}`); `import_ignore_file` → `IgnoreFileView | null`
+  (`.txt` open dialog, modelled on `open_file_dialog`'s `app.dialog().file()` + oneshot); 
+  `refresh_ignore_file(path)` → `IgnoreFileView` (re-reads exists/count; frontend keeps the staged
+  `enabled`); `save_ignore_list(terms, files: IgnoreFile[])` → `Option<FileLoadResult>` — the single
+  commit point: `set_terms` + `set_files` (which persists + `reload_file_cache` internally) then the
+  same `apply_filters(base_terms, &tools, AnkiFilter::KnownLemmas(anki_known))` re-filter path as
+  `add_to_ignore_list`; `get_default_ignored_terms` → `Vec<String>` (`DEFAULT_IGNORED_TERMS`);
+  `export_ignore_list(terms)` → `String | null` (`.txt` save dialog + newline-join write, dated
+  default filename via `chrono` — added to `src-tauri/Cargo.toml`, unifies to the engine's 0.4.41).
+  New DTOs `IgnoreFileView`/`IgnoreListView` in `dto.rs` (+ data-model.md "Ignore list" section).
+  Same locking discipline (no `Mutex<AppState>` across `.await`). **Frontend:** `ipc.ts` gained the 6
+  wrappers + `IgnoreFile`/`IgnoreFileView`/`IgnoreListView` types; `table.ts` now **exports**
+  `textMatches` (the string-level port of egui's `text_matches_search`) for the modal's term search;
+  `stores/index.ts` replaced the minimal pieces — **removed** the now-unused `ignoreList` writable +
+  `removeFromIgnore` action (the modal stages + persists via Save, so per-term immediate remove is
+  gone), simplified `openIgnoreModal` to just open (the modal self-hydrates), kept `addToIgnore`
+  (row right-click stays **immediate**), and added a `saveIgnore(terms, files)` action.
+  **`IgnoreListModal.svelte` fully rewritten** to egui parity: Add-New-Term input (Enter/Add stages),
+  Search-Terms filter, file pills (📄 name · enable checkbox · ↻ refresh · ✕ remove · `(missing)`
+  state · count) + "+ Import File" pill (hidden while searching), term pills (✕), "Manual: N | From
+  Files: M" counts, staged Save (enabled when dirty) / Cancel (reverts staged, egui keeps modal open)
+  / Export… / Restore Default, and a ⚠ "Settings have been modified" dirty indicator (temp vs.
+  original snapshot, files compared on path+enabled). **Decisions (per handoff):** row right-click =
+  immediate `add_to_ignore_list`; modal = staged `save_ignore_list`. `remove_from_ignore_list`
+  backend command + `removeFromIgnoreList`/`getIgnoreList` ipc wrappers **kept for API completeness**
+  (contract still documents them) though the modal no longer calls them. **File-content search
+  deviation:** egui filters file pills by loading each file's terms and matching; the client only
+  ships `term_count`, not the terms, so file pills stay visible regardless of search (only manual
+  term pills + the import pill react to search). Noted intentional. `-p yomine` /
+  `--no-default-features` / `cargo test` unaffected (zero engine changes). **Verify on Windows
+  (`cargo tauri dev`, folds into T039):** `pnpm install` first (T037's `wanakana` dep still pending);
+  open modal → add/search/import/refresh/remove/toggle stage; dirty ⚠ shows; Save persists + re-filters
+  the table; Cancel reverts; Restore Default + Export work; compare against egui.
 - **NEXT options (all unblocked except T028):**
-  - **T038b** [US4] ignore-list modal → full egui parity (see the task; backend cargo-checkable in
-    WSL, frontend on Windows). The chosen follow-up to T038.
   - **T039** [US4] parity verify (sort/filter/search/**ignore** incl. the T038b modal) — yield the
     same visible set/behaviour as egui; interactive `cargo tauri dev` on Windows (maintainer).
   - **T030b** [US1] deferred sentence polish (◀ n/m ▶ multi-sentence nav + per-sentence comprehension).
@@ -428,7 +465,10 @@ stories render inside it.
 - [x] T038 [US4] Ignore list (minimal): right-click term → `add_to_ignore_list`; ignore-list modal
       (`get/remove_from_ignore_list`); table updates from returned `FileLoadResult`.
       (Backend green in WSL; frontend not built — verify on Windows, folds into T039.)
-- [ ] T038b [US4] Ignore-list modal → **full egui parity** (`gui/settings/ignore_list_modal.rs`).
+- [x] T038b [US4] Ignore-list modal → **full egui parity** (`gui/settings/ignore_list_modal.rs`).
+      DONE 2026-06-07 (backend green in WSL; frontend code-complete, Windows-build pending). See the
+      T038b note in Progress for the as-built summary. `remove_from_ignore_list` + its ipc wrapper
+      kept for API completeness; the modal stages + persists via `save_ignore_list`.
       Adds the management features T038 left out, per FR-007. **Backend** (new commands in
       `src-tauri/src/commands/ignore.rs`, registered in `lib.rs`; DTOs in `dto.rs` + `data-model.md`):
       `get_ignore_list_full` → `IgnoreListView { terms, files: IgnoreFileView[] }` (per-file `exists`

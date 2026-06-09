@@ -36,6 +36,12 @@ pub fn run() {
             commands::ignore::get_ignore_list,
             commands::ignore::add_to_ignore_list,
             commands::ignore::remove_from_ignore_list,
+            commands::ignore::get_ignore_list_full,
+            commands::ignore::import_ignore_file,
+            commands::ignore::refresh_ignore_file,
+            commands::ignore::save_ignore_list,
+            commands::ignore::get_default_ignored_terms,
+            commands::ignore::export_ignore_list,
         ])
         .setup(move |app| {
             // The player runs in its own task that solely owns `PlayerManager`;

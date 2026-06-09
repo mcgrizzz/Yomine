@@ -213,6 +213,57 @@ export function removeFromIgnoreList(lemma: string): Promise<FileLoadResult | nu
 	return invoke('remove_from_ignore_list', { lemma });
 }
 
+/** The persisted ignore-file shape (a `.txt` of terms + an enabled toggle). */
+export interface IgnoreFile {
+	path: string;
+	enabled: boolean;
+}
+
+/** A file pill in the modal: the persisted shape plus display-only metadata. */
+export interface IgnoreFileView extends IgnoreFile {
+	exists: boolean;
+	term_count: number;
+}
+
+/** Full ignore-list state that hydrates the modal. */
+export interface IgnoreListView {
+	terms: string[];
+	files: IgnoreFileView[];
+}
+
+/** Manual terms + file pills (with `exists`/`term_count`) for the modal. */
+export function getIgnoreListFull(): Promise<IgnoreListView> {
+	return invoke('get_ignore_list_full');
+}
+
+/** Native `.txt` open dialog; returns a staged file pill, or `null` if cancelled. */
+export function importIgnoreFile(): Promise<IgnoreFileView | null> {
+	return invoke('import_ignore_file');
+}
+
+/** Re-read a file's `exists`/`term_count` for display (preserve the staged `enabled`). */
+export function refreshIgnoreFile(path: string): Promise<IgnoreFileView> {
+	return invoke('refresh_ignore_file', { path });
+}
+
+/** Persist staged terms + files and re-filter; returns the updated file, or `null` if none loaded. */
+export function saveIgnoreList(
+	terms: string[],
+	files: IgnoreFile[]
+): Promise<FileLoadResult | null> {
+	return invoke('save_ignore_list', { terms, files });
+}
+
+/** The built-in default ignored terms (for "Restore Default"). */
+export function getDefaultIgnoredTerms(): Promise<string[]> {
+	return invoke('get_default_ignored_terms');
+}
+
+/** Native `.txt` save dialog; writes the staged terms, returns the path or `null`. */
+export function exportIgnoreList(terms: string[]): Promise<string | null> {
+	return invoke('export_ignore_list', { terms });
+}
+
 export interface DragDropHandlers {
 	/** A drag entered the window; `paths` are the files being dragged. */
 	onEnter?: (paths: string[]) => void;
