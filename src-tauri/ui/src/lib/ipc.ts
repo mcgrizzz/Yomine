@@ -264,6 +264,11 @@ export function exportIgnoreList(terms: string[]): Promise<string | null> {
 	return invoke('export_ignore_list', { terms });
 }
 
+/** Seek the connected player (mpv or asbplayer) to a sentence timestamp (US3/FR-008). */
+export function seekTimestamp(seconds: number, label: string): Promise<void> {
+	return invoke('seek_timestamp', { seconds, label });
+}
+
 export interface DragDropHandlers {
 	/** A drag entered the window; `paths` are the files being dragged. */
 	onEnter?: (paths: string[]) => void;

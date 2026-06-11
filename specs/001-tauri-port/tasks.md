@@ -296,12 +296,40 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
   still pending); compare the menu structure / theme+font toggle (persists across restart) / status
   dots against egui; confirm Quit closes the window, Open New File + Ignore List work, disabled
   entries are inert.
+- **T027 DONE (2026-06-11) — frontend NOT built in WSL (Windows `node_modules`), uncommitted.**
+  Bundled the two Japanese faces. Reused the **exact TTFs the egui app embeds**
+  (`assets/fonts/Noto{Sans,Serif}JP-Regular.ttf`, per `gui/app/mod.rs::setup_fonts`) → copied to
+  `src-tauri/ui/static/fonts/` (adapter-static serves `static/` at root, so `/fonts/*` resolves in
+  the Tauri webview). Added two `@font-face` blocks at the top of `src-tauri/ui/src/app.css`
+  (`format('truetype')`, weight 400, `font-display: swap`) whose family names match the **already
+  present** `body { font-family: 'Noto Sans JP' … }` / `body.font-serif { font-family: 'Noto Serif
+  JP' … }` rules + the `.font-serif` toggle (driven by `+layout.svelte` from `settings.use_serif_font`,
+  flipped by T028's 字 button). Pure font-face wiring; no markup/store changes. Fonts are not
+  gitignored (`check-ignore` → tracked-ok). **Verify on Windows (`cargo tauri dev`):** base text
+  renders in Noto Sans JP; the 字 toggle switches to Noto Serif JP and persists across restart.
+  (Closes the [P] font-faces piece; T044 "theme+font toggles wired to save_settings" was already
+  satisfied by T028.)
+- **T035 DONE (2026-06-11) [US3] — frontend NOT built in WSL (Windows `node_modules`), uncommitted.**
+  Clickable sentence timestamp → seek. Pure frontend wiring (backend `seek_timestamp` already landed
+  + registered in `lib.rs` with the T028 batch; `SentenceDto.timestamp` already carries
+  `{start_secs,end_secs,start_label,end_label}` via `TimeStampDto`). **`ipc.ts`:** added
+  `seekTimestamp(seconds,label)` → `invoke('seek_timestamp',{seconds,label})`. **`stores/index.ts`:**
+  added a `playerConnected` derived (`mpv_connected || ws_clients>0`, = egui `Player::is_connected`) +
+  a `seekTimestamp` action (calls ipc, surfaces failures via `lastError` instead of egui's eprintln).
+  **`SentenceView.svelte`:** renders the sentence's `timestamp` below the text — a clickable `▶
+  {start_label}` button when `$playerConnected`, else a weak-text label (egui `ui_timestamp`:
+  button when connected, weak label otherwise). **Deviation (noted, same as T028's player dot):** no
+  "confirmed" state on the wire (`PlayerStatus` omits it), so the button is always `▶` — egui's 👁
+  confirmed-seek variant is not mirrored. Zero engine/Rust changes → `-p yomine` /
+  `--no-default-features` / `cargo test` unaffected. **Verify on Windows (`cargo tauri dev`, folds
+  into T036):** with mpv/asbplayer connected, a sentence's `▶ mm:ss` seeks the player; with none
+  connected the timestamp shows as a plain weak label (no button); TXT sentences show no timestamp.
 - **NEXT options:**
-  - **T027** [P] Fonts — bundle Noto Sans/Serif JP `@font-face`; the 字 toggle now drives the
-    `font-serif` class (T028), so this is just the font faces.
   - **T030b** [US1] deferred sentence polish (◀ n/m ▶ multi-sentence nav + per-sentence comprehension).
-  - **US3 (T035 seek) / US5 (T041 websocket modal)** are backend-ready (seek/player/websocket wrappers
-    landed with the T028 backend); each adds its `ipc.ts` wrapper + UI and flips its TopBar menu entry.
+  - **T030c** [US1] sentence wrapping — long sentences must wrap (egui `horizontal_wrapped`), not
+    overflow as one line; the inline-block Furigana words need an inter-word `<wbr>` break opportunity.
+  - **US5 (T041 websocket modal)** is backend-ready (`set_websocket_port` landed with the T028
+    backend); add its `ipc.ts` wrapper + modal UI and flip its disabled TopBar menu entry.
   - **Other Settings modals** (Anki settings, Frequency Weighting, POS Filters, Setup Checklist) —
     backend commands exist (`list_anki_models`/`list_dictionaries`/`set_dictionary_state`/
     `get_setup_status`); each builds its modal + `ipc.ts` wrapper and flips its TopBar entry.
@@ -444,7 +472,7 @@ stories render inside it.
       override) + `+layout.svelte` (applies dark/light + serif class from `settings`) +
       `+page.svelte` restructured into the `.app-shell` top-bar/main IA. Round trip still works.
       `pnpm build` ✓. (Full menu = T028; virtualized table = T029; font faces = T027.)
-- [ ] T027 [P] Fonts: bundle Noto Sans/Serif JP as `@font-face`; serif/sans toggle → CSS class
+- [x] T027 [P] Fonts: bundle Noto Sans/Serif JP as `@font-face`; serif/sans toggle → CSS class
       driven by `settings.use_serif_font`.
 - [x] T028 Top bar `lib/components/TopBar.svelte`: menu entries opening the modals (file, anki,
       websocket, ignore list, freq weights, POS filters, analyzer, setup checklist) + status
@@ -486,6 +514,18 @@ stories render inside it.
       only once Anki filtering is active). Restores AS2's "browsed in place" + comprehension
       conveyance. Clickable timestamp→seek stays in **US3/T035**. Split out of T029/T030 by the
       2026-06-07 maintainer "lean first pass" call.
+- [ ] T030c [US1] (sentence wrapping) Long example sentences must **wrap to multiple lines** in the
+      Sentence cell (egui parity: `sentence_widget.rs` renders via `ui.horizontal_wrapped`), not
+      truncate/overflow as one line. **Root cause:** `Furigana.svelte` wraps each word in an
+      `display:inline-block` box (so a reading can't overhang its neighbour), and Svelte
+      (`preserveWhitespace:false`) strips the whitespace between the per-word `<span>`s in
+      `SentenceView`, so adjacent atomic inline-blocks give WebKit **no soft-wrap opportunity between
+      words** → the sentence renders as one unbreakable line that overflows the `1fr` grid column.
+      **Fix:** restore an inter-word break opportunity without reintroducing overhang — emit a `<wbr>`
+      (or `​`) between the word boxes in `SentenceView`'s `{#each}` (keeps each word atomic;
+      lines break only between words). **Verify on Windows:** a long sentence wraps to 2+ lines inside
+      its row (row grows in height); furigana still centres per word with no overhang/merge; no
+      horizontal scrollbar on the table.
 - [~] T031 [US1] File open + drag-drop + **no-file landing state (FR-001)** — code-complete,
       frontend pending Windows verify (folds into T032):
       `open_file_dialog`→`process_file`; Tauri `onDragDropEvent` for drops (O2); loading overlay
@@ -505,7 +545,7 @@ stories render inside it.
 
 ### US3 — Seek the video player (P2)
 
-- [ ] T035 [US3] Timestamp UI in `SentenceView`: clickable timestamp → `seek_timestamp(secs,
+- [x] T035 [US3] Timestamp UI in `SentenceView`: clickable timestamp → `seek_timestamp(secs,
       label)`; reflect `player-status` (mode/no-player) and surface the no-player error.
 - [ ] T036 [US3] **Verify**: asbplayer + MPV seek; MPV preferred when both; no-player handled.
 

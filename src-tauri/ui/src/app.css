@@ -4,6 +4,26 @@
  * swaps the layered backgrounds + accents. The active theme is driven by
  * `settings.dark_mode` in +layout.svelte. */
 
+/* Bundled Japanese faces (T027). Same TTFs the egui app embeds
+ * (assets/fonts/Noto{Sans,Serif}JP-Regular.ttf), copied to static/fonts so
+ * adapter-static serves them at /fonts/*. The `body` / `body.font-serif`
+ * rules below switch between these two families. */
+@font-face {
+	font-family: 'Noto Sans JP';
+	src: url('/fonts/NotoSansJP-Regular.ttf') format('truetype');
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'Noto Serif JP';
+	src: url('/fonts/NotoSerifJP-Regular.ttf') format('truetype');
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+}
+
 :root {
 	/* layered surfaces (darkest → lightest) */
 	--bg-darker: #191a21;

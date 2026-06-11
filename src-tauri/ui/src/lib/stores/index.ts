@@ -15,6 +15,13 @@ export const playerStatus = writable<ipc.PlayerStatus>({
 	mode: 'none'
 });
 
+/** Whether a player is connected (mpv or an asbplayer ws client) — gates the
+ * clickable timestamp seek, mirroring egui `Player::is_connected`. */
+export const playerConnected = derived(
+	playerStatus,
+	($p) => $p.mpv_connected || $p.ws_clients > 0
+);
+
 /** Loading overlay text (`null` = hidden), mirroring egui's MessageOverlay. */
 export const overlay = writable<string | null>(null);
 
@@ -145,6 +152,16 @@ export async function toggleSerifFont(): Promise<void> {
 
 /** Last surfaced error (for a modal); `null` once dismissed. */
 export const lastError = writable<ipc.ErrorPayload | null>(null);
+
+/** Seek the connected player to a sentence timestamp (US3/T035). Mirrors egui's
+ * SeekTimestamp action; surfaces failures via `lastError` instead of eprintln. */
+export async function seekTimestamp(seconds: number, label: string): Promise<void> {
+	try {
+		await ipc.seekTimestamp(seconds, label);
+	} catch (err) {
+		lastError.set({ title: 'Failed to seek', message: String(err), detail: null });
+	}
+}
 
 let hydrated = false;
 
