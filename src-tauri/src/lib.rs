@@ -32,6 +32,7 @@ pub fn run() {
             commands::file::open_file_dialog,
             commands::file::process_file,
             commands::file::get_terms,
+            commands::file::refresh_terms,
             commands::file::get_recent_files,
             commands::ignore::get_ignore_list,
             commands::ignore::add_to_ignore_list,

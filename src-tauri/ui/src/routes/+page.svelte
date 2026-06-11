@@ -4,6 +4,7 @@
 	// virtualized term table + sentence view replace the placeholder list in
 	// T029/T030. The startup round trip (open file → term count) stays working.
 	import { onMount } from 'svelte';
+	import { comprehensionColor } from '$lib/comprehension';
 	import {
 		hydrate,
 		openAndProcessFile,
@@ -14,7 +15,9 @@
 		visibleTerms,
 		recentFiles,
 		dragHovering,
-		lastError
+		lastError,
+		ankiFilterActive,
+		refreshTerms
 	} from '$lib/stores';
 	import TopBar from '$lib/components/TopBar.svelte';
 	import TermTable from '$lib/components/TermTable.svelte';
@@ -48,7 +51,17 @@
 	const toolsError = $derived(
 		typeof $languageToolsStatus === 'object' ? $languageToolsStatus.error : null
 	);
+
+	// F5 / Ctrl+R refresh terms (and block the webview's page reload).
+	function onKeydown(e: KeyboardEvent) {
+		if (e.key === 'F5' || ((e.key === 'r' || e.key === 'R') && (e.ctrlKey || e.metaKey))) {
+			e.preventDefault();
+			refreshTerms();
+		}
+	}
 </script>
+
+<svelte:window onkeydown={onKeydown} />
 
 <div class="app-shell">
 	<TopBar />
@@ -59,11 +72,28 @@
 		{:else if !toolsReady}
 			<p class="muted">Loading language tools…</p>
 		{:else if $fileResult}
+			{@const pct = $fileResult.file_comprehension * 100}
+			{@const total = $fileResult.total_terms}
+			{@const known = total - $fileResult.terms.length}
 			<h2 class="title">{$fileResult.source_file.title}</h2>
-			<p class="meta">
-				<strong>{$fileResult.terms.length}</strong> minable terms ·
-				{$fileResult.sentences.length} sentences ·
-				{Math.round($fileResult.file_comprehension * 100)}% comprehension
+			{#if $ankiFilterActive && $fileResult.sentences.length > 0}
+				<p
+					class="comprehension"
+					style:color={comprehensionColor(pct)}
+					title="Overall estimated comprehension across all sentences"
+				>
+					Comprehension estimate: {pct.toFixed(1)}%
+				</p>
+			{/if}
+			<p class="counts">
+				{$visibleTerms.length} shown
+				{#if known > 0}
+					/ <span
+						title={`Ignore list: ${$fileResult.ignored_terms}\nAnki filtered: ${known - $fileResult.ignored_terms}`}
+						>{known} known</span
+					>
+				{/if}
+				/ {total} total
 			</p>
 			<TableControls />
 			<TermTable terms={$visibleTerms} sentences={$fileResult.sentences} />
@@ -133,8 +163,14 @@
 	.title {
 		margin: 0 0 0.25rem;
 	}
-	.meta {
+	.comprehension {
+		margin: 0 0 0.15rem;
+		font-size: 13px;
+		font-weight: 600;
+	}
+	.counts {
 		margin: 0 0 1rem;
+		font-size: 12px;
 		color: var(--comment);
 	}
 	.muted {

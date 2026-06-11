@@ -324,10 +324,59 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
   `--no-default-features` / `cargo test` unaffected. **Verify on Windows (`cargo tauri dev`, folds
   into T036):** with mpv/asbplayer connected, a sentence's `▶ mm:ss` seeks the player; with none
   connected the timestamp shows as a plain weak label (no button); TXT sentences show no timestamp.
+- **T030c DONE (2026-06-11) [US1] — sentence wrapping, uncommitted with this batch.**
+  `SentenceView.svelte`'s `{#each}` over segments now emits `{#if i > 0}<wbr />{/if}` between the
+  inline-block word boxes, restoring a soft-wrap opportunity between words (root cause per the task
+  note: Svelte strips the whitespace between adjacent atomic inline-blocks). **Verify on Windows
+  (folds into T032):** long sentence wraps to 2+ lines (row grows), furigana still centres per word,
+  no horizontal scrollbar.
+- **T030b DONE (2026-06-11) [US1] — sentence polish (◀ n/m ▶ nav + 5-bar comprehension), egui
+  `sentence_column.rs` parity.** Backend: `FileLoadResult` gains `anki_filter_active: bool` (set in
+  `commands/file.rs::load_result` from `!anki_known_lemmas.is_empty()`, mirroring egui's
+  `anki_filtered_terms.is_empty()` gate) — indicator gating is backend-derived, single source of
+  truth per Constitution. `ipc.ts` field + new `ankiFilterActive` derived in `stores/index.ts`.
+  `TermTable.svelte`: `firstOccurrence()` → `occurrencesOf()` (all resolvable `sentence_references`)
+  passed to `SentenceView`, which was rewritten — props `{ occurrences, term }`, local clamped `idx`,
+  wrap-around prev/next (egui `TableState::next/prev_sentence` are modulo); meta row under the
+  sentence = nav (⏮ n/m ⏭, disabled when count ≤ 1, counter cyan 0.7rem) + T035 timestamp
+  (unchanged) + comprehension bars (heights [2.5, 4, 6.5, 10.5, 14.5]px, width 3px, gap 1px,
+  filled = `min(ceil(pct/20), 5)`, gated on `$ankiFilterActive`, tooltip "N% comprehensibility",
+  empty bars `color-mix(in srgb, var(--comment) 30%, transparent)`). Color helper extracted to
+  `$lib/comprehension.ts` (shared with T033). **Verify on Windows (folds into T032/T034):** nav
+  cycles a term's occurrences in place; bars appear only with Anki data.
+- **T033 DONE (2026-06-11) [US2] — live refresh + full-parity file summary
+  (`summary.rs::ui_current_file_summary`; scope confirmed by maintainer).** Backend:
+  `FileData.ignored_count` (display-only; kept fresh in both `commands/ignore.rs` re-filter sites);
+  `FileLoadResult.{total_terms, ignored_terms}` set in `load_result`; `process_file` now takes
+  `AppHandle` and, after storing `FileData`, spawns a `anki::api::get_version()` probe → on success
+  `live_refresh(&app)`, on error emit `ERROR` "Refresh Error" (egui `handle_processing_result`
+  tail). New `live_refresh(&AppHandle)` = port of `TaskManager::refresh_terms` + `TermsRefreshed`
+  handler: no-op Ok when no file; `ANKI_STATUS {connected:true, fetching:true}` →
+  `apply_filters(base_terms, &tools, AnkiFilter::Live(mappings))` → reconstruct `all_terms`,
+  recompute per-sentence (`calculate_sentence_comprehension`) + avg file comprehension, update
+  `FileData`, set `knowledge_dirty`, `ANKI_STATUS {fetching:false}` then `TERMS_REFRESHED` with the
+  `load_result` payload. New `#[tauri::command] refresh_terms` (manual path) registered in `lib.rs`.
+  Frontend: new `$lib/comprehension.ts` `comprehensionColor(pct)` (egui gradient red→yellow→green
+  then desaturate `ch * 0.4 + 84`); `refreshTerms()` ipc wrapper + store action (guards tools ready
+  + file loaded, overlay "Refreshing terms…", errors → `lastError` "Refresh Error"; result lands via
+  the already-wired `terms-refreshed` listener); TopBar 🔄 after the Tools menu (shown only with
+  `$fileResult`, disabled till tools ready); `+page.svelte` summary parity — gated
+  `Comprehension estimate: N%` (colored via `comprehensionColor`, only when `anki_filter_active` and
+  sentences exist, ~13px strong) + counts line (~12px weak) `{shown} shown / {known} known /
+  {total} total` with the "known" segment only when > 0 and a hover breakdown
+  (`Ignore list: n` / `Anki filtered: n`) — plus F5 / Ctrl(Cmd)+R → `preventDefault()` (also stops
+  webview reload) + `refreshTerms()`. Manual-refresh errors return `Err` → banner; the auto path
+  emits the `error` event (egui shows the same modal for both). **Builds (this session):**
+  `cargo check -p yomine-tauri` ✓ 0 errors, `cargo check -p yomine` ✓ 0 errors (engine/egui
+  untouched); `pnpm run check` = only the 4 known `vite.config.ts` scaffold errors (to run it from
+  WSL, the linux rollup/esbuild native binaries were dropped into the Windows-installed
+  `node_modules` — no package.json/lockfile change). **Verify on Windows (`cargo tauri dev`, folds
+  into T034):** auto-refresh on load with Anki open (terms update in place, spinner during fetch),
+  manual 🔄 / F5 / Ctrl+R, summary line parity against egui.
 - **NEXT options:**
-  - **T030b** [US1] deferred sentence polish (◀ n/m ▶ multi-sentence nav + per-sentence comprehension).
-  - **T030c** [US1] sentence wrapping — long sentences must wrap (egui `horizontal_wrapped`), not
-    overflow as one line; the inline-block Furigana words need an inter-word `<wbr>` break opportunity.
+  - **Interactive verifies (maintainer, Windows `cargo tauri dev`):** T032 (US1: term parity +
+    furigana + drag-drop + T030b/T030c checks) → T034 (US2: hidden terms / comprehension / live
+    refresh) → T036 (US3: seek).
   - **US5 (T041 websocket modal)** is backend-ready (`set_websocket_port` landed with the T028
     backend); add its `ipc.ts` wrapper + modal UI and flip its disabled TopBar menu entry.
   - **Other Settings modals** (Anki settings, Frequency Weighting, POS Filters, Setup Checklist) —
@@ -335,8 +384,6 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
     `get_setup_status`); each builds its modal + `ipc.ts` wrapper and flips its TopBar entry.
   - **T025 verify** still needs an interactive `cargo tauri dev` (maintainer).
 - **Deferred (tracked, intentional):**
-  - Auto-`refresh_terms`/`terms-refreshed` on a live Anki connection → **US2/T033** (backend keeps
-    `base_terms` ready; `onTermsRefreshed` listener already wired in the store).
   - `analyzer` store → **US6/T047**. Remaining commands (anki/player/dict/analyzer/knowledge/misc
     wrappers) land with their UI tasks and append to the `invoke_handler` list in `lib.rs`.
   - **Pre-existing scaffold debt (T014, not mine):** `pnpm check` reports 4 errors in
@@ -507,14 +554,14 @@ stories render inside it.
       comprehension indicator + ◀ n/m ▶ multi-sentence nav = a **US1 sentence-polish follow-up**
       (now **T030b**). **Note:** expression highlighting is approximate (egui
       has special `find_expression_segments`).
-- [ ] T030b [US1] (sentence polish) Re-add the deferred per-sentence affordances under the inline
+- [x] T030b [US1] (sentence polish) Re-add the deferred per-sentence affordances under the inline
       sentence cell (egui `sentence_column.rs`): the **◀ n/m ▶ multi-sentence nav** (browse a term's
       multiple `sentence_references` in place — the old `SentenceView` already resolved them
       index-based) and the **per-sentence comprehension indicator** (egui's 5-bar gradient, shown
       only once Anki filtering is active). Restores AS2's "browsed in place" + comprehension
       conveyance. Clickable timestamp→seek stays in **US3/T035**. Split out of T029/T030 by the
       2026-06-07 maintainer "lean first pass" call.
-- [ ] T030c [US1] (sentence wrapping) Long example sentences must **wrap to multiple lines** in the
+- [x] T030c [US1] (sentence wrapping) Long example sentences must **wrap to multiple lines** in the
       Sentence cell (egui parity: `sentence_widget.rs` renders via `ui.horizontal_wrapped`), not
       truncate/overflow as one line. **Root cause:** `Furigana.svelte` wraps each word in an
       `display:inline-block` box (so a reading can't overhang its neighbour), and Svelte
@@ -538,7 +585,7 @@ stories render inside it.
 
 ### US2 — Hide known words via Anki (P1)
 
-- [ ] T033 [US2] Wire cached-load + background live refresh: consume `terms-refreshed`; show
+- [x] T033 [US2] Wire cached-load + background live refresh: consume `terms-refreshed`; show
       comprehension column values; `anki-status` indicator in top bar.
 - [ ] T034 [US2] **Verify**: same hidden terms + comprehension % as egui; offline load works;
       live refresh updates in place.

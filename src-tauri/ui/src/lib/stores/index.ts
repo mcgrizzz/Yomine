@@ -28,6 +28,11 @@ export const overlay = writable<string | null>(null);
 /** The currently loaded file + its terms, or `null` before any file is opened. */
 export const fileResult = writable<ipc.FileLoadResult | null>(null);
 
+/** Whether Anki filtering hid any terms in the current file — gates the
+ * per-sentence comprehension indicator (T030b), mirroring egui's
+ * `anki_filtered_terms.is_empty()` check in `sentence_column.rs`. */
+export const ankiFilterActive = derived(fileResult, ($f) => $f?.anki_filter_active ?? false);
+
 /** Recently-opened files for the landing state; refreshed after each load. */
 export const recentFiles = writable<ipc.RecentFileEntry[]>([]);
 
@@ -152,6 +157,22 @@ export async function toggleSerifFont(): Promise<void> {
 
 /** Last surfaced error (for a modal); `null` once dismissed. */
 export const lastError = writable<ipc.ErrorPayload | null>(null);
+
+/** Manually reapply ignore + live Anki filters (egui's top-bar 🔄 / F5 / Cmd+R →
+ * `RequestRefresh`). The refreshed file lands via the `terms-refreshed` event
+ * (wired in `hydrate`); failures surface as the error banner (egui's "Refresh
+ * Error" modal). */
+export async function refreshTerms(): Promise<void> {
+	if (get(languageToolsStatus) !== 'ready' || !get(fileResult)) return;
+	try {
+		overlay.set('Refreshing terms…');
+		await ipc.refreshTerms();
+	} catch (err) {
+		lastError.set({ title: 'Refresh Error', message: 'Unable to refresh terms', detail: String(err) });
+	} finally {
+		overlay.set(null);
+	}
+}
 
 /** Seek the connected player to a sentence timestamp (US3/T035). Mirrors egui's
  * SeekTimestamp action; surfaces failures via `lastError` instead of eprintln. */

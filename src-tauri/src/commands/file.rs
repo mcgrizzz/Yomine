@@ -1,21 +1,31 @@
 //! File / mining commands (T021, contracts/commands.md "File / mining").
 
-use std::sync::Mutex;
+use std::sync::{
+    atomic::Ordering,
+    Mutex,
+};
 
 use tauri::{
     ipc::Channel,
     AppHandle,
+    Emitter,
+    Manager,
     State,
 };
 use tauri_plugin_dialog::DialogExt;
 use yomine::{
+    anki::comprehensibility::calculate_sentence_comprehension,
     core::{
         filename_parser,
         models::{
             SourceFile,
             SourceFileType,
         },
-        pipeline::process_source_file,
+        pipeline::{
+            apply_filters,
+            process_source_file,
+            AnkiFilter,
+        },
         recent_files::{
             RecentFileEntry,
             RecentFiles,
@@ -32,7 +42,12 @@ use crate::{
         FileLoadResult,
         SentenceDto,
     },
-    events::LoadingMessage,
+    events::{
+        names,
+        AnkiStatus,
+        ErrorPayload,
+        LoadingMessage,
+    },
     state::{
         AppState,
         FileData,
@@ -50,6 +65,9 @@ pub(crate) fn load_result(file: &FileData) -> Option<FileLoadResult> {
         terms: file.terms.clone(),
         sentences: file.sentences.iter().map(SentenceDto::from_sentence).collect(),
         file_comprehension: file.file_comprehension,
+        anki_filter_active: !file.anki_known_lemmas.is_empty(),
+        total_terms: file.base_terms.len(),
+        ignored_terms: file.ignored_count,
     })
 }
 
@@ -90,6 +108,7 @@ pub async fn open_file_dialog(app: AppHandle) -> Result<Option<String>, String> 
 /// return the minable terms + sentence DTOs. Stores the result in `AppState`.
 #[tauri::command]
 pub async fn process_file(
+    app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     path: String,
     progress: Channel<LoadingMessage>,
@@ -125,14 +144,113 @@ pub async fn process_file(
         terms: filter_result.terms,
         base_terms,
         anki_known_lemmas,
+        ignored_count: filter_result.ignore_filtered.len(),
         sentences,
         file_comprehension,
     };
     let payload = load_result(&guard.file).expect("file just stored has a source_file");
     drop(guard);
 
+    // The table now shows the cached Anki snapshot; if Anki is live, refresh
+    // against it in the background and update in place via `terms-refreshed`
+    // (egui's `handle_processing_result` tail → `refresh_terms`).
+    let app_handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        if yomine::anki::api::get_version().await.is_ok() {
+            if let Err(e) = live_refresh(&app_handle).await {
+                let _ = app_handle.emit(
+                    names::ERROR,
+                    ErrorPayload {
+                        title: "Refresh Error".into(),
+                        message: "Unable to refresh terms".into(),
+                        detail: Some(e),
+                    },
+                );
+            }
+        }
+    });
+
     let _ = progress.send(LoadingMessage::clear());
     Ok(payload)
+}
+
+/// Re-partition the loaded file's terms against **live** Anki data and emit
+/// `terms-refreshed` — a port of egui's `TaskManager::refresh_terms` + the
+/// `TermsRefreshed` handler: re-applies ignore + live Anki filters, recomputes
+/// per-sentence and file comprehension, stores the result, and marks the
+/// knowledge summary dirty (the live fetch just rewrote the vocab cache).
+pub(crate) async fn live_refresh(app: &AppHandle) -> Result<(), String> {
+    let state = app.state::<Mutex<AppState>>();
+    let (tools, base_terms, mut sentences, mappings) = {
+        let guard = state.lock().unwrap();
+        let tools = guard
+            .language_tools
+            .clone()
+            .ok_or_else(|| "Language tools are still loading".to_string())?;
+        // Nothing loaded → nothing to refresh (egui's RequestRefresh no-ops too).
+        if guard.file.base_terms.is_empty() {
+            return Ok(());
+        }
+        (
+            tools,
+            guard.file.base_terms.clone(),
+            guard.file.sentences.clone(),
+            guard.settings.anki_model_mappings.clone(),
+        )
+    };
+
+    // Mirror egui's `anki_fetching = true` spinner while the live fetch runs.
+    let _ = app.emit(names::ANKI_STATUS, AnkiStatus { connected: true, fetching: true });
+
+    let outcome: Result<FileLoadResult, String> = async {
+        let filter_result = apply_filters(base_terms, &tools, AnkiFilter::Live(mappings))
+            .await
+            .map_err(|e| e.to_string())?;
+
+        // Reconstruct the full term set and recompute comprehension from it
+        // (egui `refresh_terms` does the same before sending `TermsRefreshed`).
+        let mut all_terms = Vec::new();
+        all_terms.extend(filter_result.terms.iter().cloned());
+        all_terms.extend(filter_result.anki_filtered.iter().cloned());
+        all_terms.extend(filter_result.ignore_filtered.iter().cloned());
+        for sentence in &mut sentences {
+            calculate_sentence_comprehension(sentence, &all_terms);
+        }
+        let file_comprehension = if sentences.is_empty() {
+            0.0
+        } else {
+            sentences.iter().map(|s| s.comprehension).sum::<f32>() / sentences.len() as f32
+        };
+
+        let mut guard = state.lock().unwrap();
+        guard.file.anki_known_lemmas =
+            filter_result.anki_filtered.iter().map(|t| t.lemma_form.clone()).collect();
+        guard.file.ignored_count = filter_result.ignore_filtered.len();
+        guard.file.terms = filter_result.terms;
+        guard.file.base_terms = all_terms;
+        guard.file.sentences = sentences;
+        guard.file.file_comprehension = file_comprehension;
+        // Recompute coverage from the fresh vocab cache (egui resets
+        // `knowledge_summary_attempted`).
+        guard.knowledge_dirty.store(true, Ordering::Relaxed);
+        Ok(load_result(&guard.file).expect("refreshed file has a source_file"))
+    }
+    .await;
+
+    let _ = app.emit(
+        names::ANKI_STATUS,
+        AnkiStatus { connected: outcome.is_ok(), fetching: false },
+    );
+    let payload = outcome?;
+    let _ = app.emit(names::TERMS_REFRESHED, &payload);
+    Ok(())
+}
+
+/// Manual "reapply ignorelist and Anki filters" (egui's top-bar 🔄 / F5 / Cmd+R
+/// → `RequestRefresh`). The updated file arrives via the `terms-refreshed` event.
+#[tauri::command]
+pub async fn refresh_terms(app: AppHandle) -> Result<(), String> {
+    live_refresh(&app).await
 }
 
 /// Re-fetch the currently loaded file (e.g. after a UI reload). `null` if none.

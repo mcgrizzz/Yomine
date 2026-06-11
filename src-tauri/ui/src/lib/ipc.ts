@@ -73,6 +73,13 @@ export interface FileLoadResult {
 	terms: Term[];
 	sentences: SentenceDto[];
 	file_comprehension: number;
+	/** Whether Anki filtering removed any terms — gates the per-sentence
+	 * comprehension indicator (egui's `anki_filtered_terms.is_empty()` check). */
+	anki_filter_active: boolean;
+	/** Total terms before filtering, for the "shown / known / total" summary. */
+	total_terms: number;
+	/** Terms hidden by the ignore list — the known-count hover breakdown. */
+	ignored_terms: number;
 }
 
 /** A previously-opened file for the landing state (mirrors `RecentFileEntry`). */
@@ -191,6 +198,12 @@ export async function processFile(
 /** The currently loaded file, or `null` if none. */
 export function getTerms(): Promise<FileLoadResult | null> {
 	return invoke('get_terms');
+}
+
+/** Reapply ignore + live Anki filters (egui's 🔄 / F5 / Cmd+R). The updated
+ * file arrives via the `terms-refreshed` event; no-op when nothing is loaded. */
+export function refreshTerms(): Promise<void> {
+	return invoke('refresh_terms');
 }
 
 /** Recently-opened files (existing paths only), most-recent first. */

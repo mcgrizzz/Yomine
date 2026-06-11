@@ -103,6 +103,7 @@ async fn mutate_ignore_list(
 
     let mut guard = state.lock().unwrap();
     guard.file.terms = filter_result.terms;
+    guard.file.ignored_count = filter_result.ignore_filtered.len();
     Ok(load_result(&guard.file))
 }
 
@@ -189,6 +190,7 @@ pub async fn save_ignore_list(
 
     let mut guard = state.lock().unwrap();
     guard.file.terms = filter_result.terms;
+    guard.file.ignored_count = filter_result.ignore_filtered.len();
     Ok(load_result(&guard.file))
 }
 

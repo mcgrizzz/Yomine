@@ -50,6 +50,10 @@ pub struct FileData {
     /// `AnkiFilter::KnownLemmas` so known terms stay filtered out (mirrors egui's
     /// `FileData::anki_filtered_terms`, used by `partial_refresh`).
     pub anki_known_lemmas: HashSet<String>,
+    /// How many base terms the ignore list filtered out
+    /// (`filter_result.ignore_filtered.len()`); display-only, for the file
+    /// summary's known-count hover breakdown (egui `ui_current_file_summary`).
+    pub ignored_count: usize,
     pub sentences: Vec<Sentence>,
     pub file_comprehension: f32,
 }

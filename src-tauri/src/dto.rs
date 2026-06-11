@@ -90,6 +90,14 @@ pub struct FileLoadResult {
     pub terms: Vec<Term>,
     pub sentences: Vec<SentenceDto>,
     pub file_comprehension: f32,
+    /// Whether Anki filtering removed any terms — gates the per-sentence
+    /// comprehension indicator (egui checks `anki_filtered_terms.is_empty()`).
+    pub anki_filter_active: bool,
+    /// Total terms before filtering (`base_terms`), for the file summary's
+    /// "shown / known / total" counts (egui `ui_current_file_summary`).
+    pub total_terms: usize,
+    /// Terms hidden by the ignore list — the known-count hover breakdown.
+    pub ignored_terms: usize,
 }
 
 /// One file pill in the ignore-list modal: the persisted `IgnoreFile` fields

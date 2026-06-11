@@ -10,10 +10,12 @@
 		ankiStatus,
 		playerStatus,
 		languageToolsStatus,
+		fileResult,
 		toggleDarkMode,
 		toggleSerifFont,
 		openAndProcessFile,
-		openIgnoreModal
+		openIgnoreModal,
+		refreshTerms
 	} from '$lib/stores';
 
 	type MenuName = 'file' | 'settings' | 'tools';
@@ -132,6 +134,17 @@
 			</div>
 		{/if}
 	</div>
+
+	<!-- Reapply ignorelist + Anki filters (egui's 🔄, T033); only meaningful with
+	     a file loaded. Keyboard: F5 / Ctrl+R (wired app-wide in +page). -->
+	{#if $fileResult}
+		<button
+			class="icon-btn"
+			title="Reapply ignorelist and Anki filters (F5 / Ctrl+R)"
+			disabled={!toolsReady}
+			onclick={refreshTerms}>🔄</button
+		>
+	{/if}
 
 	<span class="spacer"></span>
 

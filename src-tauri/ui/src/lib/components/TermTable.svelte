@@ -42,15 +42,16 @@
 		return v === Infinity ? '？' : String(v);
 	}
 
-	// Resolve a term's first `sentence_reference` (index, byte offset) to its
-	// example sentence, matching egui's index-based lookup into the sentences
-	// array. Multi-sentence nav is a deferred US1 follow-up, so we show the first.
-	function firstOccurrence(term: Term): Occurrence | undefined {
+	// Resolve a term's `sentence_references` (index, byte offset) to its example
+	// sentences, matching egui's index-based lookup into the sentences array.
+	// SentenceView owns the ◀ n/m ▶ browsing across them (T030b).
+	function occurrencesOf(term: Term): Occurrence[] {
+		const out: Occurrence[] = [];
 		for (const [i, start] of term.sentence_references) {
 			const sentence = sentences[i];
-			if (sentence) return { sentence, start };
+			if (sentence) out.push({ sentence, start });
 		}
-		return undefined;
+		return out;
 	}
 </script>
 
@@ -62,7 +63,7 @@
 		<span>POS</span>
 	</div>
 	{#each terms as term (termKey(term))}
-		{@const occ = firstOccurrence(term)}
+		{@const occs = occurrencesOf(term)}
 		<div class="row">
 			<span
 					class="term"
@@ -73,8 +74,8 @@
 					><Furigana surface={term.lemma_form} reading={term.lemma_reading} /></span
 				>
 			<div class="sentence">
-				{#if occ}
-					<SentenceView occurrence={occ} {term} />
+				{#if occs.length > 0}
+					<SentenceView occurrences={occs} {term} />
 				{:else}
 					<span class="empty">—</span>
 				{/if}
