@@ -373,17 +373,67 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
   `node_modules` — no package.json/lockfile change). **Verify on Windows (`cargo tauri dev`, folds
   into T034):** auto-refresh on load with Anki open (terms update in place, spinner during fetch),
   manual 🔄 / F5 / Ctrl+R, summary line parity against egui.
+- **T032/T034/T036 DONE — VERIFIED on Windows (maintainer, 2026-06-11), walked check-by-check.**
+  **T032 (US1):** term count/order/readings/POS/frequencies match egui; furigana renders; dialog +
+  recent-file click + native drag-drop all pass; T030b nav cycles a term's occurrences in place and
+  the comprehension bars gate correctly on Anki data. Two notes: (1) **furigana bug on numeric
+  compounds** — `8月22日` shows がつにち (digit readings dropped, kana misplaced); niche, deferred
+  to US6 tokenization tooling (see Deferred). (2) T030c wrap could not be exercised (no long-enough
+  sentence in the test file); low risk now that wrapping is plain CSS — re-check opportunistically.
+  **T034 (US2):** identical hidden terms + comprehension % vs egui; offline load (Anki closed) fine
+  with disconnected indicator; auto-refresh on load updates terms in place with fetching spinner;
+  manual 🔄 / F5 / Ctrl+R all refresh without reloading the webview; summary line parity incl.
+  hover breakdown. **T036 (US3):** asbplayer seek ✓; MPV preferred when both connected ✓;
+  no-player → weak label, TXT → no timestamp, no spurious errors ✓. Maintainer noticed the seek
+  button doesn't mark itself "visited" — that is the recorded intentional T035 deviation
+  (`PlayerStatus` omits egui's 👁 confirmed state); promote to a task only if requested.
+  T031's folded frontend checks passed with T032, so T031 is ticked too.
+- **T041 DONE (2026-06-11) [US5] — WebSocket settings modal; checks green in WSL, frontend NOT
+  built (Windows `node_modules`), uncommitted.** Backend untouched (`set_websocket_port` landed +
+  registered with the T028 batch — persists `settings.websocket_settings.port` to `settings.json`
+  then `PlayerHandle::set_port` restarts a live server). **`ipc.ts`:** `setWebsocketPort(port)` →
+  `invoke('set_websocket_port', { port })`. **`stores/index.ts`:** `websocketModalOpen` writable +
+  `openWebsocketModal()` + `saveWebsocketPort(port)` action (mirrors the new port into the
+  `settings` store on success; failure → `lastError` banner "WebSocket Server / Failed to apply the
+  new port" — egui shows these inline as `restart_status`, the banner is our manual-action error
+  convention; returns success so the modal knows whether to close). **New
+  `WebsocketSettingsModal.svelte`** (IgnoreListModal pattern: backdrop/Esc/✕ close, staged temp vs
+  original snapshot), parity with `gui/settings/websocket_settings_modal.rs`: "Server Port:" number
+  input + "(Valid range: 1024-65535)" hint + red "⚠ Port must be between 1024 and 65535" when out
+  of range (egui's DragValue clamps to the range; the number input validates instead), ℹ status
+  line ("Invalid port range. Please use ports 1024-65535." on save-with-invalid), ⚠
+  "Settings have been modified" dirty indicator, footer Save Settings / Cancel (both gated on
+  dirty; Cancel reverts the staged port but keeps the modal open, egui parity) / right-aligned
+  Restore Default (→ 8766 = `WebSocketSettings::default()`). Save closes on success (egui's
+  `ui.close()`), stays open on failure for a retry. **`TopBar.svelte`** flipped the disabled
+  "WebSocket Server" entry to `openWebsocketModal` (ungated, like egui); **`+page.svelte`** renders
+  the modal next to `IgnoreListModal`. Checks: `cargo check -p yomine-tauri` ✓ 0 errors,
+  `-p yomine` ✓ 0 errors, `pnpm run check` = only the 4 known `vite.config.ts` errors (the modal
+  adds the same backdrop a11y *warning* IgnoreListModal already carries). **Verify on Windows
+  (`cargo tauri dev`, folds into T046):** Settings→WebSocket Server opens; edit port → dirty ⚠;
+  Save persists (`settings.json`) and a running server moves — asbplayer reconnects on the new
+  port; Cancel reverts; Restore Default → 8766; out-of-range port shows the red warning and Save
+  reports "Invalid port range"; restart starts the server on the saved port.
+- **T044 DONE (2026-06-11) [US5] — audited as already complete; zero code changes this session.**
+  Confirmed the T027 note's claim: egui's counterpart (`top_bar.rs` ~69–114) has exactly two
+  controls — the ☀/🌙 theme-preference toggle and the 字 serif toggle, both flip the bit +
+  `request_save_settings`; there is no separate theme/font picker menu to port. The Tauri side
+  already mirrors it end-to-end: `stores/index.ts::toggleDarkMode`/`toggleSerifFont` (T028) flip
+  the bit, mirror into the `settings` store, and call `save_settings` (persists `settings.json`);
+  `+layout.svelte` (T026) reactively applies `data-theme` dark/light + `body.font-serif`; on
+  restart `hydrate()`'s `get_settings` restores both — the full round trip. T027 supplies the Noto
+  Sans/Serif JP `@font-face`s the 字 toggle switches between. Ticked with no new code. **Verify on
+  Windows (`cargo tauri dev`, folds into T046):** toggle ☀/🌙 and 字 → instant restyle; restart →
+  both persist (same items already on T028's verify list).
 - **NEXT options:**
-  - **Interactive verifies (maintainer, Windows `cargo tauri dev`):** T032 (US1: term parity +
-    furigana + drag-drop + T030b/T030c checks) → T034 (US2: hidden terms / comprehension / live
-    refresh) → T036 (US3: seek).
-  - **US5 (T041 websocket modal)** is backend-ready (`set_websocket_port` landed with the T028
-    backend); add its `ipc.ts` wrapper + modal UI and flip its disabled TopBar menu entry.
   - **Other Settings modals** (Anki settings, Frequency Weighting, POS Filters, Setup Checklist) —
     backend commands exist (`list_anki_models`/`list_dictionaries`/`set_dictionary_state`/
     `get_setup_status`); each builds its modal + `ipc.ts` wrapper and flips its TopBar entry.
   - **T025 verify** still needs an interactive `cargo tauri dev` (maintainer).
 - **Deferred (tracked, intentional):**
+  - **Furigana on numeric compounds** (found in the T032 verify): `8月22日` → がつにち — digits get
+    no reading and the kana isn't aligned to the right characters. Engine-side
+    (tokenization/reading alignment), affects egui too; fold into **US6/T047** fixtures.
   - `analyzer` store → **US6/T047**. Remaining commands (anki/player/dict/analyzer/knowledge/misc
     wrappers) land with their UI tasks and append to the `invoke_handler` list in `lib.rs`.
   - **Pre-existing scaffold debt (T014, not mine):** `pnpm check` reports 4 errors in
@@ -573,28 +623,28 @@ stories render inside it.
       lines break only between words). **Verify on Windows:** a long sentence wraps to 2+ lines inside
       its row (row grows in height); furigana still centres per word with no overhang/merge; no
       horizontal scrollbar on the table.
-- [~] T031 [US1] File open + drag-drop + **no-file landing state (FR-001)** — code-complete,
-      frontend pending Windows verify (folds into T032):
+- [x] T031 [US1] File open + drag-drop + **no-file landing state (FR-001)** — code-complete,
+      frontend verified on Windows 2026-06-11 (folded into T032):
       `open_file_dialog`→`process_file`; Tauri `onDragDropEvent` for drops (O2); loading overlay
       from `overlayStore`; error banner on failure (don't clobber existing results — done).
       Landing state (egui parity): "no file loaded" message + "drop a file anytime" hint + an
       "Open file" action surfacing **recent files** (needs a `get_recent_files` backend command
       reusing `gui/recent_files.rs`, O3). Replaces the current bare "Open a subtitle…" placeholder.
-- [ ] T032 [US1] **Verify** against egui: same term count/order/readings/POS/frequencies; furigana
+- [x] T032 [US1] **Verify** against egui: same term count/order/readings/POS/frequencies; furigana
       renders; drag-drop parity.
 
 ### US2 — Hide known words via Anki (P1)
 
 - [x] T033 [US2] Wire cached-load + background live refresh: consume `terms-refreshed`; show
       comprehension column values; `anki-status` indicator in top bar.
-- [ ] T034 [US2] **Verify**: same hidden terms + comprehension % as egui; offline load works;
+- [x] T034 [US2] **Verify**: same hidden terms + comprehension % as egui; offline load works;
       live refresh updates in place.
 
 ### US3 — Seek the video player (P2)
 
 - [x] T035 [US3] Timestamp UI in `SentenceView`: clickable timestamp → `seek_timestamp(secs,
       label)`; reflect `player-status` (mode/no-player) and surface the no-player error.
-- [ ] T036 [US3] **Verify**: asbplayer + MPV seek; MPV preferred when both; no-player handled.
+- [x] T036 [US3] **Verify**: asbplayer + MPV seek; MPV preferred when both; no-player handled.
 
 ### US4 — Refine & search (P2)
 
@@ -634,12 +684,12 @@ stories render inside it.
 
 - [ ] T040 [P] [US5] Anki settings modal: `list_anki_models`→ note-type/field mapping UI with
       field guessing + live `anki-status`; save via `save_settings`.
-- [ ] T041 [P] [US5] WebSocket settings modal: edit port → `set_websocket_port`.
+- [x] T041 [P] [US5] WebSocket settings modal: edit port → `set_websocket_port`.
 - [ ] T042 [P] [US5] Frequency weights modal: `list_dictionaries` + `set_dictionary_state`;
       consume `dictionaries-changed` and re-fetch terms.
 - [ ] T043 [P] [US5] POS filters modal: default POS visibility from `get_pos_catalog` +
       `settings.pos_filters`.
-- [ ] T044 [P] [US5] Theme + font toggles wired to `save_settings` (uses T026/T027).
+- [x] T044 [P] [US5] Theme + font toggles wired to `save_settings` (uses T026/T027).
 - [ ] T045 [US5] Setup checklist + banner: `get_setup_status`; actions (`open_url`, open Anki
       settings, load dicts, open websocket settings).
 - [ ] T046 [US5] **Verify**: every setting persists across restart and takes effect; checklist

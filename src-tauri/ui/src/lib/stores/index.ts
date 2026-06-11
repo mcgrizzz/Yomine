@@ -132,6 +132,39 @@ export async function saveIgnore(terms: string[], files: ipc.IgnoreFile[]): Prom
 	if (result) fileResult.set(result);
 }
 
+// ---- WebSocket server settings (T041) ---------------------------------------
+
+/** Whether the WebSocket-settings modal is open. The modal stages its port edit
+ * locally (egui's `temp_websocket_settings`) and hydrates from `settings`. */
+export const websocketModalOpen = writable(false);
+
+/** Open the WebSocket-settings modal (egui's `open_settings`). */
+export function openWebsocketModal(): void {
+	websocketModalOpen.set(true);
+}
+
+/**
+ * Persist the staged port + restart a running server on it (the modal's "Save
+ * Settings"). Mirrors the new port into the local `settings` store on success;
+ * failures surface via the `lastError` banner (egui shows them inline as
+ * `restart_status`). Returns whether the save succeeded so the modal can close.
+ */
+export async function saveWebsocketPort(port: number): Promise<boolean> {
+	try {
+		await ipc.setWebsocketPort(port);
+		const s = get(settings);
+		if (s) settings.set({ ...s, websocket_settings: { ...s.websocket_settings, port } });
+		return true;
+	} catch (err) {
+		lastError.set({
+			title: 'WebSocket Server',
+			message: 'Failed to apply the new port',
+			detail: String(err)
+		});
+		return false;
+	}
+}
+
 // ---- Top-bar theme / font toggles (T028) -----------------------------------
 // Mirror egui's top-bar ☀/🌙 + 字 buttons: flip the bit, mirror it locally so the
 // root layout re-applies the theme/font immediately, then persist (egui's

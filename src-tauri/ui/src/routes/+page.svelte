@@ -23,6 +23,7 @@
 	import TermTable from '$lib/components/TermTable.svelte';
 	import TableControls from '$lib/components/TableControls.svelte';
 	import IgnoreListModal from '$lib/components/IgnoreListModal.svelte';
+	import WebsocketSettingsModal from '$lib/components/WebsocketSettingsModal.svelte';
 
 	onMount(hydrate);
 
@@ -138,6 +139,7 @@
 	</main>
 
 	<IgnoreListModal />
+	<WebsocketSettingsModal />
 
 	{#if $lastError}
 		<div class="error-banner" role="alert">

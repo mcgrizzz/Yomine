@@ -282,6 +282,11 @@ export function seekTimestamp(seconds: number, label: string): Promise<void> {
 	return invoke('seek_timestamp', { seconds, label });
 }
 
+/** Persist the WebSocket server port and restart a running server on it (US5/T041). */
+export function setWebsocketPort(port: number): Promise<void> {
+	return invoke('set_websocket_port', { port });
+}
+
 export interface DragDropHandlers {
 	/** A drag entered the window; `paths` are the files being dragged. */
 	onEnter?: (paths: string[]) => void;

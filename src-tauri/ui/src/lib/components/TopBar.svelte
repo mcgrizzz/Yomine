@@ -15,6 +15,7 @@
 		toggleSerifFont,
 		openAndProcessFile,
 		openIgnoreModal,
+		openWebsocketModal,
 		refreshTerms
 	} from '$lib/stores';
 
@@ -112,8 +113,7 @@
 			<div class="menu-panel">
 				<!-- TODO: enable with the Anki settings modal. -->
 				<button disabled title="Coming soon">Anki</button>
-				<!-- TODO: enable with the WebSocket settings modal (T041). -->
-				<button disabled title="Coming soon">WebSocket Server</button>
+				<button onclick={() => run(openWebsocketModal)}>WebSocket Server</button>
 				<button onclick={() => run(openIgnoreModal)} disabled={!toolsReady}>Ignore List</button>
 				<!-- TODO: enable with the frequency-weighting modal. -->
 				<button disabled title="Coming soon">Frequency Weighting</button>
