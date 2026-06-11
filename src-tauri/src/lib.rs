@@ -42,6 +42,14 @@ pub fn run() {
             commands::ignore::save_ignore_list,
             commands::ignore::get_default_ignored_terms,
             commands::ignore::export_ignore_list,
+            commands::anki::get_anki_status,
+            commands::anki::list_anki_models,
+            commands::dictionary::list_dictionaries,
+            commands::dictionary::set_dictionary_state,
+            commands::player::seek_timestamp,
+            commands::player::get_player_status,
+            commands::player::set_websocket_port,
+            commands::setup::get_setup_status,
         ])
         .setup(move |app| {
             // The player runs in its own task that solely owns `PlayerManager`;

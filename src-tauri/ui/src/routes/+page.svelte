@@ -1,6 +1,6 @@
 <script lang="ts">
 	// App shell (T026): top bar + scrolling main region, matching egui's IA
-	// (TopBar over a central term area). The full menu lands in T028 and the
+	// (TopBar over a central term area). The full menu is `TopBar` (T028); the
 	// virtualized term table + sentence view replace the placeholder list in
 	// T029/T030. The startup round trip (open file → term count) stays working.
 	import { onMount } from 'svelte';
@@ -8,17 +8,15 @@
 		hydrate,
 		openAndProcessFile,
 		openRecentFile,
-		openIgnoreModal,
 		languageToolsStatus,
 		overlay,
 		fileResult,
 		visibleTerms,
 		recentFiles,
 		dragHovering,
-		ankiStatus,
-		playerStatus,
 		lastError
 	} from '$lib/stores';
+	import TopBar from '$lib/components/TopBar.svelte';
 	import TermTable from '$lib/components/TermTable.svelte';
 	import TableControls from '$lib/components/TableControls.svelte';
 	import IgnoreListModal from '$lib/components/IgnoreListModal.svelte';
@@ -50,29 +48,10 @@
 	const toolsError = $derived(
 		typeof $languageToolsStatus === 'object' ? $languageToolsStatus.error : null
 	);
-	const playerLabel = $derived(
-		$playerStatus.mode === 'mpv'
-			? 'MPV'
-			: $playerStatus.mode === 'asbplayer'
-				? 'asbplayer'
-				: 'Player'
-	);
 </script>
 
 <div class="app-shell">
-	<header class="topbar">
-		<span class="brand">Yomine</span>
-		<!-- TODO(T028): full menu — file, anki, websocket, ignore list, freq weights,
-		     POS filters, analyzer, setup checklist. The buttons below are interim
-		     openers that T028 folds into the proper menu. -->
-		<button onclick={openAndProcessFile} disabled={!toolsReady}>Open file…</button>
-		<button onclick={openIgnoreModal} disabled={!toolsReady}>Ignore list…</button>
-		<span class="spacer"></span>
-		<span class="status">
-			<span class="chip" class:on={$ankiStatus.connected}>Anki</span>
-			<span class="chip" class:on={$playerStatus.mode !== 'none'}>{playerLabel}</span>
-		</span>
-	</header>
+	<TopBar />
 
 	<main class="app-main">
 		{#if toolsError}
@@ -151,38 +130,6 @@
 </div>
 
 <style>
-	.topbar {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		padding: 0.5rem 1rem;
-		background: var(--bg-dark);
-		border-bottom: 1px solid var(--border);
-	}
-	.brand {
-		font-weight: 700;
-		font-size: 1.05rem;
-	}
-	.spacer {
-		flex: 1;
-	}
-	.status {
-		display: flex;
-		gap: 0.5rem;
-	}
-	.chip {
-		font-size: 0.75rem;
-		padding: 0.15rem 0.5rem;
-		border-radius: 999px;
-		background: var(--bg-light);
-		color: var(--comment);
-		border: 1px solid var(--border);
-	}
-	.chip.on {
-		color: var(--bg-darker);
-		background: var(--green);
-		border-color: var(--green);
-	}
 	.title {
 		margin: 0 0 0.25rem;
 	}

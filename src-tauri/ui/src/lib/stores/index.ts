@@ -120,6 +120,29 @@ export async function saveIgnore(terms: string[], files: ipc.IgnoreFile[]): Prom
 	if (result) fileResult.set(result);
 }
 
+// ---- Top-bar theme / font toggles (T028) -----------------------------------
+// Mirror egui's top-bar ☀/🌙 + 字 buttons: flip the bit, mirror it locally so the
+// root layout re-applies the theme/font immediately, then persist (egui's
+// `request_save_settings`). No-op until settings have hydrated.
+
+/** Toggle dark/light mode and persist (the ☀/🌙 button). */
+export async function toggleDarkMode(): Promise<void> {
+	const s = get(settings);
+	if (!s) return;
+	const updated = { ...s, dark_mode: !s.dark_mode };
+	settings.set(updated);
+	await ipc.saveSettings(updated);
+}
+
+/** Toggle the serif/sans font family and persist (the 字 button). */
+export async function toggleSerifFont(): Promise<void> {
+	const s = get(settings);
+	if (!s) return;
+	const updated = { ...s, use_serif_font: !s.use_serif_font };
+	settings.set(updated);
+	await ipc.saveSettings(updated);
+}
+
 /** Last surfaced error (for a modal); `null` once dismissed. */
 export const lastError = writable<ipc.ErrorPayload | null>(null);
 

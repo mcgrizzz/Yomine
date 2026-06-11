@@ -124,3 +124,25 @@ impl PosInfo {
         Self { key: pos.as_key().to_string(), display_name: pos.display_name().to_string() }
     }
 }
+
+/// One row of the frequency-dictionary list (`list_dictionaries`). The engine
+/// `DictionaryState` holds only `weight`/`enabled`; the name is the map key, so
+/// this DTO folds it in to give the modal a flat `{ name, weight, enabled }`
+/// (data-model.md "Frequency dictionary state").
+#[derive(Serialize, Deserialize, Clone)]
+pub struct DictionaryStateDto {
+    pub name: String,
+    pub weight: f32,
+    pub enabled: bool,
+}
+
+/// Aggregated readiness for the setup checklist/banner (`get_setup_status`).
+/// Each field mirrors the matching egui `check_*` in `setup_checklist_modal.rs`.
+#[derive(Serialize, Deserialize, Clone)]
+pub struct SetupStatus {
+    pub tools_loaded: bool,
+    pub anki_connected: bool,
+    pub has_field_mapping: bool,
+    pub has_frequency_dict: bool,
+    pub player_connected: bool,
+}

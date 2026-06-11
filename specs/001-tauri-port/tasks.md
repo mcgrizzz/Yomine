@@ -247,15 +247,64 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
   (`cargo tauri dev`, folds into T039):** `pnpm install` first (T037's `wanakana` dep still pending);
   open modal → add/search/import/refresh/remove/toggle stage; dirty ⚠ shows; Save persists + re-filters
   the table; Cancel reverts; Restore Default + Export work; compare against egui.
-- **NEXT options (all unblocked except T028):**
-  - **T039** [US4] parity verify (sort/filter/search/**ignore** incl. the T038b modal) — yield the
-    same visible set/behaviour as egui; interactive `cargo tauri dev` on Windows (maintainer).
+- **T039 DONE — VERIFIED on Windows (maintainer, 2026-06-09).** All of US4 (sort / filter / search /
+  POS / frequency from T037 + the T038/T038b ignore modal) yields the same visible set/behaviour as
+  egui. Closes the US4 verify gate; T038b's frontend verify folded in.
+- **T028 BACKEND COMMANDS DONE (2026-06-09) — backend builds green in WSL (`cargo build -p
+  yomine-tauri` ✓, exit 0; warnings dropped to 8, all pre-existing transient — the new commands now
+  consume `DICTIONARIES_CHANGED`/`PLAYER_STATUS`/`AnkiStatus`/`PlayerHandle`).** This is the
+  **backend half** of T028 (the command batch the handoff flagged as the blocker); the TopBar.svelte
+  UI + the per-modal `ipc.ts` wrappers are the **frontend half**, deferred to their own
+  tasks/Windows builds (T028 UI, T035, T041) so untestable TS isn't shipped from WSL. **8 new
+  commands** (registered in `lib.rs`): `commands/anki.rs` — `get_anki_status` (point-in-time
+  `get_version` probe, `fetching:false`), `list_anki_models` (mirrors egui `fetch_models`: version
+  gate → `anki::get_models` → map `Model`→`AnkiModelInfo`; `Err("Anki Offline")` when down).
+  `commands/player.rs` — `seek_timestamp(seconds,label)` / `get_player_status` (thin `PlayerHandle`
+  channel wrappers; covers T035/T041 backend), `set_websocket_port(port)` (persist
+  `settings.websocket_settings.port` + `PlayerHandle::set_port` restart). `commands/dictionary.rs` —
+  `list_dictionaries` (live `dictionary_states` → `DictionaryStateDto{name,weight,enabled}`, sorted
+  by name) / `set_dictionary_state(name,weight,enabled)` (manager gets `weight.max(0.1)`, settings
+  keep raw value + persist + `knowledge_dirty`, emit `dictionaries-changed`; faithful to egui's
+  `apply_frequency_settings`). `commands/setup.rs` — `get_setup_status` → `SetupStatus`
+  (tools/mapping/dict read under a brief lock; anki + player probed unlocked; mirrors the
+  `check_*` in `setup_checklist_modal.rs`). **New DTOs** `DictionaryStateDto`/`SetupStatus` in
+  `dto.rs` (per data-model.md). Locking discipline kept (no `Mutex<AppState>` across `.await`). Zero
+  engine changes → `-p yomine` / `--no-default-features` / `cargo test` provably unaffected.
+- **T028 FRONTEND DONE (2026-06-09) — code-complete in WSL, frontend NOT built (Windows
+  `node_modules`), uncommitted.** `TopBar.svelte` — the full egui `top_bar.rs` IA: ☀/🌙 theme toggle
+  + 字 font toggle (new `toggleDarkMode`/`toggleSerifFont` store actions: flip the bit, mirror to the
+  `settings` store so the root `+layout` re-applies theme/serif, then `saveSettings` — egui's
+  `request_save_settings`), the **File / Settings / Tools** dropdown menus (one-open-at-a-time via a
+  local `openMenu` rune; `<svelte:window onclick>` closes; trigger `stopPropagation` so its own click
+  doesn't re-close), and the right-aligned **asbplayer / mpv / Anki** status indicators (egui
+  `show_status_indicators` colors: green `#00c800` / yellow `#c8c800` / grey `#646464` / anki-red
+  `#c85050`; a CSS spinner while `anki.fetching`). **Wired now (actions exist):** File→Open New File
+  (`openAndProcessFile`, gated on tools-ready), File→Quit (`getCurrentWindow().close()` — added
+  `core:window:allow-close` to `capabilities/default.json`), Settings→Ignore List (`openIgnoreModal`,
+  gated). **Disabled-pending entries** (full menu shell, each a `<button disabled title="Coming
+  soon">` with a `TODO` naming its task — flip to enabled + add `onclick` when the modal lands):
+  File→Load New Frequency Dictionaries, File→Open Data Folder; Settings→Anki, WebSocket Server (T041),
+  Frequency Weighting, Part of Speech Filters, Setup Checklist; Tools→Frequency Analyzer (US6).
+  **`+page.svelte`** dropped its interim header (the old "Open file…"/"Ignore list…" buttons + Anki/
+  Player chips + the `.topbar`/`.brand`/`.spacer`/`.status`/`.chip` styles + the now-unused
+  `openIgnoreModal`/`ankiStatus`/`playerStatus` imports + `playerLabel`) → now just `<TopBar />`.
+  **Status-indicator deviation (noted):** `PlayerStatus` collapses the WebSocket server state to
+  `mode` + `ws_clients`, so the asbplayer dot can't show egui's Error/Starting sub-states — it maps
+  connected→green, mode==='asbplayer' (running, waiting)→yellow, else→grey. **No new `ipc.ts`
+  wrappers** (TopBar reads existing stores/events + `saveSettings`; the pending modals add their own
+  wrappers). **Verify on Windows (`cargo tauri dev`):** `pnpm install` first (T037's `wanakana` dep
+  still pending); compare the menu structure / theme+font toggle (persists across restart) / status
+  dots against egui; confirm Quit closes the window, Open New File + Ignore List work, disabled
+  entries are inert.
+- **NEXT options:**
+  - **T027** [P] Fonts — bundle Noto Sans/Serif JP `@font-face`; the 字 toggle now drives the
+    `font-serif` class (T028), so this is just the font faces.
   - **T030b** [US1] deferred sentence polish (◀ n/m ▶ multi-sentence nav + per-sentence comprehension).
-  - **Backend commands still to implement** — `list_anki_models`,
-    `list_dictionaries`/`set_dictionary_state`, `get_setup_status`,
-    `get_anki_status`/`get_player_status`, `seek_timestamp`/`set_websocket_port` (player wrappers
-    over the existing `PlayerHandle`). Most are required before the top bar / modals (T028, US3, US5).
-    (`get_recent_files` landed with T031; ignore-list get/add/remove with T038.)
+  - **US3 (T035 seek) / US5 (T041 websocket modal)** are backend-ready (seek/player/websocket wrappers
+    landed with the T028 backend); each adds its `ipc.ts` wrapper + UI and flips its TopBar menu entry.
+  - **Other Settings modals** (Anki settings, Frequency Weighting, POS Filters, Setup Checklist) —
+    backend commands exist (`list_anki_models`/`list_dictionaries`/`set_dictionary_state`/
+    `get_setup_status`); each builds its modal + `ipc.ts` wrapper and flips its TopBar entry.
   - **T025 verify** still needs an interactive `cargo tauri dev` (maintainer).
 - **Deferred (tracked, intentional):**
   - Auto-`refresh_terms`/`terms-refreshed` on a live Anki connection → **US2/T033** (backend keeps
@@ -397,9 +446,13 @@ stories render inside it.
       `pnpm build` ✓. (Full menu = T028; virtualized table = T029; font faces = T027.)
 - [ ] T027 [P] Fonts: bundle Noto Sans/Serif JP as `@font-face`; serif/sans toggle → CSS class
       driven by `settings.use_serif_font`.
-- [ ] T028 Top bar `lib/components/TopBar.svelte`: menu entries opening the modals (file, anki,
+- [x] T028 Top bar `lib/components/TopBar.svelte`: menu entries opening the modals (file, anki,
       websocket, ignore list, freq weights, POS filters, analyzer, setup checklist) + status
-      indicators (anki/player) from `statusStore`.
+      indicators (anki/player) from `statusStore`. **Backend command batch DONE (2026-06-09,
+      cargo-green WSL); frontend `TopBar.svelte` code-complete (NOT built — Windows), uncommitted.**
+      Full menu shell built; entries whose modal isn't built yet are disabled-pending (each later
+      modal task flips its entry on). See the Progress block (T028 backend + T028 frontend entries)
+      for the as-built record. Verify on Windows folds into the next interactive `cargo tauri dev`.
 
 ### US1 — Mine vocabulary from a file (P1) 🎯 MVP
 
