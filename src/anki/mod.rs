@@ -1,9 +1,11 @@
 pub mod api;
 pub mod comprehensibility;
+pub mod field_guessing;
 pub mod scoring;
 pub mod state;
 pub mod types;
 
+pub use field_guessing::guess_field_mappings;
 pub use state::{
     get_models,
     get_sample_note_for_model,

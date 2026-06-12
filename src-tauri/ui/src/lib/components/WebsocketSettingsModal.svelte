@@ -3,6 +3,7 @@
 	// The port edit is *staged* (egui's temp_websocket_settings) and committed only on
 	// "Save Settings" via set_websocket_port (persist + restart the running server);
 	// Cancel reverts the staged edit but keeps the modal open (egui behavior).
+	import { untrack } from 'svelte';
 	import { settings, websocketModalOpen, saveWebsocketPort } from '$lib/stores';
 
 	/** `WebSocketSettings::default()` (core/settings.rs). */
@@ -13,8 +14,10 @@
 	let status = $state<string | null>(null);
 
 	// Hydrate from the settings mirror each time the modal opens (egui open_settings).
+	// untrack: hydrate reads $settings, which would otherwise become a dependency and
+	// re-hydrate (clobbering the staged port) on any settings change while open.
 	$effect(() => {
-		if ($websocketModalOpen) hydrate();
+		if ($websocketModalOpen) untrack(hydrate);
 	});
 
 	function hydrate() {

@@ -103,6 +103,21 @@ export interface FieldMapping {
 	reading_field: string;
 }
 
+/** A note type with its fields (`core::settings::AnkiModelInfo`). `sample_note`
+ * is `null` from `list_anki_models`; it is fetched lazily per model. */
+export interface AnkiModelInfo {
+	name: string;
+	fields: string[];
+	sample_note: Record<string, string> | null;
+}
+
+/** A model's sample note + the engine's term/reading field guesses (T040). */
+export interface SampleNote {
+	sample_note: Record<string, string> | null;
+	guessed_term: string | null;
+	guessed_reading: string | null;
+}
+
 export interface FrequencyDictionarySetting {
 	weight: number;
 	enabled: boolean;
@@ -285,6 +300,29 @@ export function seekTimestamp(seconds: number, label: string): Promise<void> {
 /** Persist the WebSocket server port and restart a running server on it (US5/T041). */
 export function setWebsocketPort(port: number): Promise<void> {
 	return invoke('set_websocket_port', { port });
+}
+
+/** Snapshot of the player status. The `player-status` event only fires on *change*,
+ * so a freshly-loaded webview must pull the resting state once (hydrate). */
+export function getPlayerStatus(): Promise<PlayerStatus> {
+	return invoke('get_player_status');
+}
+
+/** Snapshot of Anki connectivity (same hydrate rationale as getPlayerStatus). */
+export function getAnkiStatus(): Promise<AnkiStatus> {
+	return invoke('get_anki_status');
+}
+
+/** Note types (with fields) that have at least one note, for the Anki settings
+ * modal's mapping UI (US5/T040). Rejects with "Anki Offline" when disconnected. */
+export function listAnkiModels(): Promise<AnkiModelInfo[]> {
+	return invoke('list_anki_models');
+}
+
+/** Fetch a model's sample note + the engine-side field guesses (US5/T040).
+ * Never rejects — fetch failures come back as a `null` sample (egui parity). */
+export function getAnkiSampleNote(modelName: string, fields: string[]): Promise<SampleNote> {
+	return invoke('get_anki_sample_note', { modelName, fields });
 }
 
 export interface DragDropHandlers {

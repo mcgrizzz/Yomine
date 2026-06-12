@@ -14,6 +14,7 @@
 		toggleDarkMode,
 		toggleSerifFont,
 		openAndProcessFile,
+		openAnkiModal,
 		openIgnoreModal,
 		openWebsocketModal,
 		refreshTerms
@@ -111,8 +112,7 @@
 		<button class="menu-trigger" onclick={(e) => toggleMenu('settings', e)}>Settings</button>
 		{#if openMenu === 'settings'}
 			<div class="menu-panel">
-				<!-- TODO: enable with the Anki settings modal. -->
-				<button disabled title="Coming soon">Anki</button>
+				<button onclick={() => run(openAnkiModal)}>Anki</button>
 				<button onclick={() => run(openWebsocketModal)}>WebSocket Server</button>
 				<button onclick={() => run(openIgnoreModal)} disabled={!toolsReady}>Ignore List</button>
 				<!-- TODO: enable with the frequency-weighting modal. -->

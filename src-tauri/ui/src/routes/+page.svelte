@@ -24,6 +24,7 @@
 	import TableControls from '$lib/components/TableControls.svelte';
 	import IgnoreListModal from '$lib/components/IgnoreListModal.svelte';
 	import WebsocketSettingsModal from '$lib/components/WebsocketSettingsModal.svelte';
+	import AnkiSettingsModal from '$lib/components/AnkiSettingsModal.svelte';
 
 	onMount(hydrate);
 
@@ -140,6 +141,7 @@
 
 	<IgnoreListModal />
 	<WebsocketSettingsModal />
+	<AnkiSettingsModal />
 
 	{#if $lastError}
 		<div class="error-banner" role="alert">

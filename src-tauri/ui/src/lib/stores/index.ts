@@ -165,6 +165,46 @@ export async function saveWebsocketPort(port: number): Promise<boolean> {
 	}
 }
 
+// ---- Anki settings (T040) ----------------------------------------------------
+
+/** Whether the Anki-settings modal is open. The modal stages its mapping/interval
+ * edits locally (egui's `SettingsModalData`) and hydrates from `settings`. */
+export const ankiModalOpen = writable(false);
+
+/** Open the Anki-settings modal (egui's `open_settings`). */
+export function openAnkiModal(): void {
+	ankiModalOpen.set(true);
+}
+
+/**
+ * Persist the staged model mappings + known-interval (the modal's "Save
+ * Settings"). The backend's `save_settings` propagates the interval into the
+ * live tools and marks the knowledge summary dirty, the same way egui does on
+ * Anki-settings save. Mirrors into the local `settings` store on success;
+ * failures surface via the `lastError` banner. Returns whether the save
+ * succeeded so the modal can close.
+ */
+export async function saveAnkiSettings(
+	mappings: Record<string, ipc.FieldMapping>,
+	interval: number
+): Promise<boolean> {
+	const s = get(settings);
+	if (!s) return false;
+	const updated = { ...s, anki_model_mappings: mappings, anki_interval: interval };
+	try {
+		await ipc.saveSettings(updated);
+		settings.set(updated);
+		return true;
+	} catch (err) {
+		lastError.set({
+			title: 'Anki Settings',
+			message: 'Failed to save settings',
+			detail: String(err)
+		});
+		return false;
+	}
+}
+
 // ---- Top-bar theme / font toggles (T028) -----------------------------------
 // Mirror egui's top-bar ☀/🌙 + 字 buttons: flip the bit, mirror it locally so the
 // root layout re-applies the theme/font immediately, then persist (egui's
@@ -251,17 +291,24 @@ export async function hydrate(): Promise<void> {
 	});
 
 	// Hydrate from the commands that exist today; the rest arrive via events.
-	const [loadedSettings, catalog, currentFile, recents] = await Promise.all([
+	// player/anki status must be pulled too: the backend emits those events only on
+	// *change*, so a (re)loaded webview would otherwise sit on the initial placeholder
+	// (grey "server stopped") until the next change.
+	const [loadedSettings, catalog, currentFile, recents, player, anki] = await Promise.all([
 		ipc.getSettings(),
 		ipc.getPosCatalog(),
 		ipc.getTerms(),
-		ipc.getRecentFiles()
+		ipc.getRecentFiles(),
+		ipc.getPlayerStatus(),
+		ipc.getAnkiStatus()
 	]);
 	settings.set(loadedSettings);
 	posEnabled.set({ ...loadedSettings.pos_filters });
 	posCatalog.set(catalog);
 	fileResult.set(currentFile);
 	recentFiles.set(recents);
+	playerStatus.set(player);
+	ankiStatus.set(anki);
 
 	// Begin loading the heavy language tools; progress streams to the overlay.
 	overlay.set('Loading language tools…');

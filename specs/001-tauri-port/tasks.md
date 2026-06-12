@@ -425,6 +425,77 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
   Sans/Serif JP `@font-face`s the 字 toggle switches between. Ticked with no new code. **Verify on
   Windows (`cargo tauri dev`, folds into T046):** toggle ☀/🌙 and 字 → instant restyle; restart →
   both persist (same items already on T028's verify list).
+- **T040 DONE (2026-06-11) [US5] — Anki settings modal (note-type/field mappings + known
+  interval); cargo checks green in WSL; `pnpm run check` was sandbox-denied for the subagent but
+  the orchestrator ran it after: only the 4 known vite.config.ts errors + the modal's backdrop
+  a11y warning (same pattern as T038b/T041). Uncommitted.** **Engine:** egui's term/reading guessing heuristic
+  (`guess_field_mappings` + `is_likely_term`/`is_likely_reading`) moved verbatim out of
+  `gui/settings/components.rs` into the new UI-neutral `src/anki/field_guessing.rs` (re-exported
+  as `anki::guess_field_mappings`; components.rs `pub use`s it so old paths resolve) — the gui
+  module is feature-gated off in the Tauri build, so this is the single-source-of-truth move the
+  Constitution wants. **Backend:** one new command, `get_anki_sample_note(model_name, fields)` →
+  `SampleNote { sample_note, guessed_term, guessed_reading }` (commands/anki.rs, registered in
+  `lib.rs`): fetches the model's sample note (errors swallowed to `None`, mirroring egui's
+  `fetch_sample_note` `.unwrap_or(None)`) and runs the shared guesser over it, so the heuristic
+  never exists in TS. `list_anki_models` (T028) returns `sample_note: None` — samples are lazy
+  per model, same as egui. **`ipc.ts`:** `AnkiModelInfo`/`SampleNote` types + `listAnkiModels()`
+  + `getAnkiSampleNote(modelName, fields)`. **`stores/index.ts`:** `ankiModalOpen` writable +
+  `openAnkiModal()` + `saveAnkiSettings(mappings, interval)` → merges the two staged fields into
+  `settings`, `save_settings` (backend already propagates `known_interval` into live tools +
+  marks knowledge dirty, the exact egui post-save behavior), mirrors into the `settings` store on
+  success, `lastError` banner "Anki Settings / Failed to save settings" on failure, returns
+  success so the modal can close. **New `AnkiSettingsModal.svelte`** (WebsocketSettingsModal
+  pattern: backdrop/Esc/✕, staged temp vs original snapshot), full parity with
+  `gui/settings/anki_settings_modal.rs`: ① Known Interval Threshold — ℹ hover, number input
+  clamped 1–365 on change (DragValue parity), "(Default: 30 days)"; ② Current Notetypes — one row
+  per staged mapping (Notetype / Term Field / Reading Field in egui's blue, Edit + Delete);
+  ③ Add/Edit Notetype — heading flips with editor mode, "Anki Connection Status:" line (spinner +
+  "Fetching models..." while loading, red "Error: …" on fetch failure shown *inline* like egui —
+  not a banner — green "Connected" / yellow "Ready" otherwise, with the resting state live from
+  the ambient `anki-status` store) + "Refresh Notetypes"/"Refreshing..." button, notetype select
+  (selection clears both fields then guesses from the cached/fetched sample — egui
+  `ui_model_selection`), Term/Reading field selects with the ＊ "guessed" marker + truncated
+  (30-char) green/blue "Example:" values from the sample note (`ui_field_selection`), Add/Update
+  gated on all three non-empty, rename-while-editing removes the original key; ④ footer — ⚠
+  dirty indicator, Save Settings / Cancel gated on dirty (Cancel reverts staged edits, stays
+  open; Save closes on success, stays open on failure), right-aligned Restore Default. Models are
+  cached across opens (egui keeps `available_models` for the app lifetime); on open, sample notes
+  are fetched for already-mapped models lacking one (egui `open_settings`). **Deviations
+  (flagged):** Restore Default resets only the two fields this modal owns (mappings → empty,
+  interval → 30) — egui resets the *whole* staged `SettingsData` to default, which on Save would
+  clobber unrelated settings (websocket port, POS filters, theme…); scoped reset is the
+  egui-faithful-minus-the-bug option. And the resting connection text is live from `anki-status`
+  (per the task), so it can flip Connected→Ready while open, which egui's fetch-frozen string
+  doesn't. **`TopBar.svelte`** flipped the disabled "Anki" entry to `openAnkiModal` (ungated,
+  like egui); **`+page.svelte`** renders the modal next to the other two. Checks:
+  `cargo check -p yomine-tauri` ✓ 0 errors, `-p yomine` ✓ 0 errors (egui still compiles against
+  the moved guesser), `pnpm run check` ✓ (orchestrator; only the 4 known vite.config.ts errors).
+  **Post-verify fix (same day):** first Windows verify hit `effect_update_depth_exceeded` on open —
+  the hydrate `$effect` tracked state `hydrate()` both writes and reads (`tempInterval` w@45/r@46,
+  `tempMappings` w@43/r via `fetchMappedSamples`), so it re-triggered itself. Fixed with
+  `untrack(hydrate)` so the effect depends on the open flag only; same guard applied to
+  `WebsocketSettingsModal.svelte` (no loop there, but its hydrate reads `$settings`, which would
+  re-hydrate and clobber the staged port on any settings change while open). `IgnoreListModal`
+  audited: safe (sync section only writes; post-await reads are untracked).
+  **Second post-verify fix (same day) — stale grey "WebSocket server stopped" indicator.**
+  Maintainer saw the asbplayer dot grey while the server was demonstrably up (turned green once a
+  client connected). Root cause: the backend `player-status`/`anki-status` events emit **only on
+  change** (player_task `last_status` dedupe), but `hydrate()` never pulled the resting snapshot —
+  so any freshly-(re)loaded webview sat on the store's initial placeholder (`mode:'none'` → grey)
+  until the next change. Fix: `ipc.ts` gains `getPlayerStatus()`/`getAnkiStatus()` wrappers (both
+  backend commands already existed) and `hydrate()` pulls both alongside settings and seeds the
+  stores. Note for future verifies: grey while **MPV is connected** is *correct* parity — the
+  engine deliberately shuts the WS server down when MPV connects (`PlayerManager::update` prefers
+  MPV) and restarts it when MPV drops. Known residual gap (pre-existing T028 deviation, still
+  open): `PlayerStatus` carries no `ServerState`, so egui's Starting (blue) / Error (red) dot
+  sub-states still can't render; promoted to **T056** at the maintainer's request.
+  **Verify on Windows (`cargo tauri dev`, folds into T046):** Settings→Anki opens;
+  with Anki running the status shows Connected and notetypes populate; selecting a notetype
+  auto-guesses term/reading (＊ marker + Example values) matching egui's guesses for the same
+  deck; Add → row appears, Edit/Delete/rename work; interval edit → dirty ⚠; Save persists
+  (`settings.json` `anki_model_mappings` + `anki_interval`) and the knowledge summary recomputes;
+  Cancel reverts staged edits but keeps the modal open; Restore Default empties mappings +
+  interval 30; with Anki closed → "Error: Anki Offline" inline (no banner) and Refresh retries.
 - **NEXT options:**
   - **Other Settings modals** (Anki settings, Frequency Weighting, POS Filters, Setup Checklist) —
     backend commands exist (`list_anki_models`/`list_dictionaries`/`set_dictionary_state`/
@@ -645,6 +716,12 @@ stories render inside it.
 - [x] T035 [US3] Timestamp UI in `SentenceView`: clickable timestamp → `seek_timestamp(secs,
       label)`; reflect `player-status` (mode/no-player) and surface the no-player error.
 - [x] T036 [US3] **Verify**: asbplayer + MPV seek; MPV preferred when both; no-player handled.
+- [ ] T056 [P] [US3] Surface `ServerState` in `PlayerStatus` (closes the T028 indicator
+      deviation): add the websocket server state (running/starting/error+message/stopped, from
+      `ws.get_server_state()`) to the DTO + `ipc.ts`, and drive the TopBar asbplayer dot from it
+      like egui `show_status_indicators` — green has-clients, yellow Running, blue Starting,
+      red Error (tooltip carries the message), grey Stopped. Found during the 2026-06-11
+      T040 verify session: a bind failure is currently indistinguishable from "waiting".
 
 ### US4 — Refine & search (P2)
 
@@ -682,7 +759,7 @@ stories render inside it.
 
 ### US5 — Configure & personalize (P2)
 
-- [ ] T040 [P] [US5] Anki settings modal: `list_anki_models`→ note-type/field mapping UI with
+- [x] T040 [P] [US5] Anki settings modal: `list_anki_models`→ note-type/field mapping UI with
       field guessing + live `anki-status`; save via `save_settings`.
 - [x] T041 [P] [US5] WebSocket settings modal: edit port → `set_websocket_port`.
 - [ ] T042 [P] [US5] Frequency weights modal: `list_dictionaries` + `set_dictionary_state`;

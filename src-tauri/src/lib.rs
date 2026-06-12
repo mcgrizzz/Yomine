@@ -45,6 +45,7 @@ pub fn run() {
             commands::ignore::export_ignore_list,
             commands::anki::get_anki_status,
             commands::anki::list_anki_models,
+            commands::anki::get_anki_sample_note,
             commands::dictionary::list_dictionaries,
             commands::dictionary::set_dictionary_state,
             commands::player::seek_timestamp,
