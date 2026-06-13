@@ -1,8 +1,9 @@
 <script lang="ts">
 	// Term-table controls (T037, US4): search, sort, POS filter, and a frequency
 	// range — all client-side, writing the control stores that `visibleTerms`
-	// derives from. Mirrors egui's controls row + POS-filter menu.
-	import { get } from 'svelte/store';
+	// derives from. Mirrors egui's controls row; the POS button opens the POS
+	// modal (T043) — single surface for POS, a deliberate deviation from egui's
+	// separate header popover (maintainer decision, 2026-06-11).
 	import {
 		tableSearch,
 		tableSort,
@@ -10,7 +11,8 @@
 		posCatalog,
 		freqFilter,
 		visibleTerms,
-		fileResult
+		fileResult,
+		openPosModal
 	} from '$lib/stores';
 	import { SORT_FIELDS, defaultDir, type SortField } from '$lib/table';
 
@@ -25,17 +27,6 @@
 
 	const posTotal = $derived($posCatalog.length);
 	const posOn = $derived($posCatalog.filter((p) => $posEnabled[p.key] !== false).length);
-
-	function setPos(key: string, on: boolean) {
-		posEnabled.update((m) => ({ ...m, [key]: on }));
-	}
-	function setAllPos(on: boolean) {
-		posEnabled.update((m) => {
-			const next = { ...m };
-			for (const p of get(posCatalog)) next[p.key] = on;
-			return next;
-		});
-	}
 
 	function setFreqMin(v: number) {
 		freqFilter.update((f) => (f ? { ...f, min: Math.min(v, f.max) } : f));
@@ -68,25 +59,9 @@
 		</button>
 	</div>
 
-	<details class="pos">
-		<summary>POS ({posOn}/{posTotal})</summary>
-		<div class="pos-menu">
-			<div class="pos-actions">
-				<button onclick={() => setAllPos(true)}>All</button>
-				<button onclick={() => setAllPos(false)}>None</button>
-			</div>
-			{#each $posCatalog as p (p.key)}
-				<label class="pos-row">
-					<input
-						type="checkbox"
-						checked={$posEnabled[p.key] !== false}
-						onchange={(e) => setPos(p.key, e.currentTarget.checked)}
-					/>
-					<span>{p.display_name}</span>
-				</label>
-			{/each}
-		</div>
-	</details>
+	<button class="pos" onclick={openPosModal} title="Edit part-of-speech filters">
+		POS ({posOn}/{posTotal})
+	</button>
 
 	{#if $freqFilter && $freqFilter.hi > $freqFilter.lo}
 		<div class="group freq">
@@ -155,55 +130,12 @@
 		line-height: 1;
 	}
 	.pos {
-		position: relative;
-	}
-	.pos > summary {
 		cursor: pointer;
-		list-style: none;
 		padding: 0.3rem 0.6rem;
 		background: var(--bg-light);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		color: var(--fg);
-	}
-	.pos > summary::-webkit-details-marker {
-		display: none;
-	}
-	.pos-menu {
-		position: absolute;
-		z-index: 15;
-		top: calc(100% + 0.25rem);
-		left: 0;
-		min-width: 12rem;
-		max-height: 18rem;
-		overflow-y: auto;
-		display: flex;
-		flex-direction: column;
-		gap: 0.15rem;
-		padding: 0.5rem;
-		background: var(--bg-dark);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
-	}
-	.pos-actions {
-		display: flex;
-		gap: 0.4rem;
-		padding-bottom: 0.35rem;
-		margin-bottom: 0.25rem;
-		border-bottom: 1px solid var(--border);
-	}
-	.pos-actions button {
-		flex: 1;
-		padding: 0.2rem 0;
-		font-size: 0.75rem;
-	}
-	.pos-row {
-		display: flex;
-		align-items: center;
-		gap: 0.4rem;
-		cursor: pointer;
-		white-space: nowrap;
 	}
 	.freq input[type='range'] {
 		width: 6rem;

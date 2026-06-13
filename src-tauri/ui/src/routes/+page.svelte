@@ -25,6 +25,8 @@
 	import IgnoreListModal from '$lib/components/IgnoreListModal.svelte';
 	import WebsocketSettingsModal from '$lib/components/WebsocketSettingsModal.svelte';
 	import AnkiSettingsModal from '$lib/components/AnkiSettingsModal.svelte';
+	import FrequencyWeightsModal from '$lib/components/FrequencyWeightsModal.svelte';
+	import PosFiltersModal from '$lib/components/PosFiltersModal.svelte';
 
 	onMount(hydrate);
 
@@ -142,6 +144,8 @@
 	<IgnoreListModal />
 	<WebsocketSettingsModal />
 	<AnkiSettingsModal />
+	<FrequencyWeightsModal />
+	<PosFiltersModal />
 
 	{#if $lastError}
 		<div class="error-banner" role="alert">

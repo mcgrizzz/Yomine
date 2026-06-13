@@ -69,6 +69,17 @@ pub fn set_dictionary_state(
 
     if let Some(manager) = manager {
         manager.set_dictionary_state(&name, weight.max(0.1), enabled).map_err(|e| e.to_string())?;
+
+        // The stored terms carry a baked "HARMONIC" entry computed at process time
+        // (egui instead recomputes `get_weighted_harmonic` every frame at render).
+        // Refresh it under the new weights so the `get_terms` re-fetch the
+        // `dictionaries-changed` event triggers returns up-to-date values.
+        let mut guard = state.lock().unwrap();
+        let file = &mut guard.file;
+        for term in file.terms.iter_mut().chain(file.base_terms.iter_mut()) {
+            let harmonic = manager.get_weighted_harmonic(&term.frequencies);
+            term.frequencies.insert("HARMONIC".to_string(), harmonic);
+        }
     }
 
     let _ = app.emit(names::DICTIONARIES_CHANGED, ());

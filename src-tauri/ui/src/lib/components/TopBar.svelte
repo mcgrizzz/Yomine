@@ -17,6 +17,8 @@
 		openAnkiModal,
 		openIgnoreModal,
 		openWebsocketModal,
+		openFrequencyModal,
+		openPosModal,
 		refreshTerms
 	} from '$lib/stores';
 
@@ -115,10 +117,8 @@
 				<button onclick={() => run(openAnkiModal)}>Anki</button>
 				<button onclick={() => run(openWebsocketModal)}>WebSocket Server</button>
 				<button onclick={() => run(openIgnoreModal)} disabled={!toolsReady}>Ignore List</button>
-				<!-- TODO: enable with the frequency-weighting modal. -->
-				<button disabled title="Coming soon">Frequency Weighting</button>
-				<!-- TODO: enable with the POS-filters modal. -->
-				<button disabled title="Coming soon">Part of Speech Filters</button>
+				<button onclick={() => run(openFrequencyModal)}>Frequency Weighting</button>
+				<button onclick={() => run(openPosModal)}>Part of Speech Filters</button>
 				<!-- TODO: enable with the setup-checklist modal. -->
 				<button disabled title="Coming soon">Setup Checklist</button>
 			</div>

@@ -325,6 +325,26 @@ export function getAnkiSampleNote(modelName: string, fields: string[]): Promise<
 	return invoke('get_anki_sample_note', { modelName, fields });
 }
 
+/** One row of the frequency-dictionary list (`DictionaryStateDto`). */
+export interface DictionaryState {
+	name: string;
+	weight: number;
+	enabled: boolean;
+}
+
+/** The live per-dictionary weight/enabled set, sorted by name (US5/T042).
+ * Empty until the language tools are loaded. */
+export function listDictionaries(): Promise<DictionaryState[]> {
+	return invoke('list_dictionaries');
+}
+
+/** Update one dictionary's weight/enabled: persists `settings.frequency_weights`,
+ * applies to the live manager, rebakes the stored terms' HARMONIC, and emits
+ * `dictionaries-changed` (US5/T042). */
+export function setDictionaryState(name: string, weight: number, enabled: boolean): Promise<void> {
+	return invoke('set_dictionary_state', { name, weight, enabled });
+}
+
 export interface DragDropHandlers {
 	/** A drag entered the window; `paths` are the files being dragged. */
 	onEnter?: (paths: string[]) => void;
@@ -356,6 +376,8 @@ export const onTermsRefreshed = (cb: (r: FileLoadResult) => void) =>
 	listenTo('terms-refreshed', cb);
 export const onKnowledgeSummary = (cb: (s: KnowledgeSummary) => void) =>
 	listenTo('knowledge-summary', cb);
+export const onDictionariesChanged = (cb: () => void) =>
+	listenTo<null>('dictionaries-changed', () => cb());
 export const onError = (cb: (e: ErrorPayload) => void) => listenTo('error', cb);
 
 function listenTo<T>(event: string, cb: (payload: T) => void): Promise<UnlistenFn> {

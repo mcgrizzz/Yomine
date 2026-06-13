@@ -496,6 +496,83 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
   (`settings.json` `anki_model_mappings` + `anki_interval`) and the knowledge summary recomputes;
   Cancel reverts staged edits but keeps the modal open; Restore Default empties mappings +
   interval 30; with Anki closed → "Error: Anki Offline" inline (no banner) and Refresh retries.
+- **T042 DONE (2026-06-11) [US5] — Frequency weights modal; cargo checks green in WSL,
+  `pnpm run check` green (only the 4 known vite.config.ts errors + the modal's backdrop a11y
+  warning, same pattern as T038b/T040/T041). Uncommitted.** **Backend (one surgical fix, no new
+  commands):** `commands/dictionary.rs::set_dictionary_state` now rebakes the stored
+  `file.terms`/`file.base_terms` `"HARMONIC"` entries via `manager.get_weighted_harmonic` after
+  applying the new state — the Tauri table reads the *baked* `frequencies.HARMONIC` (table.ts)
+  whereas egui recomputes it from the manager every frame, so without this the
+  `dictionaries-changed` re-fetch returned stale weighted frequencies. (`get_weighted_harmonic`
+  skips the `"HARMONIC"` key itself — it only counts names present in the states map — so the
+  rebake is idempotent.) **`ipc.ts`:** `DictionaryState` type + `listDictionaries()` +
+  `setDictionaryState(name, weight, enabled)` + `onDictionariesChanged`. **`stores/index.ts`:**
+  `frequencyModalOpen` + `openFrequencyModal()` + `saveDictionaryStates(entries)` (commits each
+  *changed* entry via `set_dictionary_state` — egui saves the whole map in one shot, the
+  per-dictionary command makes the changed subset the minimal equivalent; mirrors into the
+  `settings` store's `frequency_weights` on success; failure → `lastError` banner "Frequency
+  Weights / Failed to save dictionary settings"; returns success so the modal can close);
+  `hydrate()` wires `onDictionariesChanged` → `getTerms()` → `fileResult.set` (freq bounds rederive
+  via the existing `fileResult` subscription; knowledge summary recomputes via `knowledge_dirty` +
+  the background task — both already in place). **New `FrequencyWeightsModal.svelte`**
+  (WebsocketSettingsModal pattern: backdrop/Esc/✕, staged vs original, `untrack(hydrate)` on the
+  open flag): parity with `gui/settings/frequency_weights_modal.rs` — header row
+  (blank/Dictionary/Weight/Value), one row per dict: enabled checkbox (unchecking floors weight at
+  0.1, egui guard), name greyed when disabled, *logarithmic* 0.1–5.0 slider (egui
+  `Slider::logarithmic`, mapped onto a linear 0..1000 range input) + number input (step 0.05,
+  clamped 0.1–5, 2 decimals, "x" suffix), both disabled when the dict is off; "No frequency
+  dictionaries loaded." when empty; hydrate = `list_dictionaries` overlaid with
+  `settings.frequency_weights` (egui `build_entries`, incl. the settings-less fallback when tools
+  aren't loaded); footer ⚠ dirty + Save Settings/Cancel gated on dirty (Cancel reverts staged,
+  stays open; Save closes on success) + right-aligned Restore Default (all enabled, weight 1.0,
+  staged only). **`TopBar.svelte`** flipped the disabled "Frequency Weighting" entry (ungated,
+  like egui); **`+page.svelte`** renders the modal. **Verify on Windows (`cargo tauri dev`, folds
+  into T046):** Settings→Frequency Weighting lists the loaded dicts; drag a weight / toggle a dict
+  → dirty ⚠; Save persists (`settings.json` `frequency_weights`), the table's Frequency column +
+  bounds shift immediately (no reload), and the knowledge-summary bands recompute; Cancel reverts;
+  Restore Default → all on at 1.00x; with a dict disabled its slider/value grey out; restart →
+  weights persist and apply at load (`apply_frequency_weights`).
+- **T043 DONE (2026-06-11) [US5] — POS filters modal (persisted defaults); checks green (same
+  results as T042's run). Uncommitted.** No backend changes (`get_pos_catalog` + `save_settings`
+  suffice). **Parity answer to the task's question:** egui's save updates *both* — it assigns
+  `settings_data.pos_filters` **and** calls `table_state.apply_pos_settings(...)` (app/mod.rs
+  ~360), and the modal *opens* seeded from the **live** table snapshot
+  (`table_state.pos_snapshot()`, top_bar.rs ~157), not from the persisted defaults. Mirrored
+  exactly: open seeds staged from the live `posEnabled` session store (T037 semantics: missing key
+  = enabled), Save → `savePosFilters(map)` = `save_settings` with the full map as
+  `settings.pos_filters` + `posEnabled.set(map)` so the table refilters immediately
+  (`visibleTerms` is derived; egui's extra `ensure_indices` has no Tauri counterpart to call).
+  **`stores/index.ts`:** `posModalOpen` + `openPosModal()` + `savePosFilters(filters)` (mirrors
+  into `settings` on success; failure → `lastError` banner "POS Filters / Failed to save
+  settings"; returns success so the modal can close). **New `PosFiltersModal.svelte`**
+  (same modal pattern, `untrack(hydrate)`): parity with `gui/settings/pos_filters_modal.rs` —
+  toggle chips in vertical-fill columns (CSS multi-column ≈ egui's width-based column flow), egui's
+  exact chip list/order: strong parent "Noun" chip gating greyed-uninteractable
+  ProperNoun/CompoundNoun/AdjectivalNoun/SuruVerb sub-chips (their on-state preserved while
+  gated), then the 20 remaining chips; **NounExpression is hidden but still saved** (egui's `raw`
+  map covers all 26 variants; staged map spans the full `posCatalog`); footer ⚠ dirty + Save/
+  Cancel gated on dirty (Cancel reverts, stays open; Save closes on success) + Restore Default →
+  egui `default_pos_map` (all on except Unknown/Other/Symbol/KanaExpression, staged only).
+  **Flagged (pre-existing T037 fork, not changed here):** egui's *session* table defaults turn
+  KanaExpression off (`PosToggle::off`) even with empty settings, while T037's `posEnabled` treats
+  missing keys as enabled — the modal seeds from the live Tauri state, so on a fresh profile it
+  shows KanaExpression on where egui would show it off; defaults converge after the first Save.
+  **`TopBar.svelte`** flipped the disabled "Part of Speech Filters" entry (ungated, like egui);
+  **`+page.svelte`** renders the modal. **Verify on Windows (`cargo tauri dev`, folds into
+  T046):** Settings→Part of Speech Filters opens seeded with the table's current POS state (toggle
+  something in TableControls first to confirm); chip toggles → dirty ⚠; Noun off greys its four
+  sub-chips and the table hides noun terms only after Save; Save persists (`settings.json`
+  `pos_filters`, incl. NounExpression) *and* refilters the table + updates the TableControls POS
+  count immediately; Cancel reverts; Restore Default turns everything on except
+  Unknown/Other/Symbol/KanaExpression; restart → saved defaults seed the table (T037 hydrate).
+  **Post-review UX deviation (maintainer decision, 2026-06-11):** having two POS surfaces (T037's
+  header popover + this modal, both inherited from egui) was judged redundant — the TableControls
+  POS popover was **removed**; the header "POS (n/m)" control is now a button that opens this
+  modal, making it the single POS surface. Consequence: POS changes always go through
+  Save (persisted) — there is no session-only POS tweaking anymore, unlike egui. `setPos`/
+  `setAllPos` + popover markup/styles deleted from `TableControls.svelte`; the All/None quick
+  actions only exist as the modal's Restore Default now. Re-verify: header POS button opens the
+  modal; count still tracks `posEnabled`.
 - **NEXT options:**
   - **Other Settings modals** (Anki settings, Frequency Weighting, POS Filters, Setup Checklist) —
     backend commands exist (`list_anki_models`/`list_dictionaries`/`set_dictionary_state`/
@@ -762,9 +839,9 @@ stories render inside it.
 - [x] T040 [P] [US5] Anki settings modal: `list_anki_models`→ note-type/field mapping UI with
       field guessing + live `anki-status`; save via `save_settings`.
 - [x] T041 [P] [US5] WebSocket settings modal: edit port → `set_websocket_port`.
-- [ ] T042 [P] [US5] Frequency weights modal: `list_dictionaries` + `set_dictionary_state`;
+- [x] T042 [P] [US5] Frequency weights modal: `list_dictionaries` + `set_dictionary_state`;
       consume `dictionaries-changed` and re-fetch terms.
-- [ ] T043 [P] [US5] POS filters modal: default POS visibility from `get_pos_catalog` +
+- [x] T043 [P] [US5] POS filters modal: default POS visibility from `get_pos_catalog` +
       `settings.pos_filters`.
 - [x] T044 [P] [US5] Theme + font toggles wired to `save_settings` (uses T026/T027).
 - [ ] T045 [US5] Setup checklist + banner: `get_setup_status`; actions (`open_url`, open Anki

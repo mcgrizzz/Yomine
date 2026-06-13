@@ -205,6 +205,89 @@ export async function saveAnkiSettings(
 	}
 }
 
+// ---- Frequency dictionary weights (T042) ------------------------------------
+
+/** Whether the frequency-weights modal is open. The modal stages its
+ * weight/enabled edits locally (egui's `FrequencyEntry` list) and hydrates from
+ * `list_dictionaries` + `settings.frequency_weights`. */
+export const frequencyModalOpen = writable(false);
+
+/** Open the frequency-weights modal (egui's `open_modal`). */
+export function openFrequencyModal(): void {
+	frequencyModalOpen.set(true);
+}
+
+/**
+ * Persist the staged dictionary states (the modal's "Save Settings"). egui saves
+ * the whole map in one shot; the Tauri backend exposes per-dictionary
+ * `set_dictionary_state`, so commit each *changed* entry — every call persists
+ * `settings.frequency_weights`, applies to the live manager, rebakes the stored
+ * terms' HARMONIC, and emits `dictionaries-changed` (which re-fetches the terms
+ * via the listener in `hydrate`). Mirrors into the local `settings` store on
+ * success; failures surface via the `lastError` banner. Returns whether the save
+ * succeeded so the modal can close.
+ */
+export async function saveDictionaryStates(entries: ipc.DictionaryState[]): Promise<boolean> {
+	try {
+		for (const e of entries) {
+			await ipc.setDictionaryState(e.name, e.weight, e.enabled);
+		}
+		const s = get(settings);
+		if (s) {
+			const frequency_weights = { ...s.frequency_weights };
+			for (const e of entries) {
+				frequency_weights[e.name] = { weight: e.weight, enabled: e.enabled };
+			}
+			settings.set({ ...s, frequency_weights });
+		}
+		return true;
+	} catch (err) {
+		lastError.set({
+			title: 'Frequency Weights',
+			message: 'Failed to save dictionary settings',
+			detail: String(err)
+		});
+		return false;
+	}
+}
+
+// ---- POS filter defaults (T043) ----------------------------------------------
+
+/** Whether the POS-filters modal is open. The modal stages its chip edits locally
+ * (egui's `raw` map) and hydrates from the live `posEnabled` session state. */
+export const posModalOpen = writable(false);
+
+/** Open the POS-filters modal (egui seeds it from `table_state.pos_snapshot()`). */
+export function openPosModal(): void {
+	posModalOpen.set(true);
+}
+
+/**
+ * Persist the staged POS map as the new defaults *and* apply it to the live
+ * table — egui's save does both (`settings_data.pos_filters = …` +
+ * `table_state.apply_pos_settings`). Mirrors into the local `settings` store on
+ * success; failures surface via the `lastError` banner. Returns whether the save
+ * succeeded so the modal can close.
+ */
+export async function savePosFilters(filters: Record<string, boolean>): Promise<boolean> {
+	const s = get(settings);
+	if (!s) return false;
+	const updated = { ...s, pos_filters: { ...filters } };
+	try {
+		await ipc.saveSettings(updated);
+		settings.set(updated);
+		posEnabled.set({ ...filters });
+		return true;
+	} catch (err) {
+		lastError.set({
+			title: 'POS Filters',
+			message: 'Failed to save settings',
+			detail: String(err)
+		});
+		return false;
+	}
+}
+
 // ---- Top-bar theme / font toggles (T028) -----------------------------------
 // Mirror egui's top-bar ☀/🌙 + 字 buttons: flip the bit, mirror it locally so the
 // root layout re-applies the theme/font immediately, then persist (egui's
@@ -274,6 +357,14 @@ export async function hydrate(): Promise<void> {
 	ipc.onKnowledgeSummary((s) => knowledge.set(s));
 	ipc.onTermsRefreshed((r) => fileResult.set(r));
 	ipc.onError((e) => lastError.set(e));
+	// Weights/enabled changed → the backend rebaked the stored terms' HARMONIC;
+	// re-fetch so the table's weighted frequency + bounds recompute (egui reads
+	// the manager live each frame instead). No hydrate pull needed: the resting
+	// snapshot is the `getTerms()` below.
+	ipc.onDictionariesChanged(async () => {
+		const current = await ipc.getTerms();
+		if (current) fileResult.set(current);
+	});
 
 	// Native drag-drop: show a "drop to open" overlay while a supported file hovers,
 	// and load the first supported file on drop (egui parity). Ignored entirely until
