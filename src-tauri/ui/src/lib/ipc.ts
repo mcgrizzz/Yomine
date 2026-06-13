@@ -133,6 +133,18 @@ export interface SettingsData {
 	dark_mode: boolean;
 }
 
+/** Aggregated setup readiness for the checklist/banner (`get_setup_status`).
+ * Each field mirrors a `check_*` in egui's `setup_checklist_modal.rs`. */
+export interface SetupStatus {
+	tools_loaded: boolean;
+	anki_connected: boolean;
+	has_field_mapping: boolean;
+	has_frequency_dict: boolean;
+	/** Loaded dictionary count: ≥1 → item 2 (default) complete, >1 → item 6 (additional). */
+	frequency_dict_count: number;
+	player_connected: boolean;
+}
+
 export interface BandStats {
 	coverage: number;
 	comprehension: number;
@@ -343,6 +355,12 @@ export function listDictionaries(): Promise<DictionaryState[]> {
  * `dictionaries-changed` (US5/T042). */
 export function setDictionaryState(name: string, weight: number, enabled: boolean): Promise<void> {
 	return invoke('set_dictionary_state', { name, weight, enabled });
+}
+
+/** Aggregated setup readiness (US5/T045). Probes Anki + player live, so it's a
+ * command (not an event) — pull on hydrate and after relevant state changes. */
+export function getSetupStatus(): Promise<SetupStatus> {
+	return invoke('get_setup_status');
 }
 
 export interface DragDropHandlers {

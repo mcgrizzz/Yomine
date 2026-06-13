@@ -19,6 +19,7 @@
 		openWebsocketModal,
 		openFrequencyModal,
 		openPosModal,
+		openSetupModal,
 		refreshTerms
 	} from '$lib/stores';
 
@@ -119,8 +120,7 @@
 				<button onclick={() => run(openIgnoreModal)} disabled={!toolsReady}>Ignore List</button>
 				<button onclick={() => run(openFrequencyModal)}>Frequency Weighting</button>
 				<button onclick={() => run(openPosModal)}>Part of Speech Filters</button>
-				<!-- TODO: enable with the setup-checklist modal. -->
-				<button disabled title="Coming soon">Setup Checklist</button>
+				<button onclick={() => run(openSetupModal)}>Setup Checklist</button>
 			</div>
 		{/if}
 	</div>

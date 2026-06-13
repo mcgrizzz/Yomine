@@ -150,13 +150,15 @@ a {
 
 /* App shell: fixed top bar over a scrolling main region. */
 .app-shell {
-	display: grid;
-	grid-template-rows: auto 1fr;
+	display: flex;
+	flex-direction: column;
 	height: 100vh;
 	overflow: hidden;
 }
 
 .app-main {
+	flex: 1 1 auto;
+	min-height: 0;
 	overflow: auto;
 	padding: 1.25rem 1.5rem;
 }

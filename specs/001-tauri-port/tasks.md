@@ -573,7 +573,55 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
   `setAllPos` + popover markup/styles deleted from `TableControls.svelte`; the All/None quick
   actions only exist as the modal's Restore Default now. Re-verify: header POS button opens the
   modal; count still tracks `posEnabled`.
+- **T045 DONE (2026-06-13) [US5] — setup checklist modal + incomplete banner, the last US5 modal.**
+  Parity with egui's `setup_checklist_modal.rs` + `setup_banner.rs`. New files:
+  **`SetupChecklistModal.svelte`** (6 check items in egui order, ✓ green Complete / ✕ red
+  Incomplete-required / ◯ grey Incomplete-optional, per-item help-docs + action buttons, Close
+  footer) and **`SetupBanner.svelte`** (amber rgb(180,140,0) clickable strip → opens the modal).
+  **Wiring:** `ipc.ts` gained the `SetupStatus` type + `getSetupStatus()` wrapper (the command was
+  registered since T028 but unexposed in JS). `stores/index.ts` gained `setupStatus` writable +
+  `refreshSetupStatus()` (best-effort re-pull), `setupModalOpen` + `openSetupModal()`, and the
+  `showSetupBanner` derived store (= freq dict missing OR Anki model mappings empty, mirroring
+  egui's `should_show_banner`; the Anki bit reads the live `settings` mirror so a Save reflects
+  immediately). `get_setup_status` probes Anki/player live, so it's a command not an event: pulled
+  once at the end of `hydrate()` (after tools load, when the freq-dict bit resolves) and re-pulled
+  on `dictionaries-changed`. `TopBar.svelte` flipped the disabled "Setup Checklist" entry to
+  `openSetupModal`. `+page.svelte` renders `<SetupBanner/>` between TopBar and main and mounts
+  `<SetupChecklistModal/>`. The modal self-hydrates on open via the `untrack` pattern
+  (`if ($setupModalOpen) untrack(() => refreshSetupStatus())`) — read-only, no staged edits.
+  **Layout change:** `.app-shell` switched from `grid-template-rows: auto 1fr` to a flex column
+  (TopBar + optional banner are auto, main flex-grows) so the conditional banner inserts a third
+  row cleanly without breaking main's height.
+  **DTO addition (item-6 decision):** egui's item 2 (default dict) vs item 6 (additional dicts)
+  differ only by COUNT (item 6 wants >1 dict), but the DTO only had `has_frequency_dict: bool`.
+  Added `frequency_dict_count: usize` to `SetupStatus` (dto.rs) + setup.rs (engine untouched —
+  reads `frequency_manager.get_dictionary_names().len()`; the bool is now `count > 0`). Item 6's
+  status is `count > 1`.
+  **LoadFrequencyDictionary scope-gap handling:** the two "Install Dictionary" buttons (items 2 &
+  6) have **no Tauri command** — the freq-dict import is a separate File-menu task (still disabled
+  "Coming soon" in TopBar). Rendered them **disabled with a "Coming soon" title** (mirrors the
+  File-menu precedent; clearer than wiring a button labelled "Install Dictionary" to open docs).
+  Item 6 still gets its working "📖 View Docs" button (opener plugin); item 2 has no help_url in
+  egui so it has neither working action (default dict auto-downloads → normally Complete anyway).
+  **No JS dep added** — `@tauri-apps/plugin-opener` was already in package.json (and capabilities
+  grant `opener:default`); `openUrl` imported from `@tauri-apps/plugin-opener` resolved with no
+  missing-module error in `pnpm check`. **Build matrix:** `cargo check -p yomine-tauri` ✓ (5
+  pre-existing dead-code warnings); `cargo check -p yomine` (egui) ✓ (3 pre-existing deprecations);
+  `pnpm run check` → only the 4 known vite.config.ts errors + backdrop a11y warnings (mine matches
+  the other modals' pattern). **Verify on Windows (`cargo tauri dev`, folds into T046):**
+  Settings→Setup Checklist opens the modal; with all green, banner is hidden; force an incomplete
+  state (no file / Anki offline / clear mappings) → amber banner appears and click opens the modal;
+  item icons/colors match (Tokenizer ✓ once loaded, default dict ✓ after auto-download, AnkiConnect
+  ✓/✕ on live probe, Anki Notetypes ✕→✓ after a mapping save, player ✕→✓ when asbplayer/mpv
+  connects, additional dicts ◯ optional until >1 dict); "Setup Anki" / "Configure WebSocket" open
+  their modals and close the checklist; "📖 View Docs" opens the URL in the browser; the two
+  "+ Install Dictionary" buttons are disabled ("Coming soon").
 - **NEXT options:**
+  - **`load_frequency_dictionaries` import command (freq-dict import)** — the File-menu "Load New
+    Frequency Dictionaries" entry and the checklist's two "+ Install Dictionary" actions (T045)
+    are both disabled pending this backend command. Building it (native picker → parse Yomitan
+    dict → register in `frequency_manager` → persist + `dictionaries-changed`) would enable all
+    three surfaces. Separate task; out of scope for T045.
   - **Other Settings modals** (Anki settings, Frequency Weighting, POS Filters, Setup Checklist) —
     backend commands exist (`list_anki_models`/`list_dictionaries`/`set_dictionary_state`/
     `get_setup_status`); each builds its modal + `ipc.ts` wrapper and flips its TopBar entry.
@@ -844,7 +892,7 @@ stories render inside it.
 - [x] T043 [P] [US5] POS filters modal: default POS visibility from `get_pos_catalog` +
       `settings.pos_filters`.
 - [x] T044 [P] [US5] Theme + font toggles wired to `save_settings` (uses T026/T027).
-- [ ] T045 [US5] Setup checklist + banner: `get_setup_status`; actions (`open_url`, open Anki
+- [x] T045 [US5] Setup checklist + banner: `get_setup_status`; actions (`open_url`, open Anki
       settings, load dicts, open websocket settings).
 - [ ] T046 [US5] **Verify**: every setting persists across restart and takes effect; checklist
       reflects true state.

@@ -27,6 +27,8 @@
 	import AnkiSettingsModal from '$lib/components/AnkiSettingsModal.svelte';
 	import FrequencyWeightsModal from '$lib/components/FrequencyWeightsModal.svelte';
 	import PosFiltersModal from '$lib/components/PosFiltersModal.svelte';
+	import SetupBanner from '$lib/components/SetupBanner.svelte';
+	import SetupChecklistModal from '$lib/components/SetupChecklistModal.svelte';
 
 	onMount(hydrate);
 
@@ -69,6 +71,7 @@
 
 <div class="app-shell">
 	<TopBar />
+	<SetupBanner />
 
 	<main class="app-main">
 		{#if toolsError}
@@ -146,6 +149,7 @@
 	<AnkiSettingsModal />
 	<FrequencyWeightsModal />
 	<PosFiltersModal />
+	<SetupChecklistModal />
 
 	{#if $lastError}
 		<div class="error-banner" role="alert">

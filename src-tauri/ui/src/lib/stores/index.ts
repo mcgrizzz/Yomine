@@ -311,6 +311,41 @@ export async function toggleSerifFont(): Promise<void> {
 	await ipc.saveSettings(updated);
 }
 
+// ---- Setup checklist + banner (T045) ----------------------------------------
+
+/** Latest backend-derived setup readiness, or `null` before the first pull.
+ * `get_setup_status` probes Anki + player live, so it's a command, not an event:
+ * hydrated once and re-pulled after file load / settings save / dict changes. */
+export const setupStatus = writable<ipc.SetupStatus | null>(null);
+
+/** Re-pull the setup snapshot (best-effort; a failed probe just leaves the prior
+ * snapshot). Called after the events that can flip a checklist/banner item. */
+export async function refreshSetupStatus(): Promise<void> {
+	try {
+		setupStatus.set(await ipc.getSetupStatus());
+	} catch (err) {
+		console.error('[yomine] get_setup_status failed', err);
+	}
+}
+
+/** Whether the setup checklist modal is open (it self-hydrates on open). */
+export const setupModalOpen = writable(false);
+
+/** Open the setup checklist modal (the banner click + the Settings-menu entry). */
+export function openSetupModal(): void {
+	setupModalOpen.set(true);
+}
+
+/** Whether to show the "Setup Incomplete" banner. Mirrors egui's
+ * `should_show_banner` = freq dict missing OR Anki model mappings empty — derived
+ * from the backend snapshot (with the settings mirror as the mappings source). */
+export const showSetupBanner = derived([setupStatus, settings], ([$status, $settings]) => {
+	if (!$status) return false;
+	const freqDictMissing = !$status.has_frequency_dict;
+	const ankiModelsMissing = !$settings || Object.keys($settings.anki_model_mappings).length === 0;
+	return freqDictMissing || ankiModelsMissing;
+});
+
 /** Last surfaced error (for a modal); `null` once dismissed. */
 export const lastError = writable<ipc.ErrorPayload | null>(null);
 
@@ -364,6 +399,8 @@ export async function hydrate(): Promise<void> {
 	ipc.onDictionariesChanged(async () => {
 		const current = await ipc.getTerms();
 		if (current) fileResult.set(current);
+		// A dict load/unload flips checklist items 2 & 6 and the banner's freq bit.
+		refreshSetupStatus();
 	});
 
 	// Native drag-drop: show a "drop to open" overlay while a supported file hovers,
@@ -410,6 +447,10 @@ export async function hydrate(): Promise<void> {
 	} finally {
 		overlay.set(null);
 	}
+
+	// Pull the setup snapshot once tools are loaded (the freq-dict bit only
+	// resolves after the tools land); drives the checklist + banner.
+	refreshSetupStatus();
 }
 
 /**

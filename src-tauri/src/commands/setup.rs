@@ -20,16 +20,17 @@ pub async fn get_setup_status(
     state: State<'_, Mutex<AppState>>,
     player: State<'_, PlayerHandle>,
 ) -> Result<SetupStatus, String> {
-    let (tools_loaded, has_field_mapping, has_frequency_dict) = {
+    let (tools_loaded, has_field_mapping, frequency_dict_count) = {
         let guard = state.lock().unwrap();
         let tools_loaded = guard.language_tools.is_some();
         let has_field_mapping = !guard.settings.anki_model_mappings.is_empty();
-        let has_frequency_dict = guard
+        let frequency_dict_count = guard
             .language_tools
             .as_ref()
-            .is_some_and(|t| !t.frequency_manager.get_dictionary_names().is_empty());
-        (tools_loaded, has_field_mapping, has_frequency_dict)
+            .map_or(0, |t| t.frequency_manager.get_dictionary_names().len());
+        (tools_loaded, has_field_mapping, frequency_dict_count)
     };
+    let has_frequency_dict = frequency_dict_count > 0;
 
     let anki_connected = anki::api::get_version().await.is_ok();
     let player = player.status().await?;
@@ -40,6 +41,7 @@ pub async fn get_setup_status(
         anki_connected,
         has_field_mapping,
         has_frequency_dict,
+        frequency_dict_count,
         player_connected,
     })
 }

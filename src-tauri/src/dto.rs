@@ -152,5 +152,9 @@ pub struct SetupStatus {
     pub anki_connected: bool,
     pub has_field_mapping: bool,
     pub has_frequency_dict: bool,
+    /// Number of loaded frequency dictionaries. The bool above answers item 2
+    /// ("default dict installed", count ≥ 1); this count answers item 6
+    /// ("additional dicts installed", count > 1) — egui's `check_additional_freq_dicts`.
+    pub frequency_dict_count: usize,
     pub player_connected: bool,
 }
