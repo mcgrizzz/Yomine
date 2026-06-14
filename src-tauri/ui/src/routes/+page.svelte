@@ -29,6 +29,7 @@
 	import PosFiltersModal from '$lib/components/PosFiltersModal.svelte';
 	import SetupBanner from '$lib/components/SetupBanner.svelte';
 	import SetupChecklistModal from '$lib/components/SetupChecklistModal.svelte';
+	import FrequencyAnalyzerModal from '$lib/components/FrequencyAnalyzerModal.svelte';
 
 	onMount(hydrate);
 
@@ -150,6 +151,7 @@
 	<FrequencyWeightsModal />
 	<PosFiltersModal />
 	<SetupChecklistModal />
+	<FrequencyAnalyzerModal />
 
 	{#if $lastError}
 		<div class="error-banner" role="alert">

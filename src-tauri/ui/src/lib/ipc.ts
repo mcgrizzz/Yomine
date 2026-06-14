@@ -98,6 +98,66 @@ export interface PosInfo {
 	display_name: string;
 }
 
+// ---- Frequency analyzer (US6/T047) -----------------------------------------
+
+/** Per-file analysis progress streamed over a `Channel` while `start_analysis`
+ * runs (data-model.md). `current_file` is 1-based; `eta_secs` is the smoothed
+ * remaining-time estimate (`null` until the first byte lands). */
+export interface AnalysisProgressDto {
+	total_files: number;
+	current_file: number;
+	message: string;
+	total_bytes: number;
+	bytes_processed: number;
+	eta_secs: number | null;
+}
+
+/** One row of the frequency-analysis preview (`term`/`reading` are the lemma +
+ * its reading, `null` reading for pure kana; `frequency`/`count` are the corpus
+ * count). */
+export interface AnalysisPreviewEntry {
+	term: string;
+	reading: string | null;
+	frequency: number;
+	count: number;
+}
+
+/** The results preview returned by `start_analysis`: top `PREVIEW_LIMIT` entries
+ * by frequency, plus the full unique-lemma `total` before the cap. */
+export interface AnalysisPreview {
+	entries: AnalysisPreviewEntry[];
+	total: number;
+}
+
+/** Export metadata + format flags (mirrors `tools::analysis::ExportOptions`).
+ * Empty metadata strings map to `None` backend-side. */
+export interface ExportOptions {
+	dict_name: string;
+	dict_author: string;
+	dict_url: string;
+	dict_description: string;
+	revision_prefix: string;
+	export_yomitan: boolean;
+	export_csv: boolean;
+	pretty_json: boolean;
+	exclude_hapax: boolean;
+}
+
+/** `ExportOptions::default()` — Yomitan on, everything else off/empty. */
+export function defaultExportOptions(): ExportOptions {
+	return {
+		dict_name: 'custom_frequency',
+		dict_author: '',
+		dict_url: '',
+		dict_description: '',
+		revision_prefix: '',
+		export_yomitan: true,
+		export_csv: false,
+		pretty_json: false,
+		exclude_hapax: false
+	};
+}
+
 export interface FieldMapping {
 	term_field: string;
 	reading_field: string;
@@ -180,6 +240,12 @@ export interface ErrorPayload {
 	title: string;
 	message: string;
 	detail: string | null;
+}
+
+/** `export-complete` payload (US6/T047). */
+export interface ExportCompletePayload {
+	ok: boolean;
+	message: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -363,6 +429,35 @@ export function getSetupStatus(): Promise<SetupStatus> {
 	return invoke('get_setup_status');
 }
 
+/** Expand a picked folder to the supported subtitle/text files under it
+ * (recurses subdirectories) — used to build the selection tree (US6/T047). */
+export function findAnalysisFiles(dir: string): Promise<string[]> {
+	return invoke('find_analysis_files', { dir });
+}
+
+/** Tokenize the corpus + count lemma frequencies; streams `AnalysisProgressDto`
+ * over `onProgress` and resolves with the top-`PREVIEW_LIMIT` preview. Rejects
+ * with "...cancelled..." on user cancel, or an error message otherwise (US6/T047). */
+export async function startAnalysis(
+	paths: string[],
+	onProgress: (p: AnalysisProgressDto) => void
+): Promise<AnalysisPreview> {
+	const channel = new Channel<AnalysisProgressDto>();
+	channel.onmessage = onProgress;
+	return invoke('start_analysis', { paths, progress: channel });
+}
+
+/** Request cancellation of a running `start_analysis` (US6/T047). */
+export function cancelAnalysis(): Promise<void> {
+	return invoke('cancel_analysis');
+}
+
+/** Export the last analysis into `output_dir` per the `options` flags; resolves
+ * with a success message (US6/T047). */
+export function exportAnalysis(output_dir: string, options: ExportOptions): Promise<string> {
+	return invoke('export_analysis', { outputDir: output_dir, options });
+}
+
 export interface DragDropHandlers {
 	/** A drag entered the window; `paths` are the files being dragged. */
 	onEnter?: (paths: string[]) => void;
@@ -397,6 +492,18 @@ export const onKnowledgeSummary = (cb: (s: KnowledgeSummary) => void) =>
 export const onDictionariesChanged = (cb: () => void) =>
 	listenTo<null>('dictionaries-changed', () => cb());
 export const onError = (cb: (e: ErrorPayload) => void) => listenTo('error', cb);
+
+// Frequency-analyzer events (US6/T047). `start_analysis`/`export_analysis`
+// already resolve with their result, so the modal drives its flow off those
+// promises (mirroring `processFile`); these listeners exist for parity / any
+// global observer and are intentionally NOT wired by the modal to avoid
+// double-handling the same outcome.
+export const onAnalysisComplete = (cb: (p: AnalysisPreview) => void) =>
+	listenTo('analysis-complete', cb);
+export const onAnalysisCancelled = (cb: () => void) =>
+	listenTo<null>('analysis-cancelled', () => cb());
+export const onExportComplete = (cb: (p: ExportCompletePayload) => void) =>
+	listenTo('export-complete', cb);
 
 function listenTo<T>(event: string, cb: (payload: T) => void): Promise<UnlistenFn> {
 	return listen<T>(event, (e) => cb(e.payload));

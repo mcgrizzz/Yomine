@@ -144,6 +144,44 @@ pub struct DictionaryStateDto {
     pub enabled: bool,
 }
 
+/// Per-file analysis progress streamed over a `Channel` while `start_analysis`
+/// runs (data-model.md "Analysis progress"). `total_bytes`/`bytes_processed`
+/// drive the progress bar; `eta_secs` is the smoothed remaining-time estimate
+/// (alpha=0.3, `null` until the first byte lands) computed backend-side so the
+/// UI just renders it. `current_file` is 1-based (mirrors the engine callback).
+#[derive(Serialize, Deserialize, Clone)]
+pub struct AnalysisProgressDto {
+    pub total_files: usize,
+    pub current_file: usize,
+    pub message: String,
+    pub total_bytes: u64,
+    pub bytes_processed: u64,
+    pub eta_secs: Option<f32>,
+}
+
+/// One row of the frequency-analysis preview table (`AnalysisPreview.entries`).
+/// `term`/`reading` are the deinflected lemma + its reading (`None` for pure
+/// kana); `frequency` is the corpus count; `count` is kept as an explicit alias
+/// so the UI can label "occurrences" without re-deriving it (data-model.md).
+#[derive(Serialize, Deserialize, Clone)]
+pub struct AnalysisPreviewEntry {
+    pub term: String,
+    pub reading: Option<String>,
+    pub frequency: u32,
+    pub count: u32,
+}
+
+/// The results preview returned by `start_analysis` (and re-emitted on the
+/// `analysis-complete` event). Only this lightweight view crosses the IPC
+/// boundary — the full `FrequencyAnalysisResult` (needed for export) stays in
+/// `AppState.last_analysis`. `entries` are sorted by frequency descending and
+/// capped; `total` is the full unique-lemma count before the cap (data-model.md).
+#[derive(Serialize, Deserialize, Clone)]
+pub struct AnalysisPreview {
+    pub entries: Vec<AnalysisPreviewEntry>,
+    pub total: usize,
+}
+
 /// Aggregated readiness for the setup checklist/banner (`get_setup_status`).
 /// Each field mirrors the matching egui `check_*` in `setup_checklist_modal.rs`.
 #[derive(Serialize, Deserialize, Clone)]

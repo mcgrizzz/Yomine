@@ -20,6 +20,7 @@
 		openFrequencyModal,
 		openPosModal,
 		openSetupModal,
+		openAnalyzerModal,
 		refreshTerms
 	} from '$lib/stores';
 
@@ -129,8 +130,9 @@
 		<button class="menu-trigger" onclick={(e) => toggleMenu('tools', e)}>Tools</button>
 		{#if openMenu === 'tools'}
 			<div class="menu-panel">
-				<!-- TODO: enable with the frequency-analyzer modal (US6). -->
-				<button disabled title="Coming soon">Frequency Analyzer</button>
+				<button onclick={() => run(openAnalyzerModal)} disabled={!toolsReady}
+					>Frequency Analyzer</button
+				>
 			</div>
 		{/if}
 	</div>

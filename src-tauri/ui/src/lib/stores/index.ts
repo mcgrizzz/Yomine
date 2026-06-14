@@ -311,6 +311,19 @@ export async function toggleSerifFont(): Promise<void> {
 	await ipc.saveSettings(updated);
 }
 
+// ---- Frequency analyzer (T047) ----------------------------------------------
+
+/** Whether the frequency-analyzer modal is open. The modal owns all of its own
+ * state (selection, progress, results, export form) as component-local `$state`
+ * and starts fresh in SelectingFiles each open — nothing global is needed beyond
+ * this flag (the full `FrequencyAnalysisResult` for export lives backend-side). */
+export const analyzerModalOpen = writable(false);
+
+/** Open the frequency-analyzer modal (egui's `open_modal`). */
+export function openAnalyzerModal(): void {
+	analyzerModalOpen.set(true);
+}
+
 // ---- Setup checklist + banner (T045) ----------------------------------------
 
 /** Latest backend-derived setup readiness, or `null` before the first pull.

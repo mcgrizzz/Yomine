@@ -4,6 +4,7 @@
 //! briefly — lock → clone the cheap `Arc` handles → unlock → do async/blocking
 //! work → lock again to store. The lock is **never** held across an `.await`.
 
+pub mod analysis;
 pub mod anki;
 pub mod dictionary;
 pub mod file;

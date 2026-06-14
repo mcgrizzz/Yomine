@@ -616,6 +616,105 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
   connects, additional dicts ◯ optional until >1 dict); "Setup Anki" / "Configure WebSocket" open
   their modals and close the checklist; "📖 View Docs" opens the URL in the browser; the two
   "+ Install Dictionary" buttons are disabled ("Coming soon").
+- **T047 BACKEND DONE (2026-06-13) [US6] — analysis commands; frontend modal pending.**
+  Ports egui's `gui::frequency_analyzer::modal` + `TaskManager::{analyze_frequency,
+  export_frequency}` to the IPC layer. **New file `src-tauri/src/commands/analysis.rs`** (module
+  pattern like `commands/{file,dictionary}.rs`; `pub mod analysis;` added to `commands/mod.rs`).
+  **Four commands, all registered in `lib.rs` invoke_handler:**
+  - `start_analysis(paths: Vec<String>, progress: Channel<AnalysisProgressDto>) -> Result<AnalysisPreview, String>`
+    — async. Brief lock to `clone()` the Arc-backed `LanguageTools` (Err "Language tools are still
+    loading" if None) + grab the `analysis_cancel` Arc (reset to false first). Pre-sums file sizes
+    for `total_bytes` (ETA), then runs the **synchronous CPU-heavy** `analyzer::analyze_files` on
+    `tauri::async_runtime::spawn_blocking` (no lock held across it). The engine progress callback
+    `(file_idx_1based, message, file_size)` accumulates `bytes_processed` (AtomicU64) and computes
+    the smoothed `eta_secs` via `tools::analysis::calculate_smoothed_time_estimate` (alpha=0.3,
+    prev-estimate in a Mutex), pushing an `AnalysisProgressDto` per file over the cloned `Channel`.
+    On Ok: stores the full `FrequencyAnalysisResult` in `AppState.last_analysis` under a brief lock,
+    builds the preview, **emits `analysis-complete`** with it (contract lists both return + event —
+    emitted for store consistency), returns the preview. On the cancel Err (engine returns
+    "Analysis cancelled by user"): **emits `analysis-cancelled`** + returns Err. Other Err → Err
+    (frontend banner).
+  - `cancel_analysis()` — sync; flips `analysis_cancel` to true (engine checks per-file).
+  - `export_analysis(output_dir: String, options: ExportOptions) -> Result<String, String>` —
+    async. Brief lock clones `last_analysis` out (Err "No analysis to export" if None), runs
+    `export_yomitan_zip` and/or `export_csv` per the `options` flags on `spawn_blocking`, maps empty
+    option strings → `None` (egui parity), returns "✓ Export successful to: {dir}" (or joined
+    errors), and **emits `export-complete { ok, message }`**.
+  - `find_analysis_files(dir: String) -> Vec<String>` — sync; **addition beyond the original
+    contract** (noted as allowed). Wraps `find_supported_files_recursive` so the frontend can turn a
+    picked folder into the supported-file list to build its selection tree. The tree-building +
+    selection UI is the frontend batch's job.
+  **DTOs (dto.rs):** `AnalysisProgressDto { total_files, current_file (1-based), message,
+  total_bytes, bytes_processed, eta_secs: Option<f32> }`; `AnalysisPreview { entries:
+  Vec<AnalysisPreviewEntry>, total }` with `AnalysisPreviewEntry { term, reading: Option<String>,
+  frequency, count }`. Preview is sorted by frequency desc and **capped at 250** (mirrors egui's
+  `RESULTS_DISPLAY_LIMIT`); `total` is the full unique-lemma count before the cap. The engine
+  `ExportOptions` (already serde) is **reused directly** in the `export_analysis` signature — no
+  re-declared DTO. Event-name constants already existed in `events.rs`; `ExportComplete` payload
+  reused. **ZERO engine changes.** The `analysis_cancel`/`last_analysis` dead-code warnings are now
+  cleared (commands consume them). **Frontend batch still needs:** `ipc.ts` wrappers + types for all
+  four commands, an `analyzer` store, the `FrequencyAnalyzerModal.svelte` (file/folder pick → tree
+  via `find_analysis_files` → `start_analysis` with a `Channel` for progress/ETA + cancel button →
+  results table from `AnalysisPreview` → export form driving `export_analysis`), `listen`ers for
+  `analysis-complete`/`analysis-cancelled`/`export-complete`, and flipping the TopBar
+  "Frequency Analyzer" entry. Folder picking reuses the dialog plugin (`@tauri-apps/plugin-dialog`).
+  **Checks:** `cargo check -p yomine-tauri` ✓ (0 errors, 0 warnings); `cargo check -p yomine` (engine
+  untouched) ✓ (3 pre-existing egui deprecations). Frontend not built this batch — **the frontend
+  modal is the next batch.**
+- **T047 FRONTEND DONE (2026-06-13) [US6] — analyzer modal.** Ports
+  `gui::frequency_analyzer::{modal,export_form,results_table,progress_widget}.rs` to a Svelte state
+  machine. **New files:** `src-tauri/ui/src/lib/components/FrequencyAnalyzerModal.svelte` (the driver)
+  + `src-tauri/ui/src/lib/fileTree.ts` (selection-tree builder). **Edited:** `ipc.ts` (types +
+  wrappers + event helpers), `stores/index.ts` (`analyzerModalOpen` + `openAnalyzerModal`),
+  `TopBar.svelte` (flipped the disabled Tools→"Frequency Analyzer" entry to `openAnalyzerModal`,
+  gated on `toolsReady`), `routes/+page.svelte` (mount).
+  - **ipc.ts:** added `AnalysisProgressDto`, `AnalysisPreview`/`AnalysisPreviewEntry`,
+    `ExportOptions` + `defaultExportOptions()` (Yomitan on, rest off/empty — mirrors the engine
+    default), `ExportCompletePayload`. Wrappers: `findAnalysisFiles(dir)`, `startAnalysis(paths,
+    onProgress)` (`new Channel<AnalysisProgressDto>()` + `channel.onmessage`, mirroring `processFile`),
+    `cancelAnalysis()`, `exportAnalysis(output_dir, options)` (passed as `{ outputDir, options }` —
+    Tauri camelCases the `output_dir` arg). Event helpers `onAnalysisComplete`/`onAnalysisCancelled`/
+    `onExportComplete` exported **for parity but intentionally NOT wired** (see below).
+  - **Promise vs. events:** the modal drives its whole flow off the `startAnalysis`/`exportAnalysis`
+    **promises** (the contract's stated source of truth, mirroring `processFile`). The three events
+    are left as belt-and-suspenders / for any future global observer; subscribing them in the modal
+    would double-fire the same transition, so they're deliberately unused there. Flagged in both
+    `ipc.ts` and the component header.
+  - **Selection tree:** `fileTree.ts` mirrors the spirit of `tools::analysis::file_tree.rs` —
+    `buildFileTree(paths)` trims the common-ancestor dirs (never the filename) and builds a nested
+    dir/file tree (dirs-first, alpha sort; splits on both `/` and `\\` for Windows paths);
+    `collectChecked(node, pred)` gathers a subtree's files. The modal accumulates picked paths into a
+    deduped set across multiple Add-Files/Add-Folder actions, renders the tree with a recursive
+    `{#snippet}`, per-file + per-dir cascade checkboxes (dir shows indeterminate when partial),
+    everything checked by default, collapsible dirs, and an "N of M files selected" count. The checked
+    file paths feed `startAnalysis`.
+  - **State machine** (`phase`: selecting → analyzing → results → exporting → complete | error, all
+    component-local `$state`, fresh each open): **analyzing** shows a progress bar (current/total
+    files), the message line, and ETA from `eta_secs`, with a Cancel button (`cancelAnalysis()` → the
+    rejected promise routes back to `selecting`; **cancel is not an error**). **results** shows the
+    preview table (rank │ term │ reading │ freq, "N unique terms / showing top K") beside the export
+    form (Title/Author/URL/Revision prefix/Description + the four format checkboxes; Export… disabled
+    unless Yomitan or CSV is checked → folder pick → `exportAnalysis`). **complete** shows the success
+    message with "← Back to Results" / "New Analysis"; **error** shows the message with "Start New
+    Analysis". Modal owns its error display inline (egui parity) — does not touch the global banner.
+  - **`balance_corpus`/`show_top` gap → promoted to T057 (maintainer: parity before changes).** The
+    first pass omitted both egui toggles (backend `start_analysis` takes no analysis options). This
+    is NOT acceptable as a permanent deviation — `balance_corpus` (CorpusBalancer down-sampling) and
+    `show_top` (Top 250 / Bottom 250 radio) must be restored for US6 parity. **T057** tracks the
+    backend param + bottom-slice preview + the two UI controls; it blocks T048 full sign-off.
+  - **Checks:** `pnpm run check` → only the **4 known vite.config.ts `process` errors** (+ the paired
+    `tsconfig.json` node-types warning) and the **backdrop a11y warning** on the new modal (identical
+    to every other modal). **Zero new errors.** No new npm deps (dialog plugin already present). No
+    Rust touched. Frontend not built in WSL (Windows `node_modules`).
+  - **Verify on Windows (`cargo tauri dev`, folds into T048):** open Tools→Frequency Analyzer; (1)
+    Add Files (multi-select srt/ass/ssa/txt) → tree renders, count updates; (2) Add Folder → recurses
+    via `find_analysis_files`, dedupes against already-added files; (3) toggle a dir checkbox →
+    cascades to its files (indeterminate when partial); uncheck some → "N of M selected" tracks;
+    (4) Analyze → live progress bar + message + ETA countdown; (5) Cancel mid-run → returns to
+    selection, no error; (6) re-run to completion → results table (ranks, readings, freq) + export
+    form; (7) Export as Yomitan ZIP to a folder → ✓ message; (8) Export as CSV (and both) → files land;
+    (9) error states: zero files selected (button disabled), and force an export failure to see the
+    inline error + "Start New Analysis".
 - **NEXT options:**
   - **`load_frequency_dictionaries` import command (freq-dict import)** — the File-menu "Load New
     Frequency Dictionaries" entry and the checklist's two "+ Install Dictionary" actions (T045)
@@ -894,14 +993,29 @@ stories render inside it.
 - [x] T044 [P] [US5] Theme + font toggles wired to `save_settings` (uses T026/T027).
 - [x] T045 [US5] Setup checklist + banner: `get_setup_status`; actions (`open_url`, open Anki
       settings, load dicts, open websocket settings).
-- [ ] T046 [US5] **Verify**: every setting persists across restart and takes effect; checklist
-      reflects true state.
+- [x] T046 [US5] **Verify**: every setting persists across restart and takes effect; checklist
+      reflects true state. — VERIFIED in UI (maintainer, 2026-06-13) across the batch-by-batch
+      verifies of T040–T045 (Anki mappings, websocket port, frequency weights, POS filters,
+      theme/font, setup checklist all persist + take effect; checklist + banner reflect live
+      state). Two known follow-ups remain open, neither blocking US5 sign-off: **T056**
+      (ServerState dot sub-states) and the **`load_frequency_dictionaries`** import command (the
+      checklist's two "Install Dictionary" buttons + the File-menu entry are stubbed pending it).
 
 ### US6 — Frequency analyzer (P3)
 
-- [ ] T047 [US6] Analyzer modal: file selection; `start_analysis` (Channel progress with ETA);
+- [x] T047 [US6] Analyzer modal: file selection; `start_analysis` (Channel progress with ETA);
       `cancel_analysis`; results-preview table; export form → `export_analysis` (Yomitan/CSV +
       options); consume `analysis-complete`/`analysis-cancelled`/`export-complete`.
+- [ ] T057 [US6] **Analyzer parity gap (found in T047 review, blocks T048 full parity):** restore
+      the two egui analysis options the first pass omitted —
+      (a) **Balance corpus by source** checkbox (egui `modal.rs` ~452, hover "Uses trimmed mean
+      (10% trimming) to calculate balanced sample sizes"): add a `balance_corpus: bool` param to
+      `start_analysis`; when true the backend runs `tools::analysis::CorpusBalancer::new(paths)
+      .balance()` on the path list before `analyze_files` (engine API already exists).
+      (b) **Top 250 / Bottom 250** radio in the results table (egui `results_table.rs` ~28): the
+      current `AnalysisPreview` only carries the top 250, so "Bottom 250" isn't representable —
+      extend the preview to also include the bottom slice (or send both ends) and add the radio to
+      the modal's results table. Parity-only; do before T048 sign-off. **Backend + frontend.**
 - [ ] T048 [US6] **Verify**: same ranking + equivalent exported artifacts as egui; cancel works.
 
 ### US7 — Knowledge summary (P3)
