@@ -179,6 +179,9 @@ pub struct AnalysisPreviewEntry {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct AnalysisPreview {
     pub entries: Vec<AnalysisPreviewEntry>,
+    /// The lowest-frequency slice (last ≤`PREVIEW_LIMIT` of the same
+    /// frequency-descending list) for the UI's Bottom 250 radio.
+    pub bottom: Vec<AnalysisPreviewEntry>,
     pub total: usize,
 }
 

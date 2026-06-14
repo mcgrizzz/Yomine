@@ -126,6 +126,9 @@ export interface AnalysisPreviewEntry {
  * by frequency, plus the full unique-lemma `total` before the cap. */
 export interface AnalysisPreview {
 	entries: AnalysisPreviewEntry[];
+	/** The lowest-frequency slice (last ≤PREVIEW_LIMIT of the same desc list),
+	 * for the Top 250 / Bottom 250 radio. */
+	bottom: AnalysisPreviewEntry[];
 	total: number;
 }
 
@@ -440,11 +443,12 @@ export function findAnalysisFiles(dir: string): Promise<string[]> {
  * with "...cancelled..." on user cancel, or an error message otherwise (US6/T047). */
 export async function startAnalysis(
 	paths: string[],
+	balanceCorpus: boolean,
 	onProgress: (p: AnalysisProgressDto) => void
 ): Promise<AnalysisPreview> {
 	const channel = new Channel<AnalysisProgressDto>();
 	channel.onmessage = onProgress;
-	return invoke('start_analysis', { paths, progress: channel });
+	return invoke('start_analysis', { paths, balanceCorpus, progress: channel });
 }
 
 /** Request cancellation of a running `start_analysis` (US6/T047). */

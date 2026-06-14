@@ -34,6 +34,7 @@ use yomine::tools::analysis::{
     },
     calculate_smoothed_time_estimate,
     find_supported_files_recursive,
+    CorpusBalancer,
     ExportOptions,
     FrequencyAnalysisResult,
 };
@@ -84,8 +85,12 @@ fn build_preview(result: &FrequencyAnalysisResult) -> AnalysisPreview {
         .collect();
     entries.sort_by(|a, b| b.frequency.cmp(&a.frequency));
     let total = entries.len();
+    // Bottom slice: the last ≤PREVIEW_LIMIT entries of the same freq-desc list
+    // (lowest-frequency terms, still desc order) — mirrors egui's
+    // `entries[len-250..]` for the Bottom 250 radio.
+    let bottom = entries[entries.len().saturating_sub(PREVIEW_LIMIT)..].to_vec();
     entries.truncate(PREVIEW_LIMIT);
-    AnalysisPreview { entries, total }
+    AnalysisPreview { entries, bottom, total }
 }
 
 /// Tokenize the corpus and count lemma frequencies (FR US6). Streams
@@ -100,6 +105,7 @@ pub async fn start_analysis(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     paths: Vec<String>,
+    balance_corpus: bool,
     progress: Channel<AnalysisProgressDto>,
 ) -> Result<AnalysisPreview, String> {
     // Brief lock: clone the cheap Arc-backed tools, grab + reset the cancel flag.
@@ -113,7 +119,14 @@ pub async fn start_analysis(
         (tools, Arc::clone(&guard.analysis_cancel))
     };
 
-    let file_paths: Vec<PathBuf> = paths.iter().map(PathBuf::from).collect();
+    let mut file_paths: Vec<PathBuf> = paths.iter().map(PathBuf::from).collect();
+    // Optional trimmed-mean (10%) down-sampling so no single source dominates
+    // (egui `AnalysisOptions::balance_corpus`). Balance first, then pre-sum
+    // `total_bytes` below so progress/ETA reflect the balanced set. Cheap path
+    // math — no AppState lock held.
+    if balance_corpus {
+        file_paths = CorpusBalancer::new(file_paths).balance();
+    }
     let total_files = file_paths.len();
 
     // Sum file sizes up front so the per-file ETA is computable (egui pre-sums

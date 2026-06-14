@@ -86,10 +86,19 @@
 	}
 
 	// --- Analysis -------------------------------------------------------------
+	// Balance corpus by source: trimmed-mean (10%) down-sampling so no single
+	// source dominates (egui `AnalysisOptions::balance_corpus`, default false).
+	let balanceCorpus = $state(false);
 	let progress = $state<ipc.AnalysisProgressDto | null>(null);
 	let preview = $state<ipc.AnalysisPreview | null>(null);
+	// Top 250 / Bottom 250 toggle for the results table (egui `show_top`, default true).
+	let showTop = $state(true);
 	let errorMessage = $state<string | null>(null);
 	let exportMessage = $state<string | null>(null);
+
+	// Which slice the results table renders: Top 250 (`entries`) or Bottom 250
+	// (`bottom`, lowest-frequency terms). Mirrors egui's `show_top` radio.
+	const displayedEntries = $derived(showTop ? (preview?.entries ?? []) : (preview?.bottom ?? []));
 
 	const progressFraction = $derived(
 		progress && progress.total_files > 0 ? progress.current_file / progress.total_files : 0
@@ -111,7 +120,7 @@
 		errorMessage = null;
 		phase = 'analyzing';
 		try {
-			const result = await ipc.startAnalysis(paths, (p) => {
+			const result = await ipc.startAnalysis(paths, balanceCorpus, (p) => {
 				progress = p;
 			});
 			preview = result;
@@ -216,6 +225,12 @@
 					{/if}
 
 					<footer>
+						<label
+							class="cb"
+							title="Uses trimmed mean (10% trimming) to calculate balanced sample sizes."
+						>
+							<input type="checkbox" bind:checked={balanceCorpus} /> Balance corpus by source
+						</label>
 						<button class="primary" onclick={analyze} disabled={checkedCount === 0}
 							>Analyze files</button
 						>
@@ -248,7 +263,23 @@
 					</p>
 
 					<div class="results-grid">
-						<div class="results-table-wrap">
+						<div class="results-table-col">
+							<div class="show-toggle">
+								<span>Show:</span>
+								<label class="cb"
+									><input type="radio" name="show-slice" checked={showTop} onchange={() => (showTop = true)} />
+									Top 250</label
+								>
+								<label class="cb"
+									><input
+										type="radio"
+										name="show-slice"
+										checked={!showTop}
+										onchange={() => (showTop = false)}
+									/> Bottom 250</label
+								>
+							</div>
+							<div class="results-table-wrap">
 							<table class="results-table">
 								<thead>
 									<tr>
@@ -259,7 +290,7 @@
 									</tr>
 								</thead>
 								<tbody>
-									{#each preview?.entries ?? [] as e, i (e.term + (e.reading ?? '') + i)}
+									{#each displayedEntries as e, i (e.term + (e.reading ?? '') + i)}
 										<tr>
 											<td class="rank">{i + 1}</td>
 											<td class="jp">{e.term}</td>
@@ -269,6 +300,7 @@
 									{/each}
 								</tbody>
 							</table>
+							</div>
 						</div>
 
 						<div class="export-form">
@@ -504,6 +536,18 @@
 		grid-template-columns: 1fr 1fr;
 		gap: 1rem;
 		align-items: start;
+	}
+	.results-table-col {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+	}
+	.show-toggle {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		font-size: 0.85rem;
+		color: var(--comment);
 	}
 	.results-table-wrap {
 		max-height: 340px;

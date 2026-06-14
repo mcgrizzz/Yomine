@@ -715,6 +715,41 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
     form; (7) Export as Yomitan ZIP to a folder → ✓ message; (8) Export as CSV (and both) → files land;
     (9) error states: zero files selected (button disabled), and force an export failure to see the
     inline error + "Start New Analysis".
+- **T057 DONE (2026-06-14) [US6] — analyzer parity: balance_corpus + Top/Bottom 250.** Restored the
+  two egui analysis options the T047 first pass omitted; spans a shared DTO (backend + frontend).
+  - **(a) Balance corpus by source.** `start_analysis` gained a `balance_corpus: bool` param (after
+    `paths`, before `progress`; Tauri maps it to JS `balanceCorpus`). When true the command runs
+    `CorpusBalancer::new(file_paths).balance()` (imported from `yomine::tools::analysis` alongside
+    `analyze_files`) on the path list **before** pre-summing `total_bytes` and before `analyze_files`,
+    so progress/ETA reflect the balanced (down-sampled) set — matches egui (`modal.rs` balances first,
+    then pre-sums). `file_paths` is now `mut`; runs in the command body (cheap path math, no AppState
+    lock held), not in `spawn_blocking`. Frontend: `balanceCorpus` `$state(false)` (egui
+    `AnalysisOptions::default`), a checkbox in the SelectingFiles footer next to "Analyze files" with
+    label "Balance corpus by source" + `title` hover "Uses trimmed mean (10% trimming) to calculate
+    balanced sample sizes."; threaded through the `startAnalysis(paths, balanceCorpus, onProgress)`
+    ipc wrapper (`invoke('start_analysis', { paths, balanceCorpus, progress })`) and the modal's
+    `analyze()` call site.
+  - **(b) Top 250 / Bottom 250 radio.** `AnalysisPreview` (dto.rs) gained a `bottom:
+    Vec<AnalysisPreviewEntry>` field alongside `entries` (top, unchanged name — frontend already reads
+    it). In `build_preview`: after the freq-desc sort and recording `total`, `bottom =
+    entries[len.saturating_sub(PREVIEW_LIMIT)..].to_vec()` (the last ≤250, still desc order — egui's
+    `entries[len-250..]`), then `entries.truncate(PREVIEW_LIMIT)` for the top. Small corpora (total ≤
+    250) → top and bottom are the same list, matching egui (slices the same full list). Frontend:
+    `bottom` added to the `AnalysisPreview` type in ipc.ts; modal gained `showTop` `$state(true)`
+    (egui default) + a `displayedEntries` `$derived` (`showTop ? preview.entries : preview.bottom`);
+    the results table renders a "Show: ● Top 250 ○ Bottom 250" radio pair above it and iterates
+    `displayedEntries` (rank by position in the rendered slice, `i + 1`, as egui does).
+  - **Checks:** `cargo check -p yomine-tauri` ✓ 0 errors; `cargo check -p yomine` ✓ (engine untouched,
+    3 pre-existing egui deprecations only); `pnpm run check` → only the 4 known vite.config.ts
+    `process` errors + the existing backdrop a11y warnings (the modal's 192:3 warning is the
+    pre-existing backdrop, not new). Zero new errors. No engine changes (CorpusBalancer already
+    existed). No commit.
+  - **Verify on Windows (`cargo tauri dev`, folds into T048):** (1) check "Balance corpus by source"
+    before Analyze → the analyzed set is down-sampled (fewer total files/bytes in progress vs.
+    unchecked on a multi-source corpus); leave unchecked → full set. (2) In results, the Top 250 /
+    Bottom 250 radio switches the table: Top shows the highest-frequency terms, Bottom switches to the
+    lowest-frequency terms (last ≤250 of the desc list); on a small corpus (≤250 unique) both show the
+    same list.
 - **NEXT options:**
   - **`load_frequency_dictionaries` import command (freq-dict import)** — the File-menu "Load New
     Frequency Dictionaries" entry and the checklist's two "+ Install Dictionary" actions (T045)
@@ -1006,7 +1041,7 @@ stories render inside it.
 - [x] T047 [US6] Analyzer modal: file selection; `start_analysis` (Channel progress with ETA);
       `cancel_analysis`; results-preview table; export form → `export_analysis` (Yomitan/CSV +
       options); consume `analysis-complete`/`analysis-cancelled`/`export-complete`.
-- [ ] T057 [US6] **Analyzer parity gap (found in T047 review, blocks T048 full parity):** restore
+- [x] T057 [US6] **Analyzer parity gap (found in T047 review, blocks T048 full parity):** restore
       the two egui analysis options the first pass omitted —
       (a) **Balance corpus by source** checkbox (egui `modal.rs` ~452, hover "Uses trimmed mean
       (10% trimming) to calculate balanced sample sizes"): add a `balance_corpus: bool` param to
