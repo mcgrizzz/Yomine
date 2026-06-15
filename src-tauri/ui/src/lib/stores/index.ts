@@ -435,13 +435,14 @@ export async function hydrate(): Promise<void> {
 	// player/anki status must be pulled too: the backend emits those events only on
 	// *change*, so a (re)loaded webview would otherwise sit on the initial placeholder
 	// (grey "server stopped") until the next change.
-	const [loadedSettings, catalog, currentFile, recents, player, anki] = await Promise.all([
+	const [loadedSettings, catalog, currentFile, recents, player, anki, summary] = await Promise.all([
 		ipc.getSettings(),
 		ipc.getPosCatalog(),
 		ipc.getTerms(),
 		ipc.getRecentFiles(),
 		ipc.getPlayerStatus(),
-		ipc.getAnkiStatus()
+		ipc.getAnkiStatus(),
+		ipc.getKnowledgeSummary()
 	]);
 	settings.set(loadedSettings);
 	posEnabled.set({ ...loadedSettings.pos_filters });
@@ -450,6 +451,7 @@ export async function hydrate(): Promise<void> {
 	recentFiles.set(recents);
 	playerStatus.set(player);
 	ankiStatus.set(anki);
+	if (summary) knowledge.set(summary);
 
 	// Begin loading the heavy language tools; progress streams to the overlay.
 	overlay.set('Loading language tools…');

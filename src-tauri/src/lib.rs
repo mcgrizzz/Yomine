@@ -56,6 +56,7 @@ pub fn run() {
             commands::player::get_player_status,
             commands::player::set_websocket_port,
             commands::setup::get_setup_status,
+            commands::knowledge::get_knowledge_summary,
         ])
         .setup(move |app| {
             // The player runs in its own task that solely owns `PlayerManager`;

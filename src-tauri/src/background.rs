@@ -22,6 +22,7 @@ use yomine::{
 };
 
 use crate::{
+    dto::KnowledgeSummaryDto,
     events::{
         names,
         AnkiStatus,
@@ -72,7 +73,15 @@ async fn run(app: AppHandle) {
                 })
                 .await
                 {
-                    let _ = app.emit(names::KNOWLEDGE_SUMMARY, summary);
+                    // Cache for the `get_knowledge_summary` pull, then push the same
+                    // DTO to any live webview (the engine tuples are reshaped to named
+                    // fields once, here, so the wire format matches the TS interface).
+                    let dto = KnowledgeSummaryDto::from_summary(summary);
+                    {
+                        let state = app.state::<Mutex<AppState>>();
+                        state.lock().unwrap().knowledge_summary = Some(dto.clone());
+                    }
+                    let _ = app.emit(names::KNOWLEDGE_SUMMARY, dto);
                     dirty.store(false, Ordering::Relaxed);
                 }
             }

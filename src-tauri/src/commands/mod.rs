@@ -9,6 +9,7 @@ pub mod anki;
 pub mod dictionary;
 pub mod file;
 pub mod ignore;
+pub mod knowledge;
 pub mod lifecycle;
 pub mod player;
 pub mod setup;

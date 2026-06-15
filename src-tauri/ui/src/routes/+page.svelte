@@ -30,6 +30,7 @@
 	import SetupBanner from '$lib/components/SetupBanner.svelte';
 	import SetupChecklistModal from '$lib/components/SetupChecklistModal.svelte';
 	import FrequencyAnalyzerModal from '$lib/components/FrequencyAnalyzerModal.svelte';
+	import KnowledgeSummary from '$lib/components/KnowledgeSummary.svelte';
 
 	onMount(hydrate);
 
@@ -83,7 +84,9 @@
 			{@const pct = $fileResult.file_comprehension * 100}
 			{@const total = $fileResult.total_terms}
 			{@const known = total - $fileResult.terms.length}
-			<h2 class="title">{$fileResult.source_file.title}</h2>
+			<div class="header-row">
+				<div class="header-left">
+					<h2 class="title">{$fileResult.source_file.title}</h2>
 			{#if $ankiFilterActive && $fileResult.sentences.length > 0}
 				<p
 					class="comprehension"
@@ -103,6 +106,9 @@
 				{/if}
 				/ {total} total
 			</p>
+				</div>
+				<KnowledgeSummary />
+			</div>
 			<TableControls />
 			<TermTable terms={$visibleTerms} sentences={$fileResult.sentences} />
 		{:else}
@@ -174,6 +180,15 @@
 </div>
 
 <style>
+	.header-row {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+	.header-left {
+		min-width: 0;
+	}
 	.title {
 		margin: 0 0 0.25rem;
 	}

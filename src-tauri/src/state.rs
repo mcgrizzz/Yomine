@@ -32,6 +32,8 @@ use yomine::{
     tools::analysis::FrequencyAnalysisResult,
 };
 
+use crate::dto::KnowledgeSummaryDto;
+
 /// The currently loaded file and its enriched analysis. Mirrors the egui
 /// `gui::app::file_data::FileData`, but holds only what the backend needs to
 /// answer `get_terms`/`refresh_terms` and build the wire DTOs.
@@ -72,6 +74,10 @@ pub struct AppState {
     /// Starts `true` so the first cached summary loads once tools are ready.
     /// Mirrors egui's `knowledge_summary_attempted` reset (R5).
     pub knowledge_dirty: Arc<AtomicBool>,
+    /// Last summary the background task computed, cached so a (re)loaded webview
+    /// can pull it via `get_knowledge_summary` — the `knowledge-summary` event
+    /// fires only on change, so without this the widget sits blank after a reload.
+    pub knowledge_summary: Option<KnowledgeSummaryDto>,
 }
 
 impl AppState {
@@ -83,6 +89,7 @@ impl AppState {
             analysis_cancel: Arc::new(AtomicBool::new(false)),
             last_analysis: None,
             knowledge_dirty: Arc::new(AtomicBool::new(true)),
+            knowledge_summary: None,
         }
     }
 }

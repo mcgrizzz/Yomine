@@ -394,6 +394,14 @@ export function getAnkiStatus(): Promise<AnkiStatus> {
 	return invoke('get_anki_status');
 }
 
+/** Last computed knowledge summary (US7/T049). `null` until the background task
+ * has produced one (needs loaded tools + an Anki vocab cache). The
+ * `knowledge-summary` event pushes fresh values; this is the one-shot hydrate so
+ * a (re)loaded webview isn't blank (same rationale as getPlayerStatus). */
+export function getKnowledgeSummary(): Promise<KnowledgeSummary | null> {
+	return invoke('get_knowledge_summary');
+}
+
 /** Note types (with fields) that have at least one note, for the Anki settings
  * modal's mapping UI (US5/T040). Rejects with "Anki Offline" when disconnected. */
 export function listAnkiModels(): Promise<AnkiModelInfo[]> {

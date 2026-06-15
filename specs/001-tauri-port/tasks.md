@@ -750,6 +750,58 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
     Bottom 250 radio switches the table: Top shows the highest-frequency terms, Bottom switches to the
     lowest-frequency terms (last ≤250 of the desc list); on a small corpus (≤250 unique) both show the
     same list.
+- **T048 DONE (2026-06-14) [US6] — analyzer verified on Windows (`cargo tauri dev`).** US6 is now
+  fully signed off. Walked the maintainer through the folded T047+T057 checklist; all four groups
+  pass: **(A) Selection** — Add Files multi-select renders the tree + count; Add Folder recurses
+  (`find_analysis_files`) and dedupes against already-added; dir checkbox cascades to its files with
+  indeterminate on partial; "N of M selected" tracks. **(B) Analysis** — progress bar shows
+  `current/total` + message + "Estimated Xs remaining" ETA; **Cancel mid-run returns to selection
+  with no error** (the `cancelled` reject drives the `selecting` transition, not an error banner);
+  re-run completes to the results table (#/Term/Reading/Freq) + export form. **(C) Parity controls
+  (T057)** — Top 250 / Bottom 250 radio switches the table (Bottom = lowest-freq terms); Balance
+  corpus by source down-samples the analyzed set on a multi-source corpus. **(D) Export & errors** —
+  Yomitan ZIP + CSV (and both) export to a chosen folder and files land; zero files selected disables
+  Analyze. **Skipped:** the forced export-failure inline-error path (not practical to trigger a
+  write failure interactively; the code path is `doExport` catch → `phase = 'error'` → red message +
+  "Start New Analysis", unchanged from the verified error-render pattern). No code changes — verify
+  only.
+- **T049 DONE (2026-06-14) [US7] — knowledge summary widget; T050 verify PENDING.** Ports egui's
+  `gui/table/summary.rs::ui_knowledge_profile`/`ui_knowledge_summary` (the global JLPT + frequency
+  band card). The handoff billed this as "mostly frontend, backend already exists" — **two backend
+  gaps were found and closed:**
+  - **No `get_knowledge_summary` command existed** (only the `knowledge-summary` event, which the
+    background task emits *only* on `knowledge_dirty`). Per the established convention (events that
+    fire on change need a one-shot pull — the anki/player fix this session), added
+    `commands/knowledge.rs::get_knowledge_summary -> Option<KnowledgeSummaryDto>` returning a cached
+    snapshot; registered in `commands/mod.rs` + `lib.rs`. `AppState` gained
+    `knowledge_summary: Option<KnowledgeSummaryDto>` (state.rs); `background.rs` now caches the DTO
+    into state **and** emits it. ipc `getKnowledgeSummary()` + a hydrate pull in
+    `stores/index.ts` (added to the `Promise.all`, `if (summary) knowledge.set(summary)`).
+  - **Wire-format mismatch:** the engine `KnowledgeSummary` holds `jlpt: Vec<(JlptLevel, BandStats)>`
+    / `frequency: Vec<(String, BandStats)>` — tuples serialize as positional JS arrays, but the TS
+    `KnowledgeSummary` interface (written in T016, never exercised) expects `{ level, stats }` /
+    `{ label, stats }` objects. Added `KnowledgeSummaryDto` + `JlptBand`/`FrequencyBand` to `dto.rs`
+    (`from_summary` maps `level.label()` → `level` string; `BandStats` already serializes cleanly as
+    `{ coverage, comprehension, total }`). Both the event emit and the new pull go through the DTO so
+    the wire shape matches the TS interface. **No engine changes.**
+  - **Frontend:** `components/KnowledgeSummary.svelte` — mode `$state` ('coverage'|'estimate', egui
+    `KnowledgeMode` default Coverage); clickable title + ⇄ button toggle (hover "Switch to {other}");
+    JLPT row (N5→N1, 40px bars) + frequency row (<1.5k→<20k, 28px bars), each a track+fill mini-bar
+    with the band label beside it and a `{got}/{total} {pct}%` tooltip (freq repeats the label, egui
+    `label_in_hover`). `frac` picks coverage vs comprehension; **vivid** red→yellow→green bar color
+    (egui `coverage_color`, NOT the gray-blended `comprehensionColor` the text uses). Card hides when
+    the summary is null/empty (egui parity). Mounted in `+page.svelte` top-right of a new
+    `.header-row` (title/comprehension/counts on the left), mirroring egui's `horizontal_top`.
+  - **Checks (orchestrator-run):** `cargo check -p yomine-tauri` ✓ clean; `cargo check -p yomine` ✓
+    (3 pre-existing egui `Panel::show` deprecations only); `pnpm run check` → only the 4 known
+    vite.config.ts `process` errors + tsconfig node-types warning + the pre-existing backdrop a11y
+    warnings; **zero new errors/warnings** (the card uses real `<button>`s). No commit.
+  - **Verify on Windows (`cargo tauri dev`, T050):** with a loaded file + Anki vocab cache + a
+    frequency dict, the card shows top-right; JLPT (N5..N1) + frequency (<1.5k..<20k) bars render;
+    clicking the title or ⇄ toggles "Anki Coverage" ↔ "Estimated Knowledge" and the bar fills change;
+    hover shows `n/total pct%`; **band values match egui** for the same Anki snapshot (T050's gate).
+    Card is absent when no Anki cache exists. Known cosmetic nit: the wrapped header block in
+    `+page.svelte` is one indent level shallow (functional, svelte-check clean).
 - **NEXT options:**
   - **`load_frequency_dictionaries` import command (freq-dict import)** — the File-menu "Load New
     Frequency Dictionaries" entry and the checklist's two "+ Install Dictionary" actions (T045)
@@ -1051,11 +1103,11 @@ stories render inside it.
       current `AnalysisPreview` only carries the top 250, so "Bottom 250" isn't representable —
       extend the preview to also include the bottom slice (or send both ends) and add the radio to
       the modal's results table. Parity-only; do before T048 sign-off. **Backend + frontend.**
-- [ ] T048 [US6] **Verify**: same ranking + equivalent exported artifacts as egui; cancel works.
+- [x] T048 [US6] **Verify**: same ranking + equivalent exported artifacts as egui; cancel works.
 
 ### US7 — Knowledge summary (P3)
 
-- [ ] T049 [US7] Knowledge summary widget: `get_knowledge_summary` + `knowledge-summary` event;
+- [x] T049 [US7] Knowledge summary widget: `get_knowledge_summary` + `knowledge-summary` event;
       JLPT + frequency bands; coverage/estimate toggle (`KnowledgeMode`).
 - [ ] T050 [US7] **Verify**: JLPT + band values match egui for the same Anki snapshot.
 

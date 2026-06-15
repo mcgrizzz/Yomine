@@ -15,6 +15,10 @@ use yomine::{
         Term,
     },
     segmentation::word::POS,
+    tools::knowledge_summary::{
+        BandStats,
+        KnowledgeSummary,
+    },
 };
 
 /// One `<ruby>` span over the sentence text: the surface slice, its reading +
@@ -198,4 +202,49 @@ pub struct SetupStatus {
     /// ("additional dicts installed", count > 1) — egui's `check_additional_freq_dicts`.
     pub frequency_dict_count: usize,
     pub player_connected: bool,
+}
+
+/// One JLPT band of the knowledge summary (`get_knowledge_summary` /
+/// `knowledge-summary`). Flattens the engine's `(JlptLevel, BandStats)` tuple to
+/// named `{ level, stats }` — `BandStats` already serializes cleanly, but the
+/// positional tuple does not (it lands as a JS array), so the bands get a DTO.
+/// `level` is the display label (egui `JlptLevel::label`).
+#[derive(Serialize, Deserialize, Clone)]
+pub struct JlptBand {
+    pub level: String,
+    pub stats: BandStats,
+}
+
+/// One frequency band of the knowledge summary; flattens `(String, BandStats)`
+/// to `{ label, stats }` (the label is already the display string, e.g. "<1.5k").
+#[derive(Serialize, Deserialize, Clone)]
+pub struct FrequencyBand {
+    pub label: String,
+    pub stats: BandStats,
+}
+
+/// The knowledge summary as it crosses IPC. The engine `KnowledgeSummary` holds
+/// `Vec<(_, BandStats)>` tuples (positional on the wire); this names the fields
+/// so the TS `KnowledgeSummary` interface deserializes as objects, not arrays.
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct KnowledgeSummaryDto {
+    pub jlpt: Vec<JlptBand>,
+    pub frequency: Vec<FrequencyBand>,
+}
+
+impl KnowledgeSummaryDto {
+    pub fn from_summary(s: KnowledgeSummary) -> Self {
+        Self {
+            jlpt: s
+                .jlpt
+                .into_iter()
+                .map(|(level, stats)| JlptBand { level: level.label().to_string(), stats })
+                .collect(),
+            frequency: s
+                .frequency
+                .into_iter()
+                .map(|(label, stats)| FrequencyBand { label, stats })
+                .collect(),
+        }
+    }
 }
