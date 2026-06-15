@@ -29,6 +29,7 @@ pub fn run() {
             commands::lifecycle::get_pos_catalog,
             commands::lifecycle::get_settings,
             commands::lifecycle::save_settings,
+            commands::lifecycle::open_data_folder,
             commands::file::open_file_dialog,
             commands::file::process_file,
             commands::file::get_terms,

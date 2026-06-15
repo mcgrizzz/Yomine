@@ -378,6 +378,16 @@ export async function refreshTerms(): Promise<void> {
 	}
 }
 
+/** Open the app data directory in the OS file explorer (File → Open Data Folder, T058).
+ * Mirrors egui's `open_folder`; surfaces failures via `lastError` instead of eprintln. */
+export async function openDataFolder(): Promise<void> {
+	try {
+		await ipc.openDataFolder();
+	} catch (err) {
+		lastError.set({ title: 'Failed to open data folder', message: String(err), detail: null });
+	}
+}
+
 /** Seek the connected player to a sentence timestamp (US3/T035). Mirrors egui's
  * SeekTimestamp action; surfaces failures via `lastError` instead of eprintln. */
 export async function seekTimestamp(seconds: number, label: string): Promise<void> {

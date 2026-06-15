@@ -802,6 +802,50 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
     hover shows `n/total pct%`; **band values match egui** for the same Anki snapshot (T050's gate).
     Card is absent when no Anki cache exists. Known cosmetic nit: the wrapped header block in
     `+page.svelte` is one indent level shallow (functional, svelte-check clean).
+- **T051 DONE (2026-06-14) — bundle-resources audit; no code change needed.** Walked the resource
+  surface against the current `tauri.conf.json`: (1) **jlpt_vocab.json** is embedded at compile time
+  (`include_str!("../../assets/jlpt_vocab.json")`, `src/jlpt/mod.rs:8`) — O1 resolved (research.md
+  §O1), so **no `resources` entry is needed** (it's in the binary, not a sidecar file). (2) **Fonts**
+  are bundled frontend-side (T027, the egui TTFs as web `@font-face`) — not a Tauri resource. (3)
+  **Icon** set is already declared in `bundle.icon` (32/128/128@2x/icns/ico). (4) **Runtime
+  downloads** (unidic, frequency dicts, Anki vocab cache) resolve via the engine's unchanged
+  `dirs::data_local_dir()/yomine` — identical code path to egui, no port-side change. Net: nothing to
+  add to `tauri.conf.json`; the bundle's actual contents are validated by **T052**'s `cargo tauri
+  build` (maintainer/per-OS). Ticked as a config audit.
+- **Final parity inspection (2026-06-14) → T058/T059/T060 added as a PRIORITY GATE.** After US7
+  the maintainer asked for a full egui-vs-Tauri sweep before any new feature/UX work. Compared the
+  egui `UiAction` catalog + all three menus (`top_bar.rs`) + table/term/sentence surfaces against the
+  Tauri port. **At parity:** all Settings modals, Tools→Analyzer, theme/font toggles, asbplayer/mpv/
+  Anki indicators, all 4 sort fields (dropdown — T037 deviation), POS single-surface (intentional),
+  freq-range + search, sentence widget (Tauri upgrades hover-reading → furigana), right-click ignore,
+  recents (on the landing vs egui's file-open modal — reorganized, not missing), drag-drop, knowledge
+  summary, comprehension bars. **Gaps → new tasks:** T058 Open Data Folder (disabled stub vs egui's
+  working `open_folder`), T059 term ignore UX (egui Ctrl+Click toggle + grey-in-place + inline undo
+  vs Tauri's eager right-click removal), T060 `load_frequency_dictionaries` import (two stubbed
+  surfaces). **Already-tracked, same gate:** T056 (asbplayer Error/Starting sub-states). Intentionally
+  unmirrored (not gaps): egui's 👁 confirmed-timestamp seek variant (T035). Maintainer directive:
+  **T056/T058/T059/T060 jump ahead of any additive feature/UX/UI task** (need not all land at once).
+  No code written this turn — tasks added only.
+- **T058 DONE (2026-06-15) [parity] — File → Open Data Folder; first of the PRIORITY GATE.** Ports
+  egui's `top_bar.rs::open_folder` (which spawns `explorer`/`open`/`xdg-open` on `get_app_data_dir()`)
+  to the Tauri opener plugin. **Backend (one new command):** `commands/lifecycle::open_data_folder()`
+  → `Result<(), String>` (registered in `lib.rs` after `save_settings`): reads the engine's
+  `persistence::get_app_data_dir()` (same `dirs::data_local_dir()/yomine` path egui uses; it
+  `create_dir_all`s, so it always exists — no existence guard needed) and opens it with
+  `app.opener().open_path(dir, None::<&str>)` (`tauri_plugin_opener::OpenerExt`). `open_path` on a
+  directory opens the OS file manager **at** that dir (showing its contents) — exact behaviour parity
+  with egui, unlike `reveal_item_in_dir` which would select the dir in its parent. **No capability
+  change:** Rust-side `OpenerExt` calls bypass the JS opener scope, so `opener:default` already
+  suffices. **Frontend:** `ipc.ts` `openDataFolder()` wrapper; `stores/index.ts` `openDataFolder()`
+  action (try/catch → `lastError` "Failed to open data folder", the manual-action error convention,
+  mirroring `seekTimestamp`); `TopBar.svelte` imports it and flips the disabled "Open Data Folder"
+  File-menu stub to `onclick={() => run(openDataFolder)}` (ungated, like egui). **Checks
+  (orchestrator-run):** `cargo check -p yomine-tauri` ✓ clean (28.98s); `pnpm run check` → only the 4
+  known `vite.config.ts` `process` errors + the tsconfig node-types warning + the 8 pre-existing
+  backdrop a11y warnings — **zero new** (the menu item is a real `<button>`). Engine untouched
+  (`get_app_data_dir` already existed) → `-p yomine` / `--no-default-features` / `cargo test`
+  unaffected. **Verify on Windows (`cargo tauri dev`):** File → Open Data Folder opens
+  `%LOCALAPPDATA%\yomine` in Explorer; matches egui's same menu action.
 - **NEXT options:**
   - **`load_frequency_dictionaries` import command (freq-dict import)** — the File-menu "Load New
     Frequency Dictionaries" entry and the checklist's two "+ Install Dictionary" actions (T045)
@@ -1109,7 +1153,7 @@ stories render inside it.
 
 - [x] T049 [US7] Knowledge summary widget: `get_knowledge_summary` + `knowledge-summary` event;
       JLPT + frequency bands; coverage/estimate toggle (`KnowledgeMode`).
-- [ ] T050 [US7] **Verify**: JLPT + band values match egui for the same Anki snapshot.
+- [x] T050 [US7] **Verify**: JLPT + band values match egui for the same Anki snapshot.
 
 **Checkpoint**: All user stories functional and verified against egui.
 
@@ -1117,7 +1161,7 @@ stories render inside it.
 
 ## Phase D: Package, sign off, CI
 
-- [ ] T051 Declare bundled resources in `tauri.conf.json` (fonts handled in-frontend; icon;
+- [x] T051 Declare bundled resources in `tauri.conf.json` (fonts handled in-frontend; icon;
       `assets/jlpt_vocab.json` per O1 outcome); confirm runtime downloads (unidic, freq dicts,
       Anki cache) still resolve to `dirs::data_local_dir()/yomine`.
 - [ ] T052 `cargo tauri build` produces installers on Win/macOS/Linux; smoke-test each artifact.
@@ -1128,6 +1172,40 @@ stories render inside it.
       Success Criteria SC-001..SC-009.
 - [ ] T055 Resolve Open Item O4: decide whether to retire the egui crate/feature or keep it
       gated for a transition; document in README/RELEASES.
+
+---
+
+## Parity gaps (final-inspection 2026-06-14) — PRIORITY GATE
+
+Found in the post-US7 final egui-vs-Tauri inspection (egui `UiAction` catalog + all three menus +
+table/term/sentence surfaces). **Maintainer directive: these close the egui→Tauri parity gap and
+MUST be addressed before any new-feature / UX / UI work** (e.g. issues #18 theme picker, #68 sorts/
+filters, #71 freq breakdown, #89 MPV launcher, #91 mouse-less mining, #100 dict manager). They need
+not all land at once, but they jump the queue ahead of anything additive. T056 (asbplayer
+sub-states, above) belongs to the same gate.
+
+- [x] T058 [parity] **Open Data Folder** (File menu): egui's `File → Open Data Folder` opens the app
+      data dir in the OS file explorer (`top_bar.rs::open_folder` → `get_app_data_dir()`); the Tauri
+      menu item is a disabled stub. Wire it via the already-registered `tauri-plugin-opener` (reveal/
+      open the `dirs::data_local_dir()/yomine` path the engine uses) and enable the `TopBar.svelte`
+      item. Small; backend path helper (command or capability) + frontend onclick.
+- [ ] T059 [parity] [US4] **Term ignore UX → egui parity.** egui's term cell supports **Ctrl+Click**
+      to toggle ignore AND keeps an ignored term **visible but greyed in place** with an inline
+      "Remove from ignore list" undo (right-click or Ctrl+Click again); the actual re-filter happens
+      on refresh (`table/mod.rs::ui_col_term`). Tauri only has the right-click "Add to ignore list",
+      which calls `add_to_ignore_list` → the backend **re-filters immediately** so the row vanishes,
+      with no inline undo (un-ignore only via the Ignore List modal). Restore: (a) Ctrl+Click toggle
+      on the term cell (keyboard quick-action, obj #4), (b) grey-in-place instead of immediate
+      removal, with inline un-ignore + the hover hint ("Ctrl+Click to ignore / UNDO ignore"). Decide
+      where the re-filter fires (on refresh, per egui) vs Tauri's current eager `FileLoadResult`
+      return — likely defer removal to the next `refresh_terms`. **Backend + frontend.**
+- [ ] T060 [parity] **`load_frequency_dictionaries` import command.** Both the `File → Load New
+      Frequency Dictionaries` menu item AND the setup-checklist "+ Install Dictionary" actions (T045)
+      are disabled stubs pending this backend command. Build it: native multi-file picker → parse the
+      Yomitan dictionary → register in `frequency_manager` → persist + emit `dictionaries-changed`
+      (the store already re-fetches terms + setup status on that event). Enables all three surfaces.
+      egui reference: `frequency_utils::load_frequency_dictionaries`. **Backend + frontend (enable the
+      two stubbed surfaces).** Largest of the three.
 
 ---
 

@@ -21,6 +21,7 @@
 		openPosModal,
 		openSetupModal,
 		openAnalyzerModal,
+		openDataFolder,
 		refreshTerms
 	} from '$lib/stores';
 
@@ -105,8 +106,7 @@
 				>
 				<!-- TODO: enable with the freq-dictionary import task (load_frequency_dictionaries). -->
 				<button disabled title="Coming soon">Load New Frequency Dictionaries</button>
-				<!-- TODO: enable with the open_url/open-folder command. -->
-				<button disabled title="Coming soon">Open Data Folder</button>
+				<button onclick={() => run(openDataFolder)}>Open Data Folder</button>
 				<button onclick={() => run(quit)}>Quit</button>
 			</div>
 		{/if}

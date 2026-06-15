@@ -12,6 +12,7 @@ use tauri::{
     Emitter,
     State,
 };
+use tauri_plugin_opener::OpenerExt;
 use yomine::{
     core::{
         settings::SettingsData,
@@ -109,6 +110,18 @@ pub async fn load_language_tools(
             Err(e)
         }
     }
+}
+
+/// Open the app data directory (`dirs::data_local_dir()/yomine`) in the OS file
+/// explorer — File → Open Data Folder (egui `top_bar.rs::open_folder`). The engine's
+/// `get_app_data_dir()` creates the dir if missing, so it always exists. Opening from
+/// Rust via the opener plugin bypasses JS scope, so no extra capability is needed.
+#[tauri::command]
+pub fn open_data_folder(app: AppHandle) -> Result<(), String> {
+    let dir = persistence::get_app_data_dir();
+    app.opener()
+        .open_path(dir.to_string_lossy().into_owned(), None::<&str>)
+        .map_err(|e| e.to_string())
 }
 
 /// Static POS key/label list for filter UIs (keys match `settings.pos_filters`).

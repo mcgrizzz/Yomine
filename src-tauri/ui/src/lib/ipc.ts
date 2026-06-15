@@ -373,6 +373,11 @@ export function exportIgnoreList(terms: string[]): Promise<string | null> {
 	return invoke('export_ignore_list', { terms });
 }
 
+/** Open the app data directory in the OS file explorer (File → Open Data Folder, T058). */
+export function openDataFolder(): Promise<void> {
+	return invoke('open_data_folder');
+}
+
 /** Seek the connected player (mpv or asbplayer) to a sentence timestamp (US3/FR-008). */
 export function seekTimestamp(seconds: number, label: string): Promise<void> {
 	return invoke('seek_timestamp', { seconds, label });
