@@ -47,19 +47,26 @@
 		getCurrentWindow().close();
 	}
 
-	// --- Status indicators (egui `show_status_indicators`). The PlayerStatus DTO
-	// collapses the WebSocket server state to `mode` + `ws_clients`, so the
-	// asbplayer dot can't show the Error/Starting sub-states egui does; it maps
-	// connected → green, running-but-waiting → yellow, otherwise grey. ----------
+	// --- Status indicators (egui `show_status_indicators`). PlayerStatus now carries
+	// the WebSocket `server_state` (+ error message), so the asbplayer dot mirrors
+	// egui's full mapping: green has-clients, yellow Running, blue Starting,
+	// red Error (tooltip = message), grey Stopped (T056). -----------------------
 	const GREEN = '#00c800';
 	const YELLOW = '#c8c800';
+	const BLUE = '#6464c8';
+	const RED = '#c80000';
 	const GREY = '#646464';
 	const ANKI_RED = '#c85050';
 
 	const asbplayer = $derived.by(() => {
-		if ($playerStatus.ws_clients > 0) return { color: GREEN, tip: 'Connected to asbplayer' };
-		if ($playerStatus.mode === 'asbplayer')
+		const s = $playerStatus;
+		if (s.server_state === 'running' && s.ws_clients > 0)
+			return { color: GREEN, tip: 'Connected to asbplayer' };
+		if (s.server_state === 'running')
 			return { color: YELLOW, tip: 'WebSocket server running - waiting for asbplayer' };
+		if (s.server_state === 'error')
+			return { color: RED, tip: `WebSocket server error: ${s.server_error ?? ''}` };
+		if (s.server_state === 'starting') return { color: BLUE, tip: 'WebSocket server starting...' };
 		return { color: GREY, tip: 'WebSocket server stopped' };
 	});
 

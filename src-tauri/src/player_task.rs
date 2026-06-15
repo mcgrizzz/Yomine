@@ -20,7 +20,10 @@ use tokio::sync::{
 use yomine::{
     mpv::MpvManager,
     player::PlayerManager,
-    websocket::WebSocketManager,
+    websocket::{
+        ServerState,
+        WebSocketManager,
+    },
 };
 
 use crate::events::{
@@ -81,11 +84,22 @@ fn current_status(player: &PlayerManager) -> PlayerStatus {
     } else {
         "none"
     };
+    // Carry the WebSocket server's own state so the asbplayer dot can show
+    // Starting/Error/Stopped, not just "waiting" (T056; mirrors egui's
+    // `show_status_indicators` reading `WebSocketManager::get_server_state`).
+    let (server_state, server_error) = match player.ws.get_server_state() {
+        ServerState::Running => ("running", None),
+        ServerState::Starting => ("starting", None),
+        ServerState::Stopped => ("stopped", None),
+        ServerState::Error(msg) => ("error", Some(msg)),
+    };
     PlayerStatus {
         mpv_connected,
         // The engine tracks presence (bool), not a precise count.
         ws_clients: if has_clients { 1 } else { 0 },
         mode: mode.to_string(),
+        server_state: server_state.to_string(),
+        server_error,
     }
 }
 

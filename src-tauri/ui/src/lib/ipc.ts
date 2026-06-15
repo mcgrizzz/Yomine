@@ -237,6 +237,10 @@ export interface PlayerStatus {
 	mpv_connected: boolean;
 	ws_clients: number;
 	mode: 'mpv' | 'asbplayer' | 'none';
+	/** WebSocket server state — drives the asbplayer dot's sub-states (T056). */
+	server_state: 'running' | 'starting' | 'error' | 'stopped';
+	/** Error message when `server_state === 'error'`, else null. */
+	server_error: string | null;
 }
 
 export interface ErrorPayload {

@@ -174,7 +174,7 @@ return an `IgnoreFileView`.
 
 ```
 AnkiStatus { connected: bool, fetching: bool }
-PlayerStatus { mpv_connected: bool, ws_clients: usize, mode: "mpv" | "asbplayer" | "none" }
+PlayerStatus { mpv_connected: bool, ws_clients: usize, mode: "mpv" | "asbplayer" | "none", server_state: "running" | "starting" | "error" | "stopped", server_error: Option<String> }  // server_state/error added in T056
 LoadingMessage { message: string | null }   // mirrors egui MessageOverlay
 LanguageToolsStatus = "loading" | "ready" | { error: string }
 ```

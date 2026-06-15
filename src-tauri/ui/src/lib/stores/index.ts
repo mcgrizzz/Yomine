@@ -12,7 +12,9 @@ export const ankiStatus = writable<ipc.AnkiStatus>({ connected: false, fetching:
 export const playerStatus = writable<ipc.PlayerStatus>({
 	mpv_connected: false,
 	ws_clients: 0,
-	mode: 'none'
+	mode: 'none',
+	server_state: 'stopped',
+	server_error: null
 });
 
 /** Whether a player is connected (mpv or an asbplayer ws client) — gates the
@@ -409,10 +411,26 @@ export async function hydrate(): Promise<void> {
 	hydrated = true;
 
 	// Live event wiring (set up before any await so we don't miss early emits).
+	// player/anki/knowledge emit only on *change*; if one fires during the hydrate
+	// awaits below (e.g. asbplayer connects on startup), that event is fresher than
+	// the one-shot pull — track it so the pull's stale snapshot can't clobber it back
+	// (the backend won't re-emit, so a clobber sticks until the next change).
+	let playerEventSeen = false;
+	let ankiEventSeen = false;
+	let knowledgeEventSeen = false;
 	ipc.onLanguageToolsStatus((s) => languageToolsStatus.set(s));
-	ipc.onAnkiStatus((s) => ankiStatus.set(s));
-	ipc.onPlayerStatus((s) => playerStatus.set(s));
-	ipc.onKnowledgeSummary((s) => knowledge.set(s));
+	ipc.onAnkiStatus((s) => {
+		ankiEventSeen = true;
+		ankiStatus.set(s);
+	});
+	ipc.onPlayerStatus((s) => {
+		playerEventSeen = true;
+		playerStatus.set(s);
+	});
+	ipc.onKnowledgeSummary((s) => {
+		knowledgeEventSeen = true;
+		knowledge.set(s);
+	});
 	ipc.onTermsRefreshed((r) => fileResult.set(r));
 	ipc.onError((e) => lastError.set(e));
 	// Weights/enabled changed → the backend rebaked the stored terms' HARMONIC;
@@ -459,9 +477,10 @@ export async function hydrate(): Promise<void> {
 	posCatalog.set(catalog);
 	fileResult.set(currentFile);
 	recentFiles.set(recents);
-	playerStatus.set(player);
-	ankiStatus.set(anki);
-	if (summary) knowledge.set(summary);
+	// Only seed from the pull if no change-event has set these since hydrate began.
+	if (!playerEventSeen) playerStatus.set(player);
+	if (!ankiEventSeen) ankiStatus.set(anki);
+	if (summary && !knowledgeEventSeen) knowledge.set(summary);
 
 	// Begin loading the heavy language tools; progress streams to the overlay.
 	overlay.set('Loading language tools…');

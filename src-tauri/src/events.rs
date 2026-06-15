@@ -61,6 +61,11 @@ pub struct PlayerStatus {
     pub ws_clients: usize,
     /// `"mpv"` | `"asbplayer"` | `"none"`.
     pub mode: String,
+    /// WebSocket server state: `"running"` | `"starting"` | `"error"` | `"stopped"`
+    /// (T056). Lets the asbplayer dot distinguish a bind failure from "waiting".
+    pub server_state: String,
+    /// Error message when `server_state == "error"` (e.g. a bind failure), else `None`.
+    pub server_error: Option<String>,
 }
 
 /// `export-complete` payload.

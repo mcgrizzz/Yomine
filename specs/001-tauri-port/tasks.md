@@ -846,6 +846,45 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
   (`get_app_data_dir` already existed) → `-p yomine` / `--no-default-features` / `cargo test`
   unaffected. **Verify on Windows (`cargo tauri dev`):** File → Open Data Folder opens
   `%LOCALAPPDATA%\yomine` in Explorer; matches egui's same menu action.
+- **T056 DONE (2026-06-15) [US3] — asbplayer dot sub-states; second PRIORITY GATE task.** Closes the
+  long-standing T028/T040 indicator deviation (a WS bind failure looked identical to "waiting").
+  Mirrors egui's `top_bar.rs::show_status_indicators` reading `WebSocketManager::get_server_state()`.
+  **No engine change** — the `ServerState` enum (Running/Starting/Error(msg)/Stopped) already exists
+  in `src/websocket/types.rs` and is re-exported from `yomine::websocket`. **Backend:**
+  `events::PlayerStatus` (the `player-status` event + `get_player_status` command DTO) gained two
+  fields — `server_state: String` ("running"|"starting"|"error"|"stopped") + `server_error:
+  Option<String>` — mapped wire-friendly so the TS side gets clean values and the struct keeps its
+  `PartialEq` (the player loop's `last_status` change-dedupe relies on it; an externally-tagged enum
+  would have worked too but the string pair is tidier on the wire). `player_task::current_status`
+  now `match`es `player.ws.get_server_state()` into the pair (imported `ServerState` alongside
+  `WebSocketManager`). Note: when MPV connects the engine stops the WS server → `server_state ==
+  "stopped"` → grey dot, which is correct parity (the documented MPV-preferred behaviour). **Frontend:**
+  `ipc.ts` `PlayerStatus` interface gained both fields; `stores/index.ts` seeded the
+  `playerStatus` default with `server_state: 'stopped', server_error: null`; `TopBar.svelte` rewrote
+  the `asbplayer` `$derived` to egui's full mapping — green `#00c800` (running + has-clients), yellow
+  `#c8c800` (running, waiting), **blue `#6464c8` (starting)**, **red `#c80000` (error, tooltip =
+  `WebSocket server error: {msg}`)**, grey `#646464` (stopped) — adding `BLUE`/`RED` constants and
+  updating the indicator comment (the old "DTO can't show sub-states" caveat is now resolved). `mode`
+  stays on the DTO (untouched) though the dot no longer reads it. **data-model.md** PlayerStatus line
+  updated. **Checks (orchestrator-run):** `cargo check -p yomine-tauri` ✓ clean (25.25s); `pnpm run
+  check` → only the 4 known `vite.config.ts` errors + tsconfig node warning + 8 pre-existing backdrop
+  a11y warnings — **zero new**. Engine untouched → `-p yomine` / `cargo test` unaffected. **Verify on
+  Windows (`cargo tauri dev`):** with a free port, the asbplayer dot is yellow (waiting) then green
+  when asbplayer connects; set the WS port to one already in use (Settings→WebSocket Server) → the
+  dot turns **red** with the bind-error message on hover; while MPV is connected the dot is grey
+  (server stopped, correct); briefly blue on startup. Matches egui's same indicator.
+  **Bug found + fixed during T056 verify (2026-06-15) — dot stuck yellow after asbplayer connects on
+  startup.** Pre-existing hydrate race (not caused by T056; the old green gate was also `ws_clients >
+  0`). `hydrate()` subscribes `onPlayerStatus` first (good) but then applied the one-shot
+  `getPlayerStatus()` pull (captured pre-`await` in the `Promise.all`) unconditionally — if asbplayer
+  connected during that await window, the 0→1 `player-status` event set the store green, then the
+  stale pulled `ws_clients:0` snapshot **clobbered it back to yellow**; since the backend emits only
+  on *change* it never re-emitted, so it stuck until a manual disconnect/reconnect forced a fresh
+  transition (exactly the reported repro). Fix (`stores/index.ts`): the three change-only pulls now
+  guard against clobber — `playerEventSeen`/`ankiEventSeen`/`knowledgeEventSeen` flags set in their
+  listeners, and the post-`await` seeds run only `if (!…EventSeen)` so an event that arrived during
+  hydrate wins over the stale snapshot (anki + knowledge had the same latent clobber). `pnpm run
+  check` still only the 4 known vite.config.ts errors. Frontend-only.
 - **NEXT options:**
   - **`load_frequency_dictionaries` import command (freq-dict import)** — the File-menu "Load New
     Frequency Dictionaries" entry and the checklist's two "+ Install Dictionary" actions (T045)
@@ -1071,7 +1110,7 @@ stories render inside it.
 - [x] T035 [US3] Timestamp UI in `SentenceView`: clickable timestamp → `seek_timestamp(secs,
       label)`; reflect `player-status` (mode/no-player) and surface the no-player error.
 - [x] T036 [US3] **Verify**: asbplayer + MPV seek; MPV preferred when both; no-player handled.
-- [ ] T056 [P] [US3] Surface `ServerState` in `PlayerStatus` (closes the T028 indicator
+- [x] T056 [P] [US3] Surface `ServerState` in `PlayerStatus` (closes the T028 indicator
       deviation): add the websocket server state (running/starting/error+message/stopped, from
       `ws.get_server_state()`) to the DTO + `ipc.ts`, and drive the TopBar asbplayer dot from it
       like egui `show_status_indicators` — green has-clients, yellow Running, blue Starting,
