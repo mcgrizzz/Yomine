@@ -921,6 +921,58 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
   tracks `ctrlHeld` via window `keydown`/`keyup` (`e.ctrlKey || e.metaKey`, reset on `blur`),
   `class:ignorable={ctrlHeld}` → new `.term.ignorable { cursor: pointer }`. Frontend-only; `pnpm run
   check` unchanged (zero new). Verify: hold Ctrl → term cursor becomes a hand; release → reverts.
+- **T060 DONE (2026-07-06) [parity] — `load_frequency_dictionaries` import command; last PRIORITY
+  GATE task.** Mirrors egui's File-menu `frequency_utils::load_frequency_dictionaries` and enables
+  all three stubbed surfaces. **Backend (`commands/dictionary.rs`):** ONE command instead of the
+  contract's drafted import+reload pair (picker lives backend-side like `import_ignore_file`;
+  contracts/commands.md updated): `load_frequency_dictionaries(progress: Channel<LoadingMessage>)
+  → usize`. Flow: require tools loaded (Err otherwise) → native multi-`.zip` picker
+  (`tauri-plugin-dialog` `pick_files`, "Yomitan Frequency Dictionaries" + "All Files" filters =
+  egui's `select_frequency_dictionary_zips`) → engine `copy_frequency_dictionaries` (skips
+  already-present filenames) → `0` copied = return `Ok(0)`, NO reload (egui parity for cancel /
+  all-duplicates) → else `process_frequency_dictionaries` on `spawn_blocking` streaming its
+  progress messages over the Channel (mirrors `load_language_tools`) → on success: lock,
+  `apply_frequency_weights` (persisted weights onto the new manager), swap
+  `tools.frequency_manager`, rebake stored terms' HARMONIC (same step as `set_dictionary_state`;
+  new per-term dict entries appear on the next refresh_terms, exactly as egui), `knowledge_dirty =
+  true`, emit `dictionaries-changed`. Registered in `lib.rs`. **Frontend:** `ipc.ts`
+  `loadFrequencyDictionaries(onProgress) → Promise<number>` (Channel wrapper); stores action
+  `loadFrequencyDictionaries()` — tools-ready-guarded, streams progress into the `overlay`
+  (overlay only appears once the reload starts, so no flash behind the picker; cancelled dialog =
+  silent no-op), failures → `lastError` "Reload Error" banner (egui's Reload Error modal). The
+  existing `onDictionariesChanged` hydrate wiring already re-fetches terms + setup status, so the
+  table/checklist/banner update without new plumbing. Surfaces enabled: `TopBar.svelte` File →
+  "Load New Frequency Dictionaries" (gated on toolsReady, stub comment removed);
+  `SetupChecklistModal.svelte` items 2 & 6 "+ Install Dictionary" now call the action (the
+  now-vestigial `actionDisabled` field + its disabled/title template attrs removed — every action
+  is live). **Checks (orchestrator-run):** `cargo check -p yomine-tauri` ✓ (24.3s clean); engine
+  crate untouched (was ✓ this session); `pnpm run check` → exactly the 4 known vite.config.ts
+  errors + 8 pre-existing backdrop a11y warnings, **zero new**. **Verify on Windows (`cargo tauri
+  dev`):** File menu entry enabled once tools load; click → multi-select `.zip` picker; cancel →
+  nothing happens (no overlay/error); pick a new Yomitan freq zip → overlay shows
+  "Reloading/Loading dictionary …" then clears; Frequency Weighting modal lists the new dict; with
+  a file loaded, table frequencies/bounds update; checklist item 6 flips ✓ (>1 dicts) and both
+  "+ Install Dictionary" buttons open the same picker (modal closes after, egui parity); re-pick
+  the SAME zip → silent no-op (skip + no reload); knowledge widget recomputes (bands include the
+  new dict). Compare against egui's File → Load New Frequency Dictionaries.
+  **Re-bake refinement (2026-07-06, maintainer decision) — deliberate egui deviation.** Maintainer
+  verify found the imported dict showing "No frequency data": per-term frequencies are baked only
+  at file-process time (`extract_words` → `build_freq_map`), and `refresh_terms` re-*filters*
+  without re-running lookups — so in egui a new dict never reaches a loaded file's terms until the
+  file is reopened (with only the new dict enabled, every HARMONIC = u32::MAX → bounds collapse →
+  TableControls "No frequency data"). Diagnosed against the real dict (`[Freq] Narou Freq`, probe
+  vs the extracted term bank: 49269/49269 entries parse, all common-lemma lookups hit — import +
+  engine were fine; the data was just stale). Fix: after the manager swap, the command now re-bakes
+  `terms` + `base_terms` with `term.frequencies = manager.build_freq_map(lemma, reading, is_kana)`
+  (the exact call `extract_words` uses; bakes ALL dicts + HARMONIC, drops removed dicts) instead of
+  the HARMONIC-only rebake — imports now take effect immediately, no reopen needed.
+  `set_dictionary_state` intentionally keeps its HARMONIC-only rebake: per-dict entries are always
+  all baked regardless of enabled state, so enable/disable/weight changes only move HARMONIC. Note
+  the re-bake keeps the originally-chosen lemma (deinflection candidate ranking consults the
+  manager at process time); full re-ranking still needs a reopen — acceptable, edge-case only.
+  Verify addition: with a file loaded, import a new dict → per-term frequency + breakdown show the
+  new dict immediately; disable all other dicts → table still shows frequencies (was "No frequency
+  data").
 - **NEXT options:**
   - **`load_frequency_dictionaries` import command (freq-dict import)** — the File-menu "Load New
     Frequency Dictionaries" entry and the checklist's two "+ Install Dictionary" actions (T045)
@@ -1274,7 +1326,7 @@ sub-states, above) belongs to the same gate.
       removal, with inline un-ignore + the hover hint ("Ctrl+Click to ignore / UNDO ignore"). Decide
       where the re-filter fires (on refresh, per egui) vs Tauri's current eager `FileLoadResult`
       return — likely defer removal to the next `refresh_terms`. **Backend + frontend.**
-- [ ] T060 [parity] **`load_frequency_dictionaries` import command.** Both the `File → Load New
+- [x] T060 [parity] **`load_frequency_dictionaries` import command.** Both the `File → Load New
       Frequency Dictionaries` menu item AND the setup-checklist "+ Install Dictionary" actions (T045)
       are disabled stubs pending this backend command. Build it: native multi-file picker → parse the
       Yomitan dictionary → register in `frequency_manager` → persist + emit `dictionaries-changed`

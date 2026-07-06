@@ -445,6 +445,19 @@ export function setDictionaryState(name: string, weight: number, enabled: boolea
 	return invoke('set_dictionary_state', { name, weight, enabled });
 }
 
+/** File → Load New Frequency Dictionaries (T060): native multi-`.zip` picker →
+ * copy the new archives into the frequency-dict dir → reload the manager,
+ * streaming progress over `onProgress`. Resolves with the number of newly copied
+ * archives (0 = cancelled or nothing new — no reload happened). A reload emits
+ * `dictionaries-changed`. */
+export async function loadFrequencyDictionaries(
+	onProgress: (msg: LoadingMessage) => void
+): Promise<number> {
+	const channel = new Channel<LoadingMessage>();
+	channel.onmessage = onProgress;
+	return invoke('load_frequency_dictionaries', { progress: channel });
+}
+
 /** Aggregated setup readiness (US5/T045). Probes Anki + player live, so it's a
  * command (not an event) — pull on hydrate and after relevant state changes. */
 export function getSetupStatus(): Promise<SetupStatus> {

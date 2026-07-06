@@ -282,6 +282,30 @@ export async function saveDictionaryStates(entries: ipc.DictionaryState[]): Prom
 	}
 }
 
+/**
+ * File → Load New Frequency Dictionaries (T060; egui
+ * `frequency_utils::load_frequency_dictionaries`). The backend opens the native
+ * multi-zip picker and, when new archives land, reloads the manager and emits
+ * `dictionaries-changed` (terms + setup status re-fetch via the hydrate wiring).
+ * The overlay only appears once the reload starts streaming progress — no flash
+ * behind the picker; a cancelled dialog is a silent no-op. Failures surface via
+ * the `lastError` banner (egui's "Reload Error" modal).
+ */
+export async function loadFrequencyDictionaries(): Promise<void> {
+	if (get(languageToolsStatus) !== 'ready') return;
+	try {
+		await ipc.loadFrequencyDictionaries((msg) => overlay.set(msg.message));
+	} catch (err) {
+		lastError.set({
+			title: 'Reload Error',
+			message: 'Failed to reload frequency dictionaries',
+			detail: String(err)
+		});
+	} finally {
+		overlay.set(null);
+	}
+}
+
 // ---- POS filter defaults (T043) ----------------------------------------------
 
 /** Whether the POS-filters modal is open. The modal stages its chip edits locally

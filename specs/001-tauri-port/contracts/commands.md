@@ -69,8 +69,7 @@ file_comprehension: f32 }`.
 |---------|------|---------|---------|-------|
 | `list_dictionaries` | — | `array<DictionaryState>` | `dictionary_states` | name/weight/enabled. |
 | `set_dictionary_state` | `name: string`, `weight: f32`, `enabled: bool` | `()` | `apply_frequency_settings` | Updates engine; emits `dictionaries-changed`; UI re-fetches terms. |
-| `load_frequency_dictionaries` | `paths: array<string>`, `progress: Channel<LoadingMessage>` | `()` | `frequency_utils::load_frequency_dictionaries` | Import zips. |
-| `reload_dictionaries` | `progress: Channel<LoadingMessage>` | `array<DictionaryState>` | `TaskManager::reload_frequency_dictionaries` | Rebuilds manager; emits `dictionaries-changed`. |
+| `load_frequency_dictionaries` | `progress: Channel<LoadingMessage>` | `usize` | `frequency_utils::load_frequency_dictionaries` + `TaskManager::reload_frequency_dictionaries` | One command instead of the drafted import+reload pair (T060): native multi-`.zip` picker (backend-side, like `import_ignore_file`) → copy new archives → rebuild + swap the manager (weights reapplied; the loaded file's per-term frequencies re-baked via `build_freq_map`, so new dicts take effect immediately — deviation from egui, which needs the file reopened) → emit `dictionaries-changed`. Returns the newly-copied count; `0` = cancelled/nothing new (no reload, egui parity). |
 
 ## Frequency analyzer
 

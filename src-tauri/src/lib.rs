@@ -49,6 +49,7 @@ pub fn run() {
             commands::anki::get_anki_sample_note,
             commands::dictionary::list_dictionaries,
             commands::dictionary::set_dictionary_state,
+            commands::dictionary::load_frequency_dictionaries,
             commands::analysis::find_analysis_files,
             commands::analysis::start_analysis,
             commands::analysis::cancel_analysis,

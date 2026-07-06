@@ -12,6 +12,7 @@
 		refreshSetupStatus,
 		openAnkiModal,
 		openWebsocketModal,
+		loadFrequencyDictionaries,
 		settings
 	} from '$lib/stores';
 
@@ -25,8 +26,6 @@
 		helpUrl: string | null;
 		action: (() => void) | null;
 		actionText: string | null;
-		/** A planned action with no backend yet (the freq-dict import buttons). */
-		actionDisabled: boolean;
 	}
 
 	// Re-pull the live snapshot on open. untrack: hydrate reads $setupStatus/$settings,
@@ -40,9 +39,8 @@
 	}
 
 	// The 6 items mirror egui's SetupChecklistModal::new() in order. The two
-	// "Install Dictionary" actions (items 2 & 6) have no Tauri command yet — the
-	// freq-dictionary import is a separate File-menu task — so they're disabled
-	// with a "coming soon" hint (mirrors the disabled File-menu entry).
+	// "Install Dictionary" actions (items 2 & 6) run the freq-dictionary import
+	// (egui's SetupAction::LoadFrequencyDictionary → T060).
 	const items = $derived.by<CheckItem[]>(() => {
 		const st = $setupStatus;
 		const mappingsEmpty = !$settings || Object.keys($settings.anki_model_mappings).length === 0;
@@ -56,8 +54,7 @@
 				optional: false,
 				helpUrl: null,
 				action: null,
-				actionText: null,
-				actionDisabled: false
+				actionText: null
 			},
 			{
 				title: 'Default Frequency Dictionary Installed',
@@ -65,9 +62,8 @@
 				status: s((st?.has_frequency_dict ?? false) && count >= 1),
 				optional: false,
 				helpUrl: null,
-				action: null,
-				actionText: '+ Install Dictionary',
-				actionDisabled: true
+				action: loadFrequencyDictionaries,
+				actionText: '+ Install Dictionary'
 			},
 			{
 				title: 'AnkiConnect Enabled and Detected',
@@ -76,8 +72,7 @@
 				optional: false,
 				helpUrl: 'https://ankiweb.net/shared/info/2055492159',
 				action: null,
-				actionText: null,
-				actionDisabled: false
+				actionText: null
 			},
 			{
 				title: 'Anki Notetypes Setup',
@@ -87,8 +82,7 @@
 				helpUrl:
 					'https://github.com/mcgrizzz/Yomine?tab=readme-ov-file#setting-up-anki-integration',
 				action: openAnkiModal,
-				actionText: 'Setup Anki',
-				actionDisabled: false
+				actionText: 'Setup Anki'
 			},
 			{
 				title: 'asbplayer or mpv detected',
@@ -98,8 +92,7 @@
 				helpUrl:
 					'https://github.com/mcgrizzz/Yomine?tab=readme-ov-file#configuring-websocket-connection',
 				action: openWebsocketModal,
-				actionText: 'Configure WebSocket',
-				actionDisabled: false
+				actionText: 'Configure WebSocket'
 			},
 			{
 				title: 'Additional Frequency Dictionaries Installed [Optional]',
@@ -108,9 +101,8 @@
 				optional: true,
 				helpUrl:
 					'https://github.com/mcgrizzz/Yomine?tab=readme-ov-file#setting-up-frequency-dictionaries',
-				action: null,
-				actionText: '+ Install Dictionary',
-				actionDisabled: true
+				action: loadFrequencyDictionaries,
+				actionText: '+ Install Dictionary'
 			}
 		];
 	});
@@ -167,11 +159,7 @@
 						</div>
 						<div class="actions">
 							{#if item.action || item.actionText}
-								<button
-									disabled={item.actionDisabled}
-									title={item.actionDisabled ? 'Coming soon' : undefined}
-									onclick={() => runAction(item)}>{item.actionText}</button
-								>
+								<button onclick={() => runAction(item)}>{item.actionText}</button>
 							{/if}
 							{#if item.helpUrl}
 								<button class="docs" onclick={() => viewDocs(item.helpUrl!)}>📖 View Docs</button>
