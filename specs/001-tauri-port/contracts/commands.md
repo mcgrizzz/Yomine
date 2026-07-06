@@ -35,8 +35,8 @@ file_comprehension: f32 }`.
 | Command | Args | Returns | Maps to | Notes |
 |---------|------|---------|---------|-------|
 | `get_ignore_list` | — | `array<string>` | `IgnoreList::get_all_terms` | Manual lemma forms only (not file-sourced). |
-| `add_to_ignore_list` | `lemma: string` | `FileLoadResult \| null` | right-click action + `partial_refresh` | Adds + persists + reapplies filters (no Anki connection); returns updated terms (null if no file loaded). The row context action stays immediate (not staged). |
-| `remove_from_ignore_list` | `lemma: string` | `FileLoadResult \| null` | — | Immediate remove + reapply. Retained for API completeness; the modal removes via staged `save_ignore_list` instead. |
+| `add_to_ignore_list` | `lemma: string` | `()` | row Ctrl+Click / context menu | Adds + persists only; **no re-filter** — the term stays visible-but-greyed until the next `refresh_terms` (T059, egui parity). |
+| `remove_from_ignore_list` | `lemma: string` | `()` | row Ctrl+Click / context menu (un-ignore) | Removes + persists only; the un-ignored term stops being greyed (T059). Also retained for API completeness vs the modal's staged `save_ignore_list`. |
 | `get_ignore_list_full` | — | `IgnoreListView` | `IgnoreListModal::open_modal` | Hydrates the modal: manual terms + file pills with per-file `exists` + `term_count`. |
 | `import_ignore_file` | — | `IgnoreFileView \| null` | `FileAction::Add` | Opens a `.txt` open dialog (`tauri-plugin-dialog`), loads its terms, returns `{ path, enabled: true, exists, term_count }`; null if cancelled. Frontend pushes it to the staged file list. |
 | `refresh_ignore_file` | `path: string` | `IgnoreFileView` | `FileAction::Refresh` | Re-reads a file's `term_count`/`exists` for display. The persisted cache reload happens on save. |

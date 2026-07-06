@@ -885,6 +885,42 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
   listeners, and the post-`await` seeds run only `if (!…EventSeen)` so an event that arrived during
   hydrate wins over the stale snapshot (anki + knowledge had the same latent clobber). `pnpm run
   check` still only the 4 known vite.config.ts errors. Frontend-only.
+- **T059 DONE (2026-06-15) [parity/US4] — term ignore UX → egui parity; third PRIORITY GATE task.**
+  Mirrors egui's `table/mod.rs::ui_col_term`: ignoring a term **mutates the persisted ignore list but
+  does NOT re-filter** — the term stays visible, *greyed in place*, and only leaves the table on the
+  next `refresh_terms` (the old Tauri behaviour re-filtered eagerly so the row vanished with no undo).
+  **Backend (`commands/ignore.rs`):** `add_to_ignore_list`/`remove_from_ignore_list` no longer
+  re-filter — `mutate_ignore_list` now just clones the tools handle, mutates+persists the
+  `IgnoreList` (`add_term`/`remove_term`, which save to `ignore_list.json`), and returns `()` (was
+  `Option<FileLoadResult>`). The `apply_filters`/`load_result`/`base_terms`/`anki_known` re-filter
+  path is gone from this fn; those imports stay (still used by the modal's staged `save_ignore_list`,
+  which *does* re-filter — unchanged). Module doc + contracts/commands.md rows updated. **Frontend:**
+  new `ignoredLemmas` store (`Set<string>` = the live ignore set, egui's `ignore_list.contains()`),
+  `refreshIgnoredLemmas()` (pulls `get_ignore_list`, tools-ready-guarded) seeded at the end of
+  `hydrate()` and re-pulled after the modal's `saveIgnore`; `addToIgnore` replaced by `toggleIgnore`
+  (adds or removes by current membership, surfaces failures via `lastError`, updates `ignoredLemmas`
+  optimistically so the cell flips instantly). `ipc.ts` add/remove wrappers now `Promise<void>`.
+  `TermTable.svelte`: the term cell gains `class:ignored` (greyed via new `.term.ignored { color:
+  var(--comment) }`, egui's weak_text_color), a `title` hover hint ("Ctrl+Click to ignore" /
+  "…to UNDO ignore"), an `onclick` that toggles only when **Ctrl (Win/Linux) or Cmd (macOS)** is held
+  (plain click left alone for text selection; on macOS Ctrl+Click opens the menu), and the right-click
+  context menu now labels **Remove/Add** by `ignoredLemmas` membership and calls `toggleIgnore`. One
+  `svelte-ignore a11y_click_events_have_key_events` on the term span (intentional mouse-modifier
+  action, no keyboard equivalent in egui either) keeps the check clean. **Re-filter timing:** removal
+  from the minable set is deferred to the next `refresh_terms` (manual 🔄 / F5 / auto-on-load) exactly
+  as egui does; `ignoredLemmas` = the full ignore list, so after a refresh drops the rows the set is
+  still accurate (no clear needed). **Checks (orchestrator-run):** `cargo check -p yomine-tauri` ✓
+  (17.9s; one fixed E0308 — `add_term`/`remove_term` return `Result<bool>`, mapped to `()`);
+  `cargo check -p yomine` untouched; `pnpm run check` → only the 4 known vite.config.ts errors + 8
+  pre-existing backdrop a11y warnings — **zero new**. **Verify on Windows (`cargo tauri dev`):**
+  Ctrl/Cmd+Click a term → it greys in place (stays visible), persists to `ignore_list.json`; Ctrl+Click
+  again or right-click → "Remove from ignore list" → un-greys; hover shows the hint; hit 🔄 / F5 →
+  the greyed terms drop out of the table (deferred re-filter); compare against egui's same cell.
+  **Cursor refinement (2026-06-15, maintainer request):** added a pointing-hand cursor on the term
+  while Ctrl/Cmd is held (egui `set_cursor_icon(PointingHand)` on ctrl+hover). `TermTable.svelte`
+  tracks `ctrlHeld` via window `keydown`/`keyup` (`e.ctrlKey || e.metaKey`, reset on `blur`),
+  `class:ignorable={ctrlHeld}` → new `.term.ignorable { cursor: pointer }`. Frontend-only; `pnpm run
+  check` unchanged (zero new). Verify: hold Ctrl → term cursor becomes a hand; release → reverts.
 - **NEXT options:**
   - **`load_frequency_dictionaries` import command (freq-dict import)** — the File-menu "Load New
     Frequency Dictionaries" entry and the checklist's two "+ Install Dictionary" actions (T045)
@@ -1228,7 +1264,7 @@ sub-states, above) belongs to the same gate.
       menu item is a disabled stub. Wire it via the already-registered `tauri-plugin-opener` (reveal/
       open the `dirs::data_local_dir()/yomine` path the engine uses) and enable the `TopBar.svelte`
       item. Small; backend path helper (command or capability) + frontend onclick.
-- [ ] T059 [parity] [US4] **Term ignore UX → egui parity.** egui's term cell supports **Ctrl+Click**
+- [x] T059 [parity] [US4] **Term ignore UX → egui parity.** egui's term cell supports **Ctrl+Click**
       to toggle ignore AND keeps an ignored term **visible but greyed in place** with an inline
       "Remove from ignore list" undo (right-click or Ctrl+Click again); the actual re-filter happens
       on refresh (`table/mod.rs::ui_col_term`). Tauri only has the right-click "Add to ignore list",

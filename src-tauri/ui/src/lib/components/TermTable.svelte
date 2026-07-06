@@ -6,16 +6,17 @@
 	// sorted by `visibleTerms` (driven by `TableControls`, T037).
 	import type { SentenceDto, Term } from '$lib/ipc';
 	import { harmonic } from '$lib/table';
-	import { addToIgnore, posCatalog } from '$lib/stores';
+	import { ignoredLemmas, toggleIgnore, posCatalog } from '$lib/stores';
 	import { posColor } from '$lib/pos';
 	import Furigana from './Furigana.svelte';
 	import SentenceView, { type Occurrence } from './SentenceView.svelte';
 
 	let { terms, sentences }: { terms: Term[]; sentences: SentenceDto[] } = $props();
 
-	// Right-click "Add to ignore list" (egui parity). Visible rows are never already
-	// ignored (ignored terms are filtered out), so the menu only offers "add"; removal
-	// lives in the ignore-list modal. Closes on the next click/scroll anywhere.
+	// Term ignore (T059, egui parity): Ctrl/Cmd+Click the term to toggle ignore, or
+	// right-click for the same as a menu. An ignored term stays visible but greyed —
+	// the row only disappears on the next refresh; toggling again un-ignores it. The
+	// menu closes on the next click/scroll anywhere.
 	let menu = $state<{ x: number; y: number; lemma: string } | null>(null);
 
 	function openMenu(e: MouseEvent, term: Term) {
@@ -25,8 +26,23 @@
 		menu = { x: e.clientX, y: e.clientY, lemma: term.lemma_form };
 	}
 
-	function ignoreFromMenu() {
-		if (menu) addToIgnore(menu.lemma);
+	// Ctrl (Win/Linux) or Cmd (macOS) + click toggles ignore; a plain click is left
+	// alone so text selection still works. (On macOS Ctrl+Click opens the menu instead.)
+	function termClick(e: MouseEvent, term: Term) {
+		if (!e.ctrlKey && !e.metaKey) return;
+		e.preventDefault();
+		toggleIgnore(term.lemma_form);
+	}
+
+	// Track whether Ctrl/Cmd is held so the term shows a pointing-hand cursor while it
+	// can be clicked-to-ignore (egui `set_cursor_icon(PointingHand)` on ctrl+hover).
+	let ctrlHeld = $state(false);
+	function trackMods(e: KeyboardEvent) {
+		ctrlHeld = e.ctrlKey || e.metaKey;
+	}
+
+	function toggleFromMenu() {
+		if (menu) toggleIgnore(menu.lemma);
 		menu = null;
 	}
 
@@ -65,11 +81,19 @@
 	{#each terms as term (termKey(term))}
 		{@const occs = occurrencesOf(term)}
 		<div class="row">
+			<!-- svelte-ignore a11y_click_events_have_key_events -- Ctrl/Cmd+Click is a
+			     mouse-modifier ignore toggle (egui parity); no keyboard equivalent. -->
 			<span
 					class="term"
+					class:ignored={$ignoredLemmas.has(term.lemma_form)}
+					class:ignorable={ctrlHeld}
 					lang="ja"
 					role="button"
 					tabindex="-1"
+					title={$ignoredLemmas.has(term.lemma_form)
+						? 'Ctrl+Click to UNDO ignore'
+						: 'Ctrl+Click to ignore'}
+					onclick={(e) => termClick(e, term)}
 					oncontextmenu={(e) => openMenu(e, term)}
 					><Furigana surface={term.lemma_form} reading={term.lemma_reading} /></span
 				>
@@ -90,7 +114,9 @@
 
 {#if menu}
 	<div class="ctx-menu" style="left: {menu.x}px; top: {menu.y}px;">
-		<button type="button" onclick={ignoreFromMenu}>Add to ignore list</button>
+		<button type="button" onclick={toggleFromMenu}>
+			{$ignoredLemmas.has(menu.lemma) ? 'Remove from ignore list' : 'Add to ignore list'}
+		</button>
 	</div>
 {/if}
 
@@ -98,6 +124,9 @@
 	onclick={() => (menu = null)}
 	onscroll={() => (menu = null)}
 	oncontextmenu={() => (menu = null)}
+	onkeydown={trackMods}
+	onkeyup={trackMods}
+	onblur={() => (ctrlHeld = false)}
 />
 
 <style>
@@ -133,6 +162,14 @@
 		font-size: 1.5rem;
 		color: var(--red);
 		line-height: 1.1;
+	}
+	/* Ignored-in-place: greyed until the next refresh drops the row (T059). */
+	.term.ignored {
+		color: var(--comment);
+	}
+	/* Pointing-hand while Ctrl/Cmd is held (the click-to-ignore affordance). */
+	.term.ignorable {
+		cursor: pointer;
 	}
 	.pos {
 		font-size: 0.9rem;

@@ -1,10 +1,11 @@
 //! Ignore-list commands (T038, contracts/commands.md "Ignore list").
 //!
-//! `add`/`remove` mutate the shared `IgnoreList` (persisted to `ignore_list.json`,
-//! the same store egui uses) and then re-apply the ignore + cached-Anki filter to
-//! the loaded file, mirroring egui's `partial_refresh`: the Anki-known lemmas are
-//! passed as `AnkiFilter::KnownLemmas` so known terms stay filtered out and only
-//! the ignore set changes.
+//! The row-level `add`/`remove` mutate the shared `IgnoreList` (persisted to
+//! `ignore_list.json`, the same store egui uses) and **return immediately without
+//! re-filtering** — egui keeps a just-ignored term visible-but-greyed and only drops
+//! it from the minable set on the next `refresh_terms` (T059). The modal's staged
+//! `save_ignore_list` is the path that re-applies filters (the ignore + cached-Anki
+//! filter, `AnkiFilter::KnownLemmas`) and returns the refreshed file.
 
 use std::sync::Mutex;
 
@@ -33,23 +34,23 @@ use crate::{
     state::AppState,
 };
 
-/// Add a lemma to the ignore list and return the re-filtered terms. `null` when no
-/// file is loaded (the list change still persists).
+/// Add a lemma to the ignore list (persists). Does **not** re-filter — the term
+/// stays visible-but-greyed until the next `refresh_terms` (T059, egui parity).
 #[tauri::command]
 pub async fn add_to_ignore_list(
     state: State<'_, Mutex<AppState>>,
     lemma: String,
-) -> Result<Option<FileLoadResult>, String> {
+) -> Result<(), String> {
     mutate_ignore_list(&state, &lemma, true).await
 }
 
-/// Remove a lemma from the ignore list and return the re-filtered terms. `null`
-/// when no file is loaded.
+/// Remove a lemma from the ignore list (persists). Does **not** re-filter; the
+/// un-ignored term simply stops being greyed (T059, egui parity).
 #[tauri::command]
 pub async fn remove_from_ignore_list(
     state: State<'_, Mutex<AppState>>,
     lemma: String,
-) -> Result<Option<FileLoadResult>, String> {
+) -> Result<(), String> {
     mutate_ignore_list(&state, &lemma, false).await
 }
 
@@ -65,46 +66,25 @@ pub fn get_ignore_list(state: State<'_, Mutex<AppState>>) -> Result<Vec<String>,
     Ok(list.get_all_terms())
 }
 
-/// Shared add/remove path: briefly lock state to clone the handles + re-filter
-/// inputs, mutate (and persist) the ignore list, then re-apply filters and store
-/// the new minable set. The `Mutex<AppState>` is never held across the `.await`.
+/// Shared row-level add/remove path: briefly lock state to clone the ignore-list
+/// handle, then mutate (and persist) it. No re-filter — removal from the minable set
+/// is deferred to the next `refresh_terms` (T059, egui parity). `add_term`/
+/// `remove_term` persist to disk on change.
 async fn mutate_ignore_list(
     state: &State<'_, Mutex<AppState>>,
     lemma: &str,
     add: bool,
-) -> Result<Option<FileLoadResult>, String> {
-    let (tools, base_terms, anki_known) = {
+) -> Result<(), String> {
+    let tools = {
         let guard = state.lock().unwrap();
-        let tools = guard
-            .language_tools
-            .clone()
-            .ok_or_else(|| "Language tools are still loading".to_string())?;
-        (tools, guard.file.base_terms.clone(), guard.file.anki_known_lemmas.clone())
+        guard.language_tools.clone().ok_or_else(|| "Language tools are still loading".to_string())?
     };
 
-    {
-        let mut list =
-            tools.ignore_list.lock().map_err(|_| "Failed to lock ignore list".to_string())?;
-        // `add_term`/`remove_term` persist to disk on change.
-        if add { list.add_term(lemma) } else { list.remove_term(lemma) }
-            .map_err(|e| e.to_string())?;
-    }
-
-    // No file loaded → nothing to re-filter, but the list change persisted.
-    if base_terms.is_empty() {
-        return Ok(None);
-    }
-
-    // Re-apply ignore + cached-Anki filter (no Anki connection); mirrors
-    // egui's `partial_refresh`.
-    let filter_result = apply_filters(base_terms, &tools, AnkiFilter::KnownLemmas(anki_known))
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let mut guard = state.lock().unwrap();
-    guard.file.terms = filter_result.terms;
-    guard.file.ignored_count = filter_result.ignore_filtered.len();
-    Ok(load_result(&guard.file))
+    let mut list =
+        tools.ignore_list.lock().map_err(|_| "Failed to lock ignore list".to_string())?;
+    if add { list.add_term(lemma) } else { list.remove_term(lemma) }
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 /// Build a display pill for `path`: `exists` + the file's `term_count` (0 when the

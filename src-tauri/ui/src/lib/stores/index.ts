@@ -110,19 +110,47 @@ export const visibleTerms = derived(
  * state (egui's `temp_terms`/`temp_files`) and self-hydrates via `getIgnoreListFull`. */
 export const ignoreModalOpen = writable(false);
 
+/** Lemma forms currently in the ignore list. Drives the term cell's grey-in-place
+ * state (egui reads `ignore_list.contains()` live, T059). A row toggle updates this
+ * optimistically; the term is only dropped from the table on the next refresh. */
+export const ignoredLemmas = writable<Set<string>>(new Set());
+
+/** Re-pull the full ignore set from the backend (after tools load or a modal save).
+ * No-op until the language tools are ready (the command errors otherwise). */
+export async function refreshIgnoredLemmas(): Promise<void> {
+	if (get(languageToolsStatus) !== 'ready') return;
+	try {
+		ignoredLemmas.set(new Set(await ipc.getIgnoreList()));
+	} catch (err) {
+		lastError.set({ title: 'Ignore list', message: String(err), detail: null });
+	}
+}
+
 /** Open the full ignore-list modal (it hydrates its own staged state on open). */
 export function openIgnoreModal(): void {
 	ignoreModalOpen.set(true);
 }
 
 /**
- * Add a term's lemma to the ignore list (a row's right-click action). This is the
- * one *immediate* ignore path (egui parity); the modal stages and persists on save.
- * The backend re-filters and returns the updated file; if it does, the table updates.
+ * Toggle a term's lemma in the ignore list (row Ctrl/Cmd+Click or context menu).
+ * Mirrors egui: mutates the persisted list and greys the term *in place* — the
+ * actual removal from the minable set is deferred to the next `refresh_terms`.
+ * `ignoredLemmas` updates optimistically so the cell greys/un-greys immediately.
  */
-export async function addToIgnore(lemma: string): Promise<void> {
-	const result = await ipc.addToIgnoreList(lemma);
-	if (result) fileResult.set(result);
+export async function toggleIgnore(lemma: string): Promise<void> {
+	const ignored = get(ignoredLemmas).has(lemma);
+	try {
+		if (ignored) await ipc.removeFromIgnoreList(lemma);
+		else await ipc.addToIgnoreList(lemma);
+		ignoredLemmas.update((s) => {
+			const next = new Set(s);
+			if (ignored) next.delete(lemma);
+			else next.add(lemma);
+			return next;
+		});
+	} catch (err) {
+		lastError.set({ title: 'Ignore list', message: String(err), detail: null });
+	}
 }
 
 /**
@@ -132,6 +160,7 @@ export async function addToIgnore(lemma: string): Promise<void> {
 export async function saveIgnore(terms: string[], files: ipc.IgnoreFile[]): Promise<void> {
 	const result = await ipc.saveIgnoreList(terms, files);
 	if (result) fileResult.set(result);
+	refreshIgnoredLemmas();
 }
 
 // ---- WebSocket server settings (T041) ---------------------------------------
@@ -495,6 +524,8 @@ export async function hydrate(): Promise<void> {
 	// Pull the setup snapshot once tools are loaded (the freq-dict bit only
 	// resolves after the tools land); drives the checklist + banner.
 	refreshSetupStatus();
+	// Seed the ignore set so a row can show its grey-in-place / un-ignore state (T059).
+	refreshIgnoredLemmas();
 }
 
 /**

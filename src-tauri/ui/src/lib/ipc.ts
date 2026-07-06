@@ -316,13 +316,15 @@ export function getIgnoreList(): Promise<string[]> {
 	return invoke('get_ignore_list');
 }
 
-/** Add a lemma to the ignore list; returns the re-filtered file, or `null` if none loaded. */
-export function addToIgnoreList(lemma: string): Promise<FileLoadResult | null> {
+/** Add a lemma to the ignore list (persists). Does not re-filter — the term stays
+ * greyed-in-place until the next refresh (T059). */
+export function addToIgnoreList(lemma: string): Promise<void> {
 	return invoke('add_to_ignore_list', { lemma });
 }
 
-/** Remove a lemma from the ignore list; returns the re-filtered file, or `null` if none loaded. */
-export function removeFromIgnoreList(lemma: string): Promise<FileLoadResult | null> {
+/** Remove a lemma from the ignore list (persists). Does not re-filter; the term just
+ * stops being greyed (T059). */
+export function removeFromIgnoreList(lemma: string): Promise<void> {
 	return invoke('remove_from_ignore_list', { lemma });
 }
 
