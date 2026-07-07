@@ -11,6 +11,9 @@
 		const s = $settings;
 		document.documentElement.dataset.theme = s && !s.dark_mode ? 'light' : 'dark';
 		document.body.classList.toggle('font-serif', s?.use_serif_font ?? false);
+		// Whole-UI scale (Appearance modal): CSS zoom scales px sizes too, unlike
+		// a root font-size change. The modal live-previews by setting this directly.
+		document.documentElement.style.setProperty('zoom', String(s?.font_scale ?? 1));
 	});
 </script>
 

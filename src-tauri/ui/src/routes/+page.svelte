@@ -27,6 +27,7 @@
 	import TableControls from '$lib/components/TableControls.svelte';
 	import IgnoreListModal from '$lib/components/IgnoreListModal.svelte';
 	import WebsocketSettingsModal from '$lib/components/WebsocketSettingsModal.svelte';
+	import AppearanceModal from '$lib/components/AppearanceModal.svelte';
 	import AnkiSettingsModal from '$lib/components/AnkiSettingsModal.svelte';
 	import FrequencyWeightsModal from '$lib/components/FrequencyWeightsModal.svelte';
 	import PosFiltersModal from '$lib/components/PosFiltersModal.svelte';
@@ -82,8 +83,6 @@
 	<main class="app-main">
 		{#if toolsError}
 			<p class="error">Failed to load language tools: {toolsError}</p>
-		{:else if !toolsReady}
-			<p class="muted">Loading language tools…</p>
 		{:else if $fileResult}
 			{@const pct = $fileResult.file_comprehension * 100}
 			{@const total = $fileResult.total_terms}
@@ -120,11 +119,15 @@
 				<h1 class="landing-title">No File Loaded</h1>
 				<p class="landing-jp">ファイルがまだ読み込まれていません</p>
 				<p class="landing-hint">ℹ You can drag and drop a file at any time to load it.</p>
+				<!-- While the language tools load, the landing renders behind the
+				     $overlay popup (same loading surface as everywhere else). -->
 				<div class="landing-actions">
-					<button class="landing-open" onclick={openAndProcessFile}>Open New File</button>
+					<button class="landing-open" disabled={!toolsReady} onclick={openAndProcessFile}
+						>Open New File</button
+					>
 					{#if $playerStatus.ws_clients > 0}
 						<!-- Only offered while asbplayer is actually connected (issue #105). -->
-						<button class="landing-open asb" onclick={openAsbplayerModal}
+						<button class="landing-open asb" disabled={!toolsReady} onclick={openAsbplayerModal}
 							>▶ Load from asbplayer</button
 						>
 					{/if}
@@ -166,6 +169,7 @@
 	<IgnoreListModal />
 	<AsbplayerModal />
 	<WebsocketSettingsModal />
+	<AppearanceModal />
 	<AnkiSettingsModal />
 	<FrequencyWeightsModal />
 	<PosFiltersModal />
@@ -217,9 +221,6 @@
 	.counts {
 		margin: 0 0 1rem;
 		font-size: 12px;
-		color: var(--comment);
-	}
-	.muted {
 		color: var(--comment);
 	}
 	.landing {

@@ -97,6 +97,10 @@ SettingsData {
   pos_filters: map<string, bool>,                    // POS as_key() → shown
   use_serif_font: bool,
   dark_mode: bool,
+  asbplayer_follow_new_media: bool,                  // issue #105 follow mode (default false)
+  asbplayer_follow_active_tab: bool,                 // issue #105 follow mode (default false)
+  asbplayer_poll_secs: u32,                          // follow-mode poll cadence (default 3)
+  font_scale: f32,                                   // whole-UI scale, Tauri only (default 1.0)
 }
 FieldMapping { term_field: string, reading_field: string }   // see src/anki/types.rs
 ```

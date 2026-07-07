@@ -1218,6 +1218,35 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
   table swaps to that tab's video (~poll interval); poll rate change in WebSocket settings takes
   effect next tick; after an asbplayer load, the landing recents list shows the video title and
   reopening it works with asbplayer closed.
+- **T067 DONE (2026-07-07) [bugfix] — DualSlider fast-drag 🚫 + startup loading surface
+  (maintainer verify feedback).** (1) **DualSlider (T062)**: pulling a knob fast showed a red
+  not-allowed cursor and the knob stopped — the `pointerdown` never `preventDefault()`ed, so the
+  WebView started a native text-selection drag, which fires `pointercancel` and kills our drag.
+  Fix: `e.preventDefault()` in `down()`, `user-select: none` on the track, and
+  `onlostpointercapture={up}` so any way capture ends clears the drag state. (2) **Startup
+  loading**: the main region rendered an inline "Loading language tools…" `<p>` instead of the
+  overlay popup used everywhere else (the overlay WAS already streaming tools-load progress; the
+  inline branch just sat behind/instead of it). Fix: dropped the `!toolsReady` branch in
+  `+page.svelte` — the landing screen now renders behind the `$overlay` popup (which blocks
+  pointer events while up); landing "Open New File" / "Load from asbplayer" get
+  `disabled={!toolsReady}` for the brief gap between overlay clear and the `ready` event; orphaned
+  `.muted` style removed. Checks: both crates ✓, svelte-check 0 errors. **Verify on Windows:**
+  yank a frequency knob violently (no 🚫, knob tracks, drag survives leaving the track); fresh
+  launch shows the landing screen under the dimmed progress popup, no inline loading text.
+- **T068 DONE (2026-07-07) [feature] — Appearance modal: whole-UI font scale (maintainer request,
+  placement Q&A → Settings → Appearance).** New `SettingsData.font_scale: f32` (serde-default 1.0;
+  shared settings.json, egui ignores it) applied by the root layout as **CSS `zoom` on
+  `documentElement`** (scales px sizes too, unlike a rem-only root-font-size change; no Tauri
+  capability needed). `AppearanceModal.svelte` (WebSocket-modal pattern: staged edit,
+  hydrate-on-open `$effect`+`untrack`): range slider 75–150% step 5 with −/+ steppers and %
+  readout, **live preview while adjusting** (modal sets the same zoom property directly), Save
+  persists via new `setFontScale` (clamped 0.75–1.5, `patchSettings`), Cancel reverts the staged
+  value, ✕/backdrop revert the preview to the saved value, Restore Default → 100%. Settings menu
+  gains "Appearance" (above Setup Checklist); modal mounted in `+page.svelte`. `ipc.SettingsData`
+  + stores (`appearanceModalOpen`/`openAppearanceModal`/`setFontScale`). Checks: both crates ✓,
+  svelte-check 0 errors / 9 warnings (8 known + the new modal's identical backdrop pattern).
+  **Verify on Windows:** Settings → Appearance — slider live-previews the whole UI (menus, table,
+  modals), Cancel/close reverts, Save persists across restart, default 100%.
 - **NEXT options:**
   - **`load_frequency_dictionaries` import command (freq-dict import)** — the File-menu "Load New
     Frequency Dictionaries" entry and the checklist's two "+ Install Dictionary" actions (T045)
@@ -1595,6 +1624,13 @@ sub-states, above) belongs to the same gate.
 
 ## Post-parity features
 
+- [x] T068 [feature] **Appearance modal — whole-UI font scale.** `SettingsData.font_scale`
+      (default 1.0) applied as CSS zoom by the root layout; Settings → Appearance modal with a
+      75–150% slider (live preview, staged save, Restore Default).
+- [x] T067 [bugfix] **DualSlider fast-drag 🚫 + startup loading via the overlay popup.**
+      `preventDefault` + `user-select: none` stop the native drag that cancelled knob drags; the
+      landing screen now renders behind the `$overlay` progress popup instead of an inline
+      "Loading language tools…" paragraph.
 - [x] T066 [feature] **Load subtitles from asbplayer (issue #105, phase 1).** `get-bound-media` /
       `get-subtitles` over the existing WebSocket (request/response with messageId correlation);
       landing-screen "Load from asbplayer" + File-menu entry open a media picker (title, favicon,
@@ -1610,6 +1646,20 @@ sub-states, above) belongs to the same gate.
       into a "Recommended" section (hosted, updateable dictionaries the user can check + download —
       e.g. JPDBv2㋕, Jiten — with version + Up-to-Date/download state) and the rest; likely rename
       "Frequency Weighting" → "Frequency Dictionaries". Builds on T060's import + reload plumbing.
+
+## Ship roadmap (maintainer, 2026-07-07)
+
+- [ ] T069 **UI/UX pass.** Sweep the whole app for polish: spacing/margins, affordances
+      (clickable things look clickable), consistency across modals, empty/edge states.
+- [ ] T070 **Code structure + comments pass (tauri code).** Reduce excessive comments, tighten
+      module structure in `src-tauri/` and `src-tauri/ui/` — keep only constraint-stating comments.
+- [ ] T071 **Ship the port.** Push → first green CI run (ticks T053), release build + installer
+      smoke tests (T052), tag/release.
+- [ ] T072 **Retire the egui build.** After the shipped port is validated: remove the egui build
+      system/feature, move egui code to an `egui` branch, `main` becomes the Tauri port (T055
+      decision executed).
+- [ ] T073 **Resume the GitHub issue backlog** (#91 mouse-less mining, #3, #71, #68/#92,
+      quick wins #94/#106/#82/#14, engine quality #6/#81/#102, #105 phase 2 one-click mining).
 
 ---
 

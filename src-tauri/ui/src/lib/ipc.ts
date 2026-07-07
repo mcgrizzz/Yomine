@@ -202,6 +202,8 @@ export interface SettingsData {
 	asbplayer_follow_active_tab: boolean;
 	/** Follow-mode poll cadence in seconds (≥1). */
 	asbplayer_poll_secs: number;
+	/** Whole-UI scale factor (1.0 = 100%), applied as CSS zoom on the root. */
+	font_scale: number;
 }
 
 /** Aggregated setup readiness for the checklist/banner (`get_setup_status`).

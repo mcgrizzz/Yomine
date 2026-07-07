@@ -652,6 +652,20 @@ export const setAsbplayerFollowActiveTab = (on: boolean) =>
 export const setAsbplayerPollSecs = (secs: number) =>
 	patchSettings({ asbplayer_poll_secs: Math.max(1, Math.round(secs) || 1) });
 
+// ---- Appearance settings ------------------------------------------------------
+
+/** Whether the Appearance modal is open (stages its scale edit like the
+ * WebSocket modal; the layout applies `settings.font_scale` as CSS zoom). */
+export const appearanceModalOpen = writable(false);
+
+export function openAppearanceModal(): void {
+	appearanceModalOpen.set(true);
+}
+
+/** Persist the UI scale factor (clamped to the modal's 75%–150% range). */
+export const setFontScale = (scale: number) =>
+	patchSettings({ font_scale: Math.min(1.5, Math.max(0.75, scale)) });
+
 /** Transient toast text (`null` = hidden) — non-blocking, unlike `overlay`. */
 export const notice = writable<string | null>(null);
 let noticeTimer: ReturnType<typeof setTimeout> | undefined;

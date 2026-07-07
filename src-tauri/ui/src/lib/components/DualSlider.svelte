@@ -51,8 +51,11 @@
 	}
 
 	// One handler on the track: grab the nearest thumb and drag it. Pointer
-	// capture keeps the drag alive outside the track.
+	// capture keeps the drag alive outside the track. preventDefault stops the
+	// WebView from starting a native text-selection drag on fast pulls, which
+	// would show a 🚫 cursor and pointercancel our drag.
 	function down(e: PointerEvent) {
+		e.preventDefault();
 		const f = fracAt(e);
 		dragging = Math.abs(f - minFrac) <= Math.abs(f - maxFrac) ? 'min' : 'max';
 		track.setPointerCapture(e.pointerId);
@@ -82,6 +85,7 @@
 	onpointermove={move}
 	onpointerup={up}
 	onpointercancel={up}
+	onlostpointercapture={up}
 >
 	<div class="rail"></div>
 	<div
@@ -120,6 +124,8 @@
 		margin: 0 0.35rem;
 		cursor: pointer;
 		touch-action: none;
+		-webkit-user-select: none;
+		user-select: none;
 	}
 	.rail {
 		position: absolute;

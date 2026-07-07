@@ -17,6 +17,7 @@
 		openAnkiModal,
 		openIgnoreModal,
 		openWebsocketModal,
+		openAppearanceModal,
 		openAsbplayerModal,
 		openFrequencyModal,
 		openPosModal,
@@ -137,6 +138,7 @@
 				<button onclick={() => run(openIgnoreModal)} disabled={!toolsReady}>Ignore List</button>
 				<button onclick={() => run(openFrequencyModal)}>Frequency Dictionaries</button>
 				<button onclick={() => run(openPosModal)}>Part of Speech Filters</button>
+				<button onclick={() => run(openAppearanceModal)}>Appearance</button>
 				<button onclick={() => run(openSetupModal)}>Setup Checklist</button>
 			</div>
 		{/if}

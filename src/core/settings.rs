@@ -58,6 +58,13 @@ pub struct SettingsData {
     /// How often follow mode polls asbplayer's bound-media list, in seconds.
     #[serde(default = "default_asbplayer_poll_secs")]
     pub asbplayer_poll_secs: u32,
+    /// Whole-UI scale factor (Tauri app only; 1.0 = 100%). The egui app ignores it.
+    #[serde(default = "default_font_scale")]
+    pub font_scale: f32,
+}
+
+const fn default_font_scale() -> f32 {
+    1.0
 }
 
 const fn default_asbplayer_poll_secs() -> u32 {
@@ -85,6 +92,7 @@ impl Default for SettingsData {
             asbplayer_follow_new_media: false,
             asbplayer_follow_active_tab: false,
             asbplayer_poll_secs: default_asbplayer_poll_secs(),
+            font_scale: default_font_scale(),
         }
     }
 }
