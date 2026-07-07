@@ -113,7 +113,11 @@
 				<KnowledgeSummary />
 			</div>
 			<TableControls />
-			<TermTable terms={$visibleTerms} sentences={$fileResult.sentences} />
+			<!-- The one scroll region in the file view: title/coverage/controls above
+			     stay put, the sticky column header sticks to this container's top. -->
+			<div class="table-scroll">
+				<TermTable terms={$visibleTerms} sentences={$fileResult.sentences} />
+			</div>
 		{:else}
 			<div class="landing">
 				<h1 class="landing-title">No File Loaded</h1>
@@ -222,6 +226,11 @@
 		margin: 0 0 1rem;
 		font-size: 12px;
 		color: var(--comment);
+	}
+	.table-scroll {
+		flex: 1 1 auto;
+		min-height: 0;
+		overflow-y: auto;
 	}
 	.landing {
 		display: flex;
@@ -340,6 +349,8 @@
 		border-radius: var(--radius);
 		color: var(--fg);
 		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+		/* Above modal backdrops (z 50): errors from modal actions must stay visible. */
+		z-index: 60;
 	}
 	.error-banner strong {
 		color: var(--red);
@@ -358,7 +369,8 @@
 		color: var(--fg);
 		font-size: 0.85rem;
 		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-		z-index: 40;
+		/* Above modal backdrops (z 50): follow-mode loads can land mid-modal. */
+		z-index: 60;
 	}
 	.error-banner .detail {
 		color: var(--comment);

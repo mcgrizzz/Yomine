@@ -1,9 +1,9 @@
 <script lang="ts">
-	// Top bar (T028): mirrors egui's `top_bar.rs` — theme/font toggles, the
-	// File / Settings / Tools dropdown menus, and the right-aligned asbplayer / mpv
-	// / Anki status indicators. Entries whose modal/command isn't built yet are
-	// rendered disabled with a "coming soon" tooltip; each is enabled by its own
-	// task (see the per-item comments), at which point it gains an `onclick`.
+	// Top bar (T028): theme/font toggles, the File / Mining / Settings menus, and
+	// the right-aligned asbplayer / mpv / Anki status indicators. Menu grouping
+	// deviates from egui (maintainer, 2026-07-07): Mining collects the data you
+	// tweak while working (ignore list, POS, dictionaries, analyzer); Settings
+	// keeps true configuration (integrations + UI) and the setup checklist.
 	import { getCurrentWindow } from '@tauri-apps/api/window';
 	import {
 		settings,
@@ -29,7 +29,7 @@
 		setAsbplayerFollowActiveTab
 	} from '$lib/stores';
 
-	type MenuName = 'file' | 'settings' | 'tools' | 'asb';
+	type MenuName = 'file' | 'mining' | 'settings' | 'asb';
 	let openMenu = $state<MenuName | null>(null);
 
 	const toolsReady = $derived($languageToolsStatus === 'ready');
@@ -89,8 +89,11 @@
 	);
 </script>
 
-<!-- Any click outside an open menu closes it. -->
-<svelte:window onclick={() => (openMenu = null)} />
+<!-- Any click outside an open menu closes it; Esc too. -->
+<svelte:window
+	onclick={() => (openMenu = null)}
+	onkeydown={(e) => e.key === 'Escape' && (openMenu = null)}
+/>
 
 <header class="topbar">
 	<span class="brand">Yomine</span>
@@ -121,7 +124,8 @@
 					title={$playerStatus.ws_clients === 0 ? 'asbplayer is not connected' : undefined}
 					>Load from asbplayer…</button
 				>
-				<!-- Frequency-dictionary import lives in Settings → Frequency Dictionaries
+				<div class="menu-sep"></div>
+				<!-- Frequency-dictionary import lives in Mining → Frequency Dictionaries
 				     (maintainer, 2026-07-06 — egui's File-menu entry deliberately not mirrored). -->
 				<button onclick={() => run(openDataFolder)}>Open Data Folder</button>
 				<button onclick={() => run(quit)}>Quit</button>
@@ -129,28 +133,32 @@
 		{/if}
 	</div>
 
+	<!-- Mining data + tools: what you tweak while working through a file. -->
+	<div class="menu" class:open={openMenu === 'mining'}>
+		<button class="menu-trigger" onclick={(e) => toggleMenu('mining', e)}>Mining</button>
+		{#if openMenu === 'mining'}
+			<div class="menu-panel">
+				<button onclick={() => run(openIgnoreModal)} disabled={!toolsReady}>Ignore List</button>
+				<button onclick={() => run(openPosModal)}>Part of Speech Filters</button>
+				<button onclick={() => run(openFrequencyModal)}>Frequency Dictionaries</button>
+				<div class="menu-sep"></div>
+				<button onclick={() => run(openAnalyzerModal)} disabled={!toolsReady}
+					>Frequency Analyzer</button
+				>
+			</div>
+		{/if}
+	</div>
+
+	<!-- True configuration: integrations + UI, plus the onboarding checklist. -->
 	<div class="menu" class:open={openMenu === 'settings'}>
 		<button class="menu-trigger" onclick={(e) => toggleMenu('settings', e)}>Settings</button>
 		{#if openMenu === 'settings'}
 			<div class="menu-panel">
 				<button onclick={() => run(openAnkiModal)}>Anki</button>
 				<button onclick={() => run(openWebsocketModal)}>WebSocket Server</button>
-				<button onclick={() => run(openIgnoreModal)} disabled={!toolsReady}>Ignore List</button>
-				<button onclick={() => run(openFrequencyModal)}>Frequency Dictionaries</button>
-				<button onclick={() => run(openPosModal)}>Part of Speech Filters</button>
 				<button onclick={() => run(openAppearanceModal)}>Appearance</button>
+				<div class="menu-sep"></div>
 				<button onclick={() => run(openSetupModal)}>Setup Checklist</button>
-			</div>
-		{/if}
-	</div>
-
-	<div class="menu" class:open={openMenu === 'tools'}>
-		<button class="menu-trigger" onclick={(e) => toggleMenu('tools', e)}>Tools</button>
-		{#if openMenu === 'tools'}
-			<div class="menu-panel">
-				<button onclick={() => run(openAnalyzerModal)} disabled={!toolsReady}
-					>Frequency Analyzer</button
-				>
 			</div>
 		{/if}
 	</div>
@@ -304,6 +312,11 @@
 	.menu-panel button:disabled {
 		color: var(--comment);
 		cursor: default;
+	}
+	.menu-sep {
+		height: 1px;
+		margin: 0.25rem 0.4rem;
+		background: var(--border);
 	}
 	.spacer {
 		flex: 1;

@@ -115,6 +115,12 @@
 	}
 </script>
 
+<!-- Esc closes from anywhere: the backdrop's own keydown only fires once focus
+     is inside the modal, which it isn't right after opening from a menu. -->
+<svelte:window
+	onkeydown={(e) => $ignoreModalOpen && e.key === 'Escape' && ignoreModalOpen.set(false)}
+/>
+
 {#if $ignoreModalOpen}
 	<div
 		class="backdrop"

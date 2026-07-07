@@ -93,6 +93,9 @@ html,
 body {
 	margin: 0;
 	height: 100%;
+	/* The shell owns all scrolling; never let the window itself scroll (under
+	 * root zoom, any accidental overflow would scroll the whole app away). */
+	overflow: hidden;
 }
 
 body {
@@ -128,6 +131,25 @@ button:disabled {
 	cursor: default;
 }
 
+/* Text-like inputs share the themed surface everywhere (checkbox/radio/range
+ * keep their native rendering). Component styles may tighten padding/width. */
+input:not([type='checkbox']):not([type='radio']):not([type='range']),
+select,
+textarea {
+	font: inherit;
+	color: var(--fg);
+	background: var(--bg-light);
+	border: 1px solid var(--border);
+	border-radius: 3px;
+	padding: 0.3rem 0.5rem;
+}
+
+/* Keyboard-focus affordance (mouse clicks don't trigger :focus-visible). */
+:focus-visible {
+	outline: 2px solid var(--cyan);
+	outline-offset: 1px;
+}
+
 a {
 	color: var(--blue);
 }
@@ -148,17 +170,22 @@ a {
 	background: var(--bg-dark);
 }
 
-/* App shell: fixed top bar over a scrolling main region. */
+/* App shell: fixed top bar over the main region. 100% (not 100vh): vh ignores
+ * the root `zoom` the Appearance scale applies, which would overflow the window. */
 .app-shell {
 	display: flex;
 	flex-direction: column;
-	height: 100vh;
+	height: 100%;
 	overflow: hidden;
 }
 
+/* The main region never scrolls itself — each view scopes its own scroll
+ * region (the term rows, the recents list) so headers/controls stay put. */
 .app-main {
+	display: flex;
+	flex-direction: column;
 	flex: 1 1 auto;
 	min-height: 0;
-	overflow: auto;
+	overflow: hidden;
 	padding: 1.25rem 1.5rem;
 }

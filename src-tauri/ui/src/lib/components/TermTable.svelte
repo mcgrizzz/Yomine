@@ -153,6 +153,9 @@
 		</span>
 		<span>POS</span>
 	</div>
+	{#if terms.length === 0}
+		<p class="no-match">No terms match the current filters.</p>
+	{/if}
 	{#each terms as term (termKey(term))}
 		{@const occs = occurrencesOf(term)}
 		<div class="row">
@@ -197,7 +200,7 @@
 
 <svelte:window
 	onclick={() => (menu = null)}
-	onscroll={() => (menu = null)}
+	onscrollcapture={() => (menu = null)}
 	oncontextmenu={() => (menu = null)}
 	onkeydown={trackMods}
 	onkeyup={trackMods}
@@ -315,6 +318,12 @@
 	}
 	.empty {
 		color: var(--comment);
+	}
+	.no-match {
+		margin: 0;
+		padding: 1.5rem 0.5rem;
+		color: var(--comment);
+		text-align: center;
 	}
 	.ctx-menu {
 		position: fixed;

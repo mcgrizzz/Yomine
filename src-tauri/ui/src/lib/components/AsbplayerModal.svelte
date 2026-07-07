@@ -20,7 +20,8 @@
 	let media = $state<ipc.BoundMedia[]>([]);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
-	let busy = $state(false);
+	/** Media id currently loading (all Load buttons disable; only its row shows it). */
+	let busyId = $state<string | null>(null);
 	/** Selected track per media id: a track number, or -1 = all tracks. */
 	let selectedTrack = $state<Record<string, number>>({});
 
@@ -48,11 +49,11 @@
 	}
 
 	async function load(m: ipc.BoundMedia) {
-		busy = true;
+		busyId = m.id;
 		const choice = selectedTrack[m.id] ?? -1;
 		const tracks = choice === -1 ? null : [choice];
 		const ok = await loadFromAsbplayer(m, tracks);
-		busy = false;
+		busyId = null;
 		if (ok) asbplayerModalOpen.set(false);
 	}
 
@@ -62,6 +63,10 @@
 
 	const connected = $derived($playerStatus.ws_clients > 0);
 </script>
+
+<!-- Esc closes from anywhere: the backdrop's own keydown only fires once focus
+     is inside the modal, which it isn't right after opening from a menu. -->
+<svelte:window onkeydown={(e) => $asbplayerModalOpen && e.key === 'Escape' && close()} />
 
 {#if $asbplayerModalOpen}
 	<div
@@ -82,7 +87,7 @@
 			<header>
 				<h2>Load from asbplayer</h2>
 				<div class="head-actions">
-					<button disabled={loading || busy} onclick={refresh}>
+					<button disabled={loading || busyId !== null} onclick={refresh}>
 						{loading ? 'Refreshing…' : '⟳ Refresh'}
 					</button>
 					<button class="close" aria-label="Close" onclick={close}>✕</button>
@@ -121,8 +126,8 @@
 								{#if m.active}<span class="badge active">active tab</span>{/if}
 								<button
 									class="load"
-									disabled={!hasSubs || busy}
-									onclick={() => load(m)}>{busy ? 'Loading…' : 'Load'}</button
+									disabled={!hasSubs || busyId !== null}
+									onclick={() => load(m)}>{busyId === m.id ? 'Loading…' : 'Load'}</button
 								>
 							</div>
 							{#if !hasSubs}

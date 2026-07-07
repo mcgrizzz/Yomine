@@ -1247,6 +1247,49 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
   svelte-check 0 errors / 9 warnings (8 known + the new modal's identical backdrop pattern).
   **Verify on Windows:** Settings → Appearance — slider live-previews the whole UI (menus, table,
   modals), Cancel/close reverts, Save persists across restart, default 100%.
+- **T069 round 1 (2026-07-07) [UI/UX pass] — full component audit + six fixes.** Audited every
+  component + app.css (modal chrome/staging patterns were already consistent). Fixed: (1) **Esc
+  now closes every modal from anywhere** — the backdrop `onkeydown` only fired once focus was
+  inside the modal (right after opening, focus is on `body`, so Esc did nothing); each of the 9
+  modals gains a top-level `<svelte:window>` Esc listener gated on its open store (Appearance/
+  asbplayer/Setup/Analyzer route through their `close()` so preview-revert etc. still runs), and
+  the TopBar menus close on Esc too. (2) **Global themed inputs** (app.css): text-like
+  `input`/`select`/`textarea` get the fg/bg-light/border/3px treatment — the table-controls
+  search + Min/Max fields were rendering native WebView chrome; checkbox/radio/range excluded,
+  component styles still override. (3) **Term-table empty state**: filters excluding every row
+  left a bare header — now "No terms match the current filters." (4) **Toast + error banner
+  above modals**: both were under the z-50 backdrops (a WebSocket save failure showed its error
+  banner BEHIND the modal); now z-60. (5) **asbplayer picker per-row busy**: `busy` was global so
+  every row's button read "Loading…"; now only the clicked row does (all stay disabled). (6)
+  **Global `:focus-visible` outline** (cyan, matches the DualSlider thumbs) for keyboard nav.
+  Flagged, not changed (maintainer's call): the counts line under the title ("N shown / known /
+  total") and the controls-row "N / M shown" say nearly the same thing twice. Checks:
+  svelte-check 0 errors / 9 known warnings. **Verify on Windows:** Esc closes each modal
+  immediately after opening it from a menu; search + Min/Max inputs look themed (dark, bordered)
+  in both themes; filter everything out → empty-state message; trigger a WS-port save failure
+  with the modal open → banner visible on top; picker with 2+ videos → only the clicked row says
+  Loading…; Tab around → cyan focus outlines.
+  **Round 2 (2026-07-07, maintainer verify feedback) — scroll scoping + menu reorganization.**
+  (1) **Outer window scrollbar** (whole app scrolled, menu bar included): T068 regression —
+  `.app-shell` was `height: 100vh`, and vh ignores the root CSS `zoom` the Appearance scale
+  applies, so any scale >100% overflowed the window. Now `height: 100%` (chains through
+  html/body) + `overflow: hidden` on html/body so the window can never scroll. (2) **Inner
+  scroll scoped to the term rows only**: `.app-main` no longer scrolls (flex column,
+  overflow hidden); the file view wraps `TermTable` in a `.table-scroll` region — title, Anki
+  coverage card, and search/filter controls stay put; the sticky column header sticks to the
+  rows region's top (also kills the old rows-visible-above-the-sticky-header padding gap). The
+  landing screen already scoped its own recents scroll. TermTable's context menu now closes on
+  `onscrollcapture` (plain `onscroll` on window never fires for inner-container scrolls). (3)
+  **Menu reorganization** (maintainer choice via Q&A: "Mining menu"): the one-item Tools menu is
+  gone; new **Mining** menu = Ignore List, Part of Speech Filters, Frequency Dictionaries, ─,
+  Frequency Analyzer (the data you tweak while working); **Settings** = Anki, WebSocket Server,
+  Appearance, ─, Setup Checklist (true config + onboarding); **File** gains a separator before
+  Open Data Folder/Quit. `.menu-sep` divider style; setup-checklist description string updated
+  to "Mining → Frequency Dictionaries". Checks: svelte-check 0 errors / 9 known warnings.
+  **Verify on Windows:** at 125% Appearance scale there is NO outer scrollbar; with a long file
+  loaded, scrolling keeps title/coverage/search fixed and only the rows move (column header
+  pinned); menus read File / Mining / Settings with separators; all six relocated entries open
+  their modals.
 - **NEXT options:**
   - **`load_frequency_dictionaries` import command (freq-dict import)** — the File-menu "Load New
     Frequency Dictionaries" entry and the checklist's two "+ Install Dictionary" actions (T045)
