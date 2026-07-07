@@ -50,3 +50,13 @@ pub fn set_websocket_port(
     player.set_port(port);
     Ok(())
 }
+
+/// The media asbplayer is currently tracking (`get-bound-media`, issue #105) —
+/// drives the "Load from asbplayer" picker. Errors when asbplayer isn't
+/// connected or the extension predates the command (v1.20+).
+#[tauri::command]
+pub async fn get_asbplayer_media(
+    player: State<'_, PlayerHandle>,
+) -> Result<Vec<crate::dto::BoundMediaDto>, String> {
+    Ok(player.get_bound_media().await?.into_iter().map(Into::into).collect())
+}

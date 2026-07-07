@@ -36,6 +36,7 @@ pub fn run() {
             commands::file::get_terms,
             commands::file::refresh_terms,
             commands::file::get_recent_files,
+            commands::file::load_asbplayer_media,
             commands::ignore::get_ignore_list,
             commands::ignore::add_to_ignore_list,
             commands::ignore::remove_from_ignore_list,
@@ -61,6 +62,7 @@ pub fn run() {
             commands::player::seek_timestamp,
             commands::player::get_player_status,
             commands::player::set_websocket_port,
+            commands::player::get_asbplayer_media,
             commands::setup::get_setup_status,
             commands::knowledge::get_knowledge_summary,
         ])

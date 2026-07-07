@@ -46,12 +46,23 @@ pub async fn process_source_file(
     source_file: &SourceFile,
     language_tools: &LanguageTools,
 ) -> Result<(Vec<Term>, FilterResult, Vec<Sentence>, f32), YomineError> {
-    let total_start = Instant::now();
-
     // Parse the source file
-    let mut sentences =
+    let sentences =
         parser::read(source_file).map_err(|e| YomineError::FailedToLoadFile(e.to_string()))?;
     println!("Parsed {} sentences", sentences.len());
+
+    process_sentences(sentences, language_tools).await
+}
+
+/// The shared tail of file processing: tokenize/segment `sentences`, dedupe
+/// terms, apply the ignore + cached-Anki filters, and compute comprehension.
+/// Split from `process_source_file` so non-file sources (the asbplayer subtitle
+/// importer, issue #105) run the identical pipeline.
+pub async fn process_sentences(
+    mut sentences: Vec<Sentence>,
+    language_tools: &LanguageTools,
+) -> Result<(Vec<Term>, FilterResult, Vec<Sentence>, f32), YomineError> {
+    let total_start = Instant::now();
 
     // Extract and deduplicate terms
     let mut terms = extract_words(

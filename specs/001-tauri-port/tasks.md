@@ -1131,6 +1131,93 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
   workflow (first run downloads UniDic once, then cached); (3) when releasing, `manual-release`
   or a release tag now also produces Tauri installers — smoke-test them (that's T052) — then tick
   T053.
+- **T066 DONE (2026-07-07) [feature] — load subtitles from asbplayer (issue #105 phase 1;
+  maintainer-directed).** Uses the `get-bound-media` (asbplayer PR #1033) + `get-subtitles`
+  commands the maintainer landed upstream (extension v1.20+; shapes from asbplayer's
+  docs/reference/external-api.md). **Engine (`src/websocket/`):** the protocol gains real
+  request/response — `CommandResponse` now carries an optional `body`; `ServerCommand::
+  ProcessConfirmation` generalized to `ProcessResponse { message_id, body }` (a pending request
+  wins the messageId, else it's a seek confirmation exactly as before); `WebSocketServer` gains a
+  `pending_requests` map (messageId → `SyncSender`), `request_blocking(command, body, timeout)`
+  (no clients → "asbplayer is not connected"; timeout error hints "needs the asbplayer extension
+  v1.20+"), and typed `get_bound_media()` (5s) / `get_subtitles(media_id, track_numbers)` (15s).
+  New types `BoundMedia`/`SubtitleTrack`/`RemoteSubtitle` (camelCase serde matching asbplayer);
+  `RemoteSubtitle::to_sentence` converts a cue (ms timings) into a pipeline `Sentence` — same
+  cleanup as the SRT parser via the newly-shared `parser::clean_subtitle_text` (parse_srt now uses
+  it too; adds a trailing trim, behavior otherwise identical) and a `TimeStamp` from ms so
+  **seek + 👁 confirmations work unchanged**. `pipeline::process_sentences` factored out of
+  `process_source_file` (the tokenize→dedupe→filter→comprehension tail) so non-file sources run
+  the identical pipeline. **Tauri:** `PlayerCommand::{GetBoundMedia, GetSubtitles}` — handled in
+  the player task by cloning the ws server Arc into `spawn_blocking` (the 250ms poll loop never
+  stalls on the request timeout); `PlayerHandle` async wrappers; snake_case `BoundMediaDto`;
+  commands `get_asbplayer_media` (player.rs) and `load_asbplayer_media(media_id, track_numbers?,
+  title, progress)` (file.rs — mirrors `process_file`'s tail: FileData store, background
+  live-Anki refresh, but **skips recent-files recording**; `SourceFile { source: "asbplayer",
+  file_type: Other("asbplayer"), original_file: "asbplayer://<id>" }`; empty subtitle list →
+  friendly Err). Registered in lib.rs; contracts updated. **Frontend:** `AsbplayerModal.svelte`
+  media picker — fetches on open + ⟳ Refresh; rows show favicon (🎬 fallback), title
+  ("Untitled video" fallback), streaming/local badge, green "active tab" badge; media without
+  loaded subtitles are visible-but-disabled with a "load a subtitle file in asbplayer first"
+  hint; ONE track = one-click Load, multiple tracks = radio choice (+ "All tracks"); success
+  closes the modal into the loaded table. Entry points: landing screen gains "▶ Load from
+  asbplayer" beside Open New File **only while asbplayer is connected** (`ws_clients > 0`, live
+  via player-status), and File → "Load from asbplayer…" (disabled + tooltip when not connected).
+  `stores`: `asbplayerModalOpen`/`openAsbplayerModal`/`loadFromAsbplayer` (overlay progress,
+  `lastError` on failure). **Checks:** `cargo check -p yomine` + `-p yomine-tauri` ✓, engine
+  tests all green, `pnpm run check` → **0 errors** (first run with the T053 @types/node fix +
+  maintainer's lockfile regen) + 8 known backdrop warnings. **Verify on Windows (`cargo tauri
+  dev`):** with asbplayer connected + a video bound: landing shows the asbplayer button → picker
+  lists the video (title/favicon/badges) → Load → table appears with timestamps; click a
+  timestamp → seeks + goes green 👁; with multiple subtitle tracks → radio choice; video with no
+  subtitles → disabled row + hint; disconnect asbplayer → landing button disappears, File-menu
+  entry disables; old extension → timeout error mentions v1.20+. Phase 2 of #105 (Yomitan
+  `get-rendered-fields` → AnkiConnect `create note` → `mine-subtitle` one-click flow) is a
+  separate task.
+  **Follow mode + picker polish (2026-07-07, maintainer verify feedback + design Q&A).** Picker:
+  dialog widened to 720px; titles wrap up to 3 lines (`line-clamp`, badges/Load pinned right) —
+  no more mid-title ellipsis. **Follow mode (maintainer choices: "follow after first load",
+  persisted):** new `SettingsData.asbplayer_follow` (serde-default false; shared settings.json,
+  egui-compatible); the picker gains a persisted "Keep following asbplayer — load new videos
+  automatically" checkbox. Backend: third `background.rs` loop (3s cadence) that is **armed** only
+  while the setting is on AND the current file came from asbplayer (`source == "asbplayer"`) —
+  arming seeds a seen-set from the current `get-bound-media` list so ONLY genuinely-new media ids
+  trigger (tab-switching among open videos never does; a new id fires once its subtitles are
+  loaded, which can land a couple polls after the video appears; active tab preferred when
+  several are new). Auto-load reuses the factored `load_asbplayer_into_state` (the command's body,
+  progress optional) and pushes the new `FileLoadResult` via the new **`asbplayer-media-loaded`**
+  event; failures → `error` event. Opening a regular file (or unchecking) disarms; the next
+  asbplayer load re-arms with a fresh seed. Frontend: event listener swaps the table in place +
+  a new non-blocking `notice` toast ("Loaded from asbplayer: <title>", auto-dismiss 4s, green
+  accent, top-center) — first use of the toast primitive. Checks: both crates ✓, svelte-check
+  0 errors / 8 known warnings. Verify: enable the checkbox, load a video, play the next episode
+  (or open a new subtitled video) → within ~3-6s the table swaps + toast; switching among
+  already-open tabs does nothing; open a local file → following stops until the next asbplayer
+  load.
+  **Round 2 (2026-07-07, maintainer verify feedback) — exposure, active-tab follow, poll rate,
+  recents integration.** (1) **Settings split + exposure**: `asbplayer_follow` →
+  `asbplayer_follow_new_media` + new `asbplayer_follow_active_tab` + `asbplayer_poll_secs`
+  (default 3, clamp ≥1; all serde-default). The **TopBar asbplayer status indicator is now a
+  click-menu** ("Load from asbplayer…", ✓ Follow new videos, ✓ Follow active tab — right-anchored
+  panel; stopPropagation so toggling keeps it open, Esc closes) — the follow toggles are one click
+  away while connected; the picker keeps both checkboxes too (shared persisted state via a new
+  `patchSettings` store helper). Poll rate lives in the **WebSocket settings modal** (staged
+  field, 1-60s validation, Restore Default resets both). (2) **Active-tab follow**: the background
+  loop (now `sleep(asbplayer_poll_secs)` re-read each iteration) checks new-media first, then — if
+  `follow_active_tab` — whether the loaded video is still among the active-with-subtitles tabs;
+  if not, switches to the first one. Needs to know what's loaded: `FileData.asbplayer_media_id:
+  Option<String>` (set by asbplayer loads, `None` for files) — also replaces the source-string
+  check for arming. Stable by construction: no flapping when two windows both have active videos
+  (loaded ∈ actives → no-op). (3) **Recents integration**: asbplayer loads now write the raw cues
+  as a real `.srt` (engine `websocket::subtitles_to_srt`) to `<app data>/asbplayer_subtitles/
+  <sanitized title>.srt` (overwrite = reloading the same video updates its entry) and
+  `record_recent_file` it — sessions reopen later WITHOUT asbplayer via the normal parser (raw
+  text written; both paths clean identically). `SourceFile.file_type` = SRT + real path when
+  saved (fallback `asbplayer://<id>` + no recents on write failure, best-effort). Checks: both
+  crates ✓, svelte-check 0 errors / 8 known warnings. Verify additions: asbplayer dot → menu opens
+  with working toggles (state matches the picker's); tab-switch with "Follow active tab" on →
+  table swaps to that tab's video (~poll interval); poll rate change in WebSocket settings takes
+  effect next tick; after an asbplayer load, the landing recents list shows the video title and
+  reopening it works with asbplayer closed.
 - **NEXT options:**
   - **`load_frequency_dictionaries` import command (freq-dict import)** — the File-menu "Load New
     Frequency Dictionaries" entry and the checklist's two "+ Install Dictionary" actions (T045)
@@ -1508,6 +1595,11 @@ sub-states, above) belongs to the same gate.
 
 ## Post-parity features
 
+- [x] T066 [feature] **Load subtitles from asbplayer (issue #105, phase 1).** `get-bound-media` /
+      `get-subtitles` over the existing WebSocket (request/response with messageId correlation);
+      landing-screen "Load from asbplayer" + File-menu entry open a media picker (title, favicon,
+      streaming/local + active badges, track selection); the selected media's subtitles run
+      through the normal pipeline with cue timings intact, so seek/👁 work end-to-end.
 - [x] T065 [feature] **Segmentation regression suite + numeric/rendaku reading fixes (mission
       objective #3).** First-principles expected-vs-actual fixture suite (`tests/segmentation.rs` +
       `tests/fixtures/segmentation/*.toml`, live UniDic, per-file synthetic frequency dicts), the

@@ -9,6 +9,8 @@
 		hydrate,
 		openAndProcessFile,
 		openRecentFile,
+		openAsbplayerModal,
+		playerStatus,
 		languageToolsStatus,
 		overlay,
 		fileResult,
@@ -16,6 +18,7 @@
 		recentFiles,
 		dragHovering,
 		lastError,
+		notice,
 		ankiFilterActive,
 		refreshTerms
 	} from '$lib/stores';
@@ -30,6 +33,7 @@
 	import SetupBanner from '$lib/components/SetupBanner.svelte';
 	import SetupChecklistModal from '$lib/components/SetupChecklistModal.svelte';
 	import FrequencyAnalyzerModal from '$lib/components/FrequencyAnalyzerModal.svelte';
+	import AsbplayerModal from '$lib/components/AsbplayerModal.svelte';
 	import KnowledgeSummary from '$lib/components/KnowledgeSummary.svelte';
 
 	onMount(hydrate);
@@ -116,7 +120,15 @@
 				<h1 class="landing-title">No File Loaded</h1>
 				<p class="landing-jp">ファイルがまだ読み込まれていません</p>
 				<p class="landing-hint">ℹ You can drag and drop a file at any time to load it.</p>
-				<button class="landing-open" onclick={openAndProcessFile}>Open New File</button>
+				<div class="landing-actions">
+					<button class="landing-open" onclick={openAndProcessFile}>Open New File</button>
+					{#if $playerStatus.ws_clients > 0}
+						<!-- Only offered while asbplayer is actually connected (issue #105). -->
+						<button class="landing-open asb" onclick={openAsbplayerModal}
+							>▶ Load from asbplayer</button
+						>
+					{/if}
+				</div>
 
 				{#if $recentFiles.length > 0}
 					<section class="recents">
@@ -152,6 +164,7 @@
 	</main>
 
 	<IgnoreListModal />
+	<AsbplayerModal />
 	<WebsocketSettingsModal />
 	<AnkiSettingsModal />
 	<FrequencyWeightsModal />
@@ -166,6 +179,10 @@
 			{#if $lastError.detail}<span class="detail">{$lastError.detail}</span>{/if}
 			<button onclick={() => lastError.set(null)} aria-label="Dismiss">✕</button>
 		</div>
+	{/if}
+
+	{#if $notice}
+		<div class="notice" role="status">{$notice}</div>
 	{/if}
 
 	{#if $dragHovering}
@@ -232,8 +249,13 @@
 		font-size: 0.75rem;
 		color: var(--comment);
 	}
-	.landing-open {
+	.landing-actions {
+		display: flex;
+		gap: 0.6rem;
 		margin-top: 1.25rem;
+	}
+	.landing-open.asb {
+		color: var(--green);
 	}
 	.recents {
 		margin-top: 2.5rem;
@@ -320,6 +342,22 @@
 	}
 	.error-banner strong {
 		color: var(--red);
+	}
+	/* Transient toast (e.g. follow mode swapped in a new asbplayer video). */
+	.notice {
+		position: fixed;
+		top: 3.2rem;
+		left: 50%;
+		transform: translateX(-50%);
+		max-width: 80vw;
+		padding: 0.45rem 0.9rem;
+		background: var(--bg-light);
+		border: 1px solid var(--green);
+		border-radius: var(--radius);
+		color: var(--fg);
+		font-size: 0.85rem;
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+		z-index: 40;
 	}
 	.error-banner .detail {
 		color: var(--comment);

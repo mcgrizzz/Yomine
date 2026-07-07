@@ -509,6 +509,12 @@ export async function hydrate(): Promise<void> {
 	});
 	ipc.onTermsRefreshed((r) => fileResult.set(r));
 	ipc.onError((e) => lastError.set(e));
+	// Follow mode swapped in a new asbplayer video (issue #105): update the
+	// table in place and say so without blocking anything.
+	ipc.onAsbplayerMediaLoaded((r) => {
+		fileResult.set(r);
+		showNotice(`Loaded from asbplayer: ${r.source_file.title}`);
+	});
 	// Weights/enabled changed → the backend rebaked the stored terms' HARMONIC;
 	// re-fetch so the table's weighted frequency + bounds recompute (egui reads
 	// the manager live each frame instead). No hydrate pull needed: the resting
@@ -612,4 +618,73 @@ export async function openAndProcessFile(): Promise<void> {
 /** Open a previously-loaded file directly from the recent-files list. */
 export function openRecentFile(path: string): Promise<void> {
 	return loadAndStore(path);
+}
+
+// ---- Load from asbplayer (issue #105) ----------------------------------------
+
+/** Whether the asbplayer media-picker modal is open (it fetches the media list
+ * on open). Opened from the landing screen + the File menu when connected. */
+export const asbplayerModalOpen = writable(false);
+
+export function openAsbplayerModal(): void {
+	asbplayerModalOpen.set(true);
+}
+
+/** Persist a partial settings change and mirror it locally (the asbplayer
+ * follow toggles + poll rate use this; theme/font keep their named toggles). */
+async function patchSettings(patch: Partial<ipc.SettingsData>): Promise<void> {
+	const s = get(settings);
+	if (!s) return;
+	const updated = { ...s, ...patch };
+	settings.set(updated);
+	await ipc.saveSettings(updated);
+}
+
+/** Follow-mode opt-ins (issue #105) — armed only after a load from asbplayer;
+ * the backend loop does the watching. Exposed in the asbplayer status menu and
+ * the picker. */
+export const setAsbplayerFollowNewMedia = (on: boolean) =>
+	patchSettings({ asbplayer_follow_new_media: on });
+export const setAsbplayerFollowActiveTab = (on: boolean) =>
+	patchSettings({ asbplayer_follow_active_tab: on });
+
+/** Follow-mode poll cadence (seconds, ≥1) — the WebSocket settings modal. */
+export const setAsbplayerPollSecs = (secs: number) =>
+	patchSettings({ asbplayer_poll_secs: Math.max(1, Math.round(secs) || 1) });
+
+/** Transient toast text (`null` = hidden) — non-blocking, unlike `overlay`. */
+export const notice = writable<string | null>(null);
+let noticeTimer: ReturnType<typeof setTimeout> | undefined;
+export function showNotice(text: string): void {
+	notice.set(text);
+	clearTimeout(noticeTimer);
+	noticeTimer = setTimeout(() => notice.set(null), 4000);
+}
+
+/**
+ * Load a bound media's subtitles from asbplayer as the current "file". Same
+ * overlay/error surface as opening a file; returns whether it succeeded so the
+ * picker can close. Timestamps come through, so seek/👁 work immediately.
+ */
+export async function loadFromAsbplayer(
+	media: ipc.BoundMedia,
+	trackNumbers: number[] | null
+): Promise<boolean> {
+	if (get(languageToolsStatus) !== 'ready') return false;
+	try {
+		overlay.set('Fetching subtitles from asbplayer…');
+		const result = await ipc.loadAsbplayerMedia(
+			media.id,
+			trackNumbers,
+			media.title ?? 'asbplayer video',
+			(msg) => overlay.set(msg.message)
+		);
+		fileResult.set(result);
+		return true;
+	} catch (err) {
+		lastError.set({ title: 'Failed to load from asbplayer', message: String(err), detail: null });
+		return false;
+	} finally {
+		overlay.set(null);
+	}
 }

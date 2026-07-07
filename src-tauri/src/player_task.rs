@@ -21,6 +21,8 @@ use yomine::{
     mpv::MpvManager,
     player::PlayerManager,
     websocket::{
+        BoundMedia,
+        RemoteSubtitle,
         ServerState,
         WebSocketManager,
     },
@@ -39,6 +41,16 @@ pub enum PlayerCommand {
     Seek { seconds: f32, label: String, reply: oneshot::Sender<Result<(), String>> },
     Status { reply: oneshot::Sender<PlayerStatus> },
     SetPort(u16),
+    /// asbplayer `get-bound-media` (issue #105). Runs on `spawn_blocking` off
+    /// the task loop — the request blocks up to its timeout.
+    GetBoundMedia { reply: oneshot::Sender<Result<Vec<BoundMedia>, String>> },
+    /// asbplayer `get-subtitles` for one media (all tracks when `track_numbers`
+    /// is `None`).
+    GetSubtitles {
+        media_id: Option<String>,
+        track_numbers: Option<Vec<u32>>,
+        reply: oneshot::Sender<Result<Vec<RemoteSubtitle>, String>>,
+    },
 }
 
 /// Cheap-to-clone handle commands hold to reach the player task.
@@ -64,6 +76,26 @@ impl PlayerHandle {
 
     pub fn set_port(&self, port: u16) {
         let _ = self.0.send(PlayerCommand::SetPort(port));
+    }
+
+    pub async fn get_bound_media(&self) -> Result<Vec<BoundMedia>, String> {
+        let (reply, rx) = oneshot::channel();
+        self.0
+            .send(PlayerCommand::GetBoundMedia { reply })
+            .map_err(|_| "player task is not running".to_string())?;
+        rx.await.map_err(|_| "player task dropped the request".to_string())?
+    }
+
+    pub async fn get_subtitles(
+        &self,
+        media_id: Option<String>,
+        track_numbers: Option<Vec<u32>>,
+    ) -> Result<Vec<RemoteSubtitle>, String> {
+        let (reply, rx) = oneshot::channel();
+        self.0
+            .send(PlayerCommand::GetSubtitles { media_id, track_numbers, reply })
+            .map_err(|_| "player task is not running".to_string())?;
+        rx.await.map_err(|_| "player task dropped the request".to_string())?
     }
 }
 
@@ -131,6 +163,28 @@ async fn run(app: AppHandle, mut port: u16, mut rx: mpsc::UnboundedReceiver<Play
                 }
                 PlayerCommand::Status { reply } => {
                     let _ = reply.send(current_status(&player));
+                }
+                PlayerCommand::GetBoundMedia { reply } => {
+                    let server = player.ws.server.clone();
+                    tauri::async_runtime::spawn_blocking(move || {
+                        let result = match server {
+                            Some(s) => s.get_bound_media().map_err(|e| e.to_string()),
+                            None => Err("WebSocket server is not running".to_string()),
+                        };
+                        let _ = reply.send(result);
+                    });
+                }
+                PlayerCommand::GetSubtitles { media_id, track_numbers, reply } => {
+                    let server = player.ws.server.clone();
+                    tauri::async_runtime::spawn_blocking(move || {
+                        let result = match server {
+                            Some(s) => s
+                                .get_subtitles(media_id.as_deref(), track_numbers.as_deref())
+                                .map_err(|e| e.to_string()),
+                            None => Err("WebSocket server is not running".to_string()),
+                        };
+                        let _ = reply.send(result);
+                    });
                 }
                 PlayerCommand::SetPort(new_port) => {
                     if port != new_port {

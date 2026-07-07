@@ -47,6 +47,21 @@ pub struct SettingsData {
     pub use_serif_font: bool,
     #[serde(default = "default_true")]
     pub dark_mode: bool,
+    /// Follow mode (issue #105): after a load from asbplayer, automatically load
+    /// NEW videos asbplayer binds (with subtitles). Opt-in, persisted.
+    #[serde(default)]
+    pub asbplayer_follow_new_media: bool,
+    /// Follow mode (issue #105): after a load from asbplayer, switch to the
+    /// active tab's video when it isn't the loaded one. Opt-in, persisted.
+    #[serde(default)]
+    pub asbplayer_follow_active_tab: bool,
+    /// How often follow mode polls asbplayer's bound-media list, in seconds.
+    #[serde(default = "default_asbplayer_poll_secs")]
+    pub asbplayer_poll_secs: u32,
+}
+
+const fn default_asbplayer_poll_secs() -> u32 {
+    3
 }
 
 const fn default_interval() -> u32 {
@@ -67,6 +82,9 @@ impl Default for SettingsData {
             pos_filters: HashMap::new(),
             use_serif_font: false,
             dark_mode: true,
+            asbplayer_follow_new_media: false,
+            asbplayer_follow_active_tab: false,
+            asbplayer_poll_secs: default_asbplayer_poll_secs(),
         }
     }
 }

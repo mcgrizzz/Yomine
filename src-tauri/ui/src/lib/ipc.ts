@@ -194,6 +194,14 @@ export interface SettingsData {
 	pos_filters: Record<string, boolean>;
 	use_serif_font: boolean;
 	dark_mode: boolean;
+	/** Follow mode (issue #105): after a load from asbplayer, NEW bound videos
+	 * with subtitles load automatically. Opt-in. */
+	asbplayer_follow_new_media: boolean;
+	/** Follow mode (issue #105): switch to the active tab's video when it isn't
+	 * the loaded one. Opt-in. */
+	asbplayer_follow_active_tab: boolean;
+	/** Follow-mode poll cadence in seconds (≥1). */
+	asbplayer_poll_secs: number;
 }
 
 /** Aggregated setup readiness for the checklist/banner (`get_setup_status`).
@@ -392,6 +400,46 @@ export function seekTimestamp(seconds: number, label: string): Promise<void> {
 	return invoke('seek_timestamp', { seconds, label });
 }
 
+/** One subtitle track loaded for a bound media (issue #105). */
+export interface SubtitleTrack {
+	track_number: number;
+	file_name: string;
+}
+
+/** Media asbplayer is currently tracking (`get-bound-media`, issue #105). */
+export interface BoundMedia {
+	id: string;
+	/** 'streaming' | 'local'. */
+	media_type: string;
+	title: string | null;
+	favicon_url: string | null;
+	/** Empty when no subtitles are loaded for the media. */
+	loaded_subtitles: SubtitleTrack[];
+	/** Whether the media's tab is the active tab of its window. */
+	active: boolean;
+}
+
+/** The media asbplayer is tracking, for the "Load from asbplayer" picker
+ * (issue #105). Rejects when asbplayer isn't connected or the extension
+ * predates `get-bound-media` (v1.20+). */
+export function getAsbplayerMedia(): Promise<BoundMedia[]> {
+	return invoke('get_asbplayer_media');
+}
+
+/** Fetch a media's subtitles from asbplayer and run them through the same
+ * pipeline as a file; resolves with the loaded terms (issue #105). Timestamps
+ * are preserved, so seeking works. `trackNumbers = null` loads all tracks. */
+export async function loadAsbplayerMedia(
+	mediaId: string,
+	trackNumbers: number[] | null,
+	title: string,
+	onProgress: (msg: LoadingMessage) => void
+): Promise<FileLoadResult> {
+	const channel = new Channel<LoadingMessage>();
+	channel.onmessage = onProgress;
+	return invoke('load_asbplayer_media', { mediaId, trackNumbers, title, progress: channel });
+}
+
 /** Persist the WebSocket server port and restart a running server on it (US5/T041). */
 export function setWebsocketPort(port: number): Promise<void> {
 	return invoke('set_websocket_port', { port });
@@ -571,6 +619,10 @@ export const onKnowledgeSummary = (cb: (s: KnowledgeSummary) => void) =>
 	listenTo('knowledge-summary', cb);
 export const onDictionariesChanged = (cb: () => void) =>
 	listenTo<null>('dictionaries-changed', () => cb());
+/** Follow mode auto-loaded a new asbplayer video (issue #105); payload = the
+ * freshly loaded file. */
+export const onAsbplayerMediaLoaded = (cb: (r: FileLoadResult) => void) =>
+	listenTo('asbplayer-media-loaded', cb);
 export const onError = (cb: (e: ErrorPayload) => void) => listenTo('error', cb);
 
 // Frequency-analyzer events (US6/T047). `start_analysis`/`export_analysis`

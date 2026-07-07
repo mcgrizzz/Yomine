@@ -3,14 +3,24 @@
 	// The port edit is *staged* (egui's temp_websocket_settings) and committed only on
 	// "Save Settings" via set_websocket_port (persist + restart the running server);
 	// Cancel reverts the staged edit but keeps the modal open (egui behavior).
+	// Also hosts the asbplayer follow-mode poll rate (issue #105), staged the same way.
 	import { untrack } from 'svelte';
-	import { settings, websocketModalOpen, saveWebsocketPort } from '$lib/stores';
+	import {
+		settings,
+		websocketModalOpen,
+		saveWebsocketPort,
+		setAsbplayerPollSecs
+	} from '$lib/stores';
 
 	/** `WebSocketSettings::default()` (core/settings.rs). */
 	const DEFAULT_PORT = 8766;
+	/** `default_asbplayer_poll_secs()` (core/settings.rs). */
+	const DEFAULT_POLL_SECS = 3;
 
 	let tempPort = $state(DEFAULT_PORT);
 	let originalPort = $state(DEFAULT_PORT);
+	let tempPoll = $state(DEFAULT_POLL_SECS);
+	let originalPoll = $state(DEFAULT_POLL_SECS);
 	let status = $state<string | null>(null);
 
 	// Hydrate from the settings mirror each time the modal opens (egui open_settings).
@@ -24,31 +34,46 @@
 		const port = $settings?.websocket_settings.port ?? DEFAULT_PORT;
 		tempPort = port;
 		originalPort = port;
+		const poll = $settings?.asbplayer_poll_secs ?? DEFAULT_POLL_SECS;
+		tempPoll = poll;
+		originalPoll = poll;
 		status = null;
 	}
 
-	const dirty = $derived(tempPort !== originalPort);
+	const dirty = $derived(tempPort !== originalPort || tempPoll !== originalPoll);
 	// egui's is_valid_port (>= 1024; u16 caps at 65535 — the number input doesn't).
 	const valid = $derived(Number.isInteger(tempPort) && tempPort >= 1024 && tempPort <= 65535);
+	const pollValid = $derived(Number.isInteger(tempPoll) && tempPoll >= 1 && tempPoll <= 60);
 
 	async function save() {
 		if (!valid) {
 			status = 'Invalid port range. Please use ports 1024-65535.';
 			return;
 		}
-		if (await saveWebsocketPort(tempPort)) {
-			websocketModalOpen.set(false);
+		if (!pollValid) {
+			status = 'Poll interval must be 1-60 seconds.';
+			return;
 		}
-		// On failure the lastError banner shows; staged state stays for a retry.
+		if (tempPoll !== originalPoll) {
+			await setAsbplayerPollSecs(tempPoll);
+			originalPoll = tempPoll;
+		}
+		if (tempPort !== originalPort) {
+			if (!(await saveWebsocketPort(tempPort))) return;
+			// On failure the lastError banner shows; staged state stays for a retry.
+		}
+		websocketModalOpen.set(false);
 	}
 
 	function cancel() {
 		tempPort = originalPort;
+		tempPoll = originalPoll;
 		status = null;
 	}
 
 	function restoreDefault() {
 		tempPort = DEFAULT_PORT;
+		tempPoll = DEFAULT_POLL_SECS;
 		status = null;
 	}
 </script>
@@ -85,6 +110,17 @@
 			</div>
 			{#if !valid}
 				<p class="invalid">⚠ Port must be between 1024 and 65535</p>
+			{/if}
+
+			<!-- Follow-mode poll cadence (issue #105): how often yomine asks
+			     asbplayer for its bound media while a follow toggle is armed. -->
+			<div class="port-row">
+				<label for="asb-poll">asbplayer poll interval:</label>
+				<input id="asb-poll" type="number" min="1" max="60" bind:value={tempPoll} />
+				<span class="hint">seconds (1-60; used by follow mode)</span>
+			</div>
+			{#if !pollValid}
+				<p class="invalid">⚠ Poll interval must be between 1 and 60 seconds</p>
 			{/if}
 
 			{#if status}

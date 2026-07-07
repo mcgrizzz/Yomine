@@ -261,3 +261,39 @@ pub struct RecommendedDictionaryDto {
     pub latest_revision: Option<String>,
     pub status: String,
 }
+
+/// One subtitle track of a bound media (issue #105, snake_case for the wire).
+#[derive(Serialize, Clone)]
+pub struct SubtitleTrackDto {
+    pub track_number: u32,
+    pub file_name: String,
+}
+
+/// Media asbplayer is tracking (`get-bound-media`), for the picker modal.
+#[derive(Serialize, Clone)]
+pub struct BoundMediaDto {
+    pub id: String,
+    /// `"streaming"` | `"local"`.
+    pub media_type: String,
+    pub title: Option<String>,
+    pub favicon_url: Option<String>,
+    pub loaded_subtitles: Vec<SubtitleTrackDto>,
+    pub active: bool,
+}
+
+impl From<yomine::websocket::BoundMedia> for BoundMediaDto {
+    fn from(m: yomine::websocket::BoundMedia) -> Self {
+        Self {
+            id: m.id,
+            media_type: m.media_type,
+            title: m.title,
+            favicon_url: m.favicon_url,
+            loaded_subtitles: m
+                .loaded_subtitles
+                .into_iter()
+                .map(|t| SubtitleTrackDto { track_number: t.track_number, file_name: t.file_name })
+                .collect(),
+            active: m.active,
+        }
+    }
+}

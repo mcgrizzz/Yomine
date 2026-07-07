@@ -27,6 +27,7 @@ A `null` `message` clears the overlay (mirrors `MessageOverlay::clear_message`).
 | `terms-refreshed` | `FileLoadResult` | live Anki refresh completes | `TaskResult::TermsRefreshed` |
 | `dictionaries-changed` | `array<DictionaryState>` | dictionaries reloaded or states changed | `TaskResult::FrequencyDictionariesReloaded` |
 | `knowledge-summary` | `KnowledgeSummary` | background recompute finishes | `TaskResult::KnowledgeSummary` |
+| `asbplayer-media-loaded` | `FileLoadResult` | follow mode (T066) auto-loaded a new asbplayer video | — (new in Tauri) |
 | `analysis-complete` | `AnalysisPreview` | analyzer finishes (non-cancelled) | `FrequencyAnalysisUpdate::Complete` |
 | `analysis-cancelled` | `()` | analyzer cancelled | `FrequencyAnalysisUpdate::Cancelled` |
 | `export-complete` | `{ ok: bool, message: string }` | export finishes | `TaskResult::FrequencyExport` |

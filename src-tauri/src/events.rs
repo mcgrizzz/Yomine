@@ -16,6 +16,7 @@ pub mod names {
     pub const TERMS_REFRESHED: &str = "terms-refreshed";
     pub const DICTIONARIES_CHANGED: &str = "dictionaries-changed";
     pub const KNOWLEDGE_SUMMARY: &str = "knowledge-summary";
+    pub const ASBPLAYER_MEDIA_LOADED: &str = "asbplayer-media-loaded";
     pub const ANALYSIS_COMPLETE: &str = "analysis-complete";
     pub const ANALYSIS_CANCELLED: &str = "analysis-cancelled";
     pub const EXPORT_COMPLETE: &str = "export-complete";

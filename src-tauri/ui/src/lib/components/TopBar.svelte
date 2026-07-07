@@ -17,15 +17,18 @@
 		openAnkiModal,
 		openIgnoreModal,
 		openWebsocketModal,
+		openAsbplayerModal,
 		openFrequencyModal,
 		openPosModal,
 		openSetupModal,
 		openAnalyzerModal,
 		openDataFolder,
-		refreshTerms
+		refreshTerms,
+		setAsbplayerFollowNewMedia,
+		setAsbplayerFollowActiveTab
 	} from '$lib/stores';
 
-	type MenuName = 'file' | 'settings' | 'tools';
+	type MenuName = 'file' | 'settings' | 'tools' | 'asb';
 	let openMenu = $state<MenuName | null>(null);
 
 	const toolsReady = $derived($languageToolsStatus === 'ready');
@@ -111,6 +114,12 @@
 				<button onclick={() => run(openAndProcessFile)} disabled={!toolsReady}
 					>Open New File</button
 				>
+				<button
+					onclick={() => run(openAsbplayerModal)}
+					disabled={!toolsReady || $playerStatus.ws_clients === 0}
+					title={$playerStatus.ws_clients === 0 ? 'asbplayer is not connected' : undefined}
+					>Load from asbplayer…</button
+				>
 				<!-- Frequency-dictionary import lives in Settings → Frequency Dictionaries
 				     (maintainer, 2026-07-06 — egui's File-menu entry deliberately not mirrored). -->
 				<button onclick={() => run(openDataFolder)}>Open Data Folder</button>
@@ -158,10 +167,53 @@
 	<span class="spacer"></span>
 
 	<div class="status">
-		<span class="indicator" title={asbplayer.tip}>
-			<small>asbplayer</small>
-			<span class="dot" style:color={asbplayer.color}>●</span>
-		</span>
+		<!-- The asbplayer indicator doubles as a menu: load + the follow toggles
+		     live here so they're one click away while connected (issue #105). -->
+		<div class="menu" class:open={openMenu === 'asb'}>
+			<button class="indicator asb-trigger" title={asbplayer.tip} onclick={(e) => toggleMenu('asb', e)}>
+				<small>asbplayer</small>
+				<span class="dot" style:color={asbplayer.color}>●</span>
+			</button>
+			{#if openMenu === 'asb'}
+				<!-- Toggling a follow checkbox keeps the menu open; Esc / clicking
+				     elsewhere closes it (the stopPropagation shields the window handler). -->
+				<div
+					class="menu-panel right"
+					role="menu"
+					tabindex="-1"
+					onclick={(e) => e.stopPropagation()}
+					onkeydown={(e) => e.key === 'Escape' && (openMenu = null)}
+				>
+					<button
+						onclick={() => run(openAsbplayerModal)}
+						disabled={!toolsReady || $playerStatus.ws_clients === 0}
+						>Load from asbplayer…</button
+					>
+					<label
+						class="menu-check"
+						title="Automatically load new videos asbplayer picks up (e.g. the next episode)."
+					>
+						<input
+							type="checkbox"
+							checked={$settings?.asbplayer_follow_new_media ?? false}
+							onchange={(e) => setAsbplayerFollowNewMedia(e.currentTarget.checked)}
+						/>
+						Follow new videos
+					</label>
+					<label
+						class="menu-check"
+						title="Switch to the active tab's video (with subtitles) when it isn't the loaded one."
+					>
+						<input
+							type="checkbox"
+							checked={$settings?.asbplayer_follow_active_tab ?? false}
+							onchange={(e) => setAsbplayerFollowActiveTab(e.currentTarget.checked)}
+						/>
+						Follow active tab
+					</label>
+				</div>
+			{/if}
+		</div>
 		<span class="indicator" title={mpv.tip}>
 			<small>mpv</small>
 			<span class="dot" style:color={mpv.color}>●</span>
@@ -263,6 +315,38 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.2rem;
+	}
+	/* The asbplayer indicator is a real button (it opens the follow menu). */
+	.asb-trigger {
+		padding: 0.15rem 0.35rem;
+		background: transparent;
+		border: none;
+		border-radius: var(--radius);
+		color: inherit;
+		font: inherit;
+		cursor: pointer;
+	}
+	.asb-trigger:hover,
+	.menu.open .asb-trigger {
+		background: var(--bg-light);
+	}
+	/* Right-anchored panel so it doesn't overflow the window edge. */
+	.menu-panel.right {
+		left: auto;
+		right: 0;
+	}
+	.menu-check {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.4rem 0.6rem;
+		font-size: 0.85rem;
+		white-space: nowrap;
+		cursor: pointer;
+		border-radius: var(--radius);
+	}
+	.menu-check:hover {
+		background: var(--bg-lighter);
 	}
 	.indicator small {
 		font-size: 0.7rem;

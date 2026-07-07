@@ -58,6 +58,10 @@ pub struct FileData {
     pub ignored_count: usize,
     pub sentences: Vec<Sentence>,
     pub file_comprehension: f32,
+    /// The asbplayer media id this content was loaded from (T066), `None` for
+    /// regular files. Arms follow mode and lets the active-tab follow know what
+    /// is currently showing.
+    pub asbplayer_media_id: Option<String>,
 }
 
 pub struct AppState {

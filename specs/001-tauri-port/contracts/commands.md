@@ -62,6 +62,8 @@ file_comprehension: f32 }`.
 | `seek_timestamp` | `seconds: f32`, `label: string` | `()` | `PlayerManager::seek_timestamp` | Prefers MPV, else WebSocket; errors if no player. |
 | `get_player_status` | — | `PlayerStatus` | `PlayerManager` | Also pushed via `player-status` event. |
 | `set_websocket_port` | `port: u16` | `()` | websocket settings modal | Persists + restarts server. |
+| `get_asbplayer_media` | — | `array<BoundMediaDto>` | issue #105 (T066) | asbplayer `get-bound-media` over the WS (extension v1.20+): id/type/title/favicon/tracks/active for the picker. Errors when not connected / no response (timeout hints at the version). |
+| `load_asbplayer_media` | `media_id: string`, `track_numbers: array<u32> \| null`, `title: string`, `progress: Channel<LoadingMessage>` | `FileLoadResult` | issue #105 (T066) | asbplayer `get-subtitles` → cues become `Sentence`s (SRT-grade cleanup, cue timings preserved → seek/👁 work) → `process_sentences` (the same pipeline tail as `process_file`) → stored as the loaded file. NOT recorded in recent files. `null` tracks = all loaded tracks. |
 
 ## Frequency dictionaries
 
