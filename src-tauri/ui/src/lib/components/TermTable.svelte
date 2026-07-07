@@ -1,9 +1,4 @@
 <script lang="ts">
-	// Term table (T029/T030, inline): the US1 mining surface, mirroring egui's
-	// four-column layout — Term │ Sentence │ Frequency │ POS. The term shows its
-	// reading as furigana above the lemma; the example sentence renders inline in
-	// the row (always visible, no expander). Rows arrive already filtered and
-	// sorted by `visibleTerms` (driven by `TableControls`, T037).
 	import type { SentenceDto, Term } from '$lib/ipc';
 	import { defaultDir, harmonic, type SortField } from '$lib/table';
 	import { ignoredLemmas, toggleIgnore, posCatalog, tableSort } from '$lib/stores';
@@ -13,13 +8,8 @@
 
 	let { terms, sentences }: { terms: Term[]; sentences: SentenceDto[] } = $props();
 
-	// Column-header sorting (T061, egui `header.rs`): the Sentence and Frequency
-	// headers ARE the sort controls. Clicking an inactive header activates it in
-	// its natural direction; clicking it again reverses. The Sentence header owns
-	// three modes — when active, a small chip shows the current one and clicking
-	// the chip cycles Chronological → Sentence Count → Comprehension, keeping the
-	// direction (egui's 🕒/#/📊 cycle icon). The active column header is
-	// highlighted; hovering an inactive one previews its default direction arrow.
+	// The column headers ARE the sort controls; the Sentence header owns three
+	// modes, cycled via its chip while active.
 	const SENTENCE_MODES: { field: SortField; label: string; name: string }[] = [
 		{ field: 'chronological', label: '🕒 Chronological', name: 'Chronological' },
 		{ field: 'sentenceCount', label: '# Sentence Count', name: 'Sentence Count' },
@@ -51,10 +41,8 @@
 		tableSort.update((s) => ({ field: next, dir: s.dir }));
 	}
 
-	// Term ignore (T059, egui parity): Ctrl/Cmd+Click the term to toggle ignore, or
-	// right-click for the same as a menu. An ignored term stays visible but greyed —
-	// the row only disappears on the next refresh; toggling again un-ignores it. The
-	// menu closes on the next click/scroll anywhere.
+	// Ignored terms stay visible but greyed; the row only disappears on the next
+	// refresh, so the toggle is undoable in place (egui parity).
 	let menu = $state<{ x: number; y: number; lemma: string } | null>(null);
 
 	function openMenu(e: MouseEvent, term: Term) {
@@ -72,8 +60,7 @@
 		toggleIgnore(term.lemma_form);
 	}
 
-	// Track whether Ctrl/Cmd is held so the term shows a pointing-hand cursor while it
-	// can be clicked-to-ignore (egui `set_cursor_icon(PointingHand)` on ctrl+hover).
+	// Pointing-hand cursor while Ctrl/Cmd is held (the click-to-ignore affordance).
 	let ctrlHeld = $state(false);
 	function trackMods(e: KeyboardEvent) {
 		ctrlHeld = e.ctrlKey || e.metaKey;
@@ -96,9 +83,6 @@
 		return v === Infinity ? '？' : String(v);
 	}
 
-	// Resolve a term's `sentence_references` (index, byte offset) to its example
-	// sentences, matching egui's index-based lookup into the sentences array.
-	// SentenceView owns the ◀ n/m ▶ browsing across them (T030b).
 	function occurrencesOf(term: Term): Occurrence[] {
 		const out: Occurrence[] = [];
 		for (const [i, start] of term.sentence_references) {
@@ -233,7 +217,7 @@
 		text-transform: uppercase;
 		letter-spacing: 0.03em;
 	}
-	/* Sortable column headers (T061, egui header.rs). */
+	/* Sortable column headers. */
 	.head-cell {
 		display: inline-flex;
 		align-items: center;
@@ -256,7 +240,7 @@
 		letter-spacing: inherit;
 		cursor: pointer;
 	}
-	/* Active-column highlight (egui draw_column_highlight: cyan @ 10%). */
+	/* Active-column highlight. */
 	.head-btn.active {
 		background: color-mix(in srgb, var(--cyan) 10%, transparent);
 		color: var(--fg);
@@ -269,7 +253,7 @@
 		color: var(--cyan);
 	}
 	/* Sortable-column affordance: a dim ⇅ that swaps to the default-direction
-	   preview arrow on hover (egui sort_arrow_text). */
+	   preview arrow on hover. */
 	.arrow.hint {
 		opacity: 0.55;
 	}
@@ -305,7 +289,7 @@
 		color: var(--red);
 		line-height: 1.1;
 	}
-	/* Ignored-in-place: greyed until the next refresh drops the row (T059). */
+	/* Ignored-in-place: greyed until the next refresh drops the row. */
 	.term.ignored {
 		color: var(--comment);
 	}

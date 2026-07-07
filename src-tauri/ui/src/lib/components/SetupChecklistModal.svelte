@@ -1,9 +1,4 @@
 <script lang="ts">
-	// Setup checklist modal (T045): parity with src/gui/setup_checklist_modal.rs.
-	// Informational — no staged edits, just a list of readiness checks with optional
-	// help-doc + action buttons. The snapshot is re-pulled on open (egui reads the
-	// live state each frame); the action buttons open the relevant modal / docs and
-	// close this one (egui's `ui.close()` after an action).
 	import { untrack } from 'svelte';
 	import { openUrl } from '@tauri-apps/plugin-opener';
 	import {
@@ -28,8 +23,7 @@
 		actionText: string | null;
 	}
 
-	// Re-pull the live snapshot on open. untrack: hydrate reads $setupStatus/$settings,
-	// which would otherwise re-trigger this effect (it only needs to fire on open).
+	// untrack: the refresh reads stores that must not re-trigger this effect.
 	$effect(() => {
 		if ($setupModalOpen) untrack(() => refreshSetupStatus());
 	});
@@ -38,9 +32,8 @@
 		return complete ? 'complete' : 'incomplete';
 	}
 
-	// The 6 items mirror egui's SetupChecklistModal::new() in order. The two
-	// "Install Dictionary" actions (items 2 & 6) run the freq-dictionary import
-	// (egui's SetupAction::LoadFrequencyDictionary → T060).
+	// The two "Install Dictionary" actions (items 2 & 6) run the
+	// freq-dictionary zip import.
 	const items = $derived.by<CheckItem[]>(() => {
 		const st = $setupStatus;
 		const mappingsEmpty = !$settings || Object.keys($settings.anki_model_mappings).length === 0;

@@ -1,18 +1,8 @@
 <script lang="ts">
-	// Frequency-analyzer modal (T047, US6): corpus → custom Yomitan/CSV frequency
-	// dictionary builder. Ports src/gui/frequency_analyzer/{modal,export_form,
-	// results_table,progress_widget}.rs to a Svelte state machine.
-	//
-	// State flow (egui AnalysisState): selecting → analyzing → results → exporting
-	// → complete | error. All state is component-local `$state` — the modal owns it
-	// (egui parity) and starts fresh each open. The full result for export lives
-	// backend-side (`AppState.last_analysis`).
-	//
-	// Promise vs. events: `start_analysis`/`export_analysis` resolve with their
-	// result, so we drive the flow off those promises (mirroring `processFile`,
-	// per the contract note). The `analysis-complete`/`-cancelled`/`export-complete`
-	// events exist for parity but are intentionally NOT subscribed here — handling
-	// both would double-fire the same transition.
+	// State machine: selecting → analyzing → results → exporting → complete|error.
+	// Starts fresh each open; the full result for export lives backend-side.
+	// The flow is driven off the command promises — the analysis/export events
+	// are intentionally NOT subscribed, handling both would double-fire.
 	import { open as openDialog } from '@tauri-apps/plugin-dialog';
 	import * as ipc from '$lib/ipc';
 	import { analyzerModalOpen } from '$lib/stores';
@@ -87,11 +77,11 @@
 
 	// --- Analysis -------------------------------------------------------------
 	// Balance corpus by source: trimmed-mean (10%) down-sampling so no single
-	// source dominates (egui `AnalysisOptions::balance_corpus`, default false).
+	// source dominates.
 	let balanceCorpus = $state(false);
 	let progress = $state<ipc.AnalysisProgressDto | null>(null);
 	let preview = $state<ipc.AnalysisPreview | null>(null);
-	// Top 250 / Bottom 250 toggle for the results table (egui `show_top`, default true).
+	// Top 250 / Bottom 250 toggle for the results table.
 	let showTop = $state(true);
 	let errorMessage = $state<string | null>(null);
 	let exportMessage = $state<string | null>(null);

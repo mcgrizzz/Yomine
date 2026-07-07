@@ -1,5 +1,4 @@
-// POS-key → CSS color token, mirroring egui `Theme::pos_color` groups
-// (src/gui/theme.rs). Shared by the term table and the sentence view.
+// POS-key → CSS color token. Shared by the term table and the sentence view.
 
 export function posColor(posKey: string): string {
 	switch (posKey) {

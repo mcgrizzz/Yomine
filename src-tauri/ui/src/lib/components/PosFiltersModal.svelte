@@ -1,15 +1,10 @@
 <script lang="ts">
-	// POS-filters modal (T043): parity with src/gui/settings/pos_filters_modal.rs.
-	// Toggle chips for every POS, with "Noun" as a parent chip that gates its
-	// sub-categories (Proper/Compound/Adjectival Noun, Suru Verb). Edits are staged
-	// (egui's `raw` vs `original`) and committed on "Save Settings", which both
-	// persists the defaults (`settings.pos_filters`) *and* applies them to the live
-	// table (egui's `apply_pos_settings`); Cancel reverts but keeps the modal open.
+	// Staged edits; Save both persists the defaults AND applies them to the live
+	// table. Cancel reverts but keeps the modal open (egui behavior).
 	import { untrack } from 'svelte';
 	import { posCatalog, posEnabled, posModalOpen, savePosFilters } from '$lib/stores';
 
-	// egui build_chip_list: Noun (parent) + its gated sub-POS, then the rest.
-	// NounExpression is intentionally absent (egui hides it but still saves it).
+	// NounExpression is intentionally absent (hidden but still saved).
 	const NOUN_CHILDREN = ['ProperNoun', 'CompoundNoun', 'AdjectivalNoun', 'SuruVerb'];
 	const OTHER_CHIPS = [
 		'Interjection',
@@ -40,10 +35,8 @@
 	let staged = $state<Record<string, boolean>>({});
 	let original = $state<Record<string, boolean>>({});
 
-	// Hydrate each time the modal opens. egui seeds from the *live* table snapshot
-	// (`table_state.pos_snapshot()`); our live state is `posEnabled` with
-	// missing-key = enabled (T037). untrack: hydrate reads stores the effect must
-	// not depend on (a tracked read would clobber staged edits while open).
+	// Seeds from the *live* table state, not the saved defaults. untrack: a
+	// tracked read would clobber staged edits while open.
 	$effect(() => {
 		if ($posModalOpen) untrack(hydrate);
 	});

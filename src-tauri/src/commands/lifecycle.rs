@@ -1,4 +1,4 @@
-//! Lifecycle / tools commands (T019, contracts/commands.md "Lifecycle / tools").
+//! Lifecycle / tools commands (contracts/commands.md "Lifecycle / tools").
 
 use std::sync::{
     atomic::Ordering,
@@ -49,9 +49,7 @@ fn progress_callback(channel: Channel<LoadingMessage>) -> Box<dyn Fn(String) + S
     })
 }
 
-/// Load tokenizer + frequency dictionaries + ignore list into `AppState`. Streams
-/// human-readable progress over `progress`; emits `language-tools-status`
-/// (`ready`/`error`). Idempotent: a second call after success re-emits `ready`.
+/// Idempotent: a second call after success just re-emits `ready`.
 #[tauri::command]
 pub async fn load_language_tools(
     app: AppHandle,
@@ -112,10 +110,8 @@ pub async fn load_language_tools(
     }
 }
 
-/// Open the app data directory (`dirs::data_local_dir()/yomine`) in the OS file
-/// explorer — File → Open Data Folder (egui `top_bar.rs::open_folder`). The engine's
-/// `get_app_data_dir()` creates the dir if missing, so it always exists. Opening from
-/// Rust via the opener plugin bypasses JS scope, so no extra capability is needed.
+/// The engine's `get_app_data_dir()` creates the dir if missing. Opening from
+/// Rust via the opener plugin bypasses JS scope — no extra capability needed.
 #[tauri::command]
 pub fn open_data_folder(app: AppHandle) -> Result<(), String> {
     let dir = persistence::get_app_data_dir();
@@ -136,9 +132,8 @@ pub fn get_settings(state: State<'_, Mutex<AppState>>) -> SettingsData {
     state.lock().unwrap().settings.clone()
 }
 
-/// Persist settings to `settings.json`, replace the in-memory copy, and propagate
-/// the bits that affect the live tools (known-interval + frequency weights), the
-/// same way egui does on each settings-modal save.
+/// Persist + replace the in-memory copy, propagating the bits that affect the
+/// live tools (known-interval, frequency weights).
 #[tauri::command]
 pub fn save_settings(
     state: State<'_, Mutex<AppState>>,
@@ -152,8 +147,7 @@ pub fn save_settings(
     if let Some(tools) = guard.language_tools.as_mut() {
         tools.known_interval = anki_interval;
     }
-    // Known-interval / frequency weights feed the knowledge summary; recompute it
-    // (egui resets `knowledge_summary_attempted` on every settings save).
+    // Known-interval / frequency weights feed the knowledge summary; recompute it.
     guard.knowledge_dirty.store(true, Ordering::Relaxed);
     // `frequency_manager` is behind an `Arc` with interior mutability, so clone the
     // handle to drop the borrow on `guard` before reapplying weights.

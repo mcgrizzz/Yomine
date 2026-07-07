@@ -1,8 +1,6 @@
 <script lang="ts">
-	// Appearance modal: whole-UI scale (settings.font_scale, applied as CSS zoom
-	// by the root layout). The scale is *staged* like the WebSocket modal's port,
-	// but live-previews while you adjust so you can judge readability; Save
-	// persists, Cancel/✕/backdrop revert the preview to the saved value.
+	// Staged, but live-previews while adjusting so the user can judge readability;
+	// Cancel/✕/backdrop revert the preview to the saved value.
 	import { untrack } from 'svelte';
 	import { settings, appearanceModalOpen, setFontScale } from '$lib/stores';
 

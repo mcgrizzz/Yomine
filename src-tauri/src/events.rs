@@ -1,7 +1,5 @@
-//! Global event names + payload structs (contracts/events.md). These push
-//! ambient state changes the background task detects (research R5), replacing
-//! egui's per-frame `poll_results()`. Per-operation progress uses
-//! `tauri::ipc::Channel<LoadingMessage>` / `Channel<AnalysisProgressDto>` instead.
+//! Global event names + payload structs (contracts/events.md). Ambient state
+//! changes only — per-operation progress uses a `tauri::ipc::Channel` instead.
 
 use serde::{
     Deserialize,
@@ -62,15 +60,14 @@ pub struct PlayerStatus {
     pub ws_clients: usize,
     /// `"mpv"` | `"asbplayer"` | `"none"`.
     pub mode: String,
-    /// WebSocket server state: `"running"` | `"starting"` | `"error"` | `"stopped"`
-    /// (T056). Lets the asbplayer dot distinguish a bind failure from "waiting".
+    /// WebSocket server state: `"running"` | `"starting"` | `"error"` | `"stopped"`.
+    /// Lets the asbplayer dot distinguish a bind failure from "waiting".
     pub server_state: String,
     /// Error message when `server_state == "error"` (e.g. a bind failure), else `None`.
     pub server_error: Option<String>,
-    /// Start-seconds of timestamps the player acknowledged seeking to this
-    /// session (T063) — drives the 👁/green state on timestamp buttons, egui's
-    /// `PlayerManager::get_confirmed_timestamps`. Stable insertion order, so the
-    /// task's change-detection (`PartialEq`) fires exactly on new confirmations.
+    /// Start-seconds of player-acknowledged seeks (drives the 👁 button state).
+    /// Stable insertion order, so `PartialEq` change-detection fires exactly on
+    /// new confirmations.
     pub confirmed_timestamps: Vec<f32>,
 }
 

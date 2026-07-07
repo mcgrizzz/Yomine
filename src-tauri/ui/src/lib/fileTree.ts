@@ -1,7 +1,5 @@
-// Selection-tree builder for the frequency analyzer (T047). Mirrors the spirit of
-// src/tools/analysis/file_tree.rs: trim the directories common to every path so
-// the root is meaningful, then build a nested dir/file tree. Kept deliberately
-// small — a clear shallow tree over the trimmed paths, not a full feature port.
+// Trims the directories common to every path so the tree root is meaningful,
+// then builds a nested dir/file tree.
 
 export interface TreeNode {
 	/** Stable id (the full path for files, the joined dir path for directories). */

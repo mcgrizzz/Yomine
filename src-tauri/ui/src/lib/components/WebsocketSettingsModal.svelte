@@ -1,9 +1,6 @@
 <script lang="ts">
-	// WebSocket-settings modal (T041): parity with src/gui/settings/websocket_settings_modal.rs.
-	// The port edit is *staged* (egui's temp_websocket_settings) and committed only on
-	// "Save Settings" via set_websocket_port (persist + restart the running server);
-	// Cancel reverts the staged edit but keeps the modal open (egui behavior).
-	// Also hosts the asbplayer follow-mode poll rate (issue #105), staged the same way.
+	// Staged edits; Cancel reverts but keeps the modal open (egui behavior).
+	// Saving the port also restarts a running server on it.
 	import { untrack } from 'svelte';
 	import {
 		settings,
@@ -23,9 +20,8 @@
 	let originalPoll = $state(DEFAULT_POLL_SECS);
 	let status = $state<string | null>(null);
 
-	// Hydrate from the settings mirror each time the modal opens (egui open_settings).
-	// untrack: hydrate reads $settings, which would otherwise become a dependency and
-	// re-hydrate (clobbering the staged port) on any settings change while open.
+	// untrack: a tracked $settings read would re-hydrate (clobbering the staged
+	// edit) on any settings change while open.
 	$effect(() => {
 		if ($websocketModalOpen) untrack(hydrate);
 	});
@@ -41,7 +37,7 @@
 	}
 
 	const dirty = $derived(tempPort !== originalPort || tempPoll !== originalPoll);
-	// egui's is_valid_port (>= 1024; u16 caps at 65535 — the number input doesn't).
+	// u16 caps at 65535 — the number input doesn't.
 	const valid = $derived(Number.isInteger(tempPort) && tempPort >= 1024 && tempPort <= 65535);
 	const pollValid = $derived(Number.isInteger(tempPoll) && tempPoll >= 1 && tempPoll <= 60);
 
@@ -108,7 +104,6 @@
 				>
 			</header>
 
-			<!-- Port configuration (egui ui_port_configuration). -->
 			<div class="port-row">
 				<label for="ws-port">Server Port:</label>
 				<input id="ws-port" type="number" min="1024" max="65535" bind:value={tempPort} />
@@ -118,8 +113,6 @@
 				<p class="invalid">⚠ Port must be between 1024 and 65535</p>
 			{/if}
 
-			<!-- Follow-mode poll cadence (issue #105): how often yomine asks
-			     asbplayer for its bound media while a follow toggle is armed. -->
 			<div class="port-row">
 				<label for="asb-poll">asbplayer poll interval:</label>
 				<input id="asb-poll" type="number" min="1" max="60" bind:value={tempPoll} />

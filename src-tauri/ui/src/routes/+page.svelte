@@ -1,8 +1,6 @@
 <script lang="ts">
-	// App shell (T026): top bar + scrolling main region, matching egui's IA
-	// (TopBar over a central term area). The full menu is `TopBar` (T028); the
-	// virtualized term table + sentence view replace the placeholder list in
-	// T029/T030. The startup round trip (open file → term count) stays working.
+	// App shell: top bar over the main region — the landing screen (recents,
+	// open actions) before a file loads, the term table + controls after.
 	import { onMount } from 'svelte';
 	import { comprehensionColor } from '$lib/comprehension';
 	import {

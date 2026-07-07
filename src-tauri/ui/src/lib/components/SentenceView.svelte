@@ -7,19 +7,11 @@
 	const encoder = new TextEncoder();
 	const byteLen = (s: string): number => encoder.encode(s).length;
 
-	// egui's 5-bar indicator: fixed bar heights, filled = ceil(pct / 20).
+	// Filled bars = ceil(pct / 20).
 	const BAR_HEIGHTS = [2.5, 4, 6.5, 10.5, 14.5];
 </script>
 
 <script lang="ts">
-	// Sentence view (T030/T030b, inline): renders a term's example sentences
-	// inside its table row with kanji-only `<ruby>` furigana (via Furigana) and
-	// the term's own segments highlighted red (egui shows the reading on hover;
-	// the web upgrades to furigana). Below the sentence sits the meta row
-	// (egui `sentence_column.rs`): ◀ n/m ▶ nav across the term's occurrences
-	// (wrap-around, like `TableState::next/prev_sentence`), the timestamp
-	// (US3/T035), and the per-sentence comprehension indicator (5-bar gradient,
-	// only while Anki filtering is active).
 	import { comprehensionColor } from '$lib/comprehension';
 	import { posColor } from '$lib/pos';
 	import { ankiFilterActive, playerConnected, playerStatus, seekTimestamp } from '$lib/stores';
@@ -27,8 +19,7 @@
 
 	let { occurrences, term }: { occurrences: Occurrence[]; term: Term } = $props();
 
-	// Which occurrence is shown. Local per-row state (egui keeps it in
-	// `table_state.sentence_indices`); clamped in case a refresh shrinks the list.
+	// Clamped in case a refresh shrinks the occurrence list.
 	let idx = $state(0);
 	const count = $derived(occurrences.length);
 	const current = $derived(Math.min(idx, count - 1));
@@ -37,17 +28,13 @@
 	const prev = () => (idx = current === 0 ? count - 1 : current - 1);
 	const next = () => (idx = (current + 1) % count);
 
-	// The sentence's source timestamp (SRT/ASS only; TXT has none). Clickable when
-	// a player is connected → seeks it (egui `ui_timestamp`); otherwise shown as a
-	// weak label. Once the player acknowledges a seek, the button flips to egui's
-	// 👁 confirmed variant with a green fill (T063; `ui_timestamp_button`).
+	// Timestamp is null for TXT sources; 👁 once the player acknowledges the seek.
 	const ts = $derived(occ.sentence.timestamp);
 	const confirmed = $derived(
 		ts !== null && $playerStatus.confirmed_timestamps.includes(ts.start_secs)
 	);
 
-	// The term's surface span [start, end) in the sentence (egui uses
-	// `full_segment` for expressions, else `surface_form`).
+	// Expressions highlight their full segment; other terms just the surface form.
 	const isExpression = $derived(
 		term.part_of_speech === 'Expression' || term.part_of_speech === 'NounExpression'
 	);
@@ -58,17 +45,13 @@
 	const isTermSeg = (seg: { start: number; end: number }): boolean =>
 		seg.start < termEnd && seg.end > occ.start;
 
-	// Comprehension of the shown sentence, as a % (egui hides the bars until
-	// Anki filtering is active — without it every sentence reads 0%).
+	// Bars only show while Anki filtering is active — without it everything is 0%.
 	const comprehensionPct = $derived(occ.sentence.comprehension * 100);
 	const filledBars = $derived(Math.min(Math.ceil(comprehensionPct / 20), 5));
 </script>
 
-<!-- T030c: each word is an atomic inline-block (furigana can't overhang its
-     neighbour), and Svelte strips inter-tag whitespace — so without an explicit
-     break opportunity the sentence renders as one unbreakable line. The <wbr>
-     between word boxes restores soft wrap between words (egui parity:
-     `ui.horizontal_wrapped`). -->
+<!-- Each word is an atomic inline-block and Svelte strips inter-tag whitespace,
+     so without the <wbr> the sentence would render as one unbreakable line. -->
 <p class="sentence" lang="ja">
 	{#each occ.sentence.segments as seg, i (i)}
 		{@const isTerm = isTermSeg(seg)}
@@ -132,7 +115,6 @@
 		font-weight: 700;
 	}
 
-	/* Meta row under the sentence (egui's nav + timestamp + comprehension line). */
 	.meta {
 		display: flex;
 		align-items: center;
@@ -140,7 +122,6 @@
 		margin-top: 0.25rem;
 	}
 
-	/* ◀ n/m ▶ multi-sentence nav (egui `ui_sentence_navigation`). */
 	.nav {
 		display: inline-flex;
 		align-items: center;
@@ -171,7 +152,6 @@
 		font-variant-numeric: tabular-nums;
 	}
 
-	/* Timestamp meta (T035). Small, like egui's 11px. */
 	.ts,
 	.ts-label {
 		font-size: 0.78rem;
@@ -189,7 +169,6 @@
 	.ts:hover {
 		background: var(--bg-lighter);
 	}
-	/* Player-acknowledged seek: egui's 👁 button fill (#559449), white text. */
 	.ts.confirmed {
 		background: #559449;
 		color: #fff;
@@ -202,8 +181,6 @@
 		color: var(--comment);
 	}
 
-	/* Per-sentence comprehension (egui `ui_sentence_comprehension`): 5 bars of
-	   growing height, filled from the left, red→yellow→green by %. */
 	.bars {
 		display: inline-flex;
 		align-items: flex-end;

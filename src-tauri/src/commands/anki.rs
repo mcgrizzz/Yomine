@@ -1,6 +1,4 @@
-//! Anki commands (T028, contracts/commands.md "Anki"). Connectivity and the note
-//! model list the Anki settings modal needs for field mapping. Live connectivity
-//! is also pushed ambiently via the `anki-status` event (background task, R5).
+//! Anki commands (contracts/commands.md "Anki").
 
 use std::collections::HashMap;
 
@@ -11,18 +9,15 @@ use yomine::{
 
 use crate::events::AnkiStatus;
 
-/// Point-in-time Anki connectivity probe (mirrors egui's `update_anki_status`).
-/// `fetching` is always `false` here — it is a connectivity check, not a query;
-/// the background poll emits the same shape on the `anki-status` event.
+/// Point-in-time connectivity probe; `fetching` is always `false` here.
 #[tauri::command]
 pub async fn get_anki_status() -> AnkiStatus {
     let connected = anki::api::get_version().await.is_ok();
     AnkiStatus { connected, fetching: false }
 }
 
-/// Note types (with their fields) that have at least one note, for the mapping UI
-/// and field guessing. Mirrors egui's `AnkiService::fetch_models` (errors when
-/// Anki is offline so the UI can surface "Anki Offline").
+/// Note types (with fields) that have at least one note. Errors when Anki is
+/// offline so the UI can say so.
 #[tauri::command]
 pub async fn list_anki_models() -> Result<Vec<AnkiModelInfo>, String> {
     anki::api::get_version().await.map_err(|_| "Anki Offline".to_string())?;
@@ -39,7 +34,7 @@ pub async fn list_anki_models() -> Result<Vec<AnkiModelInfo>, String> {
         .collect())
 }
 
-/// A model's sample note plus the engine's term/reading field guesses (T040).
+/// A model's sample note plus the engine's term/reading field guesses.
 #[derive(serde::Serialize)]
 pub struct SampleNote {
     pub sample_note: Option<HashMap<String, String>>,
@@ -47,10 +42,8 @@ pub struct SampleNote {
     pub guessed_reading: Option<String>,
 }
 
-/// Fetch a sample note for one note type and run the shared field-guessing
-/// heuristic over it (`anki::guess_field_mappings` — the same code egui's
-/// `trigger_field_guessing` uses). Mirrors egui's `fetch_sample_note`, which
-/// swallows errors into "no sample" (`.unwrap_or(None)`), so this never errors.
+/// Sample note + engine-side field guessing for one note type. Errors are
+/// swallowed into "no sample", so this never rejects.
 #[tauri::command]
 pub async fn get_anki_sample_note(model_name: String, fields: Vec<String>) -> SampleNote {
     let sample_note = anki::get_sample_note_for_model(&model_name).await.unwrap_or(None);

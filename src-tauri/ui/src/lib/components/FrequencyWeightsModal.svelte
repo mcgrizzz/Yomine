@@ -1,15 +1,7 @@
 <script lang="ts">
-	// Frequency Dictionaries modal (T042 weights + T064 manager, issue #100).
-	// Top: the "Recommended" section — repo-manifest catalog with install/update
-	// state, one-click Download/Update (backend `get_recommended_dictionaries` /
-	// `install_recommended_dictionary`), a manual "Check for updates", and the
-	// zip import (T060; the one import surface besides the setup checklist —
-	// the File-menu entry was removed). Below: the T042 weights table (parity
-	// with src/gui/settings/frequency_weights_modal.rs) — one staged row per
-	// dictionary (enabled checkbox, name, logarithmic 0.1–5.0 weight slider,
-	// numeric value), committed only on "Save Settings", Cancel reverts and stays
-	// open — plus a per-row 🗑 (two-step confirm) that removes the dictionary
-	// outright. Install/remove are immediate (not staged) and re-hydrate the list.
+	// Weight edits are staged (Cancel reverts but stays open — egui behavior);
+	// install/update/import/remove are immediate and re-hydrate the list,
+	// resetting staged edits with it.
 	import { untrack } from 'svelte';
 	import {
 		settings,
@@ -26,19 +18,15 @@
 	let original = $state<ipc.DictionaryState[]>([]);
 	let loaded = $state(false);
 
-	// Recommended section state (T064). The catalog lives in the shared
-	// `recommendedDicts` store — checked once at launch and via the manual
-	// "Check for updates" button, NOT on every modal open (maintainer,
-	// 2026-07-06; the check hits the network). `busyTitle` gates every mutating
-	// action (install/update/import/remove are serialized — each ends in a full
-	// manager reload).
+	// The recommended catalog is checked at launch + the manual button only (it
+	// hits the network). `busyTitle` serializes every mutating action.
 	let checking = $state(false);
 	let opError = $state<string | null>(null);
 	let busyTitle = $state<string | null>(null);
 	let busyMsg = $state<string | null>(null);
 	let confirmRemove = $state<string | null>(null);
 
-	// Hydrate each time the modal opens (egui open_modal → build_entries).
+	// Hydrate each time the modal opens.
 	// untrack: hydrate reads $settings, which must not become a dependency
 	// (a tracked read would re-hydrate and clobber staged edits while open).
 	$effect(() => {
@@ -62,7 +50,6 @@
 		}
 	}
 
-	// The zip import (T060) — moved here from the File menu (maintainer, 2026-07-06).
 	async function importFromFile() {
 		busyTitle = '(import)';
 		opError = null;
@@ -133,8 +120,7 @@
 		const weights = $settings?.frequency_weights ?? {};
 		let list: ipc.DictionaryState[];
 		if (dicts.length > 0) {
-			// Live manager states, with any persisted setting taking precedence
-			// (egui build_entries).
+			// Live manager states, with any persisted setting taking precedence.
 			list = dicts.map((d) => ({
 				name: d.name,
 				weight: Math.max(weights[d.name]?.weight ?? d.weight, MIN_WEIGHT),
@@ -393,7 +379,7 @@
 		padding: 0 1rem;
 		color: var(--comment);
 	}
-	/* Recommended section (T064). */
+	/* Recommended section. */
 	.recommended {
 		display: flex;
 		flex-direction: column;

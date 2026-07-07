@@ -1,7 +1,5 @@
-//! Player commands (T028/T035/T041, contracts/commands.md "Player"). Thin
-//! wrappers over the `PlayerHandle` channel — the player itself is owned by its
-//! own task (`player_task`), never the `AppState` lock. `set_websocket_port` also
-//! persists the chosen port so it survives a restart (egui's websocket modal).
+//! Player commands (contracts/commands.md "Player"): thin wrappers over the
+//! `PlayerHandle` channel — the player is owned by its task, never this lock.
 
 use std::sync::Mutex;
 
@@ -31,10 +29,8 @@ pub async fn get_player_status(player: State<'_, PlayerHandle>) -> Result<Player
     player.status().await
 }
 
-/// Persist the WebSocket port and move a running server to it (egui parity: the
-/// websocket modal saves settings + restarts the server). The handle restarts a
-/// live server immediately; a not-yet-started server picks up the port on its
-/// next tick.
+/// Persist the port and move a running server to it; a not-yet-started server
+/// picks the port up on its next tick.
 #[tauri::command]
 pub fn set_websocket_port(
     state: State<'_, Mutex<AppState>>,

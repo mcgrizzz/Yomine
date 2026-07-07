@@ -1,8 +1,6 @@
-//! Dictionary-manager commands (T064, issue #100): the "Recommended" section of
-//! the Frequency Dictionaries modal — catalog with install/update state, one-click
-//! install/update, and removal of any installed dictionary. All three end in
-//! `dictionary::reload_and_swap`, so the live manager, per-term frequencies, and
-//! knowledge summary stay consistent and `dictionaries-changed` fires.
+//! Dictionary-manager commands (issue #100). Every mutation ends in
+//! `dictionary::reload_and_swap` so manager, per-term frequencies, and
+//! knowledge summary stay consistent.
 
 use std::{
     collections::HashMap,
@@ -34,11 +32,9 @@ use crate::{
     state::AppState,
 };
 
-/// Fetch the recommended catalog and resolve each entry's state against the
-/// loaded dictionaries. Remote manifest first (repo-hosted, updateable without a
-/// release), baked copy as the offline/pre-publish fallback; entries with an
-/// `index_url` get a live latest-revision check (best-effort). Caches the
-/// catalog in `AppState` for `install_recommended_dictionary`.
+/// Catalog with install/update state resolved. Remote manifest first, baked
+/// copy as offline fallback; cached in `AppState` so installs can resolve
+/// their download URL by title.
 #[tauri::command]
 pub async fn get_recommended_dictionaries(
     state: State<'_, Mutex<AppState>>,
@@ -99,10 +95,9 @@ pub async fn get_recommended_dictionaries(
         .collect())
 }
 
-/// Install or update a recommended dictionary (resolved by title from the cached
-/// catalog): download the zip to a temp file, replace any installed artifacts of
-/// the same title (an update's new zip name would otherwise extract beside the
-/// old folder and load a duplicate), then reload + swap. Streams progress.
+/// Download to a temp file, then replace any installed artifacts of the same
+/// title — an update's new zip name would otherwise extract beside the old
+/// folder and load a duplicate.
 #[tauri::command]
 pub async fn install_recommended_dictionary(
     app: AppHandle,
@@ -150,10 +145,9 @@ pub async fn install_recommended_dictionary(
     reload_and_swap(&app, &state, &progress).await
 }
 
-/// Remove an installed dictionary — extracted folder (incl. its cache) + the zip
-/// it came from — drop its persisted weight, and reload. Works for any installed
-/// dictionary, not just recommended ones. Note: removing the *last* dictionary
-/// makes the reload re-download the engine's default (JPDB) — engine behavior.
+/// Remove any installed dictionary (folder + zip + persisted weight) and
+/// reload. Removing the *last* one makes the reload re-download the engine's
+/// default (JPDB) — engine behavior.
 #[tauri::command]
 pub async fn remove_dictionary(
     app: AppHandle,
@@ -184,9 +178,8 @@ pub async fn remove_dictionary(
     reload_and_swap(&app, &state, &progress).await
 }
 
-/// Delete every extracted folder in the freq-dict dir whose `index.json` title
-/// matches, plus the same-stem zip that produced it (the extractor names the
-/// folder after the zip stem). Returns whether anything was removed.
+/// Delete every extracted folder whose `index.json` title matches, plus the
+/// same-stem zip that produced it (the extractor names folders after zip stems).
 fn remove_dictionary_files(title: &str) -> Result<bool, String> {
     let dir = get_frequency_dict_dir();
     let Ok(entries) = fs::read_dir(&dir) else { return Ok(false) };

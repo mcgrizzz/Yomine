@@ -1,11 +1,6 @@
 <script lang="ts">
-	// asbplayer media picker (issue #105): lists the media asbplayer is tracking
-	// (`get-bound-media`) and loads the selected one's subtitles as the current
-	// "file" (`get-subtitles` → the normal pipeline). Media without loaded
-	// subtitles are shown but not loadable — load a subtitle file in asbplayer
-	// first. One subtitle track loads with a single click; multiple tracks show
-	// a radio choice (plus "All tracks"). Fetches the list on every open and via
-	// the ⟳ button.
+	// asbplayer media picker (issue #105). Media without loaded subtitles are
+	// shown but not loadable, so the user learns why nothing happens.
 	import { untrack } from 'svelte';
 	import {
 		asbplayerModalOpen,

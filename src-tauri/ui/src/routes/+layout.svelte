@@ -1,7 +1,5 @@
 <script lang="ts">
-	// Root layout (T026): loads the global theme and applies the dark/light variant
-	// + serif toggle from the backend-owned settings. Settings hydrate shortly after
-	// mount; until then the :root defaults (dark / sans) apply, so there's no flash.
+	// Until settings hydrate, the :root defaults (dark / sans) apply — no flash.
 	import '../app.css';
 	import { settings } from '$lib/stores';
 
@@ -11,8 +9,8 @@
 		const s = $settings;
 		document.documentElement.dataset.theme = s && !s.dark_mode ? 'light' : 'dark';
 		document.body.classList.toggle('font-serif', s?.use_serif_font ?? false);
-		// Whole-UI scale (Appearance modal): CSS zoom scales px sizes too, unlike
-		// a root font-size change. The modal live-previews by setting this directly.
+		// CSS zoom (not root font-size) so px-based sizes scale too; the
+		// Appearance modal live-previews by setting this same property.
 		document.documentElement.style.setProperty('zoom', String(s?.font_scale ?? 1));
 	});
 </script>

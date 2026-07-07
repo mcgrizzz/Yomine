@@ -1,13 +1,10 @@
-/* Global theme + shell (T026). Tokens mirror the egui Dracula palette
- * (src/gui/theme.rs: `ThemeDetails::dracula` / `dracula_light`) so the web UI
- * matches the reference app. Dark is the default; `:root[data-theme='light']`
- * swaps the layered backgrounds + accents. The active theme is driven by
- * `settings.dark_mode` in +layout.svelte. */
+/* Global theme + shell. Dracula-based palette; dark is the default and
+ * `:root[data-theme='light']` swaps the layered backgrounds + accents. The
+ * active theme is driven by `settings.dark_mode` in +layout.svelte. */
 
-/* Bundled Japanese faces (T027). Same TTFs the egui app embeds
- * (assets/fonts/Noto{Sans,Serif}JP-Regular.ttf), copied to static/fonts so
- * adapter-static serves them at /fonts/*. The `body` / `body.font-serif`
- * rules below switch between these two families. */
+/* Bundled Japanese faces (assets/fonts/Noto{Sans,Serif}JP-Regular.ttf, copied
+ * to static/fonts so adapter-static serves them at /fonts/*). The `body` /
+ * `body.font-serif` rules below switch between these two families. */
 @font-face {
 	font-family: 'Noto Sans JP';
 	src: url('/fonts/NotoSansJP-Regular.ttf') format('truetype');
@@ -107,7 +104,7 @@ body {
 	-webkit-font-smoothing: antialiased;
 }
 
-/* Serif toggle (T027 bundles the faces; this class is the switch). */
+/* Serif toggle (the faces are bundled above; this class is the switch). */
 body.font-serif {
 	font-family: 'Noto Serif JP', Georgia, serif;
 }

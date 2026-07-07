@@ -1,11 +1,7 @@
-//! Recommended-dictionaries manifest (T064, issue #100).
-//!
-//! The catalog of hosted frequency dictionaries the manager offers for one-click
-//! install/update. Source of truth is the manifest in the Yomine repo (so the
-//! list/versions can change without an app release), with the same file compiled
-//! in as an offline / pre-publish fallback. Entries with an `index_url` (the
-//! Yomitan `isUpdatable` convention, e.g. jiten.moe) get their latest revision
-//! checked live; otherwise `latest_revision` in the manifest is authoritative.
+//! Recommended-dictionaries catalog (issue #100). Source of truth is the
+//! manifest in the Yomine repo (changeable without an app release); the same
+//! file is compiled in as the offline fallback. Entries with an `index_url`
+//! get their latest revision checked live.
 
 use serde::{
     Deserialize,

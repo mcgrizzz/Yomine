@@ -1,13 +1,7 @@
 <script lang="ts">
-	// Knowledge summary card (US7/T049): global JLPT + frequency-band coverage /
-	// estimated-knowledge mini-bars. Ports src/gui/table/summary.rs
-	// (ui_knowledge_profile / ui_knowledge_summary). Data is pushed by the backend
-	// (`knowledge-summary` event; hydrated once via get_knowledge_summary) into the
-	// `knowledge` store; the card hides itself when there's nothing to show.
 	import { knowledge } from '$lib/stores';
 	import type { BandStats } from '$lib/ipc';
 
-	// Which estimate the bars show (egui `KnowledgeMode`, default Coverage).
 	type Mode = 'coverage' | 'estimate';
 	let mode = $state<Mode>('coverage');
 
@@ -18,20 +12,18 @@
 		mode = mode === 'coverage' ? 'estimate' : 'coverage';
 	}
 
-	// coverage = raw Anki presence; estimate = graded comprehension (egui `frac`).
+	// coverage = raw Anki presence; estimate = graded comprehension.
 	const frac = (s: BandStats) =>
 		Math.min(Math.max(mode === 'coverage' ? s.coverage : s.comprehension, 0), 1);
 
-	// egui `coverage_color`: vivid red(0%) → yellow(50%) → green(100%), WITHOUT the
-	// gray blend the comprehension text uses — these bars read brighter by design.
+	// Red→yellow→green WITHOUT the gray blend the comprehension text uses —
+	// these bars read brighter by design.
 	function barColor(pct: number): string {
 		const [r, g, b] =
 			pct >= 50 ? [180 * (1 - (pct - 50) / 50), 180, 60] : [180, 180 * (pct / 50), 60];
 		return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
 	}
 
-	// Hover text. The frequency bars repeat the label (egui `label_in_hover`); the
-	// JLPT bars don't (the label already sits next to the bar in both cases).
 	function tip(label: string | null, s: BandStats, f: number): string {
 		const got = Math.round(f * s.total);
 		const pct = (f * 100).toFixed(0);

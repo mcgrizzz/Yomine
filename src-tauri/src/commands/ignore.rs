@@ -1,11 +1,7 @@
-//! Ignore-list commands (T038, contracts/commands.md "Ignore list").
-//!
-//! The row-level `add`/`remove` mutate the shared `IgnoreList` (persisted to
-//! `ignore_list.json`, the same store egui uses) and **return immediately without
-//! re-filtering** — egui keeps a just-ignored term visible-but-greyed and only drops
-//! it from the minable set on the next `refresh_terms` (T059). The modal's staged
-//! `save_ignore_list` is the path that re-applies filters (the ignore + cached-Anki
-//! filter, `AnkiFilter::KnownLemmas`) and returns the refreshed file.
+//! Ignore-list commands (contracts/commands.md "Ignore list"). Row-level
+//! `add`/`remove` return WITHOUT re-filtering — a just-ignored term stays
+//! visible-but-greyed until the next `refresh_terms` (egui parity). Only the
+//! modal's `save_ignore_list` re-applies filters.
 
 use std::sync::Mutex;
 
@@ -35,7 +31,7 @@ use crate::{
 };
 
 /// Add a lemma to the ignore list (persists). Does **not** re-filter — the term
-/// stays visible-but-greyed until the next `refresh_terms` (T059, egui parity).
+/// stays visible-but-greyed until the next `refresh_terms` (egui parity).
 #[tauri::command]
 pub async fn add_to_ignore_list(
     state: State<'_, Mutex<AppState>>,
@@ -45,7 +41,7 @@ pub async fn add_to_ignore_list(
 }
 
 /// Remove a lemma from the ignore list (persists). Does **not** re-filter; the
-/// un-ignored term simply stops being greyed (T059, egui parity).
+/// un-ignored term simply stops being greyed (egui parity).
 #[tauri::command]
 pub async fn remove_from_ignore_list(
     state: State<'_, Mutex<AppState>>,
@@ -66,10 +62,7 @@ pub fn get_ignore_list(state: State<'_, Mutex<AppState>>) -> Result<Vec<String>,
     Ok(list.get_all_terms())
 }
 
-/// Shared row-level add/remove path: briefly lock state to clone the ignore-list
-/// handle, then mutate (and persist) it. No re-filter — removal from the minable set
-/// is deferred to the next `refresh_terms` (T059, egui parity). `add_term`/
-/// `remove_term` persist to disk on change.
+/// Shared row-level add/remove path. Mutates + persists only; no re-filter.
 async fn mutate_ignore_list(
     state: &State<'_, Mutex<AppState>>,
     lemma: &str,
@@ -97,7 +90,7 @@ fn file_view(path: String, enabled: bool) -> IgnoreFileView {
 }
 
 /// Full ignore-list state for the modal: manual terms + file pills with per-file
-/// `exists` + `term_count`. Mirrors egui's `IgnoreListModal::open_modal`.
+/// `exists` + `term_count`.
 #[tauri::command]
 pub fn get_ignore_list_full(state: State<'_, Mutex<AppState>>) -> Result<IgnoreListView, String> {
     let guard = state.lock().unwrap();
@@ -125,17 +118,14 @@ pub async fn import_ignore_file(app: AppHandle) -> Result<Option<IgnoreFileView>
 }
 
 /// Re-read a file's `exists` + `term_count` for display (the persisted cache reload
-/// happens on save). The frontend preserves the staged `enabled`. Mirrors egui's
-/// `FileAction::Refresh`.
+/// happens on save). The frontend preserves the staged `enabled`.
 #[tauri::command]
 pub fn refresh_ignore_file(path: String) -> IgnoreFileView {
     file_view(path, true)
 }
 
-/// Persist the staged modal state — replace terms + files (`set_files` reloads the
-/// file cache), reapply the ignore + cached-Anki filter, and return the updated file
-/// (`null` if none loaded). The modal's single commit point. Mirrors egui's "Save
-/// Settings".
+/// The modal's single commit point: replace terms + files, reapply filters,
+/// return the updated file (`null` if none loaded).
 #[tauri::command]
 pub async fn save_ignore_list(
     state: State<'_, Mutex<AppState>>,
@@ -182,8 +172,7 @@ pub fn get_default_ignored_terms() -> Vec<String> {
 }
 
 /// Open a `.txt` save dialog and write the (possibly unsaved) staged terms
-/// newline-joined. Returns the path written, or `null` if cancelled. Mirrors egui's
-/// `export_terms`.
+/// newline-joined. Returns the path written, or `null` if cancelled.
 #[tauri::command]
 pub async fn export_ignore_list(
     app: AppHandle,

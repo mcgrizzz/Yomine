@@ -1,8 +1,4 @@
 <script lang="ts">
-	// Setup-incomplete banner (T045): parity with src/gui/setup_banner.rs. A clickable
-	// amber strip shown when the freq dict is missing OR Anki model mappings are empty
-	// (egui's should_show_banner). Clicking opens the setup checklist modal. The
-	// show condition is the backend-derived `showSetupBanner` store.
 	import { showSetupBanner, openSetupModal } from '$lib/stores';
 </script>
 

@@ -1,7 +1,5 @@
-//! Wire DTOs that cross the IPC boundary (data-model.md). Domain types are
-//! serialized directly when cheap; a DTO is introduced only where the domain
-//! type is awkward on the wire — here, `Sentence` (its `TimeStamp` wraps
-//! `time::Time`, which we do not serialize; research R4).
+//! Wire DTOs (data-model.md). Domain types serialize directly when cheap; a
+//! DTO exists only where the domain type is awkward on the wire.
 
 use serde::{
     Deserialize,
@@ -21,11 +19,9 @@ use yomine::{
     },
 };
 
-/// One `<ruby>` span over the sentence text: the surface slice, its reading +
-/// POS, and the original `[start,end)` byte offsets. `surface` is pre-sliced and
-/// `reading` pre-converted to hiragana (egui's `.to_hiragana()`), so the UI never
-/// has to slice the sentence by UTF-8 byte offsets in JS. `start`/`end` are kept
-/// for the in-sentence term highlight (numeric overlap test on the frontend).
+/// One `<ruby>` span. `surface` is pre-sliced and `reading` pre-converted to
+/// hiragana so the UI never slices by UTF-8 byte offsets in JS; `start`/`end`
+/// remain for the in-sentence term-highlight overlap test.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct SegmentDto {
     pub surface: String,
@@ -95,18 +91,16 @@ pub struct FileLoadResult {
     pub sentences: Vec<SentenceDto>,
     pub file_comprehension: f32,
     /// Whether Anki filtering removed any terms — gates the per-sentence
-    /// comprehension indicator (egui checks `anki_filtered_terms.is_empty()`).
+    /// comprehension indicator`).
     pub anki_filter_active: bool,
     /// Total terms before filtering (`base_terms`), for the file summary's
-    /// "shown / known / total" counts (egui `ui_current_file_summary`).
+    /// "shown / known / total" counts.
     pub total_terms: usize,
     /// Terms hidden by the ignore list — the known-count hover breakdown.
     pub ignored_terms: usize,
 }
 
-/// One file pill in the ignore-list modal: the persisted `IgnoreFile` fields
-/// (`path`, `enabled`) plus the display-only `exists` + `term_count` the modal
-/// renders (contracts/commands.md `IgnoreFileView`).
+/// Persisted `IgnoreFile` fields plus the display-only `exists` + `term_count`.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct IgnoreFileView {
     pub path: String,
@@ -116,7 +110,7 @@ pub struct IgnoreFileView {
 }
 
 /// Full ignore-list state that hydrates the modal (`IgnoreListView`): the manual
-/// lemma terms plus the file pills. Mirrors egui's `IgnoreListModal::open_modal`.
+/// lemma terms plus the file pills.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct IgnoreListView {
     pub terms: Vec<String>,
@@ -137,10 +131,8 @@ impl PosInfo {
     }
 }
 
-/// One row of the frequency-dictionary list (`list_dictionaries`). The engine
-/// `DictionaryState` holds only `weight`/`enabled`; the name is the map key, so
-/// this DTO folds it in to give the modal a flat `{ name, weight, enabled }`
-/// (data-model.md "Frequency dictionary state").
+/// The engine keys `DictionaryState` by name; this folds the key in so the
+/// modal gets a flat `{ name, weight, enabled }`.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct DictionaryStateDto {
     pub name: String,
@@ -148,11 +140,8 @@ pub struct DictionaryStateDto {
     pub enabled: bool,
 }
 
-/// Per-file analysis progress streamed over a `Channel` while `start_analysis`
-/// runs (data-model.md "Analysis progress"). `total_bytes`/`bytes_processed`
-/// drive the progress bar; `eta_secs` is the smoothed remaining-time estimate
-/// (alpha=0.3, `null` until the first byte lands) computed backend-side so the
-/// UI just renders it. `current_file` is 1-based (mirrors the engine callback).
+/// `eta_secs` is smoothed backend-side (alpha=0.3, `null` until the first byte
+/// lands); `current_file` is 1-based.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct AnalysisProgressDto {
     pub total_files: usize,
@@ -163,10 +152,8 @@ pub struct AnalysisProgressDto {
     pub eta_secs: Option<f32>,
 }
 
-/// One row of the frequency-analysis preview table (`AnalysisPreview.entries`).
-/// `term`/`reading` are the deinflected lemma + its reading (`None` for pure
-/// kana); `frequency` is the corpus count; `count` is kept as an explicit alias
-/// so the UI can label "occurrences" without re-deriving it (data-model.md).
+/// `reading` is `None` for pure kana; `count` aliases `frequency` so the UI
+/// can label "occurrences" without re-deriving it.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct AnalysisPreviewEntry {
     pub term: String,
@@ -175,11 +162,8 @@ pub struct AnalysisPreviewEntry {
     pub count: u32,
 }
 
-/// The results preview returned by `start_analysis` (and re-emitted on the
-/// `analysis-complete` event). Only this lightweight view crosses the IPC
-/// boundary — the full `FrequencyAnalysisResult` (needed for export) stays in
-/// `AppState.last_analysis`. `entries` are sorted by frequency descending and
-/// capped; `total` is the full unique-lemma count before the cap (data-model.md).
+/// Only this lightweight view crosses IPC — the full result (for export) stays
+/// in `AppState.last_analysis`. `total` is the unique-lemma count before the cap.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct AnalysisPreview {
     pub entries: Vec<AnalysisPreviewEntry>,
@@ -197,18 +181,13 @@ pub struct SetupStatus {
     pub anki_connected: bool,
     pub has_field_mapping: bool,
     pub has_frequency_dict: bool,
-    /// Number of loaded frequency dictionaries. The bool above answers item 2
-    /// ("default dict installed", count ≥ 1); this count answers item 6
-    /// ("additional dicts installed", count > 1) — egui's `check_additional_freq_dicts`.
+    /// ≥1 answers "default dict installed"; >1 answers "additional dicts installed".
     pub frequency_dict_count: usize,
     pub player_connected: bool,
 }
 
-/// One JLPT band of the knowledge summary (`get_knowledge_summary` /
-/// `knowledge-summary`). Flattens the engine's `(JlptLevel, BandStats)` tuple to
-/// named `{ level, stats }` — `BandStats` already serializes cleanly, but the
-/// positional tuple does not (it lands as a JS array), so the bands get a DTO.
-/// `level` is the display label (egui `JlptLevel::label`).
+/// Names the engine's positional `(JlptLevel, BandStats)` tuple — a bare tuple
+/// lands as a JS array.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct JlptBand {
     pub level: String,
@@ -223,9 +202,7 @@ pub struct FrequencyBand {
     pub stats: BandStats,
 }
 
-/// The knowledge summary as it crosses IPC. The engine `KnowledgeSummary` holds
-/// `Vec<(_, BandStats)>` tuples (positional on the wire); this names the fields
-/// so the TS `KnowledgeSummary` interface deserializes as objects, not arrays.
+/// Names the engine's tuple vectors so TS deserializes objects, not arrays.
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct KnowledgeSummaryDto {
     pub jlpt: Vec<JlptBand>,
@@ -249,9 +226,8 @@ impl KnowledgeSummaryDto {
     }
 }
 
-/// One row of the dictionary manager's "Recommended" section (T064, issue #100).
-/// `status` is backend-derived (Constitution): `"not-installed"` | `"installed"`
-/// (present, latest revision unknown) | `"up-to-date"` | `"update-available"`.
+/// `status`: `"not-installed"` | `"installed"` (present, latest revision
+/// unknown) | `"up-to-date"` | `"update-available"`.
 #[derive(Serialize, Clone)]
 pub struct RecommendedDictionaryDto {
     pub name: String,

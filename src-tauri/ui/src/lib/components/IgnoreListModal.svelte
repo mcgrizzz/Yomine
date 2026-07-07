@@ -1,8 +1,6 @@
 <script lang="ts">
-	// Ignore-list modal (T038b): full egui parity with src/gui/settings/ignore_list_modal.rs.
-	// All edits are *staged* locally (egui's temp_terms/temp_files) and persisted only
-	// on "Save Settings" via save_ignore_list; closing/Cancel discards staged edits.
-	// The row right-click "Add to ignore list" remains immediate (see stores.addToIgnore).
+	// Staged edits, discarded on close/Cancel. The row right-click "Add to
+	// ignore list" stays immediate (the stores' toggleIgnore), unlike this modal.
 	import { ignoreModalOpen, saveIgnore } from '$lib/stores';
 	import * as ipc from '$lib/ipc';
 	import { textMatches } from '$lib/table';
@@ -145,7 +143,7 @@
 				>
 			</header>
 
-			<!-- Controls: add new term + search (egui ui_controls). -->
+			<!-- Controls: add new term + search. -->
 			<div class="controls">
 				<div class="field">
 					<label for="ignore-new-term">Add New Term</label>
@@ -166,7 +164,7 @@
 				</div>
 			</div>
 
-			<!-- Current terms: file pills + term pills (egui ui_list). -->
+			<!-- Current terms: file pills + term pills. -->
 			<div class="list">
 				<div class="list-head">
 					<span>Current Terms</span>

@@ -1,8 +1,5 @@
-//! Knowledge-summary pull (US7/T049). The summary is computed by the background
-//! task and emitted on `knowledge-summary` only when an input changes; a freshly
-//! (re)loaded webview pulls the last cached value here so the widget isn't blank
-//! until the next recompute (same rationale as the anki/player status pull in
-//! `hydrate`).
+//! One-shot pull of the cached summary — the event fires only on change, so a
+//! (re)loaded webview would otherwise sit blank until the next recompute.
 
 use std::sync::Mutex;
 

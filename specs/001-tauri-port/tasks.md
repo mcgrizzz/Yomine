@@ -1290,6 +1290,37 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
   loaded, scrolling keeps title/coverage/search fixed and only the rows move (column header
   pinned); menus read File / Mining / Settings with separators; all six relocated entries open
   their modals.
+- **T070 DONE (2026-07-07) [cleanup] — code structure + comments pass on the tauri code
+  (maintainer Q&A: strip task IDs; keep only behavioral egui refs; split stores only).**
+  (1) **stores/index.ts (704 lines) split by concern** into ui / status / modals (all 9
+  open-flags + open fns in one place) / file / controls (table search/sort/POS/freq +
+  visibleTerms) / settings (mirror + every settings-persisting action via a shared
+  patchSettings that now reports unsaved-because-not-hydrated) / ignore / dictionaries /
+  setup / player (status + seek + loadFromAsbplayer) / hydrate — index.ts is pure re-exports,
+  so every component import (`$lib/stores`) is unchanged. toggleDarkMode/toggleSerifFont/
+  saveAnkiSettings now route through patchSettings (same behavior, less duplication).
+  (2) **Comments**: all TNNN/USn task references, dates, and "maintainer decision" attributions
+  stripped across src-tauri/src + ui (regex pass + hand-fixes); provenance-only egui refs
+  ("parity with src/gui/…", "Ports src/gui/…") dropped from every component/module header —
+  behavioral egui refs kept ("Cancel reverts but keeps the modal open (egui behavior)").
+  Stale references fixed along the way (+page header still said "scrolling main region";
+  IgnoreListModal pointed at a nonexistent stores.addToIgnore). Contracts/spec files keep
+  their task IDs (they ARE the process log). Checks: cargo check (tauri) clean, svelte-check
+  0 errors / 9 known warnings. **Verify on Windows:** smoke-test the app (menus, modals,
+  file load, table controls, asbplayer picker) — this round is behavior-neutral, so anything
+  broken is a refactor slip.
+  **Round 2 (2026-07-07, maintainer feedback: "comments should only be for non-obvious intent
+  or tricky edge cases").** Full prune of paragraph-style explanatory comments across
+  src-tauri (Rust + UI): component/module header paragraphs deleted or cut to the one
+  constraint they carried; command doc paragraphs reduced to contract semantics (rejects,
+  nulls, ordering, idempotency); DTO docs reduced to wire quirks; all remaining provenance
+  egui refs ("Mirrors egui's X", "(egui `fn_name`)") stripped, keeping only
+  behavior-explaining ones ("Cancel reverts but keeps the modal open (egui behavior)"). Kept
+  intact: lock-discipline notes, untrack/effect-loop rationale, the hydrate event-race note,
+  the `<wbr>`/ruby layout constraints, the DualSlider preventDefault fix note, follow-mode
+  seeding semantics. Net ≈ −1000 comment lines. Checks: cargo check clean, svelte-check
+  0 errors / 9 known warnings; regex-artifact scan clean. Same verify: behavior-neutral
+  smoke test.
 - **NEXT options:**
   - **`load_frequency_dictionaries` import command (freq-dict import)** — the File-menu "Load New
     Frequency Dictionaries" entry and the checklist's two "+ Install Dictionary" actions (T045)
@@ -1694,8 +1725,9 @@ sub-states, above) belongs to the same gate.
 
 - [ ] T069 **UI/UX pass.** Sweep the whole app for polish: spacing/margins, affordances
       (clickable things look clickable), consistency across modals, empty/edge states.
-- [ ] T070 **Code structure + comments pass (tauri code).** Reduce excessive comments, tighten
-      module structure in `src-tauri/` and `src-tauri/ui/` — keep only constraint-stating comments.
+- [x] T070 **Code structure + comments pass (tauri code).** Stores split by concern (index.ts →
+      11 focused modules, re-exported); task-ID/date/attribution comments stripped, provenance
+      egui refs dropped, behavioral ones kept.
 - [ ] T071 **Ship the port.** Push → first green CI run (ticks T053), release build + installer
       smoke tests (T052), tag/release.
 - [ ] T072 **Retire the egui build.** After the shipped port is validated: remove the egui build

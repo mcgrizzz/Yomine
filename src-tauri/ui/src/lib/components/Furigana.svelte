@@ -1,10 +1,6 @@
 <script lang="ts">
-	// Renders surface text with furigana over kanji runs only (okurigana stays
-	// bare). The whole word goes in ONE `<ruby>` with alternating base/<rt> pairs
-	// (empty <rt> over kana) so per-kanji readings align, and the word is wrapped
-	// in an inline-block box so a reading wider than its kanji can't overhang /
-	// merge into the next word. Color/weight inherit from the parent. Shared by
-	// the term column and the sentence view (see `$lib/furigana`).
+	// One <ruby> per word with alternating base/<rt> pairs (empty <rt> over kana)
+	// so per-kanji readings align; okurigana stays bare.
 	import { furiganaParts } from '$lib/furigana';
 
 	let { surface, reading }: { surface: string; reading: string } = $props();

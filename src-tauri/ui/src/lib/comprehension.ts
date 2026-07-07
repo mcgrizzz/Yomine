@@ -1,8 +1,5 @@
-// egui's comprehension gradient: red (0%) → yellow (50%) → green (100%),
-// desaturated by blending gray(140) at gamma 0.6 over the base — premultiplied
-// "over" works out to `ch * 0.4 + 84` per channel. Shared by the per-sentence
-// indicator (`ui_sentence_comprehension`) and the file summary
-// (`ui_current_file_summary`), which use the identical computation in egui.
+// Red (0%) → yellow (50%) → green (100%), desaturated by blending gray(140) at
+// gamma 0.6 over the base — premultiplied "over" is `ch * 0.4 + 84` per channel.
 export function comprehensionColor(pct: number): string {
 	const base =
 		pct >= 50 ? [180 * (1 - (pct - 50) / 50), 180, 60] : [180, 180 * (pct / 50), 60];

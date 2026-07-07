@@ -15,9 +15,7 @@ use crate::state::AppState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Settings are owned by the backend (Constitution: one source of truth) and
-    // loaded from the same `settings.json` the egui app uses — unchanged on-disk
-    // format means existing users' settings load in both apps (research R9).
+    // Same `settings.json` as the egui app — the on-disk format is unchanged.
     let settings = yomine::persistence::load_json_or_default::<SettingsData>("settings.json");
     let websocket_port = settings.websocket_settings.port;
 

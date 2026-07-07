@@ -1,10 +1,6 @@
 <script lang="ts">
-	// Dual-thumb range slider (T062): one track, two knobs — the web counterpart
-	// of egui's `DoubleSlider` in the controls row (`table/controls.rs`), including
-	// its logarithmic scale (frequency ranks span ~1..500k, so linear thumbs cram
-	// the useful low end into a few pixels). Pointer-driven: dragging a thumb (or
-	// pressing anywhere on the track, which grabs the nearest thumb) updates the
-	// selection live; arrow keys nudge a focused thumb by 1% of the scale.
+	// Log-scaled: frequency ranks span ~1..500k, so linear thumbs would cram the
+	// useful low end into a few pixels.
 	let {
 		lo,
 		hi,
@@ -28,7 +24,7 @@
 	// track at either extreme instead of overhanging its edges.
 	const PAD = 7;
 
-	// value ↔ [0,1] fraction, log-scaled (egui `.logarithmic(true)`).
+	// value ↔ [0,1] fraction, log-scaled`).
 	const toFrac = (v: number) => (Math.log(v) - Math.log(lo)) / (Math.log(hi) - Math.log(lo));
 	const fromFrac = (f: number) => Math.round(Math.exp(Math.log(lo) + f * (Math.log(hi) - Math.log(lo))));
 

@@ -1,6 +1,4 @@
-//! Setup-status command (T028, contracts/commands.md "Misc"). Aggregates the
-//! readiness signals the setup checklist/banner shows. Each field mirrors the
-//! matching egui `check_*` in `gui::setup_checklist_modal`.
+//! Aggregates the readiness signals the setup checklist/banner shows.
 
 use std::sync::Mutex;
 

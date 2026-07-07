@@ -1,8 +1,4 @@
-//! Frequency-dictionary commands (T028/T060, contracts/commands.md "Frequency
-//! dictionaries"). List the live per-dictionary weight/enabled state, mutate a
-//! single one (mirrors egui's frequency-weights modal + `apply_frequency_settings`),
-//! and import new dictionary zips (mirrors egui's File-menu
-//! `frequency_utils::load_frequency_dictionaries`).
+//! Frequency-dictionary commands (contracts/commands.md "Frequency dictionaries").
 
 use std::sync::{
     atomic::Ordering,
@@ -54,10 +50,8 @@ pub fn list_dictionaries(state: State<'_, Mutex<AppState>>) -> Vec<DictionarySta
     dicts
 }
 
-/// Update one dictionary's weight/enabled, persist it to `settings.frequency_weights`,
-/// and emit `dictionaries-changed` so the UI re-fetches terms (weighted frequency /
-/// bands changed). Mirrors egui: the manager gets `weight.max(0.1)`, settings keep
-/// the raw value; the knowledge summary is marked dirty.
+/// Update one dictionary's weight/enabled and persist it. The manager gets
+/// `weight.max(0.1)`; settings keep the raw value (egui parity).
 #[tauri::command]
 pub fn set_dictionary_state(
     app: AppHandle,
@@ -82,10 +76,8 @@ pub fn set_dictionary_state(
     if let Some(manager) = manager {
         manager.set_dictionary_state(&name, weight.max(0.1), enabled).map_err(|e| e.to_string())?;
 
-        // The stored terms carry a baked "HARMONIC" entry computed at process time
-        // (egui instead recomputes `get_weighted_harmonic` every frame at render).
-        // Refresh it under the new weights so the `get_terms` re-fetch the
-        // `dictionaries-changed` event triggers returns up-to-date values.
+        // The stored terms carry a HARMONIC entry baked at process time; rebake
+        // it so the event-triggered `get_terms` re-fetch sees the new weights.
         let mut guard = state.lock().unwrap();
         let file = &mut guard.file;
         for term in file.terms.iter_mut().chain(file.base_terms.iter_mut()) {
@@ -98,16 +90,9 @@ pub fn set_dictionary_state(
     Ok(())
 }
 
-/// File → Load New Frequency Dictionaries (T060; egui
-/// `frequency_utils::load_frequency_dictionaries`): open a native multi-`.zip`
-/// picker, copy the new archives into the frequency-dict dir (already-present
-/// filenames are skipped, as in egui), and — only when something new landed —
-/// re-run `process_frequency_dictionaries` off the runtime, streaming its
-/// progress over `progress`. On success the persisted weights are applied to the
-/// new manager, it's swapped into the live tools, the loaded file's per-term
-/// frequencies are re-baked against it, and `dictionaries-changed` fires (the UI
-/// re-fetches terms + setup status). Returns the number of newly copied archives
-/// (0 = cancelled or nothing new → no reload, egui parity).
+/// Zip import via native multi-`.zip` picker. Returns the number of newly
+/// copied archives — 0 (cancelled, or every filename already present) skips
+/// the reload entirely.
 #[tauri::command]
 pub async fn load_frequency_dictionaries(
     app: AppHandle,
@@ -147,16 +132,10 @@ pub async fn load_frequency_dictionaries(
 }
 
 /// Rebuild the frequency manager from the dict dir and swap it into the live
-/// tools — the shared tail of every dictionary mutation (T060 import, T064
-/// install/update/remove). Re-processes the whole dir off the runtime (extracts
-/// new zips; unchanged dicts load from cache) streaming progress; then, following
-/// egui's `FrequencyDictionariesReloaded` arm: applies persisted weights, swaps
-/// the manager, and marks the knowledge summary dirty. Also re-bakes the loaded
-/// terms' full frequency maps against the new manager (`build_freq_map`, the same
-/// call `extract_words` bakes with) — a deliberate improvement over egui, where
-/// new per-term dictionary entries only appear after the file is reopened
-/// (maintainer decision, 2026-07-06). Per-term lookups are HashMap probes, so
-/// this is fast even for large files. Emits `dictionaries-changed` on success.
+/// tools — the shared tail of every dictionary mutation. Also re-bakes the
+/// loaded terms' frequency maps against the new manager (a deliberate
+/// improvement over egui, where new entries only appeared after reopening the
+/// file); per-term lookups are HashMap probes, so this is cheap.
 pub(crate) async fn reload_and_swap(
     app: &AppHandle,
     state: &State<'_, Mutex<AppState>>,

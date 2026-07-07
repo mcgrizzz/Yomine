@@ -1,12 +1,7 @@
 <script lang="ts">
-	// Anki-settings modal (T040): parity with src/gui/settings/anki_settings_modal.rs
-	// (+ its components.rs / anki_service.rs helpers). The known-interval and the
-	// per-notetype field mappings are *staged* (egui's SettingsModalData) and
-	// committed only on "Save Settings" via save_settings; Cancel reverts the staged
-	// edits but keeps the modal open (egui behavior). Note types come from
-	// list_anki_models; sample notes + the term/reading guesses are fetched lazily
-	// per model via get_anki_sample_note (the guessing heuristic runs engine-side —
-	// the same `anki::guess_field_mappings` egui calls).
+	// Staged edits; Cancel reverts but keeps the modal open (egui behavior).
+	// Sample notes + field guesses are fetched lazily per notetype (the guessing
+	// heuristic runs engine-side).
 	import { untrack } from 'svelte';
 	import * as ipc from '$lib/ipc';
 	import { ankiStatus, ankiModalOpen, settings, saveAnkiSettings } from '$lib/stores';
@@ -14,30 +9,28 @@
 	/** `SettingsData::default().anki_interval` (core/settings.rs). */
 	const DEFAULT_INTERVAL = 30;
 
-	// ---- Staged settings (egui SettingsModalData) ----
+	// ---- Staged settings ----
 	let tempMappings = $state<Record<string, ipc.FieldMapping>>({});
 	let originalMappings = $state<Record<string, ipc.FieldMapping>>({});
 	let tempInterval = $state(DEFAULT_INTERVAL);
 	let originalInterval = $state(DEFAULT_INTERVAL);
 
-	// ---- Note-type cache (egui available_models; persists across opens) ----
+	// ---- Note-type cache ----
 	let models = $state<ipc.AnkiModelInfo[]>([]);
 	/** Per-model field guesses, cached alongside the sample note. */
 	let guesses = $state<Record<string, { term: string | null; reading: string | null }>>({});
 	let loadingModels = $state(false);
 	let fetchError = $state<string | null>(null);
 
-	// ---- Mapping editor (egui ModelMappingEditor) ----
+	// ---- Mapping editor ----
 	let edModel = $state('');
 	let edTerm = $state('');
 	let edReading = $state('');
 	let edEditing = $state(false);
 	let edOriginalName = $state<string | null>(null);
 
-	// Hydrate the staged state each time the modal opens (egui open_settings).
-	// untrack: hydrate writes state it also reads (tempInterval/tempMappings), so a
-	// tracking read inside the effect body would loop (effect_update_depth_exceeded);
-	// the effect must depend on the open flag only.
+	// untrack: hydrate writes state it also reads — a tracked read would loop
+	// (effect_update_depth_exceeded). The effect must depend on the open flag only.
 	$effect(() => {
 		if ($ankiModalOpen) untrack(hydrate);
 	});
@@ -49,8 +42,6 @@
 		tempInterval = s?.anki_interval ?? DEFAULT_INTERVAL;
 		originalInterval = tempInterval;
 		resetEditor();
-		// egui: fetch models on first open, then sample notes for mapped models so
-		// the editor can show examples / guesses for them.
 		if (models.length === 0) fetchModels();
 		else fetchMappedSamples();
 	}
@@ -91,8 +82,7 @@
 			models = await ipc.listAnkiModels();
 			fetchError = null;
 		} catch (err) {
-			// egui shows fetch failures inline on the status line (red "Error: …"),
-			// not as a banner.
+			// Fetch failures show inline on the status line, not the error banner.
 			fetchError = String(err);
 		} finally {
 			loadingModels = false;
@@ -100,7 +90,7 @@
 		if (!fetchError) await fetchMappedSamples();
 	}
 
-	/** Fetch sample notes for already-mapped models that lack one (egui open_settings). */
+	/** Fetch sample notes for already-mapped models that lack one. */
 	async function fetchMappedSamples() {
 		for (const name of Object.keys(tempMappings)) {
 			const m = models.find((m) => m.name === name);
@@ -109,7 +99,7 @@
 	}
 
 	/** Fetch one model's sample note + engine-side field guesses, then auto-fill
-	 * empty editor fields (egui fetch_sample_note → trigger_field_guessing). */
+	 * empty editor fields. */
 	async function fetchSample(name: string) {
 		const model = models.find((m) => m.name === name);
 		if (!model) return;
@@ -129,7 +119,7 @@
 	const selectedModel = $derived(models.find((m) => m.name === edModel));
 
 	// Selecting a note type clears the fields, then guesses from the (possibly
-	// fetched) sample note (egui ui_model_selection).
+	// fetched) sample note.
 	function onModelSelect() {
 		edTerm = '';
 		edReading = '';
@@ -192,8 +182,7 @@
 		tempInterval = originalInterval;
 	}
 
-	// egui resets the whole staged SettingsData here; scoped to the two fields
-	// this modal owns so unrelated settings can't be clobbered by Save.
+	// Scoped to the two fields this modal owns so Save can't clobber unrelated settings.
 	function restoreDefault() {
 		tempMappings = {};
 		tempInterval = DEFAULT_INTERVAL;
@@ -229,7 +218,7 @@
 			</header>
 
 			<div class="body">
-				<!-- Known interval threshold (egui ui_known_interval_setting). -->
+				<!-- Known interval threshold. -->
 				<section>
 					<h3>
 						Known Interval Threshold
@@ -255,7 +244,7 @@
 
 				<hr />
 
-				<!-- Current notetypes (egui ui_existing_mappings). -->
+				<!-- Current notetypes. -->
 				<section>
 					<h3>Current Notetypes</h3>
 					{#each Object.entries(tempMappings) as [name, mapping] (name)}
@@ -276,7 +265,7 @@
 
 				<hr />
 
-				<!-- Mapping editor (egui ui_mapping_editor). -->
+				<!-- Mapping editor. -->
 				<section>
 					<h3>{edEditing ? 'Edit Notetype' : 'Add Notetype'}</h3>
 

@@ -1,11 +1,6 @@
 <script lang="ts">
-	// Term-table controls (T037, US4): search, POS filter, and a frequency range —
-	// all client-side, writing the control stores that `visibleTerms` derives
-	// from. Mirrors egui's controls row (`table/controls.rs`): search bar +
-	// dual-thumb log frequency slider with Min/Max numeric fields and the "?"
-	// unknown toggle. Sorting lives in the table's column headers (T061, like
-	// egui); the POS button opens the POS modal (T043) — single surface for POS,
-	// a deliberate deviation from egui's header popover (maintainer, 2026-06-11).
+	// Sorting lives in the table's column headers; POS gets a single modal here
+	// (deliberate deviation from egui's per-header popovers).
 	import {
 		tableSearch,
 		posEnabled,
@@ -20,8 +15,8 @@
 	const posTotal = $derived($posCatalog.length);
 	const posOn = $derived($posCatalog.filter((p) => $posEnabled[p.key] !== false).length);
 
-	// Slider drags move both ends live; the numeric fields commit on change
-	// (egui's DragValues), clamped to the bounds and to each other.
+	// Slider drags apply live; the numeric fields commit on change, clamped to
+	// the bounds and to each other.
 	function setRange(min: number, max: number) {
 		freqFilter.update((f) => (f ? { ...f, min, max } : f));
 	}

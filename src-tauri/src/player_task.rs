@@ -1,11 +1,7 @@
-//! The player lives here, owned solely by one background task — never in the
-//! shared `AppState` lock. `PlayerManager::update()` does blocking-ish I/O on a
-//! timer (socket reconnects, WebSocket server restart); keeping it out of the
-//! state mutex means a player tick never stalls UI commands and vice versa.
-//!
-//! Commands talk to it over a channel: `seek`/`status` carry a `oneshot` reply;
-//! `set_port` is fire-and-forget. The task also emits `player-status` whenever
-//! connectivity or mode changes (replaces egui's per-frame `PlayerManager::update`).
+//! The player is owned by this task, never by the `AppState` lock:
+//! `PlayerManager::update()` does blocking-ish I/O (socket reconnects, server
+//! restarts), so a player tick must not stall UI commands or vice versa.
+//! Commands reach it over a channel.
 
 use std::time::Duration;
 
@@ -116,9 +112,8 @@ fn current_status(player: &PlayerManager) -> PlayerStatus {
     } else {
         "none"
     };
-    // Carry the WebSocket server's own state so the asbplayer dot can show
-    // Starting/Error/Stopped, not just "waiting" (T056; mirrors egui's
-    // `show_status_indicators` reading `WebSocketManager::get_server_state`).
+    // Include the server's own state so the asbplayer dot can show
+    // Starting/Error/Stopped, not just "waiting".
     let (server_state, server_error) = match player.ws.get_server_state() {
         ServerState::Running => ("running", None),
         ServerState::Starting => ("starting", None),
@@ -133,7 +128,7 @@ fn current_status(player: &PlayerManager) -> PlayerStatus {
         server_state: server_state.to_string(),
         server_error,
         // Refreshed by `player.update()` each tick, so a confirmation reaches the
-        // UI within one UPDATE_INTERVAL (T063).
+        // UI within one UPDATE_INTERVAL.
         confirmed_timestamps: player.get_confirmed_timestamps(),
     }
 }

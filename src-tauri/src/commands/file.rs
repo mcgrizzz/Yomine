@@ -1,4 +1,4 @@
-//! File / mining commands (T021, contracts/commands.md "File / mining").
+//! File / mining commands (contracts/commands.md "File / mining").
 
 use std::sync::{
     atomic::Ordering,
@@ -125,9 +125,8 @@ pub async fn process_file(
     let _ = progress.send(LoadingMessage::new("Processing file..."));
     let source_file = source_file_from_path(&path);
 
-    // The backend runs in its own process (the UI is a separate webview), so a
-    // brief parse/segment on the async runtime doesn't freeze the UI. The cached
-    // Anki path does no real I/O await; the heavy work is CPU segmentation.
+    // Segmentation blocks the async runtime briefly, but the UI is a separate
+    // webview process — nothing user-visible freezes.
     let (base_terms, filter_result, sentences, file_comprehension) =
         process_source_file(&source_file, &tools).await.map_err(|e| e.to_string())?;
 
@@ -136,7 +135,7 @@ pub async fn process_file(
     record_recent_file(&source_file, filter_result.terms.len());
 
     // Lemmas Anki already knew — kept so an ignore-list change can re-filter
-    // without re-querying Anki (mirrors egui's `anki_filtered_terms`).
+    // without re-querying Anki.
     let anki_known_lemmas =
         filter_result.anki_filtered.iter().map(|t| t.lemma_form.clone()).collect();
 
@@ -154,9 +153,8 @@ pub async fn process_file(
     let payload = load_result(&guard.file).expect("file just stored has a source_file");
     drop(guard);
 
-    // The table now shows the cached Anki snapshot; if Anki is live, refresh
-    // against it in the background and update in place via `terms-refreshed`
-    // (egui's `handle_processing_result` tail → `refresh_terms`).
+    // The table shows the cached Anki snapshot immediately; if Anki is live,
+    // refresh against it in the background via `terms-refreshed`.
     let app_handle = app.clone();
     tauri::async_runtime::spawn(async move {
         if yomine::anki::api::get_version().await.is_ok() {
@@ -177,13 +175,10 @@ pub async fn process_file(
     Ok(payload)
 }
 
-/// Load the subtitles asbplayer has for a media and run them through the same
-/// pipeline as a file (issue #105): fetch over the WebSocket (`get-subtitles`),
-/// convert cues to sentences (SRT-grade text cleanup, cue timings preserved so
-/// timestamp seeking + 👁 confirmations work), tokenize + filter, and store as
-/// the loaded "file". The cues are also saved as an `.srt` in the app data dir
-/// so the session lands in recent files and reopens without asbplayer.
-/// `track_numbers = None` loads all tracks asbplayer has for the media.
+/// Fetch a media's subtitles from asbplayer and run them through the same
+/// pipeline as a file (cue timings preserved, so seek/👁 work). Cues are also
+/// saved as an `.srt` so the session lands in recents and reopens without
+/// asbplayer. `track_numbers = None` loads all tracks.
 #[tauri::command]
 pub async fn load_asbplayer_media(
     app: AppHandle,
@@ -303,11 +298,9 @@ pub(crate) async fn load_asbplayer_into_state(
     Ok(payload)
 }
 
-/// Re-partition the loaded file's terms against **live** Anki data and emit
-/// `terms-refreshed` — a port of egui's `TaskManager::refresh_terms` + the
-/// `TermsRefreshed` handler: re-applies ignore + live Anki filters, recomputes
-/// per-sentence and file comprehension, stores the result, and marks the
-/// knowledge summary dirty (the live fetch just rewrote the vocab cache).
+/// Re-partition the loaded terms against **live** Anki data and emit
+/// `terms-refreshed`. Marks the knowledge summary dirty — the live fetch just
+/// rewrote the vocab cache.
 pub(crate) async fn live_refresh(app: &AppHandle) -> Result<(), String> {
     let state = app.state::<Mutex<AppState>>();
     let (tools, base_terms, mut sentences, mappings) = {
@@ -336,8 +329,7 @@ pub(crate) async fn live_refresh(app: &AppHandle) -> Result<(), String> {
             .await
             .map_err(|e| e.to_string())?;
 
-        // Reconstruct the full term set and recompute comprehension from it
-        // (egui `refresh_terms` does the same before sending `TermsRefreshed`).
+        // Reconstruct the full term set and recompute comprehension from it.
         let mut all_terms = Vec::new();
         all_terms.extend(filter_result.terms.iter().cloned());
         all_terms.extend(filter_result.anki_filtered.iter().cloned());

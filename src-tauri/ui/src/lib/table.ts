@@ -1,7 +1,6 @@
-// Client-side term-table controls (T037): search, sort, POS filter, and a
-// frequency range — pure functions over the term list, mirroring egui's
-// `gui/table/{sort,filter,search}.rs` (research R6: all client-side on the
-// loaded term set, no per-keystroke round trip).
+// Client-side term-table controls: search, sort, POS filter, and a frequency
+// range — pure functions over the loaded term set, no per-keystroke round trip
+// to the backend.
 
 import { isHiragana, toHiragana } from 'wanakana';
 import type { SentenceDto, Term } from '$lib/ipc';
@@ -28,7 +27,7 @@ export function defaultDir(field: SortField): SortDir {
 	return field === 'frequency' || field === 'chronological' ? 'asc' : 'desc';
 }
 
-/** Earliest sentence index the term appears in (egui Chronological key); none → +Infinity. */
+/** Earliest sentence index the term appears in; none → +Infinity. */
 function chronoIndex(term: Term): number {
 	let min = Infinity;
 	for (const [idx] of term.sentence_references) if (idx < min) min = idx;
@@ -54,7 +53,7 @@ export interface FreqRange {
 export interface TableControlState {
 	search: string;
 	sort: { field: SortField; dir: SortDir };
-	/** POS-key → enabled; a missing key counts as enabled (egui `is_enabled` default). */
+	/** POS-key → enabled; a missing key counts as enabled. */
 	pos: Record<string, boolean>;
 	freq: FreqRange | null;
 }
@@ -89,19 +88,16 @@ function normalizeLongVowel(s: string): string {
 }
 
 /**
- * egui `core::utils::normalize_japanese_text`: convert to hiragana via wana-kana
- * (romaji → kana, katakana → kana; kanji/other pass through), then fold long
- * vowels. Uses the `wanakana` JS package — the library `wana_kana` (Rust) was
- * ported from — so the conversion matches the engine's.
+ * Hiragana conversion + long-vowel fold. Uses the `wanakana` JS package the
+ * engine's `wana_kana` crate was ported from, so results match the backend.
  */
 function normalizeJapaneseText(text: string): string {
 	return normalizeLongVowel(toHiragana(text));
 }
 
 /**
- * Substring match, a faithful port of `core::utils::text_matches_search`: first
- * the normalized-Japanese pass (romaji/katakana → hiragana + long-vowel fold),
- * then a case-insensitive ASCII fallback (e.g. English POS names).
+ * Substring match: normalized-Japanese pass first, then a case-insensitive
+ * ASCII fallback (e.g. English POS names).
  */
 export function textMatches(text: string, query: string): boolean {
 	if (normalizeJapaneseText(text).includes(normalizeJapaneseText(query))) return true;
@@ -136,7 +132,7 @@ export function applyControls(
 	c: TableControlState
 ): Term[] {
 	const out = terms.filter((t) => {
-		// Frequency range (egui `FrequencyFilter::contains`).
+		// Frequency range.
 		if (c.freq) {
 			const f = harmonic(t);
 			if (f === Infinity) {
@@ -145,7 +141,7 @@ export function applyControls(
 				return false;
 			}
 		}
-		// POS filter (egui `is_enabled`: missing key → enabled).
+		// POS filter.
 		if (c.pos[t.part_of_speech] === false) return false;
 		// Search.
 		return matchesSearch(t, sentences, c.search);

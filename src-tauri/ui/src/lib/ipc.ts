@@ -1,4 +1,4 @@
-// Typed IPC layer (T023): thin wrappers over Tauri `invoke` / `listen` / `Channel`,
+// Typed IPC layer: thin wrappers over Tauri `invoke` / `listen` / `Channel`,
 // plus the wire types that cross the boundary (data-model.md). This is the only
 // module that imports `@tauri-apps/api`; everything else talks to these helpers.
 
@@ -98,7 +98,7 @@ export interface PosInfo {
 	display_name: string;
 }
 
-// ---- Frequency analyzer (US6/T047) -----------------------------------------
+// ---- Frequency analyzer -----------------------------------------
 
 /** Per-file analysis progress streamed over a `Channel` while `start_analysis`
  * runs (data-model.md). `current_file` is 1-based; `eta_secs` is the smoothed
@@ -174,7 +174,7 @@ export interface AnkiModelInfo {
 	sample_note: Record<string, string> | null;
 }
 
-/** A model's sample note + the engine's term/reading field guesses (T040). */
+/** A model's sample note + the engine's term/reading field guesses. */
 export interface SampleNote {
 	sample_note: Record<string, string> | null;
 	guessed_term: string | null;
@@ -247,11 +247,11 @@ export interface PlayerStatus {
 	mpv_connected: boolean;
 	ws_clients: number;
 	mode: 'mpv' | 'asbplayer' | 'none';
-	/** WebSocket server state — drives the asbplayer dot's sub-states (T056). */
+	/** WebSocket server state — drives the asbplayer dot's sub-states. */
 	server_state: 'running' | 'starting' | 'error' | 'stopped';
 	/** Error message when `server_state === 'error'`, else null. */
 	server_error: string | null;
-	/** Start-seconds the player acknowledged seeking to this session (T063) —
+	/** Start-seconds the player acknowledged seeking to this session —
 	 * timestamp buttons matching an entry show egui's 👁 confirmed state. */
 	confirmed_timestamps: number[];
 }
@@ -262,7 +262,7 @@ export interface ErrorPayload {
 	detail: string | null;
 }
 
-/** `export-complete` payload (US6/T047). */
+/** `export-complete` payload. */
 export interface ExportCompletePayload {
 	ok: boolean;
 	message: string;
@@ -330,13 +330,13 @@ export function getIgnoreList(): Promise<string[]> {
 }
 
 /** Add a lemma to the ignore list (persists). Does not re-filter — the term stays
- * greyed-in-place until the next refresh (T059). */
+ * greyed-in-place until the next refresh. */
 export function addToIgnoreList(lemma: string): Promise<void> {
 	return invoke('add_to_ignore_list', { lemma });
 }
 
 /** Remove a lemma from the ignore list (persists). Does not re-filter; the term just
- * stops being greyed (T059). */
+ * stops being greyed. */
 export function removeFromIgnoreList(lemma: string): Promise<void> {
 	return invoke('remove_from_ignore_list', { lemma });
 }
@@ -392,12 +392,12 @@ export function exportIgnoreList(terms: string[]): Promise<string | null> {
 	return invoke('export_ignore_list', { terms });
 }
 
-/** Open the app data directory in the OS file explorer (File → Open Data Folder, T058). */
+/** Open the app data directory in the OS file explorer (File → Open Data Folder). */
 export function openDataFolder(): Promise<void> {
 	return invoke('open_data_folder');
 }
 
-/** Seek the connected player (mpv or asbplayer) to a sentence timestamp (US3/FR-008). */
+/** Seek the connected player (mpv or asbplayer) to a sentence timestamp. */
 export function seekTimestamp(seconds: number, label: string): Promise<void> {
 	return invoke('seek_timestamp', { seconds, label });
 }
@@ -442,7 +442,7 @@ export async function loadAsbplayerMedia(
 	return invoke('load_asbplayer_media', { mediaId, trackNumbers, title, progress: channel });
 }
 
-/** Persist the WebSocket server port and restart a running server on it (US5/T041). */
+/** Persist the WebSocket server port and restart a running server on it. */
 export function setWebsocketPort(port: number): Promise<void> {
 	return invoke('set_websocket_port', { port });
 }
@@ -458,21 +458,19 @@ export function getAnkiStatus(): Promise<AnkiStatus> {
 	return invoke('get_anki_status');
 }
 
-/** Last computed knowledge summary (US7/T049). `null` until the background task
- * has produced one (needs loaded tools + an Anki vocab cache). The
- * `knowledge-summary` event pushes fresh values; this is the one-shot hydrate so
- * a (re)loaded webview isn't blank (same rationale as getPlayerStatus). */
+/** `null` until the background task has produced one. One-shot hydrate so a
+ * (re)loaded webview isn't blank — the event only fires on change. */
 export function getKnowledgeSummary(): Promise<KnowledgeSummary | null> {
 	return invoke('get_knowledge_summary');
 }
 
 /** Note types (with fields) that have at least one note, for the Anki settings
- * modal's mapping UI (US5/T040). Rejects with "Anki Offline" when disconnected. */
+ * modal's mapping UI. Rejects with "Anki Offline" when disconnected. */
 export function listAnkiModels(): Promise<AnkiModelInfo[]> {
 	return invoke('list_anki_models');
 }
 
-/** Fetch a model's sample note + the engine-side field guesses (US5/T040).
+/** Fetch a model's sample note + the engine-side field guesses.
  * Never rejects — fetch failures come back as a `null` sample (egui parity). */
 export function getAnkiSampleNote(modelName: string, fields: string[]): Promise<SampleNote> {
 	return invoke('get_anki_sample_note', { modelName, fields });
@@ -485,7 +483,7 @@ export interface DictionaryState {
 	enabled: boolean;
 }
 
-/** The live per-dictionary weight/enabled set, sorted by name (US5/T042).
+/** The live per-dictionary weight/enabled set, sorted by name.
  * Empty until the language tools are loaded. */
 export function listDictionaries(): Promise<DictionaryState[]> {
 	return invoke('list_dictionaries');
@@ -493,12 +491,12 @@ export function listDictionaries(): Promise<DictionaryState[]> {
 
 /** Update one dictionary's weight/enabled: persists `settings.frequency_weights`,
  * applies to the live manager, rebakes the stored terms' HARMONIC, and emits
- * `dictionaries-changed` (US5/T042). */
+ * `dictionaries-changed`. */
 export function setDictionaryState(name: string, weight: number, enabled: boolean): Promise<void> {
 	return invoke('set_dictionary_state', { name, weight, enabled });
 }
 
-/** One row of the dictionary manager's "Recommended" section (T064/issue #100). */
+/** One row of the dictionary manager's "Recommended" section (issue #100). */
 export interface RecommendedDictionary {
 	name: string;
 	title: string;
@@ -509,7 +507,7 @@ export interface RecommendedDictionary {
 	status: 'not-installed' | 'installed' | 'up-to-date' | 'update-available';
 }
 
-/** The recommended catalog with install/update state resolved (T064). Fetches
+/** The recommended catalog with install/update state resolved. Fetches
  * the repo manifest + live update indexes, so it needs network for update
  * badges — offline it falls back to the baked manifest. */
 export function getRecommendedDictionaries(): Promise<RecommendedDictionary[]> {
@@ -517,8 +515,8 @@ export function getRecommendedDictionaries(): Promise<RecommendedDictionary[]> {
 }
 
 /** Install or update a recommended dictionary by title; replaces existing
- * artifacts of the same title, reloads + re-bakes, emits `dictionaries-changed`
- * (T064). Progress streams over `onProgress`. */
+ * artifacts of the same title, reloads + re-bakes, emits `dictionaries-changed`.
+ * Progress streams over `onProgress`. */
 export async function installRecommendedDictionary(
 	title: string,
 	onProgress: (msg: LoadingMessage) => void
@@ -529,7 +527,7 @@ export async function installRecommendedDictionary(
 }
 
 /** Remove an installed dictionary (any, not just recommended): deletes its files
- * + persisted weight, reloads, emits `dictionaries-changed` (T064). */
+ * + persisted weight, reloads, emits `dictionaries-changed`. */
 export async function removeDictionary(
 	title: string,
 	onProgress: (msg: LoadingMessage) => void
@@ -539,11 +537,8 @@ export async function removeDictionary(
 	return invoke('remove_dictionary', { title, progress: channel });
 }
 
-/** File → Load New Frequency Dictionaries (T060): native multi-`.zip` picker →
- * copy the new archives into the frequency-dict dir → reload the manager,
- * streaming progress over `onProgress`. Resolves with the number of newly copied
- * archives (0 = cancelled or nothing new — no reload happened). A reload emits
- * `dictionaries-changed`. */
+/** Zip import via native multi-`.zip` picker. Resolves with the number of newly
+ * copied archives — 0 means cancelled or nothing new, i.e. no reload happened. */
 export async function loadFrequencyDictionaries(
 	onProgress: (msg: LoadingMessage) => void
 ): Promise<number> {
@@ -552,21 +547,21 @@ export async function loadFrequencyDictionaries(
 	return invoke('load_frequency_dictionaries', { progress: channel });
 }
 
-/** Aggregated setup readiness (US5/T045). Probes Anki + player live, so it's a
+/** Aggregated setup readiness. Probes Anki + player live, so it's a
  * command (not an event) — pull on hydrate and after relevant state changes. */
 export function getSetupStatus(): Promise<SetupStatus> {
 	return invoke('get_setup_status');
 }
 
 /** Expand a picked folder to the supported subtitle/text files under it
- * (recurses subdirectories) — used to build the selection tree (US6/T047). */
+ * (recurses subdirectories) — used to build the selection tree. */
 export function findAnalysisFiles(dir: string): Promise<string[]> {
 	return invoke('find_analysis_files', { dir });
 }
 
 /** Tokenize the corpus + count lemma frequencies; streams `AnalysisProgressDto`
  * over `onProgress` and resolves with the top-`PREVIEW_LIMIT` preview. Rejects
- * with "...cancelled..." on user cancel, or an error message otherwise (US6/T047). */
+ * with "...cancelled..." on user cancel, or an error message otherwise. */
 export async function startAnalysis(
 	paths: string[],
 	balanceCorpus: boolean,
@@ -577,13 +572,13 @@ export async function startAnalysis(
 	return invoke('start_analysis', { paths, balanceCorpus, progress: channel });
 }
 
-/** Request cancellation of a running `start_analysis` (US6/T047). */
+/** Request cancellation of a running `start_analysis`. */
 export function cancelAnalysis(): Promise<void> {
 	return invoke('cancel_analysis');
 }
 
 /** Export the last analysis into `output_dir` per the `options` flags; resolves
- * with a success message (US6/T047). */
+ * with a success message. */
 export function exportAnalysis(output_dir: string, options: ExportOptions): Promise<string> {
 	return invoke('export_analysis', { outputDir: output_dir, options });
 }
@@ -627,11 +622,8 @@ export const onAsbplayerMediaLoaded = (cb: (r: FileLoadResult) => void) =>
 	listenTo('asbplayer-media-loaded', cb);
 export const onError = (cb: (e: ErrorPayload) => void) => listenTo('error', cb);
 
-// Frequency-analyzer events (US6/T047). `start_analysis`/`export_analysis`
-// already resolve with their result, so the modal drives its flow off those
-// promises (mirroring `processFile`); these listeners exist for parity / any
-// global observer and are intentionally NOT wired by the modal to avoid
-// double-handling the same outcome.
+// The analyzer commands already resolve with their result; the modal must NOT
+// also wire these events or it double-handles the same outcome.
 export const onAnalysisComplete = (cb: (p: AnalysisPreview) => void) =>
 	listenTo('analysis-complete', cb);
 export const onAnalysisCancelled = (cb: () => void) =>

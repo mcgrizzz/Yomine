@@ -1,14 +1,6 @@
-//! Frequency-analyzer commands (T047, US6, contracts/commands.md "Frequency
-//! analysis"). Ports egui's `gui::frequency_analyzer::modal` + the
-//! `TaskManager::{analyze_frequency, export_frequency}` tasks: tokenize a corpus
-//! of subtitle/text files, count lemma frequencies, and export a custom Yomitan
-//! / CSV frequency dictionary.
-//!
-//! Locking discipline (see `state.rs`): `analyze_files`/`export_*` are
-//! **synchronous, CPU-heavy blocking** engine calls, so they run on a blocking
-//! thread (`spawn_blocking`) and the `Mutex<AppState>` is locked only briefly —
-//! to clone the `Arc`-backed `LanguageTools` / grab the cancel flag, and again at
-//! the end to store the result — never across the blocking work.
+//! Frequency-analyzer commands (contracts/commands.md "Frequency analysis").
+//! The engine calls are CPU-heavy and blocking, so they run on `spawn_blocking`
+//! with the state lock held only to clone handles and store results.
 
 use std::{
     path::PathBuf,
@@ -52,16 +44,11 @@ use crate::{
     state::AppState,
 };
 
-/// How many preview rows cross the IPC boundary (mirrors egui's
-/// `RESULTS_DISPLAY_LIMIT`). The full result for export stays in `AppState`.
+/// How many preview rows cross the IPC boundary. The full result for export stays in `AppState`.
 const PREVIEW_LIMIT: usize = 250;
 
-/// Expand a picked folder to the supported subtitle/text files under it (recurses
-/// subdirectories). The frontend turns this list into the selection tree, then
-/// passes the chosen `paths` to `start_analysis`. (Addition beyond the original
-/// contract — the contract's `start_analysis` takes final `paths`, but the UI
-/// needs folder → file expansion to build that tree; mirrors egui's
-/// `add_files(SelectionMode::Folder)`.)
+/// Expand a picked folder to the supported files under it (recursive); the
+/// frontend builds its selection tree from this list.
 #[tauri::command]
 pub fn find_analysis_files(dir: String) -> Vec<String> {
     find_supported_files_recursive(std::path::Path::new(&dir))
@@ -86,20 +73,15 @@ fn build_preview(result: &FrequencyAnalysisResult) -> AnalysisPreview {
     entries.sort_by(|a, b| b.frequency.cmp(&a.frequency));
     let total = entries.len();
     // Bottom slice: the last ≤PREVIEW_LIMIT entries of the same freq-desc list
-    // (lowest-frequency terms, still desc order) — mirrors egui's
-    // `entries[len-250..]` for the Bottom 250 radio.
+    // (lowest-frequency terms, still desc order).]` for the Bottom 250 radio.
     let bottom = entries[entries.len().saturating_sub(PREVIEW_LIMIT)..].to_vec();
     entries.truncate(PREVIEW_LIMIT);
     AnalysisPreview { entries, bottom, total }
 }
 
-/// Tokenize the corpus and count lemma frequencies (FR US6). Streams
-/// `AnalysisProgressDto` over `progress` (one update per file, with a smoothed
-/// ETA), stores the full `FrequencyAnalysisResult` in `AppState.last_analysis`
-/// for export, and returns + emits (`analysis-complete`) the preview. On user
-/// cancel emits `analysis-cancelled` and returns `Err`; other failures return
-/// `Err` for the frontend banner. Mirrors egui's `analyze` + `analyze_frequency`
-/// task + `handle_analysis_complete`.
+/// Tokenize the corpus and count lemma frequencies. The full result stays in
+/// `AppState.last_analysis` for export; only the preview crosses the boundary.
+/// User cancel returns `Err` (and emits `analysis-cancelled`).
 #[tauri::command]
 pub async fn start_analysis(
     app: AppHandle,
@@ -120,10 +102,8 @@ pub async fn start_analysis(
     };
 
     let mut file_paths: Vec<PathBuf> = paths.iter().map(PathBuf::from).collect();
-    // Optional trimmed-mean (10%) down-sampling so no single source dominates
-    // (egui `AnalysisOptions::balance_corpus`). Balance first, then pre-sum
-    // `total_bytes` below so progress/ETA reflect the balanced set. Cheap path
-    // math — no AppState lock held.
+    // Balance first, then pre-sum `total_bytes` so progress/ETA reflect the
+    // balanced set.
     if balance_corpus {
         file_paths = CorpusBalancer::new(file_paths).balance();
     }
@@ -194,18 +174,16 @@ pub async fn start_analysis(
     }
 }
 
-/// Request cancellation of a running `start_analysis` (FR US6). Flips the shared
+/// Request cancellation of a running `start_analysis`. Flips the shared
 /// flag; `analyze_files` checks it per file and returns the cancel `Err`, which
-/// emits `analysis-cancelled`. Mirrors egui's `cancel_task(FrequencyAnalysis)`.
+/// emits `analysis-cancelled`.
 #[tauri::command]
 pub fn cancel_analysis(state: State<'_, Mutex<AppState>>) {
     state.lock().unwrap().analysis_cancel.store(true, Ordering::Relaxed);
 }
 
-/// Export the last analysis as a Yomitan zip and/or CSV into `output_dir` per the
-/// `options` flags (FR US6). Runs the blocking export off the async runtime,
-/// returns a success message, and emits `export-complete { ok, message }`.
-/// Mirrors egui's `export_frequency` task. Empty option strings map to `None`.
+/// Export the last analysis as a Yomitan zip and/or CSV. Empty option strings
+/// map to `None`.
 #[tauri::command]
 pub async fn export_analysis(
     app: AppHandle,
@@ -227,7 +205,7 @@ pub async fn export_analysis(
         let mut errors: Vec<String> = Vec::new();
 
         if options.export_yomitan {
-            // Empty strings → None for the optional metadata fields (egui does this).
+            // Empty strings → None for the optional metadata fields.
             let opt = |s: &str| if s.is_empty() { None } else { Some(s.to_string()) };
             let author = opt(&options.dict_author);
             let url = opt(&options.dict_url);

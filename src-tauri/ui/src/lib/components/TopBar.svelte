@@ -1,9 +1,6 @@
 <script lang="ts">
-	// Top bar (T028): theme/font toggles, the File / Mining / Settings menus, and
-	// the right-aligned asbplayer / mpv / Anki status indicators. Menu grouping
-	// deviates from egui (maintainer, 2026-07-07): Mining collects the data you
-	// tweak while working (ignore list, POS, dictionaries, analyzer); Settings
-	// keeps true configuration (integrations + UI) and the setup checklist.
+	// Menu grouping deviates from egui: Mining = what you tweak while working;
+	// Settings = configuration + the setup checklist.
 	import { getCurrentWindow } from '@tauri-apps/api/window';
 	import {
 		settings,
@@ -51,10 +48,6 @@
 		getCurrentWindow().close();
 	}
 
-	// --- Status indicators (egui `show_status_indicators`). PlayerStatus now carries
-	// the WebSocket `server_state` (+ error message), so the asbplayer dot mirrors
-	// egui's full mapping: green has-clients, yellow Running, blue Starting,
-	// red Error (tooltip = message), grey Stopped (T056). -----------------------
 	const GREEN = '#00c800';
 	const YELLOW = '#c8c800';
 	const BLUE = '#6464c8';
@@ -125,8 +118,6 @@
 					>Load from asbplayer…</button
 				>
 				<div class="menu-sep"></div>
-				<!-- Frequency-dictionary import lives in Mining → Frequency Dictionaries
-				     (maintainer, 2026-07-06 — egui's File-menu entry deliberately not mirrored). -->
 				<button onclick={() => run(openDataFolder)}>Open Data Folder</button>
 				<button onclick={() => run(quit)}>Quit</button>
 			</div>
@@ -163,7 +154,7 @@
 		{/if}
 	</div>
 
-	<!-- Reapply ignorelist + Anki filters (egui's 🔄, T033); only meaningful with
+	<!-- Reapply ignorelist + Anki filters (egui's 🔄); only meaningful with
 	     a file loaded. Keyboard: F5 / Ctrl+R (wired app-wide in +page). -->
 	{#if $fileResult}
 		<button
@@ -177,8 +168,7 @@
 	<span class="spacer"></span>
 
 	<div class="status">
-		<!-- The asbplayer indicator doubles as a menu: load + the follow toggles
-		     live here so they're one click away while connected (issue #105). -->
+		<!-- The asbplayer indicator doubles as the follow-mode menu (issue #105). -->
 		<div class="menu" class:open={openMenu === 'asb'}>
 			<button class="indicator asb-trigger" title={asbplayer.tip} onclick={(e) => toggleMenu('asb', e)}>
 				<small>asbplayer</small>

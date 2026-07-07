@@ -1,7 +1,4 @@
-//! Ambient background polling (T020): the Anki connectivity probe and the
-//! knowledge-summary recompute, replacing egui's per-frame `update_anki_status` /
-//! `maybe_compute_knowledge_summary`. Player connectivity has its own task
-//! (`player_task`). Pushes `anki-status` / `knowledge-summary` events (R5).
+//! Ambient background loops; each pushes its event only on change.
 
 use std::{
     collections::HashSet,
@@ -41,9 +38,8 @@ const POLL_INTERVAL: Duration = Duration::from_secs(5);
 /// fast — the summary then lands within ~1s of the tools (or a dirty flag).
 const KNOWLEDGE_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
-// Follow mode's poll cadence is the persisted `asbplayer_poll_secs` setting
-// (asbplayer has no push notification for media changes); it is re-read every
-// iteration, clamped to ≥1s. Idle cost per tick: one AppState lock.
+// Polling because asbplayer has no push for media changes; the cadence setting
+// is re-read every iteration, clamped to ≥1s.
 
 /// Spawn the background poll loops. Call once at app setup.
 pub fn spawn(app: AppHandle) {
@@ -69,11 +65,8 @@ async fn poll_anki(app: AppHandle) {
     }
 }
 
-/// Knowledge-summary recompute, in its own loop so it never queues behind the
-/// Anki probe — it only needs the offline vocab cache, but sharing the probe's
-/// tick meant the first compute waited out the AnkiConnect attempt (and its
-/// timeout when Anki is closed), so the widget appeared late (maintainer
-/// report, 2026-07-06). Recomputes when an input changed and a cache exists.
+/// Its own loop so it never queues behind the Anki probe's timeout — it only
+/// needs the offline vocab cache.
 async fn poll_knowledge(app: AppHandle) {
     let mut tick = tokio::time::interval(KNOWLEDGE_POLL_INTERVAL);
 
@@ -100,9 +93,7 @@ async fn poll_knowledge(app: AppHandle) {
                 })
                 .await
                 {
-                    // Cache for the `get_knowledge_summary` pull, then push the same
-                    // DTO to any live webview (the engine tuples are reshaped to named
-                    // fields once, here, so the wire format matches the TS interface).
+                    // Cached for the one-shot pull; pushed to any live webview.
                     let dto = KnowledgeSummaryDto::from_summary(summary);
                     {
                         let state = app.state::<Mutex<AppState>>();
@@ -116,19 +107,11 @@ async fn poll_knowledge(app: AppHandle) {
     }
 }
 
-/// asbplayer follow mode (issue #105): while ARMED — a follow setting is on AND
-/// the current content was loaded from asbplayer — watch `get-bound-media` and
-/// automatically load:
-/// - **new media** (`asbplayer_follow_new_media`): a media id we haven't seen
-///   since arming, once it has subtitles (the next episode, autoplay or manual).
-///   Arming seeds the seen-set with everything currently bound, so switching
-///   between already-open tabs never triggers this.
-/// - **the active tab** (`asbplayer_follow_active_tab`): when the active tab's
-///   video (with subtitles) isn't what's loaded, switch to it — this one DOES
-///   follow tab switches.
-/// Disarms (and re-seeds on the next arm) when both settings are off or a
-/// regular file is opened. Successful loads push the new `FileLoadResult` via
-/// `asbplayer-media-loaded`; failures surface on the `error` event.
+/// Follow mode, armed only while the current content came from asbplayer.
+/// New-media rule: arming seeds the seen-set with everything currently bound,
+/// so only genuinely-new ids (with subtitles) trigger — tab switching doesn't.
+/// Active-tab rule: switch when the active tab's subtitled video isn't what's
+/// loaded (a loaded-∈-actives no-op keeps two active windows from flapping).
 async fn poll_asbplayer_follow(app: AppHandle) {
     // `None` = disarmed; `Some(ids)` = armed with the media ids already seen.
     let mut seen: Option<HashSet<String>> = None;
