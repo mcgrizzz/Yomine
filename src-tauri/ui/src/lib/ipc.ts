@@ -241,6 +241,9 @@ export interface PlayerStatus {
 	server_state: 'running' | 'starting' | 'error' | 'stopped';
 	/** Error message when `server_state === 'error'`, else null. */
 	server_error: string | null;
+	/** Start-seconds the player acknowledged seeking to this session (T063) —
+	 * timestamp buttons matching an entry show egui's 👁 confirmed state. */
+	confirmed_timestamps: number[];
 }
 
 export interface ErrorPayload {
@@ -443,6 +446,47 @@ export function listDictionaries(): Promise<DictionaryState[]> {
  * `dictionaries-changed` (US5/T042). */
 export function setDictionaryState(name: string, weight: number, enabled: boolean): Promise<void> {
 	return invoke('set_dictionary_state', { name, weight, enabled });
+}
+
+/** One row of the dictionary manager's "Recommended" section (T064/issue #100). */
+export interface RecommendedDictionary {
+	name: string;
+	title: string;
+	description: string;
+	installed_revision: string | null;
+	latest_revision: string | null;
+	/** Backend-derived: 'installed' = present but latest revision unknown. */
+	status: 'not-installed' | 'installed' | 'up-to-date' | 'update-available';
+}
+
+/** The recommended catalog with install/update state resolved (T064). Fetches
+ * the repo manifest + live update indexes, so it needs network for update
+ * badges — offline it falls back to the baked manifest. */
+export function getRecommendedDictionaries(): Promise<RecommendedDictionary[]> {
+	return invoke('get_recommended_dictionaries');
+}
+
+/** Install or update a recommended dictionary by title; replaces existing
+ * artifacts of the same title, reloads + re-bakes, emits `dictionaries-changed`
+ * (T064). Progress streams over `onProgress`. */
+export async function installRecommendedDictionary(
+	title: string,
+	onProgress: (msg: LoadingMessage) => void
+): Promise<void> {
+	const channel = new Channel<LoadingMessage>();
+	channel.onmessage = onProgress;
+	return invoke('install_recommended_dictionary', { title, progress: channel });
+}
+
+/** Remove an installed dictionary (any, not just recommended): deletes its files
+ * + persisted weight, reloads, emits `dictionaries-changed` (T064). */
+export async function removeDictionary(
+	title: string,
+	onProgress: (msg: LoadingMessage) => void
+): Promise<void> {
+	const channel = new Channel<LoadingMessage>();
+	channel.onmessage = onProgress;
+	return invoke('remove_dictionary', { title, progress: channel });
 }
 
 /** File → Load New Frequency Dictionaries (T060): native multi-`.zip` picker →

@@ -248,3 +248,16 @@ impl KnowledgeSummaryDto {
         }
     }
 }
+
+/// One row of the dictionary manager's "Recommended" section (T064, issue #100).
+/// `status` is backend-derived (Constitution): `"not-installed"` | `"installed"`
+/// (present, latest revision unknown) | `"up-to-date"` | `"update-available"`.
+#[derive(Serialize, Clone)]
+pub struct RecommendedDictionaryDto {
+    pub name: String,
+    pub title: String,
+    pub description: String,
+    pub installed_revision: Option<String>,
+    pub latest_revision: Option<String>,
+    pub status: String,
+}

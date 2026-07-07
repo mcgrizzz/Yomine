@@ -96,7 +96,7 @@
 			},
 			{
 				title: 'Additional Frequency Dictionaries Installed [Optional]',
-				description: 'Load additional dictionaries via File menu',
+				description: 'Load additional dictionaries via Settings → Frequency Dictionaries',
 				status: s(count > 1),
 				optional: true,
 				helpUrl:

@@ -12,6 +12,7 @@ pub mod ignore;
 pub mod knowledge;
 pub mod lifecycle;
 pub mod player;
+pub mod recommended;
 pub mod setup;
 
 use std::collections::HashMap;

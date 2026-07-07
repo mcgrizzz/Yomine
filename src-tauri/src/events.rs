@@ -66,6 +66,11 @@ pub struct PlayerStatus {
     pub server_state: String,
     /// Error message when `server_state == "error"` (e.g. a bind failure), else `None`.
     pub server_error: Option<String>,
+    /// Start-seconds of timestamps the player acknowledged seeking to this
+    /// session (T063) — drives the 👁/green state on timestamp buttons, egui's
+    /// `PlayerManager::get_confirmed_timestamps`. Stable insertion order, so the
+    /// task's change-detection (`PartialEq`) fires exactly on new confirmations.
+    pub confirmed_timestamps: Vec<f32>,
 }
 
 /// `export-complete` payload.

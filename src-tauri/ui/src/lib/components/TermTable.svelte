@@ -5,13 +5,51 @@
 	// the row (always visible, no expander). Rows arrive already filtered and
 	// sorted by `visibleTerms` (driven by `TableControls`, T037).
 	import type { SentenceDto, Term } from '$lib/ipc';
-	import { harmonic } from '$lib/table';
-	import { ignoredLemmas, toggleIgnore, posCatalog } from '$lib/stores';
+	import { defaultDir, harmonic, type SortField } from '$lib/table';
+	import { ignoredLemmas, toggleIgnore, posCatalog, tableSort } from '$lib/stores';
 	import { posColor } from '$lib/pos';
 	import Furigana from './Furigana.svelte';
 	import SentenceView, { type Occurrence } from './SentenceView.svelte';
 
 	let { terms, sentences }: { terms: Term[]; sentences: SentenceDto[] } = $props();
+
+	// Column-header sorting (T061, egui `header.rs`): the Sentence and Frequency
+	// headers ARE the sort controls. Clicking an inactive header activates it in
+	// its natural direction; clicking it again reverses. The Sentence header owns
+	// three modes — when active, a small chip shows the current one and clicking
+	// the chip cycles Chronological → Sentence Count → Comprehension, keeping the
+	// direction (egui's 🕒/#/📊 cycle icon). The active column header is
+	// highlighted; hovering an inactive one previews its default direction arrow.
+	const SENTENCE_MODES: { field: SortField; label: string; name: string }[] = [
+		{ field: 'chronological', label: '🕒 Chronological', name: 'Chronological' },
+		{ field: 'sentenceCount', label: '# Sentence Count', name: 'Sentence Count' },
+		{ field: 'comprehension', label: '📊 Estimated Comprehension', name: 'Comprehension' }
+	];
+	const sentenceMode = $derived(SENTENCE_MODES.find((m) => m.field === $tableSort.field));
+	const sentenceActive = $derived(sentenceMode !== undefined);
+	const freqActive = $derived($tableSort.field === 'frequency');
+
+	const dirArrow = (d: 'asc' | 'desc') => (d === 'asc' ? '⬆' : '⬇');
+	const dirWord = (d: 'asc' | 'desc') => (d === 'asc' ? 'ascending' : 'descending');
+	const sortedTip = (name: string) => `Sorted by ${name} in ${dirWord($tableSort.dir)} order`;
+
+	function flipDir() {
+		tableSort.update((s) => ({ ...s, dir: s.dir === 'asc' ? 'desc' : 'asc' }));
+	}
+	function clickSentence() {
+		if (sentenceActive) flipDir();
+		else tableSort.set({ field: 'chronological', dir: defaultDir('chronological') });
+	}
+	function clickFrequency() {
+		if (freqActive) flipDir();
+		else tableSort.set({ field: 'frequency', dir: defaultDir('frequency') });
+	}
+	function cycleSentence(e: MouseEvent) {
+		e.stopPropagation();
+		const i = SENTENCE_MODES.findIndex((m) => m.field === $tableSort.field);
+		const next = SENTENCE_MODES[(i + 1) % SENTENCE_MODES.length].field;
+		tableSort.update((s) => ({ field: next, dir: s.dir }));
+	}
 
 	// Term ignore (T059, egui parity): Ctrl/Cmd+Click the term to toggle ignore, or
 	// right-click for the same as a menu. An ignored term stays visible but greyed —
@@ -74,8 +112,45 @@
 <div class="table">
 	<div class="row head">
 		<span>Term</span>
-		<span>Sentence</span>
-		<span class="num">Frequency</span>
+		<span class="head-cell">
+			<button
+				class="head-btn"
+				class:active={sentenceActive}
+				title={sentenceActive ? sortedTip(sentenceMode!.name) : 'Sort by Sentence'}
+				onclick={clickSentence}
+			>
+				Sentence
+				{#if sentenceActive}
+					<span class="arrow active">{dirArrow($tableSort.dir)}</span>
+				{:else}
+					<span class="arrow hint">⇅</span>
+					<span class="arrow preview">{dirArrow(defaultDir('chronological'))}</span>
+				{/if}
+			</button>
+			{#if sentenceActive}
+				<button
+					class="mode"
+					title="Cycle between Chronological, Sentence Count, and Comprehension"
+					onclick={cycleSentence}>{sentenceMode!.label}</button
+				>
+			{/if}
+		</span>
+		<span class="num head-cell">
+			<button
+				class="head-btn"
+				class:active={freqActive}
+				title={freqActive ? sortedTip('Frequency') : 'Sort by Frequency'}
+				onclick={clickFrequency}
+			>
+				Frequency
+				{#if freqActive}
+					<span class="arrow active">{dirArrow($tableSort.dir)}</span>
+				{:else}
+					<span class="arrow hint">⇅</span>
+					<span class="arrow preview">{dirArrow(defaultDir('frequency'))}</span>
+				{/if}
+			</button>
+		</span>
 		<span>POS</span>
 	</div>
 	{#each terms as term (termKey(term))}
@@ -154,6 +229,70 @@
 		font-size: 0.8rem;
 		text-transform: uppercase;
 		letter-spacing: 0.03em;
+	}
+	/* Sortable column headers (T061, egui header.rs). */
+	.head-cell {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+	.head-cell.num {
+		justify-content: flex-end;
+	}
+	.head-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		padding: 0.1rem 0.35rem;
+		background: transparent;
+		border: none;
+		border-radius: 3px;
+		color: inherit;
+		font: inherit;
+		text-transform: inherit;
+		letter-spacing: inherit;
+		cursor: pointer;
+	}
+	/* Active-column highlight (egui draw_column_highlight: cyan @ 10%). */
+	.head-btn.active {
+		background: color-mix(in srgb, var(--cyan) 10%, transparent);
+		color: var(--fg);
+	}
+	.head-btn:hover {
+		background: var(--bg-light);
+		color: var(--fg);
+	}
+	.arrow.active {
+		color: var(--cyan);
+	}
+	/* Sortable-column affordance: a dim ⇅ that swaps to the default-direction
+	   preview arrow on hover (egui sort_arrow_text). */
+	.arrow.hint {
+		opacity: 0.55;
+	}
+	.arrow.preview {
+		display: none;
+	}
+	.head-btn:hover .arrow.hint {
+		display: none;
+	}
+	.head-btn:hover .arrow.preview {
+		display: inline;
+	}
+	/* The Sentence sort-mode chip (egui's small weak-text 🕒/#/📊 cycle label). */
+	.mode {
+		padding: 0.05rem 0.3rem;
+		background: transparent;
+		border: none;
+		color: var(--comment);
+		font-size: 0.7rem;
+		text-transform: none;
+		letter-spacing: normal;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+	.mode:hover {
+		color: var(--fg);
 	}
 	.num {
 		text-align: right;

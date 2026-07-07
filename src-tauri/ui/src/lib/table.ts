@@ -23,13 +23,6 @@ export function harmonic(term: Term): number {
 export type SortField = 'frequency' | 'chronological' | 'sentenceCount' | 'comprehension';
 export type SortDir = 'asc' | 'desc';
 
-export const SORT_FIELDS: { value: SortField; label: string }[] = [
-	{ value: 'frequency', label: 'Frequency' },
-	{ value: 'chronological', label: 'Chronological' },
-	{ value: 'sentenceCount', label: 'Sentence count' },
-	{ value: 'comprehension', label: 'Comprehension' }
-];
-
 /** egui `SortState::default_direction`: frequency/chronological ascending; count/comprehension descending. */
 export function defaultDir(field: SortField): SortDir {
 	return field === 'frequency' || field === 'chronological' ? 'asc' : 'desc';

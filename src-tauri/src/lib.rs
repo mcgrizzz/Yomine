@@ -3,6 +3,7 @@ mod commands;
 mod dto;
 mod events;
 mod player_task;
+mod recommended;
 mod state;
 
 use std::sync::Mutex;
@@ -50,6 +51,9 @@ pub fn run() {
             commands::dictionary::list_dictionaries,
             commands::dictionary::set_dictionary_state,
             commands::dictionary::load_frequency_dictionaries,
+            commands::recommended::get_recommended_dictionaries,
+            commands::recommended::install_recommended_dictionary,
+            commands::recommended::remove_dictionary,
             commands::analysis::find_analysis_files,
             commands::analysis::start_analysis,
             commands::analysis::cancel_analysis,

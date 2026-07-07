@@ -156,6 +156,12 @@ impl FrequencyManager {
         self.dictionaries.keys().cloned().collect()
     }
 
+    /// (title → `index.json` revision) of every loaded dictionary — for UIs that
+    /// need install/update state (the Tauri dictionary manager, issue #100).
+    pub fn dictionary_revisions(&self) -> HashMap<String, String> {
+        self.dictionaries.iter().map(|(name, d)| (name.clone(), d.revision.clone())).collect()
+    }
+
     /// Retrieves all frequency data entries for the exact term from enabled dictionaries,
     /// without requiring a reading. For non-kana terms, excludes kana-specific frequencies.
     // Used for anki term filtering, not affected by weighting or toggling dictionaries.

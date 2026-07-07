@@ -23,7 +23,7 @@ A `null` `message` clears the overlay (mirrors `MessageOverlay::clear_message`).
 |------------|---------|--------------|-----------------|
 | `language-tools-status` | `LanguageToolsStatus` | tools finish loading or fail | `TaskResult::LanguageToolsLoaded` |
 | `anki-status` | `AnkiStatus` | background poll (~5s) detects a change | `update_anki_status` + `TaskResult::AnkiConnection` |
-| `player-status` | `PlayerStatus` | MPV/WebSocket connectivity or mode changes | `PlayerManager::update` (per-frame) |
+| `player-status` | `PlayerStatus` | MPV/WebSocket connectivity, mode, or confirmed-seek set changes (T063: payload carries `confirmed_timestamps: array<f32>` for the 👁 button state) | `PlayerManager::update` (per-frame) |
 | `terms-refreshed` | `FileLoadResult` | live Anki refresh completes | `TaskResult::TermsRefreshed` |
 | `dictionaries-changed` | `array<DictionaryState>` | dictionaries reloaded or states changed | `TaskResult::FrequencyDictionariesReloaded` |
 | `knowledge-summary` | `KnowledgeSummary` | background recompute finishes | `TaskResult::KnowledgeSummary` |

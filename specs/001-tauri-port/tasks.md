@@ -973,6 +973,101 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
   Verify addition: with a file loaded, import a new dict → per-term frequency + breakdown show the
   new dict immediately; disable all other dicts → table still shows frequencies (was "No frequency
   data").
+- **T061+T062+T063 DONE (2026-07-06) [parity] — T039 regression fixes + confirmed seeks.** Batch
+  from the T039/T054 maintainer sign-off (T039 passed *functionally*; two UI regressions spun into
+  T061/T062, and the T035 "👁 stays unmirrored" decision was reversed as T063).
+  **T061 sort → column headers (`TermTable.svelte`, egui `table/header.rs`):** the SORT dropdown +
+  ▲/▼ button are gone from `TableControls`; the Sentence and Frequency **headers** are the sort
+  surface. Click inactive → activate in `defaultDir` (Sentence starts Chronological asc); click
+  active → reverse. Active header: cyan-10% background (egui `draw_column_highlight`) + cyan ⬆/⬇;
+  inactive hover reveals a weak default-direction preview arrow (egui `sort_arrow_text`); `title`
+  tooltips mirror egui's hover text ("Sorted by X in ascending order"). When a Sentence mode is
+  active a small weak-text chip (🕒 Chronological / # Sentence Count / 📊 Estimated Comprehension)
+  cycles the three modes keeping direction (egui's cycle icon). POS button stays in TableControls
+  (T046 single-surface deviation); `SORT_FIELDS` removed from `table.ts` (orphaned).
+  **T062 dual-thumb log slider (`DualSlider.svelte` new):** replaces the two split linear range
+  inputs. One track, two knobs, **logarithmic** value mapping (egui `DoubleSlider::logarithmic`;
+  safe: `freqBounds` floors lo at 1); pointer-driven with `setPointerCapture` (press anywhere on
+  the track grabs the nearest thumb), thumbs are `role="slider"` + arrow-key nudge (1%/press);
+  cyan fill between knobs. `TableControls`: slider + `type=number` Min/Max fields (egui's
+  DragValues; commit-on-change, clamped to bounds and each other, live during slider drags) + the
+  "?" unknown toggle. Layout: `FREQ [slider] [min] – [max] [?]`.
+  **T063 confirmed seeks (backend+frontend):** `PlayerStatus` gains `confirmed_timestamps:
+  Vec<f32>` (engine `PlayerManager::get_confirmed_timestamps`, ws+mpv merged; Vec order is stable
+  insertion so the player task's `PartialEq` change-detection emits exactly on new confirmations,
+  within one 250ms tick). `ipc.ts`/store placeholder updated; `SentenceView` timestamp button:
+  `confirmed = confirmed_timestamps.includes(start_secs)` → `👁 label` with egui's green `#559449`
+  fill (else ▶ as before); contracts/events.md row updated. **Checks (orchestrator-run):**
+  `cargo check -p yomine-tauri` ✓ (23.4s); `pnpm run check` → baseline only (the new DualSlider
+  track needed `role="group"` to stay warning-clean). **Verify on Windows (`cargo tauri dev`):**
+  headers sort/reverse/highlight/cycle like egui (compare side-by-side); dropdown gone; freq
+  slider = one track two knobs, log feel (low end roomy), min/max fields commit + clamp, "?"
+  works; with asbplayer/mpv connected, click a timestamp → after the player acknowledges, the
+  button turns green 👁 (egui parity), other rows unaffected.
+  **Polish (2026-07-06, maintainer verify feedback):** (1) `DualSlider` geometry — thumbs inset by
+  half their width (`PAD = 7px`; rail/fill/thumb positions + pointer-fraction math all use the
+  inset) so the knobs no longer overhang the track ends, plus `margin: 0 0.35rem` breathing room;
+  (2) sortable-header affordance — inactive Sentence/Frequency headers now show a persistent dim
+  **⇅** (swaps to the default-direction preview arrow on hover) and `.head-btn:hover` gets a
+  background highlight, so click-to-sort is discoverable without hovering. Verify: ⇅ visible on
+  both headers at rest; knobs stay inside the track at 0%/100%.
+- **T064 DONE (2026-07-06) [feature] — In-App Dictionary Manager (issue #100); first post-parity
+  feature.** Maintainer design calls (question tool): update-check via **remote manifest** in the
+  repo, **deletion with confirm** included, seed = JPDB + Jiten. Key discovery: Jiten's index.json
+  carries Yomitan's update protocol (`isUpdatable`/`indexUrl`/`downloadUrl` → api.jiten.moe), so
+  its latest revision is checked **live** — no maintainer URL needed (his installed `Jiten
+  25-11-28` vs remote `26-07-02` = a real update-available test case). **Manifest:**
+  `assets/recommended_dictionaries.json` (JPDB v2.2 Kana → Kuuuube zip + static
+  `latest_revision`; Jiten → jiten.moe download + `index_url` live check), fetched from
+  `raw.githubusercontent.com/mcgrizzz/Yomine/main/...` with the same file `include_str!`-baked as
+  offline/pre-publish fallback (**publish note: badges use the baked copy until this lands on
+  main**). **Engine (additive):** `http::fetch_text(url)`;
+  `FrequencyManager::dictionary_revisions()` (title→revision; `dictionaries` is private).
+  **Backend:** `src-tauri/src/recommended.rs` (manifest types/parse/consts); AppState gains
+  `recommended_catalog` (install resolves URLs from the cached catalog — frontend only ever sends
+  a title); T060's reload tail factored into `dictionary::reload_and_swap` (spawn_blocking
+  process → weights → swap → per-term re-bake → knowledge_dirty → `dictionaries-changed`), reused
+  by all paths; new `commands/recommended.rs`: `get_recommended_dictionaries` (manifest + live
+  index fetches off-runtime; status = not-installed/installed/up-to-date/update-available),
+  `install_recommended_dictionary(title, progress)` (download to `.zip.part` FIRST so a failed
+  update never kills the working copy → `remove_dictionary_files(title)` (deletes every folder
+  whose index.json title matches + its same-stem zip — an update's new zip name would otherwise
+  extract beside the old folder and double-load the title) → rename into place → reload_and_swap),
+  `remove_dictionary(title, progress)` (files + `settings.frequency_weights` entry + persist +
+  reload; works for ANY installed dict; removing the last one re-triggers the engine's default
+  auto-download on reload — engine behavior, noted). All three registered in lib.rs; contracts
+  updated. **Frontend:** `FrequencyWeightsModal.svelte` → title/menu renamed **"Frequency
+  Dictionaries"** (TopBar Settings entry too, per issue); new top "Recommended" section (name,
+  revision — `old → new` when update-available — description, status badge, Download/Update
+  button; "Checking for updates…" while loading; inline op-error line; busy state serializes all
+  mutating ops); weights rows gain a 🗑 with **two-step confirm** (🗑 → Confirm/✕). Install/remove
+  are immediate (not staged), stream progress into an inline hint line, then re-hydrate the
+  weights list + catalog (staged edits reset — the dict set changed) and mirror the dropped weight
+  out of the local `settings` store. `ipc.ts`: `RecommendedDictionary` type + 3 wrappers.
+  **Checks (orchestrator-run):** `cargo check -p yomine-tauri` ✓ (6.6s), `-p yomine` ✓ (21.8s, 3
+  known warnings); `pnpm run check` → baseline only. **Verify on Windows (`cargo tauri dev`):**
+  Settings → Frequency Dictionaries: Recommended shows JPDB "(…2024-10-13)" **Up to date** (no
+  button) and Jiten "25-11-28 → 26-07-02" **Update available**; Update Jiten → progress hint →
+  list re-hydrates, badge flips Up to date, table frequencies still live (re-bake); 🗑 a spare
+  dict → Confirm → it leaves the weights list + `dictionaries-changed` refreshes terms/checklist;
+  🗑 then ✕ cancels; kill network → reopen modal: badges degrade gracefully (baked manifest, no
+  live Jiten check), Download/Update surface an inline error.
+  **Refinements (2026-07-06, maintainer verify feedback):** (1) **File → Load New Frequency
+  Dictionaries removed** — the zip import lives in the Frequency Dictionaries modal footer
+  ("Import from file…", streams progress into the modal's hint line, re-hydrates + re-checks on
+  success); the setup-checklist buttons still use the store action (which now also refreshes the
+  catalog). Deliberate egui divergence, noted in TopBar. (2) **Update checks off the modal-open
+  path**: new `recommendedDicts` store (null until first successful check), checked ONCE at launch
+  (end of `hydrate()`, tools-ready-guarded, failure = console only) + a manual "⟳ Check for
+  updates" button in the Recommended header (inline error); install/import/remove re-check
+  afterwards (statuses changed anyway). Modal open is now network-free. (3) **Knowledge widget
+  latency fix**: `background.rs` split into two independent loops — the Anki probe keeps its 5s
+  cadence, the knowledge recompute gets its own 1s loop (idle check = lock + atomic read), so the
+  first summary lands ~1s after tools load instead of queueing behind the AnkiConnect
+  attempt/timeout; refresh-marked dirty flags also land within ~1s. Checks: cargo + svelte both
+  baseline. Verify: launch with Anki closed → coverage box appears right after tools load; open
+  Frequency Dictionaries → no "checking" flash, badges from the launch check, ⟳ re-checks;
+  File menu has no import entry; footer Import from file… works end-to-end.
 - **NEXT options:**
   - **`load_frequency_dictionaries` import command (freq-dict import)** — the File-menu "Load New
     Frequency Dictionaries" entry and the checklist's two "+ Install Dictionary" actions (T045)
@@ -1235,7 +1330,7 @@ stories render inside it.
       stages all edits and persists on Save. **Note:** with staged save, `remove_from_ignore_list`
       goes unused by the modal — keep for API completeness or drop (decide at impl). Backend is
       cargo-checkable in WSL; frontend builds/verifies on Windows. Folds its verify into T039.
-- [ ] T039 [US4] **Verify**: each sort/filter/search/ignore action yields the same visible set as
+- [x] T039 [US4] **Verify**: each sort/filter/search/ignore action yields the same visible set as
       egui; the ignore-list modal (T038b) matches egui — manual add, search, file import/toggle/
       refresh/remove, Save/Cancel, Restore Default, Export.
 
@@ -1295,8 +1390,8 @@ stories render inside it.
 - [ ] T053 CI: replace/augment `.github/workflows/release*.yml` + `manual-release.yml` with the
       Tauri bundler; update `test.yml` to build the workspace (egui on/off matrix) + run
       `svelte-check`.
-- [ ] T054 Final parity sign-off: walk the full quickstart.md checklist; tick spec.md
-      Success Criteria SC-001..SC-009.
+- [x] T054 Final parity sign-off: walk the full quickstart.md checklist; tick spec.md
+      Success Criteria SC-001..SC-009. (Maintainer sign-off 2026-07-06.)
 - [ ] T055 Resolve Open Item O4: decide whether to retire the egui crate/feature or keep it
       gated for a transition; document in README/RELEASES.
 
@@ -1333,6 +1428,26 @@ sub-states, above) belongs to the same gate.
       (the store already re-fetches terms + setup status on that event). Enables all three surfaces.
       egui reference: `frequency_utils::load_frequency_dictionaries`. **Backend + frontend (enable the
       two stubbed surfaces).** Largest of the three.
+- [x] T061 [parity] [US4] **Sort UI → egui column headers.** T039 maintainer verify (2026-07-06)
+      found the combined SORT dropdown a UI regression vs egui's clickable column headers. Restore:
+      Sentence/Frequency headers are the sort controls (click to activate/reverse, active-column
+      highlight, direction arrow, hover preview arrow, Sentence mode-cycle chip 🕒/#/📊). egui ref:
+      `table/header.rs`. **Frontend only.**
+- [x] T062 [parity] [US4] **Frequency filter → dual-thumb log slider.** Same T039 verify: the two
+      split linear `<input type=range>`s are a regression vs egui's single two-knob logarithmic
+      `DoubleSlider` + Min/Max DragValues (`table/controls.rs`). Build a `DualSlider` component
+      (log scale, pointer-driven, keyboard-nudge) + numeric Min/Max fields. **Frontend only.**
+- [x] T063 [parity] [US3] **Confirmed-timestamp seeks (👁).** Maintainer reversed the T035 "stays
+      unmirrored" call (2026-07-06): surface `PlayerManager::get_confirmed_timestamps` in
+      `PlayerStatus`; the timestamp button shows egui's 👁 + green (#559449) fill once the player
+      acknowledges the seek (`sentence_column.rs::ui_timestamp_button`). **Backend + frontend.**
+
+## Post-parity features
+
+- [x] T064 [feature] **In-App Dictionary Manager (issue #100).** Split the frequency-dictionary UI
+      into a "Recommended" section (hosted, updateable dictionaries the user can check + download —
+      e.g. JPDBv2㋕, Jiten — with version + Up-to-Date/download state) and the rest; likely rename
+      "Frequency Weighting" → "Frequency Dictionaries". Builds on T060's import + reload plumbing.
 
 ---
 

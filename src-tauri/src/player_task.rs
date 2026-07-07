@@ -100,6 +100,9 @@ fn current_status(player: &PlayerManager) -> PlayerStatus {
         mode: mode.to_string(),
         server_state: server_state.to_string(),
         server_error,
+        // Refreshed by `player.update()` each tick, so a confirmation reaches the
+        // UI within one UPDATE_INTERVAL (T063).
+        confirmed_timestamps: player.get_confirmed_timestamps(),
     }
 }
 

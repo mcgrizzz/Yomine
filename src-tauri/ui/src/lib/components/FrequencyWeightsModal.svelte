@@ -1,12 +1,22 @@
 <script lang="ts">
-	// Frequency-weights modal (T042): parity with src/gui/settings/frequency_weights_modal.rs.
-	// One staged row per dictionary — enabled checkbox, name, a logarithmic 0.1–5.0
-	// weight slider, and a numeric value (egui's DragValue, 2 decimals, "x" suffix).
-	// Edits are staged (egui's `entries` vs `original`) and committed only on "Save
-	// Settings" (per-dictionary `set_dictionary_state`); Cancel reverts the staged
-	// edits but keeps the modal open (egui behavior).
+	// Frequency Dictionaries modal (T042 weights + T064 manager, issue #100).
+	// Top: the "Recommended" section — repo-manifest catalog with install/update
+	// state, one-click Download/Update (backend `get_recommended_dictionaries` /
+	// `install_recommended_dictionary`), a manual "Check for updates", and the
+	// zip import (T060; the one import surface besides the setup checklist —
+	// the File-menu entry was removed). Below: the T042 weights table (parity
+	// with src/gui/settings/frequency_weights_modal.rs) — one staged row per
+	// dictionary (enabled checkbox, name, logarithmic 0.1–5.0 weight slider,
+	// numeric value), committed only on "Save Settings", Cancel reverts and stays
+	// open — plus a per-row 🗑 (two-step confirm) that removes the dictionary
+	// outright. Install/remove are immediate (not staged) and re-hydrate the list.
 	import { untrack } from 'svelte';
-	import { settings, frequencyModalOpen, saveDictionaryStates } from '$lib/stores';
+	import {
+		settings,
+		frequencyModalOpen,
+		saveDictionaryStates,
+		recommendedDicts
+	} from '$lib/stores';
 	import * as ipc from '$lib/ipc';
 
 	const MIN_WEIGHT = 0.1;
@@ -16,12 +26,104 @@
 	let original = $state<ipc.DictionaryState[]>([]);
 	let loaded = $state(false);
 
+	// Recommended section state (T064). The catalog lives in the shared
+	// `recommendedDicts` store — checked once at launch and via the manual
+	// "Check for updates" button, NOT on every modal open (maintainer,
+	// 2026-07-06; the check hits the network). `busyTitle` gates every mutating
+	// action (install/update/import/remove are serialized — each ends in a full
+	// manager reload).
+	let checking = $state(false);
+	let opError = $state<string | null>(null);
+	let busyTitle = $state<string | null>(null);
+	let busyMsg = $state<string | null>(null);
+	let confirmRemove = $state<string | null>(null);
+
 	// Hydrate each time the modal opens (egui open_modal → build_entries).
 	// untrack: hydrate reads $settings, which must not become a dependency
 	// (a tracked read would re-hydrate and clobber staged edits while open).
 	$effect(() => {
-		if ($frequencyModalOpen) untrack(() => void hydrate());
+		if ($frequencyModalOpen)
+			untrack(() => {
+				confirmRemove = null;
+				opError = null;
+				void hydrate();
+			});
 	});
+
+	async function checkUpdates() {
+		checking = true;
+		opError = null;
+		try {
+			recommendedDicts.set(await ipc.getRecommendedDictionaries());
+		} catch (err) {
+			opError = String(err);
+		} finally {
+			checking = false;
+		}
+	}
+
+	// The zip import (T060) — moved here from the File menu (maintainer, 2026-07-06).
+	async function importFromFile() {
+		busyTitle = '(import)';
+		opError = null;
+		try {
+			const copied = await ipc.loadFrequencyDictionaries((m) => (busyMsg = m.message));
+			if (copied > 0) {
+				await hydrate();
+				await checkUpdates(); // imported zips can change recommended install states
+			}
+		} catch (err) {
+			opError = String(err);
+		} finally {
+			busyTitle = null;
+			busyMsg = null;
+		}
+	}
+
+	const badgeText: Record<ipc.RecommendedDictionary['status'], string> = {
+		'not-installed': 'Not installed',
+		installed: 'Installed',
+		'up-to-date': 'Up to date',
+		'update-available': 'Update available'
+	};
+
+	async function install(title: string) {
+		busyTitle = title;
+		opError = null;
+		try {
+			await ipc.installRecommendedDictionary(title, (m) => (busyMsg = m.message));
+			await hydrate(); // the list changed; staged edits reset with it
+			await checkUpdates();
+		} catch (err) {
+			opError = String(err);
+		} finally {
+			busyTitle = null;
+			busyMsg = null;
+		}
+	}
+
+	async function removeDict(name: string) {
+		confirmRemove = null;
+		busyTitle = name;
+		opError = null;
+		try {
+			await ipc.removeDictionary(name, (m) => (busyMsg = m.message));
+			// Mirror the dropped weight entry into the local settings store.
+			const s = $settings;
+			if (s) {
+				const frequency_weights = { ...s.frequency_weights };
+				delete frequency_weights[name];
+				settings.set({ ...s, frequency_weights });
+			}
+			await hydrate();
+			await checkUpdates();
+		} catch (err) {
+			opError = String(err);
+		} finally {
+			busyTitle = null;
+			busyMsg = null;
+		}
+	}
 
 	async function hydrate() {
 		loaded = false;
@@ -109,16 +211,58 @@
 			class="dialog"
 			role="dialog"
 			aria-modal="true"
-			aria-label="Frequency dictionary weights"
+			aria-label="Frequency dictionaries"
 			tabindex="-1"
 			onclick={(e) => e.stopPropagation()}
 		>
 			<header>
-				<h2>Frequency Dictionary Weights</h2>
+				<h2>Frequency Dictionaries</h2>
 				<button class="close" aria-label="Close" onclick={() => frequencyModalOpen.set(false)}
 					>✕</button
 				>
 			</header>
+
+			<section class="recommended">
+				<div class="rec-head">
+					<h3>Recommended</h3>
+					<button disabled={checking || busyTitle !== null} onclick={checkUpdates}>
+						{checking ? 'Checking…' : '⟳ Check for updates'}
+					</button>
+				</div>
+				{#if $recommendedDicts === null}
+					<p class="hint">Updates not checked yet.</p>
+				{:else}
+					{#each $recommendedDicts as r (r.title)}
+						<div class="rec-row">
+							<div class="rec-text">
+								<span class="rec-name">
+									{r.name}
+									{#if r.status === 'update-available'}
+										<span class="rev">{r.installed_revision} → {r.latest_revision}</span>
+									{:else if r.installed_revision ?? r.latest_revision}
+										<span class="rev">({r.installed_revision ?? r.latest_revision})</span>
+									{/if}
+								</span>
+								<span class="rec-desc">{r.description}</span>
+							</div>
+							<span class="badge {r.status}">{badgeText[r.status]}</span>
+							{#if r.status === 'not-installed' || r.status === 'update-available'}
+								<button disabled={busyTitle !== null} onclick={() => install(r.title)}>
+									{busyTitle === r.title
+										? 'Working…'
+										: r.status === 'not-installed'
+											? 'Download'
+											: 'Update'}
+								</button>
+							{/if}
+						</div>
+					{/each}
+				{/if}
+				{#if busyMsg}<p class="hint">{busyMsg}</p>{/if}
+				{#if opError}<p class="op-error">{opError}</p>{/if}
+			</section>
+
+			<hr />
 
 			{#if loaded && entries.length === 0}
 				<p class="empty">No frequency dictionaries loaded.</p>
@@ -129,6 +273,7 @@
 						<span>Dictionary</span>
 						<span>Weight</span>
 						<span>Value</span>
+						<span></span>
 					</div>
 					{#each entries as entry, i (entry.name)}
 						<div class="row">
@@ -159,6 +304,25 @@
 									onchange={(e) => (entry.weight = clampWeight(e.currentTarget.valueAsNumber))}
 								/>x
 							</span>
+							<span class="del">
+								{#if confirmRemove === entry.name}
+									<button
+										class="danger"
+										disabled={busyTitle !== null}
+										onclick={() => removeDict(entry.name)}>Confirm</button
+									>
+									<button aria-label="Keep dictionary" onclick={() => (confirmRemove = null)}
+										>✕</button
+									>
+								{:else}
+									<button
+										class="ghost"
+										title={`Remove ${entry.name}`}
+										disabled={busyTitle !== null}
+										onclick={() => (confirmRemove = entry.name)}>🗑</button
+									>
+								{/if}
+							</span>
 						</div>
 					{/each}
 				</div>
@@ -173,7 +337,10 @@
 			<footer>
 				<button disabled={!dirty} onclick={save}>Save Settings</button>
 				<button disabled={!dirty} onclick={cancel}>Cancel</button>
-				<button class="right" onclick={restoreDefault}>Restore Default</button>
+				<button class="right" disabled={busyTitle !== null} onclick={importFromFile}>
+					{busyTitle === '(import)' ? 'Importing…' : 'Import from file…'}
+				</button>
+				<button onclick={restoreDefault}>Restore Default</button>
 			</footer>
 		</div>
 	</div>
@@ -220,6 +387,107 @@
 		padding: 0 1rem;
 		color: var(--comment);
 	}
+	/* Recommended section (T064). */
+	.recommended {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+		padding: 0 1rem;
+	}
+	.rec-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+	.rec-head button {
+		font-size: 0.75rem;
+		padding: 0.2rem 0.5rem;
+	}
+	.recommended h3 {
+		margin: 0;
+		font-size: 0.85rem;
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+		color: var(--comment);
+	}
+	.rec-row {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+	}
+	.rec-text {
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+		min-width: 0;
+	}
+	.rec-name {
+		font-weight: 600;
+	}
+	.rev {
+		font-weight: 400;
+		font-size: 0.8rem;
+		color: var(--comment);
+	}
+	.rec-desc {
+		font-size: 0.8rem;
+		color: var(--comment);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.badge {
+		font-size: 0.75rem;
+		padding: 0.15rem 0.5rem;
+		border-radius: 999px;
+		border: 1px solid var(--border);
+		white-space: nowrap;
+	}
+	.badge.up-to-date {
+		color: var(--green);
+		border-color: var(--green);
+	}
+	.badge.update-available {
+		color: var(--yellow);
+		border-color: var(--yellow);
+	}
+	.badge.not-installed,
+	.badge.installed {
+		color: var(--comment);
+	}
+	.hint {
+		margin: 0;
+		font-size: 0.8rem;
+		color: var(--comment);
+	}
+	.op-error {
+		margin: 0;
+		font-size: 0.8rem;
+		color: var(--red);
+	}
+	/* Per-row remove (two-step confirm). */
+	.del {
+		display: inline-flex;
+		justify-content: flex-end;
+		gap: 0.25rem;
+	}
+	.del .ghost {
+		padding: 0.1rem 0.3rem;
+		background: transparent;
+		border: none;
+		opacity: 0.6;
+	}
+	.del .ghost:hover:not(:disabled) {
+		opacity: 1;
+	}
+	.del .danger {
+		padding: 0.15rem 0.4rem;
+		font-size: 0.75rem;
+		color: #fff;
+		background: var(--red);
+		border: none;
+		border-radius: 3px;
+	}
 	.table {
 		display: flex;
 		flex-direction: column;
@@ -231,7 +499,7 @@
 	.thead,
 	.row {
 		display: grid;
-		grid-template-columns: 1.4rem minmax(10rem, auto) 1fr 5.6rem;
+		grid-template-columns: 1.4rem minmax(9rem, auto) 1fr 5.6rem minmax(2rem, auto);
 		align-items: center;
 		gap: 0.5rem;
 	}

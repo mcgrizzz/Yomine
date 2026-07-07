@@ -30,29 +30,47 @@ use crate::{
     state::AppState,
 };
 
-/// Same 5s cadence egui throttled both checks to.
+/// Same 5s cadence egui throttled the Anki probe to.
 const POLL_INTERVAL: Duration = Duration::from_secs(5);
 
-/// Spawn the background poll loop. Call once at app setup.
+/// The knowledge check when idle is just a lock + atomic read, so it can spin
+/// fast — the summary then lands within ~1s of the tools (or a dirty flag).
+const KNOWLEDGE_POLL_INTERVAL: Duration = Duration::from_secs(1);
+
+/// Spawn the background poll loops. Call once at app setup.
 pub fn spawn(app: AppHandle) {
-    tauri::async_runtime::spawn(run(app));
+    tauri::async_runtime::spawn(poll_anki(app.clone()));
+    tauri::async_runtime::spawn(poll_knowledge(app));
 }
 
-async fn run(app: AppHandle) {
+/// Anki connectivity probe: emit `anki-status` only on change (initial poll
+/// fires at t=0).
+async fn poll_anki(app: AppHandle) {
     let mut last_connected: Option<bool> = None;
     let mut tick = tokio::time::interval(POLL_INTERVAL);
 
     loop {
         tick.tick().await;
 
-        // --- Anki connectivity: emit only on change (initial poll fires at t=0). ---
         let connected = anki::api::get_version().await.is_ok();
         if last_connected != Some(connected) {
             let _ = app.emit(names::ANKI_STATUS, AnkiStatus { connected, fetching: false });
             last_connected = Some(connected);
         }
+    }
+}
 
-        // --- Knowledge summary: recompute when an input changed and a cache exists. ---
+/// Knowledge-summary recompute, in its own loop so it never queues behind the
+/// Anki probe — it only needs the offline vocab cache, but sharing the probe's
+/// tick meant the first compute waited out the AnkiConnect attempt (and its
+/// timeout when Anki is closed), so the widget appeared late (maintainer
+/// report, 2026-07-06). Recomputes when an input changed and a cache exists.
+async fn poll_knowledge(app: AppHandle) {
+    let mut tick = tokio::time::interval(KNOWLEDGE_POLL_INTERVAL);
+
+    loop {
+        tick.tick().await;
+
         let pending = {
             let state = app.state::<Mutex<AppState>>();
             let guard = state.lock().unwrap();

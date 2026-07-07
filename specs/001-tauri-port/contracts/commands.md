@@ -69,6 +69,9 @@ file_comprehension: f32 }`.
 |---------|------|---------|---------|-------|
 | `list_dictionaries` | — | `array<DictionaryState>` | `dictionary_states` | name/weight/enabled. |
 | `set_dictionary_state` | `name: string`, `weight: f32`, `enabled: bool` | `()` | `apply_frequency_settings` | Updates engine; emits `dictionaries-changed`; UI re-fetches terms. |
+| `get_recommended_dictionaries` | — | `array<RecommendedDictionaryDto>` | issue #100 (T064) | Repo-manifest catalog (baked fallback) + live `index_url` revision checks; resolves per-entry status (`not-installed`/`installed`/`up-to-date`/`update-available`) against loaded dicts; caches the catalog in AppState. |
+| `install_recommended_dictionary` | `title: string`, `progress: Channel<LoadingMessage>` | `()` | issue #100 (T064) | Downloads to `.zip.part`, replaces same-title artifacts, then the shared `reload_and_swap` (weights + per-term re-bake + `dictionaries-changed`). |
+| `remove_dictionary` | `title: string`, `progress: Channel<LoadingMessage>` | `()` | issue #100 (T064) | Deletes the extracted folder + source zip of any installed dict, drops its `frequency_weights` entry, then `reload_and_swap`. Removing the last dict re-downloads the engine default on reload. |
 | `load_frequency_dictionaries` | `progress: Channel<LoadingMessage>` | `usize` | `frequency_utils::load_frequency_dictionaries` + `TaskManager::reload_frequency_dictionaries` | One command instead of the drafted import+reload pair (T060): native multi-`.zip` picker (backend-side, like `import_ignore_file`) → copy new archives → rebuild + swap the manager (weights reapplied; the loaded file's per-term frequencies re-baked via `build_freq_map`, so new dicts take effect immediately — deviation from egui, which needs the file reopened) → emit `dictionaries-changed`. Returns the newly-copied count; `0` = cancelled/nothing new (no reload, egui parity). |
 
 ## Frequency analyzer

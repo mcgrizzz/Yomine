@@ -22,7 +22,6 @@
 		openSetupModal,
 		openAnalyzerModal,
 		openDataFolder,
-		loadFrequencyDictionaries,
 		refreshTerms
 	} from '$lib/stores';
 
@@ -112,9 +111,8 @@
 				<button onclick={() => run(openAndProcessFile)} disabled={!toolsReady}
 					>Open New File</button
 				>
-				<button onclick={() => run(loadFrequencyDictionaries)} disabled={!toolsReady}
-					>Load New Frequency Dictionaries</button
-				>
+				<!-- Frequency-dictionary import lives in Settings → Frequency Dictionaries
+				     (maintainer, 2026-07-06 — egui's File-menu entry deliberately not mirrored). -->
 				<button onclick={() => run(openDataFolder)}>Open Data Folder</button>
 				<button onclick={() => run(quit)}>Quit</button>
 			</div>
@@ -128,7 +126,7 @@
 				<button onclick={() => run(openAnkiModal)}>Anki</button>
 				<button onclick={() => run(openWebsocketModal)}>WebSocket Server</button>
 				<button onclick={() => run(openIgnoreModal)} disabled={!toolsReady}>Ignore List</button>
-				<button onclick={() => run(openFrequencyModal)}>Frequency Weighting</button>
+				<button onclick={() => run(openFrequencyModal)}>Frequency Dictionaries</button>
 				<button onclick={() => run(openPosModal)}>Part of Speech Filters</button>
 				<button onclick={() => run(openSetupModal)}>Setup Checklist</button>
 			</div>

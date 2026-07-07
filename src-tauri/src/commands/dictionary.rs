@@ -142,8 +142,26 @@ pub async fn load_frequency_dictionaries(
         return Ok(0); // Everything already existed — egui skips the reload too.
     }
 
-    // Re-process the whole dict dir (extracts the new zips; the rest load from
-    // their caches). Blocking, so off the runtime — mirrors `load_language_tools`.
+    reload_and_swap(&app, &state, &progress).await?;
+    Ok(copied)
+}
+
+/// Rebuild the frequency manager from the dict dir and swap it into the live
+/// tools — the shared tail of every dictionary mutation (T060 import, T064
+/// install/update/remove). Re-processes the whole dir off the runtime (extracts
+/// new zips; unchanged dicts load from cache) streaming progress; then, following
+/// egui's `FrequencyDictionariesReloaded` arm: applies persisted weights, swaps
+/// the manager, and marks the knowledge summary dirty. Also re-bakes the loaded
+/// terms' full frequency maps against the new manager (`build_freq_map`, the same
+/// call `extract_words` bakes with) — a deliberate improvement over egui, where
+/// new per-term dictionary entries only appear after the file is reopened
+/// (maintainer decision, 2026-07-06). Per-term lookups are HashMap probes, so
+/// this is fast even for large files. Emits `dictionaries-changed` on success.
+pub(crate) async fn reload_and_swap(
+    app: &AppHandle,
+    state: &State<'_, Mutex<AppState>>,
+    progress: &Channel<LoadingMessage>,
+) -> Result<(), String> {
     let progress_for_blocking = progress.clone();
     let reloaded = tauri::async_runtime::spawn_blocking(move || {
         let _ = progress_for_blocking
@@ -159,13 +177,6 @@ pub async fn load_frequency_dictionaries(
     let _ = progress.send(LoadingMessage::clear());
     let manager = Arc::new(reloaded?);
 
-    // Swap + re-derive, following egui's `FrequencyDictionariesReloaded` arm:
-    // apply persisted weights, swap the manager, mark the knowledge summary
-    // dirty. Then re-bake the loaded terms' full frequency maps against the new
-    // manager (`build_freq_map`, the same call `extract_words` bakes with) — a
-    // deliberate improvement over egui, where new per-term dictionary entries
-    // only appear after the file is reopened (maintainer decision, 2026-07-06).
-    // Per-term lookups are HashMap probes, so this is fast even for large files.
     {
         let mut guard = state.lock().unwrap();
         apply_frequency_weights(&manager, &guard.settings.frequency_weights);
@@ -182,5 +193,5 @@ pub async fn load_frequency_dictionaries(
     }
 
     let _ = app.emit(names::DICTIONARIES_CHANGED, ());
-    Ok(copied)
+    Ok(())
 }

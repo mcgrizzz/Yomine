@@ -22,7 +22,7 @@
 	// only while Anki filtering is active).
 	import { comprehensionColor } from '$lib/comprehension';
 	import { posColor } from '$lib/pos';
-	import { ankiFilterActive, playerConnected, seekTimestamp } from '$lib/stores';
+	import { ankiFilterActive, playerConnected, playerStatus, seekTimestamp } from '$lib/stores';
 	import Furigana from './Furigana.svelte';
 
 	let { occurrences, term }: { occurrences: Occurrence[]; term: Term } = $props();
@@ -39,9 +39,12 @@
 
 	// The sentence's source timestamp (SRT/ASS only; TXT has none). Clickable when
 	// a player is connected → seeks it (egui `ui_timestamp`); otherwise shown as a
-	// weak label. The web has no "confirmed" state (PlayerStatus omits it), so the
-	// button is always ▶ — egui's 👁 confirmed variant is not mirrored.
+	// weak label. Once the player acknowledges a seek, the button flips to egui's
+	// 👁 confirmed variant with a green fill (T063; `ui_timestamp_button`).
 	const ts = $derived(occ.sentence.timestamp);
+	const confirmed = $derived(
+		ts !== null && $playerStatus.confirmed_timestamps.includes(ts.start_secs)
+	);
 
 	// The term's surface span [start, end) in the sentence (egui uses
 	// `full_segment` for expressions, else `surface_form`).
@@ -93,10 +96,11 @@
 		{#if $playerConnected}
 			<button
 				class="ts"
+				class:confirmed
 				title={`Seek to ${t.start_label}`}
 				onclick={() => seekTimestamp(t.start_secs, t.start_label)}
 			>
-				▶ {t.start_label}
+				{confirmed ? '👁' : '▶'} {t.start_label}
 			</button>
 		{:else}
 			<span class="ts-label">{t.start_label}</span>
@@ -184,6 +188,15 @@
 	}
 	.ts:hover {
 		background: var(--bg-lighter);
+	}
+	/* Player-acknowledged seek: egui's 👁 button fill (#559449), white text. */
+	.ts.confirmed {
+		background: #559449;
+		color: #fff;
+		border-color: #559449;
+	}
+	.ts.confirmed:hover {
+		background: color-mix(in srgb, #559449 85%, white);
 	}
 	.ts-label {
 		color: var(--comment);

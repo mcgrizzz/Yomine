@@ -14,7 +14,8 @@ export const playerStatus = writable<ipc.PlayerStatus>({
 	ws_clients: 0,
 	mode: 'none',
 	server_state: 'stopped',
-	server_error: null
+	server_error: null,
+	confirmed_timestamps: []
 });
 
 /** Whether a player is connected (mpv or an asbplayer ws client) — gates the
@@ -283,18 +284,22 @@ export async function saveDictionaryStates(entries: ipc.DictionaryState[]): Prom
 }
 
 /**
- * File → Load New Frequency Dictionaries (T060; egui
- * `frequency_utils::load_frequency_dictionaries`). The backend opens the native
- * multi-zip picker and, when new archives land, reloads the manager and emits
- * `dictionaries-changed` (terms + setup status re-fetch via the hydrate wiring).
- * The overlay only appears once the reload starts streaming progress — no flash
- * behind the picker; a cancelled dialog is a silent no-op. Failures surface via
- * the `lastError` banner (egui's "Reload Error" modal).
+ * Import frequency-dictionary zips (T060; egui
+ * `frequency_utils::load_frequency_dictionaries`). Reached from the Frequency
+ * Dictionaries modal + the setup checklist (the File-menu entry was removed —
+ * maintainer, 2026-07-06). The backend opens the native multi-zip picker and,
+ * when new archives land, reloads the manager and emits `dictionaries-changed`
+ * (terms + setup status re-fetch via the hydrate wiring). The overlay only
+ * appears once the reload starts streaming progress — no flash behind the
+ * picker; a cancelled dialog is a silent no-op. Failures surface via the
+ * `lastError` banner (egui's "Reload Error" modal).
  */
 export async function loadFrequencyDictionaries(): Promise<void> {
 	if (get(languageToolsStatus) !== 'ready') return;
 	try {
-		await ipc.loadFrequencyDictionaries((msg) => overlay.set(msg.message));
+		const copied = await ipc.loadFrequencyDictionaries((msg) => overlay.set(msg.message));
+		// The install states in the recommended catalog may have changed.
+		if (copied > 0) refreshRecommendedDicts();
 	} catch (err) {
 		lastError.set({
 			title: 'Reload Error',
@@ -303,6 +308,24 @@ export async function loadFrequencyDictionaries(): Promise<void> {
 		});
 	} finally {
 		overlay.set(null);
+	}
+}
+
+/** Recommended-dictionary catalog with install/update state (T064), `null` until
+ * the first successful check. Checked once at launch (after tools load) and via
+ * the modal's manual "Check for updates" — NOT on every modal open (maintainer,
+ * 2026-07-06); the check hits the network (manifest + live update indexes). */
+export const recommendedDicts = writable<ipc.RecommendedDictionary[] | null>(null);
+
+/** Re-run the recommended-catalog check. Tools-ready-guarded (install state
+ * comes from the live manager); a failed check keeps the previous value (the
+ * modal surfaces failures inline for its manual button). */
+export async function refreshRecommendedDicts(): Promise<void> {
+	if (get(languageToolsStatus) !== 'ready') return;
+	try {
+		recommendedDicts.set(await ipc.getRecommendedDictionaries());
+	} catch (err) {
+		console.error('[yomine] recommended-dictionaries check failed', err);
 	}
 }
 
@@ -550,6 +573,9 @@ export async function hydrate(): Promise<void> {
 	refreshSetupStatus();
 	// Seed the ignore set so a row can show its grey-in-place / un-ignore state (T059).
 	refreshIgnoredLemmas();
+	// One launch-time recommended-dictionaries check (T064); after this only the
+	// modal's manual button (and dictionary mutations) re-check.
+	refreshRecommendedDicts();
 }
 
 /**

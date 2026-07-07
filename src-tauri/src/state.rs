@@ -78,6 +78,10 @@ pub struct AppState {
     /// can pull it via `get_knowledge_summary` — the `knowledge-summary` event
     /// fires only on change, so without this the widget sits blank after a reload.
     pub knowledge_summary: Option<KnowledgeSummaryDto>,
+    /// Catalog from the last `get_recommended_dictionaries` call (T064) —
+    /// `install_recommended_dictionary` resolves its download URL from here so
+    /// the frontend only ever passes a title.
+    pub recommended_catalog: Vec<crate::recommended::RecommendedEntry>,
 }
 
 impl AppState {
@@ -90,6 +94,7 @@ impl AppState {
             last_analysis: None,
             knowledge_dirty: Arc::new(AtomicBool::new(true)),
             knowledge_summary: None,
+            recommended_catalog: Vec::new(),
         }
     }
 }
