@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.paths.outputs.code }}
+      frontend: ${{ steps.paths.outputs.frontend }}
       workflow: ${{ steps.paths.outputs.workflow }}
       scripts: ${{ steps.paths.outputs.scripts }}
       is_push_to_main: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
@@ -25,8 +26,17 @@ jobs:
           filters: |
             code:
               - 'src/**'
+              - 'tests/**'
+              - 'examples/**'
+              - 'assets/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
+              - 'src-tauri/src/**'
+              - 'src-tauri/Cargo.toml'
+              - 'src-tauri/tauri.conf.json'
+              - 'src-tauri/capabilities/**'
+            frontend:
+              - 'src-tauri/ui/**'
             workflow:
               - '.github/workflows/**/*.yml'
             scripts:
@@ -91,22 +101,76 @@ jobs:
             libxcb-xfixes0-dev
             libxkbcommon-dev
             libssl-dev
+            libwebkit2gtk-4.1-dev
+            libayatana-appindicator3-dev
+            librsvg2-dev
+            libxdo-dev
           version: 1.0
+
+      # The segmentation suite (tests/segmentation.rs) runs the real UniDic
+      # tokenizer; cache the auto-downloaded model so only the first run pays.
+      - name: Cache UniDic tokenizer model
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/yomine/dictionaries/tokenizer
+          key: unidic-tokenizer-v1
 
       - name: Setup test environment
         run: |
           mkdir -p dictionaries/frequency dictionaries/tokenizer
+          # generate_context! needs the frontendDist dir to exist even for check.
+          mkdir -p src-tauri/ui/build
           echo "CI_ENVIRONMENT=true" >> "$GITHUB_ENV"
+          # With the model cached/downloadable, a silent skip of the
+          # segmentation fixtures is a CI bug — fail instead.
+          echo "YOMINE_REQUIRE_UNIDIC=1" >> "$GITHUB_ENV"
 
       - name: Check formatting
         run: cargo +nightly fmt -- --check
 
-      - name: Run tests
+      - name: Run engine tests (egui feature on)
         run: |
-          cargo test --verbose -- \
+          cargo test -p yomine --verbose -- \
             --skip segmentation::rule_matcher_tests::tests::inspect_tokens
 
-  # 4) Inform when Rust tests are skipped (only in PRs)
+      - name: Check engine without egui (the Tauri configuration)
+        run: cargo check -p yomine --no-default-features
+
+      - name: Check Tauri app
+        run: cargo check -p yomine-tauri
+
+  # 4) Frontend type/lint check (svelte-check)
+  # Run if: frontend changed OR it's a push to main
+  svelte-check:
+    needs: filter
+    if: >
+      needs.filter.outputs.frontend == 'true' ||
+      needs.filter.outputs.is_push_to_main == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src-tauri/ui
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: '22.x'
+          cache: pnpm
+          cache-dependency-path: src-tauri/ui/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: svelte-check
+        run: pnpm run check
+
+  # 5) Inform when Rust tests are skipped (only in PRs)
   # Only run if: no code changed AND it's NOT a push to main
   rust-skipped:
     needs: filter

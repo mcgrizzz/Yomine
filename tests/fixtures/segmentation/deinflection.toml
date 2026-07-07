@@ -1,0 +1,25 @@
+# Deinflection: the surface's dictionary form is recovered by ranking
+# deinflection candidates against the frequency dictionaries — without a dict
+# hit the term keeps UniDic's concatenated lemma (食べた → 食べるた, see
+# core.toml). The synthetic dictionary below makes the correct lemmas findable.
+
+frequencies = [
+	{ term = "行く", reading = "いく", rank = 100 },
+	{ term = "会う", reading = "あう", rank = 200 },
+	{ term = "食べる", reading = "たべる", rank = 300 },
+]
+
+[[case]]
+name = "past tense resolves to dictionary form"
+text = "昨日は寿司を食べた。"
+terms = [{ surface = "食べた", lemma = "食べる", reading = "たべる", pos = "Verb" }]
+
+[[case]]
+name = "polite volitional resolves to dictionary form"
+text = "土曜日に会いましょう。"
+terms = [{ surface = "会いましょう", lemma = "会う", reading = "あう", pos = "Verb" }]
+
+[[case]]
+name = "polite non-past resolves to dictionary form"
+text = "学校に行きます。"
+terms = [{ surface = "行きます", lemma = "行く", reading = "いく", pos = "Verb" }]

@@ -132,6 +132,11 @@ pub struct Rule {
 }
 
 pub fn process_tokens(tokens: Vec<UnidicToken>, rules: &[Rule]) -> Result<Vec<Word>, YomineError> {
+    // UniDic emits multi-digit numbers one digit at a time; fold each digit run
+    // into a single token with a synthesized reading (22 → ニジュウニ) before
+    // any rule sees it (the "8月22日 → がつにち" reading bug).
+    let tokens = crate::segmentation::numbers::merge_digit_runs(tokens);
+
     let mut words: Vec<Word> = Vec::new();
     let mut tokens_iter = tokens.into_iter().peekable();
     let mut prev_token: Option<UnidicToken> = None;

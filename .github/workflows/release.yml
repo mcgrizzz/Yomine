@@ -222,3 +222,96 @@ jobs:
             SHA256SUMS-detailed.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  # Tauri app installers (T053). Bundles the new Tauri build alongside the
+  # egui binaries above (which stay until Open Item O4 / T055 retires them).
+  # `tauri-action` runs `beforeBuildCommand` (pnpm build in ui/) itself; we only
+  # install the frontend deps first. With a tag it uploads the installers to
+  # that release; in build_only mode it just builds and we attach artifacts.
+  build-tauri:
+    name: ${{ inputs.build_only && 'Build' || 'Release' }} - Tauri ${{ matrix.platform.os-name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - os-name: Windows-x86_64
+            runs-on: windows-latest
+            args: ""
+          - os-name: Linux-x86_64
+            runs-on: ubuntu-22.04
+            args: ""
+          - os-name: macOS-universal
+            runs-on: macos-latest
+            args: "--target universal-apple-darwin"
+
+    runs-on: ${{ matrix.platform.runs-on }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.os-name == 'macOS-universal' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+
+      - name: Install Linux dependencies
+        if: matrix.platform.runs-on == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+            librsvg2-dev libxdo-dev libssl-dev libgtk-3-dev patchelf
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: '22.x'
+          cache: pnpm
+          cache-dependency-path: src-tauri/ui/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: src-tauri/ui
+
+      - name: Build and upload installers
+        if: ${{ !inputs.build_only }}
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ env.TAG_NAME }}
+          args: ${{ matrix.platform.args }}
+
+      - name: Build installers (build-only mode)
+        if: ${{ inputs.build_only }}
+        uses: tauri-apps/tauri-action@v0
+        with:
+          args: ${{ matrix.platform.args }}
+
+      - name: Upload installers as artifacts (build-only mode)
+        if: ${{ inputs.build_only }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-${{ matrix.platform.os-name }}
+          path: |
+            src-tauri/target/**/bundle/**/*.msi
+            src-tauri/target/**/bundle/**/*.exe
+            src-tauri/target/**/bundle/**/*.dmg
+            src-tauri/target/**/bundle/**/*.deb
+            src-tauri/target/**/bundle/**/*.rpm
+            src-tauri/target/**/bundle/**/*.AppImage
+            target/**/bundle/**/*.msi
+            target/**/bundle/**/*.exe
+            target/**/bundle/**/*.dmg
+            target/**/bundle/**/*.deb
+            target/**/bundle/**/*.rpm
+            target/**/bundle/**/*.AppImage
+          retention-days: 7
+          if-no-files-found: warn

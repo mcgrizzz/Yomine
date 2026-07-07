@@ -1068,6 +1068,69 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
   baseline. Verify: launch with Anki closed → coverage box appears right after tools load; open
   Frequency Dictionaries → no "checking" flash, badges from the launch check, ⟳ re-checks;
   File menu has no import entry; footer Import from file… works end-to-end.
+- **T065 DONE (2026-07-06) [objective #3] — segmentation regression suite + the numeric-furigana
+  fix (and two more engine bugs it surfaced).** Designed first-principles per maintainer directive
+  (NOT the orphaned `src/tests/segmentation_regression.rs`); design calls via question tool: live
+  UniDic tokenizer (truth over speed; auto-download / UNIDIC_PATH; loud skip when absent,
+  `YOMINE_REQUIRE_UNIDIC=1` hard-fails for CI), TOML fixtures, scope = segmentation+readings+POS +
+  deinflection + phrase promotion. **Suite:** `tests/segmentation.rs` — fixture files
+  `tests/fixtures/segmentation/{core,numbers,deinflection,phrases}.toml` (10 cases), schema =
+  `[[case]]` with `text` + optional ordered `segments` (surface/reading/pos, partial asserts) +
+  `terms` (matched by surface; lemma/reading/surface_reading/pos asserted only when present) +
+  `absent`; per-file `frequencies` table builds a **synthetic in-memory dictionary**
+  (`FrequencyManager::from_dictionaries`, new pub engine ctor) so deinflection ranking + phrase
+  promotion are deterministic. One shared tokenizer (OnceLock); ALL failing cases reported in one
+  run with expected-vs-actual lines + an actual-segments/terms dump. Companion tool:
+  `examples/segment.rs` (`cargo run --example segment -- "<sentence>"`) dumps raw features →
+  parsed tokens → words → terms → display segments. New dev-dep `toml`; `pub use vibrato`
+  re-export in lib.rs. **Bug 1 — the T032 numeric furigana bug (8月22日 → がつにち), two real
+  causes found via the dumper:** (a) UniDic emits multi-digit numbers per-digit (22 = 2ニ+2ニ →
+  にに) and single multi-digit OOV tokens with surface-fallback "readings" (3000 → "3000"); new
+  `segmentation/numbers.rs` (`merge_digit_runs` at the head of `process_tokens`) folds digit runs
+  into one token with a **place-value synthesized reading** (`number_to_katakana`: 22 ニジュウニ,
+  300 サンビャク, 8000 ハッセン, 12500 イチマンニセンゴヒャク; 兆-range cap; leading-zero strings
+  read per-digit; unit-tested in-module). (b) display segments carried the **main word's** reading
+  over the **full segment's** span (8月 span with がつ; also 勉強します-type words showed べんきょう
+  over everything) → `extract_words` now emits `full_segment_reading` (one line + comment). Result:
+  8月22日 renders はちがつ/にじゅうににち over the right spans; the frontend needed NO changes (its
+  whole-ruby fallback is correct once the reading is complete). **Bug 2 — rendaku blocked ALL
+  compound promotion:** the phrase loop's pair lookup deliberately rejects a form whose entries
+  carry a different reading, and dictionary compounds carry rendaku (かいしゃ→がいしゃ) that the
+  naive component concat lacks → no rendaku compound could ever be promoted. Fix:
+  `phrase_reading_candidates` — plain concat first, then one-boundary-at-a-time dakuten/handakuten
+  variants of each interior component's first kana; a variant hit also **adopts the corrected
+  reading** on the phrase term (fixes its furigana too). **Documented finding (not changed):**
+  `min_len = 4` in the phrase loop means ≤3-char compounds (土曜日, 誕生日) are NEVER promoted even
+  with a dict entry — pinned by an `absent` fixture; loosening it is a maintainer tuning call.
+  **Engine-shared:** all fixes benefit egui too. **Checks:** `cargo test -p yomine` all green
+  (7 lib + suite); suite runtime ~7s warm; `cargo check -p yomine-tauri` ✓; frontend untouched.
+  **Verify on Windows (optional — engine-level covered by tests):** open a file containing
+  8月22日-style dates → furigana shows はちがつ/にじゅうににち aligned; 勉強します-style rows show
+  the full reading; a known 4+ char compound (株式会社) still promotes.
+- **T053 code-complete (2026-07-07) — CI workflows; NOT ticked until the first green run.**
+  **test.yml:** paths filter now covers the workspace (`src-tauri/src`, tauri config/capabilities,
+  root `tests/`/`examples/`/`assets/`) + a new `frontend` filter (`src-tauri/ui/**`); `rust-tests`
+  gains the Tauri linux deps (webkit2gtk-4.1, ayatana-appindicator, rsvg, xdo), a **UniDic model
+  cache** (`~/.local/share/yomine/dictionaries/tokenizer`, key `unidic-tokenizer-v1`) with
+  `YOMINE_REQUIRE_UNIDIC=1` so the segmentation suite (T065) runs for real and a silent skip fails
+  CI, and now runs the matrix: `cargo test -p yomine` (gui on) → `cargo check -p yomine
+  --no-default-features` (the Tauri configuration of the engine) → `cargo check -p yomine-tauri`
+  (with `mkdir -p src-tauri/ui/build` — `generate_context!` needs frontendDist to exist). New
+  **svelte-check job** (pnpm 10 / node 22, lockfile-cached, `pnpm install --frozen-lockfile` +
+  `pnpm run check`), gated on the frontend filter. **release.yml:** new `build-tauri` job
+  (windows-latest, ubuntu-22.04, macos universal via `--target universal-apple-darwin`) using
+  `tauri-apps/tauri-action@v0` — uploads installers to the tag's release, or builds + attaches
+  artifacts in `build_only` mode; the egui binary jobs stay untouched until T055/O4.
+  `manual-release.yml` needs no change (it `workflow_call`s release.yml). **@types/node fix:**
+  `^22.10.0` added to `src-tauri/ui/package.json` devDependencies — clears the 4 baseline
+  vite.config.ts errors + the tsconfig warning (tsconfig already declares `types: ["node"]`).
+  **MAINTAINER STEPS (Windows):** (1) `pnpm install` in `src-tauri/ui` to regenerate
+  `pnpm-lock.yaml` (CI uses --frozen-lockfile and WILL fail without it; note this wipes the
+  hand-patched WSL linux binaries in node_modules — re-drop them or run checks from Windows);
+  confirm `pnpm run check` is now **0 errors**; (2) push / open the PR and watch the Tests
+  workflow (first run downloads UniDic once, then cached); (3) when releasing, `manual-release`
+  or a release tag now also produces Tauri installers — smoke-test them (that's T052) — then tick
+  T053.
 - **NEXT options:**
   - **`load_frequency_dictionaries` import command (freq-dict import)** — the File-menu "Load New
     Frequency Dictionaries" entry and the checklist's two "+ Install Dictionary" actions (T045)
@@ -1389,7 +1452,8 @@ stories render inside it.
 - [ ] T052 `cargo tauri build` produces installers on Win/macOS/Linux; smoke-test each artifact.
 - [ ] T053 CI: replace/augment `.github/workflows/release*.yml` + `manual-release.yml` with the
       Tauri bundler; update `test.yml` to build the workspace (egui on/off matrix) + run
-      `svelte-check`.
+      `svelte-check`. *(Code-complete 2026-07-07 — see Progress; tick after the first green CI run
+      + the Windows-side `pnpm install` lockfile regen.)*
 - [x] T054 Final parity sign-off: walk the full quickstart.md checklist; tick spec.md
       Success Criteria SC-001..SC-009. (Maintainer sign-off 2026-07-06.)
 - [ ] T055 Resolve Open Item O4: decide whether to retire the egui crate/feature or keep it
@@ -1444,6 +1508,12 @@ sub-states, above) belongs to the same gate.
 
 ## Post-parity features
 
+- [x] T065 [feature] **Segmentation regression suite + numeric/rendaku reading fixes (mission
+      objective #3).** First-principles expected-vs-actual fixture suite (`tests/segmentation.rs` +
+      `tests/fixtures/segmentation/*.toml`, live UniDic, per-file synthetic frequency dicts), the
+      `cargo run --example segment` stage dumper, and the engine fixes it drove: multi-digit
+      number readings (`segmentation::numbers`), full-segment display readings, and
+      rendaku-tolerant phrase promotion.
 - [x] T064 [feature] **In-App Dictionary Manager (issue #100).** Split the frequency-dictionary UI
       into a "Recommended" section (hosted, updateable dictionaries the user can check + download —
       e.g. JPDBv2㋕, Jiten — with version + Up-to-Date/download state) and the rest; likely rename

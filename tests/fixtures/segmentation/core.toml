@@ -1,0 +1,30 @@
+# Core segmentation: word splits, readings, POS — no frequency data, so
+# deinflection keeps UniDic lemmas and no phrases are promoted.
+
+[[case]]
+name = "plain sentence: splits, readings, POS"
+text = "昨日は寿司を食べた。"
+segments = [
+	{ surface = "昨日", reading = "きのう", pos = "Noun" },
+	{ surface = "は", reading = "わ", pos = "Postposition" },
+	{ surface = "寿司", reading = "すし", pos = "Noun" },
+	{ surface = "を", reading = "お", pos = "Postposition" },
+	{ surface = "食べた", reading = "たべた", pos = "Verb" },
+	{ surface = "。", pos = "Symbol" },
+]
+terms = [
+	{ surface = "昨日", lemma = "昨日", reading = "きのう", pos = "Noun" },
+	{ surface = "寿司", lemma = "寿司", reading = "すし", pos = "Noun" },
+]
+
+[[case]]
+name = "compound NOT promoted without frequency data"
+text = "土曜日に会いましょう。"
+segments = [
+	{ surface = "土曜", reading = "どよう", pos = "Noun" },
+	{ surface = "日", reading = "ひ", pos = "Noun" },
+	{ surface = "に", pos = "Postposition" },
+	{ surface = "会いましょう", reading = "あいましょう", pos = "Verb" },
+	{ surface = "。", pos = "Symbol" },
+]
+absent = ["土曜日"]

@@ -62,6 +62,17 @@ impl FrequencyManager {
         states.entry(name).or_insert(DictionaryState { weight: 1.0, enabled: true });
     }
 
+    /// Build a manager directly from in-memory dictionaries — for test fixtures
+    /// and debug tooling (the app path is `process_frequency_dictionaries`).
+    /// States seed to the same defaults `add_dictionary` uses.
+    pub fn from_dictionaries(dictionaries: Vec<FrequencyDictionary>) -> Self {
+        let mut manager = FrequencyManager::new(None);
+        for dict in dictionaries {
+            manager.add_dictionary(dict.title.clone(), dict);
+        }
+        manager
+    }
+
     pub fn get_enabled_dictionaries(&self) -> Vec<&FrequencyDictionary> {
         let states = self.states.read().expect("frequency states poisoned");
         self.dictionaries
