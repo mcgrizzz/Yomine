@@ -23,6 +23,7 @@
 		openPosModal,
 		openSetupModal,
 		openAnalyzerModal,
+		openAboutModal,
 		openDataFolder,
 		refreshTerms,
 		setAsbplayerFollowNewMedia,
@@ -122,6 +123,7 @@
 				>
 				<div class="menu-sep"></div>
 				<button onclick={() => run(openDataFolder)}>Open Data Folder</button>
+				<button onclick={() => run(openAboutModal)}>About Yomine</button>
 				<button onclick={() => run(quit)}>Quit</button>
 			</div>
 		{/if}

@@ -21,10 +21,12 @@ const RELEASES_PAGE = 'https://github.com/mcgrizzz/Yomine/releases/latest';
 /** Held for installUpdate once the plugin check finds something. */
 let pending: Update | null = null;
 
+export type UpdateCheckResult = 'update-found' | 'up-to-date' | 'unavailable';
+
 /** Plugin check first (signed latest.json); GitHub-API fallback when that's
  * missing or broken, so the pill can still link to the release page. Both
- * paths are best-effort — offline means no notice, never an error. */
-export async function checkForUpdate(): Promise<void> {
+ * paths are best-effort — 'unavailable' (offline etc.) is never an error. */
+export async function checkForUpdate(): Promise<UpdateCheckResult> {
 	try {
 		const update = await check();
 		if (update) {
@@ -36,8 +38,9 @@ export async function checkForUpdate(): Promise<void> {
 				installable: true
 			});
 			showNotice(`Yomine v${update.version} is available`);
+			return 'update-found';
 		}
-		return; // null = up to date
+		return 'up-to-date';
 	} catch {
 		// No latest.json on the newest release (or offline) — try the API fallback.
 	}
@@ -46,9 +49,11 @@ export async function checkForUpdate(): Promise<void> {
 		if (u) {
 			updateInfo.set({ ...u, installable: false });
 			showNotice(`Yomine ${u.latest} is available`);
+			return 'update-found';
 		}
+		return 'up-to-date';
 	} catch {
-		// Offline / rate-limited — silently up-to-date.
+		return 'unavailable';
 	}
 }
 
