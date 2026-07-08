@@ -61,10 +61,17 @@ pub struct SettingsData {
     /// Whole-UI scale factor (Tauri app only; 1.0 = 100%). The egui app ignores it.
     #[serde(default = "default_font_scale")]
     pub font_scale: f32,
+    /// yomitan-api base URL (one-click mining, issue #105).
+    #[serde(default = "default_yomitan_url")]
+    pub yomitan_url: String,
 }
 
 const fn default_font_scale() -> f32 {
     1.0
+}
+
+fn default_yomitan_url() -> String {
+    "http://127.0.0.1:19633".to_string()
 }
 
 const fn default_asbplayer_poll_secs() -> u32 {
@@ -93,6 +100,7 @@ impl Default for SettingsData {
             asbplayer_follow_active_tab: false,
             asbplayer_poll_secs: default_asbplayer_poll_secs(),
             font_scale: default_font_scale(),
+            yomitan_url: default_yomitan_url(),
         }
     }
 }

@@ -21,7 +21,7 @@ pub struct Field {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Note {
-    note_id: u64,
+    pub note_id: u64,
     profile: String,
     tags: Vec<String>,
     pub fields: HashMap<String, Field>,
@@ -129,6 +129,42 @@ pub async fn get_intervals(card_ids: Vec<u64>) -> Result<Vec<i32>, reqwest::Erro
     let params = serde_json::json!({ "cards": card_ids });
     let response: ApiResponse<Vec<i32>> = make_request("getIntervals", Some(params)).await?;
     Ok(response.unwrap_result().unwrap_or_default())
+}
+
+/// Create a note (one-click mining, issue #105). Returns the raw `ApiResponse`
+/// so callers can tell a duplicate rejection apart from other errors.
+pub async fn add_note(
+    deck_name: &str,
+    model_name: &str,
+    fields: &HashMap<String, String>,
+    tags: &[String],
+) -> Result<ApiResponse<u64>, reqwest::Error> {
+    let params = serde_json::json!({
+        "note": {
+            "deckName": deck_name,
+            "modelName": model_name,
+            "fields": fields,
+            "tags": tags,
+            "options": { "allowDuplicate": false }
+        }
+    });
+    make_request("addNote", Some(params)).await
+}
+
+/// Open Anki's card browser on a search (e.g. `nid:123`) — the "open the card
+/// I just mined" affordance.
+pub async fn gui_browse(query: &str) -> Result<ApiResponse<Vec<u64>>, reqwest::Error> {
+    let params = serde_json::json!({ "query": query });
+    make_request("guiBrowse", Some(params)).await
+}
+
+/// Store a base64 media payload in Anki's collection (`storeMediaFile`).
+pub async fn store_media_file(
+    filename: &str,
+    base64_data: &str,
+) -> Result<ApiResponse<String>, reqwest::Error> {
+    let params = serde_json::json!({ "filename": filename, "data": base64_data });
+    make_request("storeMediaFile", Some(params)).await
 }
 
 pub async fn get_model_ids() -> Result<HashMap<String, u64>, reqwest::Error> {

@@ -316,6 +316,24 @@ pub async fn get_total_vocab(
         notes_request_time.as_secs_f32()
     );
 
+    // Harvest sentence-field values while we have every note in hand (issue #3);
+    // `get_mined_state` reads the cache instead of re-downloading the collection.
+    // Entries are note-id-keyed so deletions can be pruned between harvests.
+    let mined_sentences: Vec<super::mined::MinedSentence> = notes
+        .iter()
+        .filter_map(|note| {
+            let mapping = model_mapping.get(&note.model_name)?;
+            let sentence_field = mapping.sentence_field.as_ref()?;
+            let value = &note.fields.get(sentence_field)?.value;
+            let normalized = super::mined::normalize_sentence(value);
+            (!normalized.is_empty()).then_some(super::mined::MinedSentence {
+                note_id: note.note_id,
+                sentence: normalized,
+            })
+        })
+        .collect();
+    super::mined::save_harvested_sentences(&mined_sentences);
+
     let processing_start = Instant::now();
     let relevant_models: HashSet<&String> = model_mapping.keys().collect();
     let vocab: Vec<Vocab> = notes
