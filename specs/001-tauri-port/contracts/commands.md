@@ -96,6 +96,7 @@ file_comprehension: f32 }`.
 |---------|------|---------|---------|-------|
 | `open_url` | `url: string` | `()` | `open::that` (setup checklist) | Via opener plugin. |
 | `get_setup_status` | — | `SetupStatus` | `SetupBanner`/`SetupChecklist` | Aggregates anki/dict/player readiness for the checklist. |
+| `check_for_update` | — | `UpdateInfo \| null` | — (new, T074) | Newest non-prerelease GitHub release vs the app version; `null` = up to date. `UpdateInfo = { current, latest, url }`. Called once at hydrate; failures are swallowed frontend-side. |
 
 `SetupStatus = { tools_loaded: bool, anki_connected: bool, has_field_mapping: bool,
 has_frequency_dict: bool, player_connected: bool }`.

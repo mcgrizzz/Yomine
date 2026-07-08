@@ -2,11 +2,14 @@
 	// Menu grouping deviates from egui: Mining = what you tweak while working;
 	// Settings = configuration + the setup checklist.
 	import { getCurrentWindow } from '@tauri-apps/api/window';
+	import { openUrl } from '@tauri-apps/plugin-opener';
 	import {
 		settings,
 		ankiStatus,
 		playerStatus,
 		languageToolsStatus,
+		updateInfo,
+		installUpdate,
 		fileResult,
 		toggleDarkMode,
 		toggleSerifFont,
@@ -167,6 +170,19 @@
 
 	<span class="spacer"></span>
 
+	{#if $updateInfo}
+		{@const u = $updateInfo}
+		<button
+			class="update-pill"
+			title={u.installable
+				? `Yomine ${u.latest} is available (you have v${u.current}) — click to download and install`
+				: `Yomine ${u.latest} is available (you have v${u.current}) — open the release page`}
+			onclick={() => (u.installable ? installUpdate() : openUrl(u.url))}
+		>
+			⬆ {u.latest} available
+		</button>
+	{/if}
+
 	<div class="status">
 		<!-- The asbplayer indicator doubles as the follow-mode menu (issue #105). -->
 		<div class="menu" class:open={openMenu === 'asb'}>
@@ -310,6 +326,19 @@
 	}
 	.spacer {
 		flex: 1;
+	}
+	.update-pill {
+		margin-right: 0.4rem;
+		padding: 0.15rem 0.55rem;
+		font-size: 0.78rem;
+		color: var(--green);
+		background: transparent;
+		border: 1px solid var(--green);
+		border-radius: 999px;
+		white-space: nowrap;
+	}
+	.update-pill:hover {
+		background: color-mix(in srgb, var(--green) 15%, transparent);
 	}
 	.status {
 		display: flex;
