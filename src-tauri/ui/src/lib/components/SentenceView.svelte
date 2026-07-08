@@ -159,18 +159,30 @@
 	}
 
 	/* Knowledge underlines (issue #94): text color stays free for future pitch
-	 * accent. States follow Anki: new = blue, young = orange, mature = green. */
+	 * accent. States follow Anki: new = blue, young = orange, mature = green.
+	 * Drawn as an inset background bar, not border-bottom — adjacent borders
+	 * fuse into one continuous line and word boundaries disappear. */
 	.sentence .know-unknown {
-		border-bottom: 2px solid var(--red);
+		--know-color: var(--red);
 	}
 	.sentence .know-new {
-		border-bottom: 2px solid var(--blue);
+		--know-color: var(--blue);
 	}
 	.sentence .know-young {
-		border-bottom: 2px solid var(--orange);
+		--know-color: var(--orange);
 	}
 	.sentence .know-mature {
-		border-bottom: 2px solid var(--green);
+		--know-color: var(--green);
+	}
+	.sentence .know-unknown,
+	.sentence .know-new,
+	.sentence .know-young,
+	.sentence .know-mature {
+		background-image: linear-gradient(var(--know-color), var(--know-color));
+		background-repeat: no-repeat;
+		background-size: calc(100% - 7px) 2.5px;
+		background-position: bottom center;
+		padding-bottom: 3px;
 	}
 
 	.meta {
