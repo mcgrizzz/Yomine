@@ -34,12 +34,13 @@ pub async fn list_anki_models() -> Result<Vec<AnkiModelInfo>, String> {
         .collect())
 }
 
-/// A model's sample note plus the engine's term/reading field guesses.
+/// A model's sample note plus the engine's term/reading/sentence field guesses.
 #[derive(serde::Serialize)]
 pub struct SampleNote {
     pub sample_note: Option<HashMap<String, String>>,
     pub guessed_term: Option<String>,
     pub guessed_reading: Option<String>,
+    pub guessed_sentence: Option<String>,
 }
 
 /// Sample note + engine-side field guessing for one note type. Errors are
@@ -51,6 +52,8 @@ pub async fn get_anki_sample_note(model_name: String, fields: Vec<String>) -> Sa
         .as_ref()
         .map(|note| anki::guess_field_mappings(note, &fields))
         .unwrap_or((None, None));
+    let guessed_sentence =
+        sample_note.as_ref().and_then(|note| anki::guess_sentence_field(note, &fields));
 
-    SampleNote { sample_note, guessed_term, guessed_reading }
+    SampleNote { sample_note, guessed_term, guessed_reading, guessed_sentence }
 }
