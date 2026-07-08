@@ -3,6 +3,7 @@
 	import { defaultDir, harmonic, textMatches, type SortField } from '$lib/table';
 	import {
 		addedTerms,
+		ankiStatus,
 		ignoredLemmas,
 		mineTerm,
 		minedNoteIds,
@@ -219,7 +220,8 @@
 					{:else}
 						<span class="chip mined" title="This term already has a recent Anki card">✓</span>
 					{/if}
-				{:else if $yomitanReachable}
+				{:else if $yomitanReachable && $ankiStatus.connected}
+					<!-- Mining needs BOTH: Yomitan renders the card, AnkiConnect stores it. -->
 					<button
 						class="chip mine"
 						disabled={$miningTerm !== null || $playerBusy}

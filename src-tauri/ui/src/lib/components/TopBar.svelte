@@ -1,7 +1,6 @@
 <script lang="ts">
 	// Menu grouping deviates from egui: Mining = what you tweak while working;
 	// Settings = configuration + the setup checklist.
-	import { getCurrentWindow } from '@tauri-apps/api/window';
 	import { openUrl } from '@tauri-apps/plugin-opener';
 	import {
 		settings,
@@ -47,10 +46,6 @@
 	function run(action: () => void) {
 		action();
 		openMenu = null;
-	}
-
-	function quit() {
-		getCurrentWindow().close();
 	}
 
 	const GREEN = '#00c800';
@@ -125,7 +120,6 @@
 				<div class="menu-sep"></div>
 				<button onclick={() => run(openDataFolder)}>Open Data Folder</button>
 				<button onclick={() => run(openAboutModal)}>About Yomine</button>
-				<button onclick={() => run(quit)}>Quit</button>
 			</div>
 		{/if}
 	</div>

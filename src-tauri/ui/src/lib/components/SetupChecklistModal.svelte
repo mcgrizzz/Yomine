@@ -7,7 +7,7 @@
 		refreshSetupStatus,
 		openAnkiModal,
 		openWebsocketModal,
-		loadFrequencyDictionaries,
+		openFrequencyModal,
 		settings
 	} from '$lib/stores';
 
@@ -32,8 +32,6 @@
 		return complete ? 'complete' : 'incomplete';
 	}
 
-	// The two "Install Dictionary" actions (items 2 & 6) run the
-	// freq-dictionary zip import.
 	const items = $derived.by<CheckItem[]>(() => {
 		const st = $setupStatus;
 		const mappingsEmpty = !$settings || Object.keys($settings.anki_model_mappings).length === 0;
@@ -55,7 +53,7 @@
 				status: s((st?.has_frequency_dict ?? false) && count >= 1),
 				optional: false,
 				helpUrl: null,
-				action: loadFrequencyDictionaries,
+				action: openFrequencyModal,
 				actionText: '+ Install Dictionary'
 			},
 			{
@@ -103,7 +101,7 @@
 				optional: true,
 				helpUrl:
 					'https://github.com/mcgrizzz/Yomine?tab=readme-ov-file#setting-up-frequency-dictionaries',
-				action: loadFrequencyDictionaries,
+				action: openFrequencyModal,
 				actionText: '+ Install Dictionary'
 			}
 		];
