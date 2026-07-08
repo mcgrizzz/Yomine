@@ -36,6 +36,9 @@ export const setFontScale = (scale: number) =>
 export const setSentenceColoring = (mode: ipc.SentenceColoring) =>
 	patchSettings({ sentence_coloring: mode });
 
+export const setSentenceUnderlines = (toggles: ipc.UnderlineToggles) =>
+	patchSettings({ sentence_underlines: { ...toggles } });
+
 export const setAsbplayerFollowNewMedia = (on: boolean) =>
 	patchSettings({ asbplayer_follow_new_media: on });
 export const setAsbplayerFollowActiveTab = (on: boolean) =>

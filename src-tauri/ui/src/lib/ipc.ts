@@ -198,6 +198,9 @@ export interface FrequencyDictionarySetting {
 /** Mirrors `SentenceColoring` (core/settings.rs, serde lowercase). */
 export type SentenceColoring = 'knowledge' | 'none';
 
+/** Mirrors `UnderlineToggles` (core/settings.rs): per-state underline visibility. */
+export type UnderlineToggles = Record<SegmentKnowledge, boolean>;
+
 export interface SettingsData {
 	anki_model_mappings: Record<string, FieldMapping>;
 	anki_interval: number;
@@ -220,6 +223,8 @@ export interface SettingsData {
 	yomitan_url: string;
 	/** How sentence segments are colored in the term table (issue #94). */
 	sentence_coloring: SentenceColoring;
+	/** Which underline states are shown in knowledge mode. */
+	sentence_underlines: UnderlineToggles;
 }
 
 /** Aggregated setup readiness for the checklist/banner (`get_setup_status`).

@@ -36,7 +36,10 @@ from the interval-derived comprehension (0 = new, <1 = young, ≥1 = mature; ign
 mature). Worst state wins over overlapping terms (computed in `load_result` from `base_terms`, so
 known/ignored words are covered too); `null` when no extracted term covers the segment. Paired
 with `SettingsData.sentence_coloring: "knowledge" | "none"` (serde-defaulted to `knowledge`;
-unknown values — e.g. the removed `"pos"` — deserialize to the default; Appearance modal).
+unknown values — e.g. the removed `"pos"` — deserialize to the default; Appearance modal) and
+`SettingsData.sentence_underlines: { unknown, new, young, mature: bool }` (all default true;
+per-state visibility checkboxes shown when knowledge mode is selected — filtering is
+frontend-only, the DTO always carries the state).
 
 ## Ignore list
 

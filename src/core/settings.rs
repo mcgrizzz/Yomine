@@ -52,6 +52,25 @@ impl<'de> serde::Deserialize<'de> for SentenceColoring {
     }
 }
 
+/// Per-state visibility of the knowledge underlines (issue #94).
+#[derive(Clone, Copy, serde::Serialize, serde::Deserialize)]
+pub struct UnderlineToggles {
+    #[serde(default = "default_true")]
+    pub unknown: bool,
+    #[serde(default = "default_true")]
+    pub new: bool,
+    #[serde(default = "default_true")]
+    pub young: bool,
+    #[serde(default = "default_true")]
+    pub mature: bool,
+}
+
+impl Default for UnderlineToggles {
+    fn default() -> Self {
+        Self { unknown: true, new: true, young: true, mature: true }
+    }
+}
+
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct SettingsData {
     pub anki_model_mappings: HashMap<String, FieldMapping>,
@@ -86,6 +105,8 @@ pub struct SettingsData {
     pub yomitan_url: String,
     #[serde(default)]
     pub sentence_coloring: SentenceColoring,
+    #[serde(default)]
+    pub sentence_underlines: UnderlineToggles,
 }
 
 const fn default_font_scale() -> f32 {
@@ -124,6 +145,7 @@ impl Default for SettingsData {
             font_scale: default_font_scale(),
             yomitan_url: default_yomitan_url(),
             sentence_coloring: SentenceColoring::default(),
+            sentence_underlines: UnderlineToggles::default(),
         }
     }
 }

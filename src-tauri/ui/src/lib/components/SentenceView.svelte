@@ -66,7 +66,9 @@
 		($settings?.sentence_coloring ?? 'knowledge') === 'knowledge' && $ankiFilterActive
 	);
 	const mark = (seg: SegmentDto): SegmentKnowledge | null =>
-		underlines ? seg.knowledge : null;
+		underlines && seg.knowledge && ($settings?.sentence_underlines[seg.knowledge] ?? true)
+			? seg.knowledge
+			: null;
 
 	// Bars only show while Anki filtering is active — without it everything is 0%.
 	const comprehensionPct = $derived(occ.sentence.comprehension * 100);

@@ -1980,6 +1980,11 @@ sub-states, above) belongs to the same gate.
       entirely (untrustworthy POS); `SentenceColoring` is knowledge/none, with a
       tolerant deserializer so a saved `"pos"` falls back to the default instead of
       failing the settings load.
+      Round 3: underlines drawn as inset background bars (border-bottom fused across
+      adjacent words), and per-state visibility toggles
+      (`SettingsData.sentence_underlines`, all-true default) — checkbox row in the
+      Appearance modal when knowledge mode is selected; display-only filtering in
+      `SentenceView.mark`.
 
 ---
 
