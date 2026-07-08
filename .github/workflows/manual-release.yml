@@ -162,16 +162,29 @@ jobs:
                   '*Release notes will be automatically generated once binaries are built.*',
                 ].join('\n');
 
+            // Draft until release.yml has uploaded every installer + checksums,
+            // so users (and the in-app updater) never see a binary-less release.
             const { data: release } = await github.rest.repos.createRelease({
               owner: context.repo.owner,
               repo: context.repo.repo,
               tag_name: version,
               name: releaseName,
               body: releaseBody,
-              draft: false,
+              draft: true,
               prerelease: isPrerelease,
             });
 
             console.log(
-              `Created ${isPrerelease ? 'pre-' : ''}release: ${release.html_url}`
+              `Created draft ${isPrerelease ? 'pre-' : ''}release: ${release.html_url}`
             );
+
+  # Drafts don't fire the `release: created` event, so the build is invoked
+  # directly; release.yml publishes the draft once every asset is uploaded.
+  build-release:
+    needs: [validate, create-release]
+    if: ${{ inputs.create_release && !inputs.build_only }}
+    uses: ./.github/workflows/release.yml
+    with:
+      tag_name: ${{ needs.validate.outputs.computed_version }}
+      build_only: false
+    secrets: inherit

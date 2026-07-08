@@ -62,14 +62,16 @@ That's it! Yomine will segment the text, rank terms by frequency, and show you v
 ## Installation
 
 
-### Download Prebuilt Binary (Recommended)
+### Download Installer (Recommended)
 
 1. Go to [Releases](https://github.com/mcgrizzz/Yomine/releases)
-2. Download the appropriate file for your system:
-   - **Windows**: `yomine-*-windows-x64.exe`
-   - **macOS**: `yomine-*-macos-universal` (Intel & Apple Silicon)
-   - **Linux**: `yomine-*-linux-x64`
-3. Run the executable
+2. Download the installer for your system:
+   - **Windows**: `Yomine_*_x64-setup.exe`
+   - **macOS**: `Yomine_*_universal.dmg` (Intel & Apple Silicon)
+   - **Linux**: `Yomine_*.AppImage`, `.deb`, or `.rpm`
+3. Install and run — Yomine checks for updates on launch and can update itself in-app
+
+> **macOS note**: the app isn't notarized yet. If macOS refuses to open it, run `xattr -cr /Applications/Yomine.app`.
 
 ## Configuration
 
