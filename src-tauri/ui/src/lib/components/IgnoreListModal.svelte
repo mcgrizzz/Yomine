@@ -251,8 +251,8 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.6rem;
-		width: min(620px, 92vw);
-		max-height: 82vh;
+		width: min(620px, 92%);
+		max-height: 82%;
 		padding-bottom: 0.75rem;
 		background: var(--bg-dark);
 		border: 1px solid var(--border);

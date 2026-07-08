@@ -402,8 +402,8 @@
 	.dialog {
 		display: flex;
 		flex-direction: column;
-		width: min(760px, 94vw);
-		max-height: 88vh;
+		width: min(760px, 94%);
+		max-height: 88%;
 		background: var(--bg-dark);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);

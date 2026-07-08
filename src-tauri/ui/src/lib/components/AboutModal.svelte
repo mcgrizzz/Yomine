@@ -112,7 +112,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.6rem;
-		width: min(400px, 92vw);
+		width: min(400px, 92%);
 		padding-bottom: 1rem;
 		background: var(--bg-dark);
 		border: 1px solid var(--border);
