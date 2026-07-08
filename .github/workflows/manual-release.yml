@@ -47,7 +47,7 @@ jobs:
       - name: Setup Node (for scripts)
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Warning about skipped tests
         if: ${{ inputs.skip_tests }}
@@ -127,7 +127,7 @@ jobs:
       - name: Setup Node (for scripts)
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Create Git Tag
         run: |

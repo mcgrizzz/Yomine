@@ -1342,8 +1342,14 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
   frontendDist placeholder) so the heavy GTK/WebKit compile runs IN PARALLEL with the engine
   tests — addresses the "slow" complaint too; later runs also get warm rust-cache + the UniDic
   cache. Dropped `--verbose` from cargo test (log noise). YAML validated locally.
-  **Remaining T071 (maintainer):** commit + push, watch the re-run, then a `workflow_dispatch`
-  release build with `build_only` for installer smoke tests (T052).
+  **Green (2026-07-07):** PR #107's run passed fully — fmt gate, engine tests (with live UniDic
+  fixtures), no-default-features check, parallel tauri-check, svelte-check. A CodeQL scan flagged
+  the missing `permissions` block on test.yml; added workflow-level least-privilege
+  `{contents: read, pull-requests: read}` (the PR read is required by dorny/paths-filter on PR
+  events; release.yml already had its explicit block). **T053 ticked.**
+  **Remaining T071 (maintainer):** merge the PR, then a `workflow_dispatch` release build with
+  `build_only: true` for installer smoke tests (T052) — Windows .msi/.exe is the one that matters
+  most; Linux .deb/.AppImage and macOS .dmg come out of the same run.
 - **NEXT options:**
   - **`load_frequency_dictionaries` import command (freq-dict import)** — the File-menu "Load New
     Frequency Dictionaries" entry and the checklist's two "+ Install Dictionary" actions (T045)
@@ -1663,10 +1669,10 @@ stories render inside it.
       `assets/jlpt_vocab.json` per O1 outcome); confirm runtime downloads (unidic, freq dicts,
       Anki cache) still resolve to `dirs::data_local_dir()/yomine`.
 - [ ] T052 `cargo tauri build` produces installers on Win/macOS/Linux; smoke-test each artifact.
-- [ ] T053 CI: replace/augment `.github/workflows/release*.yml` + `manual-release.yml` with the
+- [x] T053 CI: replace/augment `.github/workflows/release*.yml` + `manual-release.yml` with the
       Tauri bundler; update `test.yml` to build the workspace (egui on/off matrix) + run
-      `svelte-check`. *(Code-complete 2026-07-07 — see Progress; tick after the first green CI run
-      + the Windows-side `pnpm install` lockfile regen.)*
+      `svelte-check`. *(First green run 2026-07-07 on PR #107 after the apt-deps fix,
+      tauri-check job split, and least-privilege permissions block — see Progress.)*
 - [x] T054 Final parity sign-off: walk the full quickstart.md checklist; tick spec.md
       Success Criteria SC-001..SC-009. (Maintainer sign-off 2026-07-06.)
 - [ ] T055 Resolve Open Item O4: decide whether to retire the egui crate/feature or keep it

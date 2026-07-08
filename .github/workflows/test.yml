@@ -63,7 +63,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4.4.0
         with:
-          node-version: '18.x'
+          node-version: '22.x'
 
       - name: Lint GitHub Actions workflows
         uses: docker://rhysd/actionlint:1.7.7
