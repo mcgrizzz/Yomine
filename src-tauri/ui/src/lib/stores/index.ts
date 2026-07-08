@@ -11,5 +11,6 @@ export * from './ignore';
 export * from './dictionaries';
 export * from './setup';
 export * from './player';
+export * from './mining';
 export * from './update';
 export * from './hydrate';

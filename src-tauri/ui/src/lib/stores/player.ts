@@ -3,6 +3,7 @@ import * as ipc from '$lib/ipc';
 import { lastError, overlay } from './ui';
 import { languageToolsStatus } from './status';
 import { fileResult } from './file';
+import { refreshMinedState } from './mining';
 
 export const playerStatus = writable<ipc.PlayerStatus>({
 	mpv_connected: false,
@@ -43,6 +44,7 @@ export async function loadFromAsbplayer(
 			(msg) => overlay.set(msg.message)
 		);
 		fileResult.set(result);
+		void refreshMinedState(true);
 		return true;
 	} catch (err) {
 		lastError.set({ title: 'Failed to load from asbplayer', message: String(err), detail: null });

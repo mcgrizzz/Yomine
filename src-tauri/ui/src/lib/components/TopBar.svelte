@@ -27,7 +27,8 @@
 		openDataFolder,
 		refreshTerms,
 		setAsbplayerFollowNewMedia,
-		setAsbplayerFollowActiveTab
+		setAsbplayerFollowActiveTab,
+		yomitanReachable
 	} from '$lib/stores';
 
 	type MenuName = 'file' | 'mining' | 'settings' | 'asb';
@@ -243,6 +244,16 @@
 			{:else}
 				<span class="dot" style:color={$ankiStatus.connected ? GREEN : ANKI_RED}>●</span>
 			{/if}
+		</span>
+		<!-- Optional (grey, not red, when absent) — gates the one-click mine buttons. -->
+		<span
+			class="indicator"
+			title={$yomitanReachable
+				? 'Yomitan API connected — one-click mining available'
+				: 'Yomitan API not detected — one-click mining disabled'}
+		>
+			<small>Yomitan</small>
+			<span class="dot" style:color={$yomitanReachable ? GREEN : GREY}>●</span>
 		</span>
 	</div>
 </header>

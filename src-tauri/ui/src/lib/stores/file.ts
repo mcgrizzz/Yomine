@@ -2,9 +2,11 @@ import { derived, get, writable } from 'svelte/store';
 import * as ipc from '$lib/ipc';
 import { lastError, overlay } from './ui';
 import { languageToolsStatus } from './status';
+import { refreshMinedState } from './mining';
 
 /** The currently loaded file + its terms, or `null` before any file is opened. */
 export const fileResult = writable<ipc.FileLoadResult | null>(null);
+
 
 /** Gates the per-sentence comprehension bars — without Anki filtering every
  * sentence reads 0%. */
@@ -25,6 +27,7 @@ export async function loadAndStore(path: string): Promise<void> {
 		overlay.set('Processing file…');
 		const result = await ipc.processFile(path, (msg) => overlay.set(msg.message));
 		fileResult.set(result);
+		void refreshMinedState(true);
 		recentFiles.set(await ipc.getRecentFiles());
 	} catch (err) {
 		console.error('[yomine] process failed', err);

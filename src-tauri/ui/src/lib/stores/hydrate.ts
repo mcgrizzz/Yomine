@@ -9,6 +9,7 @@ import { posCatalog, posEnabled } from './controls';
 import { settings } from './settings';
 import { refreshIgnoredLemmas } from './ignore';
 import { refreshRecommendedDicts } from './dictionaries';
+import { refreshMinedState } from './mining';
 import { refreshSetupStatus } from './setup';
 
 let hydrated = false;
@@ -97,6 +98,9 @@ export async function hydrate(): Promise<void> {
 	refreshSetupStatus();
 	refreshIgnoredLemmas();
 	refreshRecommendedDicts();
+	// Restores ⛏ availability + mined state on a webview reload (the file-load
+	// trigger doesn't run then — the current file comes from getTerms above).
+	void refreshMinedState(true);
 
 	// Best-effort update check; a failure just means no notice.
 	void checkForUpdate();

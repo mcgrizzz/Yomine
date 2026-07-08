@@ -1,7 +1,22 @@
 <script lang="ts">
 	import type { SentenceDto, Term } from '$lib/ipc';
-	import { defaultDir, harmonic, type SortField } from '$lib/table';
-	import { ignoredLemmas, toggleIgnore, posCatalog, tableSort } from '$lib/stores';
+	import { defaultDir, harmonic, textMatches, type SortField } from '$lib/table';
+	import {
+		addedTerms,
+		ignoredLemmas,
+		mineTerm,
+		minedNoteIds,
+		minedTerms,
+		miningTerm,
+		openInAnki,
+		playerBusy,
+		playerStatus,
+		posCatalog,
+		tableSearch,
+		tableSort,
+		toggleIgnore,
+		yomitanReachable
+	} from '$lib/stores';
 	import { posColor } from '$lib/pos';
 	import Furigana from './Furigana.svelte';
 	import SentenceView, { type Occurrence } from './SentenceView.svelte';
@@ -91,6 +106,40 @@
 		}
 		return out;
 	}
+
+	// One-click mining (issue #105): the mine button uses the sentence its
+	// SentenceView is showing, so each row's occurrence index is bound up here.
+	let occIdx = $state<Record<string, number>>({});
+
+	// A search that matches inside a sentence jumps the row to that sentence
+	// (the filter alone would show the row on occurrence 1 with no hit visible).
+	$effect(() => {
+		const q = $tableSearch.trim();
+		if (!q) return;
+		for (const term of terms) {
+			const occs = occurrencesOf(term);
+			const match = occs.findIndex((o) => textMatches(o.sentence.text, q));
+			if (match >= 0) occIdx[termKey(term)] = match;
+		}
+	});
+
+	const isMined = (t: Term): boolean =>
+		$minedTerms.has(t.lemma_form) ||
+		$addedTerms.has(t.lemma_form) ||
+		$addedTerms.has(t.surface_form);
+
+	function mine(term: Term, occs: Occurrence[]) {
+		const occ = occs[Math.min(occIdx[termKey(term)] ?? 0, occs.length - 1)];
+		const ts = occ?.sentence.timestamp ?? null;
+		// The note is always created via AnkiConnect; when asbplayer is the
+		// active player (same rule as seeking) and the row has a cue, asbplayer
+		// then enriches the fresh note with audio/screenshot.
+		const via =
+			$playerStatus.mode === 'asbplayer' && $playerStatus.ws_clients > 0 && ts !== null
+				? 'asbplayer'
+				: 'direct';
+		void mineTerm(term, occ?.sentence.text ?? '', ts, via);
+	}
 </script>
 
 <div class="table">
@@ -142,26 +191,53 @@
 	{/if}
 	{#each terms as term (termKey(term))}
 		{@const occs = occurrencesOf(term)}
+		{@const key = termKey(term)}
 		<div class="row">
-			<!-- svelte-ignore a11y_click_events_have_key_events -- Ctrl/Cmd+Click is a
-			     mouse-modifier ignore toggle (egui parity); no keyboard equivalent. -->
-			<span
-					class="term"
-					class:ignored={$ignoredLemmas.has(term.lemma_form)}
-					class:ignorable={ctrlHeld}
-					lang="ja"
-					role="button"
-					tabindex="-1"
-					title={$ignoredLemmas.has(term.lemma_form)
-						? 'Ctrl+Click to UNDO ignore'
-						: 'Ctrl+Click to ignore'}
-					onclick={(e) => termClick(e, term)}
-					oncontextmenu={(e) => openMenu(e, term)}
-					><Furigana surface={term.lemma_form} reading={term.lemma_reading} /></span
-				>
+			<span class="term-cell">
+				<!-- svelte-ignore a11y_click_events_have_key_events -- Ctrl/Cmd+Click is a
+				     mouse-modifier ignore toggle (egui parity); no keyboard equivalent. -->
+				<span
+						class="term"
+						class:mined-term={isMined(term)}
+						class:ignored={$ignoredLemmas.has(term.lemma_form)}
+						class:ignorable={ctrlHeld}
+						lang="ja"
+						role="button"
+						tabindex="-1"
+						title={$ignoredLemmas.has(term.lemma_form)
+							? 'Ctrl+Click to UNDO ignore'
+							: 'Ctrl+Click to ignore'}
+						onclick={(e) => termClick(e, term)}
+						oncontextmenu={(e) => openMenu(e, term)}
+						><Furigana surface={term.lemma_form} reading={term.lemma_reading} /></span
+					>
+				{#if isMined(term)}
+					{@const noteId = $minedNoteIds[term.lemma_form]}
+					{#if noteId !== undefined}
+						<button
+							class="chip mined openable"
+							title="In Anki — click to open the card"
+							onclick={() => openInAnki(noteId)}>✓</button
+						>
+					{:else}
+						<span class="chip mined" title="This term already has a recent Anki card">✓</span>
+					{/if}
+				{:else if $yomitanReachable}
+					<button
+						class="chip mine"
+						disabled={$miningTerm !== null || $playerBusy}
+						title={$playerBusy && $miningTerm === null
+							? 'Waiting for asbplayer to finish recording the mined line…'
+							: 'Create an Anki card from the displayed sentence'}
+						onclick={() => mine(term, occs)}
+					>
+						{$miningTerm === term.lemma_form ? '…' : '+'}
+					</button>
+				{/if}
+			</span>
 			<div class="sentence">
 				{#if occs.length > 0}
-					<SentenceView occurrences={occs} {term} />
+					<SentenceView occurrences={occs} {term} bind:currentIndex={occIdx[key]} />
 				{:else}
 					<span class="empty">—</span>
 				{/if}
@@ -284,10 +360,58 @@
 	.num {
 		text-align: right;
 	}
+	.term-cell {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+	}
 	.term {
 		font-size: 1.5rem;
 		color: var(--red);
 		line-height: 1.1;
+	}
+	/* Mined terms read as "done" — green, like the confirmed-seek pill. Kept
+	   above .ignored so an ignored term still greys out. */
+	.term.mined-term {
+		color: var(--green);
+	}
+	/* Mine (+) and mined (✓) share one footprint so the swap doesn't shift layout. */
+	.chip {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.5rem;
+		height: 1.5rem;
+		padding: 0;
+		font-size: 0.95rem;
+		line-height: 1;
+		border-radius: var(--radius);
+	}
+	.mine {
+		color: var(--cyan);
+		background: var(--bg-light);
+		border: 1px solid var(--border);
+		cursor: pointer;
+	}
+	.mine:hover:not(:disabled) {
+		background: var(--bg-lighter);
+		border-color: var(--cyan);
+	}
+	.mine:disabled {
+		opacity: 0.5;
+		cursor: default;
+	}
+	.mined {
+		color: var(--green);
+		background: color-mix(in srgb, var(--green) 12%, transparent);
+		border: 1px solid color-mix(in srgb, var(--green) 35%, transparent);
+		cursor: help;
+	}
+	.mined.openable {
+		cursor: pointer;
+	}
+	.mined.openable:hover {
+		background: color-mix(in srgb, var(--green) 25%, transparent);
 	}
 	/* Ignored-in-place: greyed until the next refresh drops the row. */
 	.term.ignored {
