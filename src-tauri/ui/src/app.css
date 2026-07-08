@@ -57,27 +57,29 @@
 	color-scheme: dark;
 }
 
+/* Soft warm paper, well below pure white — the near-white palette read as
+ * blinding next to the dark default. Same darkest → lightest layering. */
 :root[data-theme='light'] {
-	--bg-darker: #ebebe6;
-	--bg-dark: #f5f5f0;
-	--bg: #f8f8f2;
-	--bg-light: #fffffa;
-	--bg-lighter: #ffffff;
+	--bg-darker: #d9d7cc;
+	--bg-dark: #e7e5da;
+	--bg: #efede2;
+	--bg-light: #f5f3e8;
+	--bg-lighter: #faf8ee;
 
 	--fg: #282a36;
 	--selection: #c8c8dc;
-	--comment: #788aa0;
+	--comment: #6e7f95;
 
 	--red: #c85050;
-	--orange: #dc965a;
-	--yellow: #dce678;
-	--green: #50c878;
+	--orange: #d8863c;
+	--yellow: #b0a030;
+	--green: #3caa64;
 	--blue: #4682b4;
 	--purple: #9678dc;
-	--cyan: #50bee6;
+	--cyan: #2896c8;
 	--pink: #e682c8;
 
-	--border: #d6d6cc;
+	--border: #c6c4b6;
 
 	color-scheme: light;
 }
