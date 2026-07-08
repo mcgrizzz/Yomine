@@ -370,6 +370,26 @@ impl WebSocketServer {
         .map_err(|e| YomineError::Custom(format!("Unexpected get-subtitles response: {e}")))
     }
 
+    /// asbplayer `mine-subtitle`. `post_mine_action`: 0 none, 1 Anki dialog,
+    /// 2 update last card, 3 export.
+    pub fn mine_subtitle(
+        &self,
+        fields: &HashMap<String, String>,
+        post_mine_action: u8,
+    ) -> Result<(), YomineError> {
+        let body = self.request_blocking(
+            "mine-subtitle",
+            serde_json::json!({ "postMineAction": post_mine_action, "fields": fields }),
+            Duration::from_secs(15),
+        )?;
+        match body.get("published").and_then(|v| v.as_bool()) {
+            Some(true) => Ok(()),
+            _ => Err(YomineError::Custom(
+                "asbplayer did not publish the mined card — check its Anki settings".to_string(),
+            )),
+        }
+    }
+
     pub fn seek_timestamp(&self, timestamp: f32, timestamp_str: &str) -> Result<(), YomineError> {
         println!(
             "[WS] Sending seek command for timestamp: {} seconds, str: {}",

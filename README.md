@@ -56,6 +56,7 @@ That's it! Yomine will segment the text, rank terms by frequency, and show you v
 - **Dictionary weighting** - Customize which frequency sources are prioritized
 - **Sorting and searching** - Sort by frequency, chronological order, sentence count, or comprehension level; search for specific terms
 - **Multiple subtitle formats** - Supports SRT, ASS, and SSA subtitle files
+- **One-click mining** - Create Anki cards straight from the table, rendered with your own Yomitan templates
 - **Frequency Analyzer Tool** - Generate your own frequency dictionaries.
     - Here's one I generated from around 5000 files: [Anilist Top 500](https://github.com/user-attachments/files/23733337/Anilist.Top.500.zip)
 
@@ -149,6 +150,17 @@ Yomine can also integrate directly with MPV player for timestamp navigation, pro
 4. When MPV is closed, Yomine will automatically restart the WebSocket server for ASBPlayer
 
 **Note:** You can add `input-ipc-server=/tmp/mpv-socket` to your MPV configuration file to enable IPC by default.
+
+### **One-Click Mining**
+
+Click the ⛏ button next to any term to create an Anki card from the displayed sentence. Card content (definitions, readings, audio) is rendered with your own Yomitan templates, so cards look exactly like the ones you mine with Yomitan directly. The button appears once Yomine detects the Yomitan API.
+
+**Setup:**
+1. Install [yomitan-api](https://github.com/yomidevs/yomitan-api) (Yomitan's native messaging companion) and enable **Enable Yomitan API** in Yomitan's General settings
+2. Make sure Yomitan has an Anki card format configured (Yomitan Settings → Anki)
+3. Optional, for video sessions loaded from asbplayer: configure asbplayer's Anki settings with the **same note type** as Yomitan — mining then goes through asbplayer, which adds sentence audio and a screenshot
+
+Terms that already have a recently-added Anki card show a green ⛏ mined chip instead of the button — including cards you mine directly with Yomitan while watching. Sentences Yomine itself mined are remembered and flagged with "✓ sentence mined" when you see them again. To also flag sentences from cards created outside Yomine, map an optional **Sentence field** in Settings → Anki.
 
 ### **Managing Your Ignore List**
 

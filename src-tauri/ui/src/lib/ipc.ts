@@ -164,6 +164,8 @@ export function defaultExportOptions(): ExportOptions {
 export interface FieldMapping {
 	term_field: string;
 	reading_field: string;
+	/** Sentence field for already-mined detection (issue #3); optional. */
+	sentence_field?: string | null;
 }
 
 /** A note type with its fields (`core::settings::AnkiModelInfo`). `sample_note`
@@ -174,11 +176,12 @@ export interface AnkiModelInfo {
 	sample_note: Record<string, string> | null;
 }
 
-/** A model's sample note + the engine's term/reading field guesses. */
+/** A model's sample note + the engine's term/reading/sentence field guesses. */
 export interface SampleNote {
 	sample_note: Record<string, string> | null;
 	guessed_term: string | null;
 	guessed_reading: string | null;
+	guessed_sentence: string | null;
 }
 
 export interface FrequencyDictionarySetting {
@@ -204,6 +207,8 @@ export interface SettingsData {
 	asbplayer_poll_secs: number;
 	/** Whole-UI scale factor (1.0 = 100%), applied as CSS zoom on the root. */
 	font_scale: number;
+	/** yomitan-api base URL (one-click mining, issue #105). */
+	yomitan_url: string;
 }
 
 /** Aggregated setup readiness for the checklist/banner (`get_setup_status`).
@@ -216,6 +221,8 @@ export interface SetupStatus {
 	/** Loaded dictionary count: ≥1 → item 2 (default) complete, >1 → item 6 (additional). */
 	frequency_dict_count: number;
 	player_connected: boolean;
+	/** yomitan-api reachable (optional item — enables one-click mining). */
+	yomitan_connected: boolean;
 }
 
 export interface BandStats {
@@ -440,6 +447,56 @@ export async function loadAsbplayerMedia(
 	const channel = new Channel<LoadingMessage>();
 	channel.onmessage = onProgress;
 	return invoke('load_asbplayer_media', { mediaId, trackNumbers, title, progress: channel });
+}
+
+/** `mine_term` outcome; `warning` = note created but enrichment failed. */
+export interface MineResult {
+	status: 'created' | 'duplicate';
+	via: string;
+	warning: string | null;
+	note_id: number | null;
+}
+
+/** Already-mined state (issue #3); sentences are `normalizeSentence` keys. */
+export interface MinedState {
+	added_terms: string[];
+	mined_sentences: string[];
+}
+
+export interface YomitanStatus {
+	reachable: boolean;
+	version: string | null;
+}
+
+/** One-click mine (issue #105); stage updates stream through `onProgress`. */
+export function mineTerm(
+	args: {
+		term: string;
+		sentence: string;
+		timestampSecs: number | null;
+		timestampLabel: string | null;
+		via: 'asbplayer' | 'direct';
+	},
+	onProgress: (msg: LoadingMessage) => void
+): Promise<MineResult> {
+	const channel = new Channel<LoadingMessage>();
+	channel.onmessage = onProgress;
+	return invoke('mine_term', { ...args, progress: channel });
+}
+
+/** Open Anki's card browser on a mined note (`guiBrowse nid:`). */
+export function openInAnki(noteId: number): Promise<void> {
+	return invoke('open_in_anki', { noteId });
+}
+
+/** Best-effort: an offline AnkiConnect still returns cached sentences. */
+export function getMinedState(): Promise<MinedState> {
+	return invoke('get_mined_state');
+}
+
+/** Reachability probe; `url` tests a staged value (omitted = saved setting). */
+export function getYomitanStatus(url?: string): Promise<YomitanStatus> {
+	return invoke('get_yomitan_status', { url: url ?? null });
 }
 
 /** Persist the WebSocket server port and restart a running server on it. */

@@ -18,7 +18,8 @@
 		lastError,
 		notice,
 		ankiFilterActive,
-		refreshTerms
+		refreshTerms,
+		refreshMinedState
 	} from '$lib/stores';
 	import TopBar from '$lib/components/TopBar.svelte';
 	import TermTable from '$lib/components/TermTable.svelte';
@@ -73,7 +74,8 @@
 	}
 </script>
 
-<svelte:window onkeydown={onKeydown} />
+<!-- Focus refresh catches cards mined outside Yomine (issue #3). -->
+<svelte:window onkeydown={onKeydown} onfocus={() => void refreshMinedState()} />
 
 <div class="app-shell">
 	<TopBar />

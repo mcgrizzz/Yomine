@@ -1798,12 +1798,14 @@ sub-states, above) belongs to the same gate.
       indicators opening the release page. Verify on Windows: pill + toast appear once a newer
       release exists (or temporarily lower the version to test); clicking opens the release
       page; offline launch shows nothing.)*
-- [ ] T075 **Code signing (Windows "unknown publisher").** Evaluate SignPath.io Foundation
+- [ ] T075 **Code signing (Windows "unknown publisher").** *(Backburnered 2026-07-08,
+      maintainer decision — revisit after feature work.)* Evaluate SignPath.io Foundation
       (free for qualifying OSS) first, Azure Trusted Signing (~$10/mo) as fallback; wire into
       `tauri.conf.json` `signCommand` + the release workflow. macOS Developer ID/notarization
       ($99/yr) is its own decision.
-- [ ] T076 **Auto-updater (`tauri-plugin-updater`).** *(Code-complete 2026-07-08 — tick after
-      the maintainer key setup + the first signed release verifies in-app updating.)*
+- [x] T076 **Auto-updater (`tauri-plugin-updater`).** *(Verified end-to-end 2026-07-08:
+      key setup done, signed release shipped, installed build discovered the update and
+      self-updated via download → install → relaunch.)*
       Backend: updater + process plugins registered; `bundle.createUpdaterArtifacts: true`;
       `plugins.updater` config with the GitHub `releases/latest/download/latest.json` endpoint,
       Windows `installMode: passive`, and a PLACEHOLDER pubkey; capabilities gain
@@ -1843,6 +1845,110 @@ sub-states, above) belongs to the same gate.
       build-only dry run; required secrets incl. MY_PAT rationale); ensure-tests.js now
       gates on the whole Tests workflow-run conclusion instead of the first check run
       matching "tests" (which only covered rust-tests, ignoring tauri-/svelte-check).
+- [ ] T077 **One-click mining (#105 P2) + mined-state tracking (#3).** *(Code-complete
+      2026-07-08 — Verify on Windows.)* Card content comes from the user's own Yomitan
+      config via yomitan-api (github.com/yomidevs/yomitan-api, default
+      `http://127.0.0.1:19633`, `settings.yomitan_url`): `/ankiCardFormats` picks
+      deck/model/field templates, `/ankiFields` renders the markers (`src/yomitan`, field
+      assembly unit-tested incl. cloze-from-sentence + drop-empty-fields). Two paths from
+      the ⛏ button in SentenceView (busy-guarded, one at a time): asbplayer sessions
+      (`loadedFromAsbplayer` + connected + timestamped) confirmed-seek then WS
+      `mine-subtitle` postMineAction 3 — asbplayer supplies sentence/audio/image, so
+      empty-rendered sentence markers are dropped; everything else = direct AnkiConnect
+      `storeMediaFile` + `addNote` (tag `yomine`, duplicate → "already in Anki" toast, row
+      still marked). Mined state (issue #3, both layers): `added:1` terms via field
+      mappings + sentence harvest from the existing full-note pass in `get_total_vocab`
+      (normalized: tags stripped/whitespace removed — `anki::mined`, cached as
+      `anki_mined_sentences.json`; frontend normalization must stay in sync); refresh on
+      file load + ~2s after each mine + window focus (5s debounce), no polling.
+      `FieldMapping.sentence_field` (optional) + Yomitan API URL/status live in the Anki
+      settings modal. Windows verify: mine from a file session (note in Anki with
+      glossary+audio), duplicate → toast, asbplayer session seek-then-mine (card with
+      audio/image), Yomitan-direct mine + refocus → ⛏ mined, sentence badges on reload
+      with a sentence-field mapping, yomitan-api stopped → clean error + Unreachable in
+      settings, `pnpm run check`.
+      **Refinements (maintainer feedback):** ⛏ moved next to the term (TermTable owns it;
+      SentenceView's occurrence index is `$bindable` so the button mines the sentence on
+      display) and only renders while yomitan-api is reachable (`yomitanReachable`,
+      re-probed on every mined-state refresh + after Anki-settings save + hydrate);
+      "✓ sentence mined" badge now also covers session-mined sentences
+      (`sessionMinedSentences`) and shows for mined terms, answering "which sentence did
+      this card use"; setup checklist gained the optional "Yomitan API Detected" item
+      (`SetupStatus.yomitan_connected`, probe capped by a 10s client timeout in
+      `yomitan::post`; banner unaffected — it only keys on required items).
+      Round 2: fixed `props_invalid_value` crash on file load (Svelte forbids binding an
+      undefined record entry onto a `$bindable(0)` fallback — fallback removed, reads
+      coalesce; the thrown error had killed the table mount so the app fell back to the
+      landing page). Mined look: green pill chip "⛏ mined" + the term itself tints green
+      (kept above `.ignored` so grey still wins). Persisted sentence marks no longer
+      require a sentence-field mapping for Yomine's own mines —
+      `mined::record_mined_sentence` appends to the cache on every successful mine, and
+      the `get_total_vocab` harvest MERGES with the cache instead of overwriting it
+      (mapping still needed to flag cards created outside Yomine).
+      Round 3: asbplayer path was silently skipped — `loadedFromAsbplayer` was a
+      frontend writable set only by the manual load flow (follow-mode loads and webview
+      reloads left it false → direct path). Now backend-derived:
+      `FileLoadResult.loaded_from_asbplayer` = `FileData.asbplayer_media_id.is_some()`,
+      frontend store is a `derived` of `fileResult`. UI: dropped the ⛏ glyph (renders as
+      a thin scratch on Windows) — mine button is a fixed-footprint `+` chip that swaps
+      to a green `✓` chip when mined (no layout shift), sentence mark is a matching
+      icon-only `✓` chip in the meta row; term still tints green.
+      Round 4 (maintainer corrections): (1) `loadedFromAsbplayer` plumbing REVERTED —
+      the asbplayer path keys on the same rule as seeking (player mode `asbplayer` +
+      client connected + row has a cue), not on how the file was loaded. (2) Mine order
+      inverted to match asbplayer's one-click architecture: `postMineAction: 3` (export)
+      failed because asbplayer had no card to build — now Yomine ALWAYS creates the note
+      via AnkiConnect first (both paths identical: Yomitan fields + sentence + media),
+      then the asbplayer path confirmed-seeks and sends `mine-subtitle` postMineAction 2
+      (update last card) to attach audio/screenshot. Enrichment failure → `warning` on
+      `MineResultDto` (toasted) instead of failing a mine whose note already exists;
+      duplicates skip enrichment ("last card" would hit an unrelated note).
+      Round 5 (maintainer feedback): (1) mine streams stage toasts via a
+      `Channel<LoadingMessage>` (Rendering with Yomitan → Creating Anki note → Adding
+      audio & screenshot via asbplayer) and returns `note_id` — the mined ✓ chip becomes
+      a button that opens the card in Anki (`open_in_anki` → guiBrowse nid:) for
+      session mines. (2) Anki-side deletions now reflect: Yomine's own mines live in a
+      note-id-keyed cache (`yomine_mined_notes.json`) pruned against `findNotes(nid:…)`
+      on every `get_mined_state`; the harvest cache is overwritten wholesale again
+      (self-heals); the frontend clears its optimistic session sets after each
+      successful refresh so backend state is authoritative. Old `anki_mined_sentences`
+      recorded entries don't migrate (harvest rebuilds mapped ones). (3) Sentence-field
+      guessing: literal "Sentence" → sentence-ish name (not audio/translation) →
+      content heuristic; auto-fills the editor like term/reading. (4) Modal fixes:
+      `.body { min-height: 0 }` (flexbox refused to scroll, footer pushed off-screen)
+      + mapping rows restructured to name-line/fields-line with right-aligned actions.
+      Round 6: (1) modals still overflowed under the Appearance zoom — vh/vw don't
+      scale with root CSS `zoom` (same class as the T069 scrollbar bug); ALL ten modal
+      dialogs now size in % of the backdrop (fixed inset:0 IS zoom-correct).
+      (2) Sentence guessing rewritten: space/case-insensitive exact "Sentence" →
+      shortest sentence-named field minus derived variants (audio/furigana/meaning/
+      card/…) → context-ish names → content sniff; unit-tested against the
+      maintainer's two real note types. (3) Searching text that matches inside a
+      sentence now jumps the row to that occurrence (TermTable effect on tableSearch
+      via the shared `textMatches`). (4) Yomitan indicator added to the top-bar status
+      row (green/grey — optional, so grey not red when absent), driven by
+      `yomitanReachable`.
+      Round 7: Sentence Field editor row gets the guessed-＊ marker + sample Example
+      (matching term/reading; the "optional" hint moved to the label tooltip).
+      Recording lockout: `playerBusy` blocks seek + mine buttons from mine-click until
+      cue duration (`end_secs - start_secs`) + 1.5s buffer after an asbplayer-path mine
+      — clicking either mid-recording ruins asbplayer's clip; the post-mine
+      mined-state refresh shifts by the same hold. Non-asbplayer/failed/duplicate
+      mines unlock immediately.
+      Subtitle formatting leak: `STRIP_INLINE_TAGS` whitelisted only b/i/u/font, so
+      any other tag (`<c.jp>`, `<span>`, `<em>`, `<ruby>`, …) leaked into sentence
+      text; now strips any HTML/WebVTT-style tag (+ existing `{\…}` overrides), and
+      `read_txt` runs the tag strip too (copied-from-subtitles text). Unit-tested in
+      parser.rs. NOTE: a styled sentence on a mined Anki CARD from the asbplayer path
+      is asbplayer's own field write (its overwrite settings), not Yomine's text.
+      Round 8: the tags the maintainer saw were Anki sample-note HTML in the settings
+      Example previews — now stripped for display (`preview()` wraps all three
+      term/reading/sentence examples). Stale sentence marks after deleting a note:
+      the harvest cache had no note ids, so only the recorded-mines cache pruned;
+      both caches now store `MinedSentence { note_id, sentence }` and
+      `mined_sentences_pruned()` prunes BOTH against chunked `findNotes(nid:…)`
+      queries (500/batch) on every refresh (offline → untouched). Old harvest cache
+      format fails deserialize → empty → rebuilt on next full Anki pass.
       **Draft-until-built releases (maintainer request):** Manual Release now creates a
       DRAFT release, so users/updater never see a binary-less release. Drafts don't fire
       `release: created`, so manual-release invokes release.yml via workflow_call (new

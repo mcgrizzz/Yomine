@@ -55,6 +55,12 @@ pub enum PlayerCommand {
         track_numbers: Option<Vec<u32>>,
         reply: oneshot::Sender<Result<Vec<RemoteSubtitle>, String>>,
     },
+    /// asbplayer `mine-subtitle` (one-click mining, issue #105).
+    MineSubtitle {
+        fields: std::collections::HashMap<String, String>,
+        post_mine_action: u8,
+        reply: oneshot::Sender<Result<(), String>>,
+    },
 }
 
 /// Cheap-to-clone handle commands hold to reach the player task.
@@ -98,6 +104,18 @@ impl PlayerHandle {
         let (reply, rx) = oneshot::channel();
         self.0
             .send(PlayerCommand::GetSubtitles { media_id, track_numbers, reply })
+            .map_err(|_| "player task is not running".to_string())?;
+        rx.await.map_err(|_| "player task dropped the request".to_string())?
+    }
+
+    pub async fn mine_subtitle(
+        &self,
+        fields: std::collections::HashMap<String, String>,
+        post_mine_action: u8,
+    ) -> Result<(), String> {
+        let (reply, rx) = oneshot::channel();
+        self.0
+            .send(PlayerCommand::MineSubtitle { fields, post_mine_action, reply })
             .map_err(|_| "player task is not running".to_string())?;
         rx.await.map_err(|_| "player task dropped the request".to_string())?
     }
@@ -184,6 +202,18 @@ async fn run(app: AppHandle, mut port: u16, mut rx: mpsc::UnboundedReceiver<Play
                             Some(s) => s
                                 .get_subtitles(media_id.as_deref(), track_numbers.as_deref())
                                 .map_err(|e| e.to_string()),
+                            None => Err("WebSocket server is not running".to_string()),
+                        };
+                        let _ = reply.send(result);
+                    });
+                }
+                PlayerCommand::MineSubtitle { fields, post_mine_action, reply } => {
+                    let server = player.ws.server.clone();
+                    tauri::async_runtime::spawn_blocking(move || {
+                        let result = match server {
+                            Some(s) => {
+                                s.mine_subtitle(&fields, post_mine_action).map_err(|e| e.to_string())
+                            }
                             None => Err("WebSocket server is not running".to_string()),
                         };
                         let _ = reply.send(result);

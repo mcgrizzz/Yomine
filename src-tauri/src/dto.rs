@@ -19,6 +19,29 @@ use yomine::{
     },
 };
 
+/// `mine_term` outcome. `status`: `"created"` | `"duplicate"`; `warning` =
+/// note created but asbplayer enrichment failed.
+#[derive(Serialize, Clone)]
+pub struct MineResultDto {
+    pub status: String,
+    pub via: String,
+    pub warning: Option<String>,
+    pub note_id: Option<u64>,
+}
+
+/// Already-mined state (issue #3): `added:1` terms + normalized sentence keys.
+#[derive(Serialize, Clone)]
+pub struct MinedStateDto {
+    pub added_terms: Vec<String>,
+    pub mined_sentences: Vec<String>,
+}
+
+#[derive(Serialize, Clone)]
+pub struct YomitanStatusDto {
+    pub reachable: bool,
+    pub version: Option<String>,
+}
+
 /// One `<ruby>` span. `surface` is pre-sliced and `reading` pre-converted to
 /// hiragana so the UI never slices by UTF-8 byte offsets in JS; `start`/`end`
 /// remain for the in-sentence term-highlight overlap test.
@@ -184,6 +207,8 @@ pub struct SetupStatus {
     /// ≥1 answers "default dict installed"; >1 answers "additional dicts installed".
     pub frequency_dict_count: usize,
     pub player_connected: bool,
+    /// yomitan-api reachable (optional item — enables one-click mining).
+    pub yomitan_connected: bool,
 }
 
 /// Names the engine's positional `(JlptLevel, BandStats)` tuple — a bare tuple

@@ -11,6 +11,9 @@ pub struct Model {
 pub struct FieldMapping {
     pub term_field: String,
     pub reading_field: String,
+    /// Sentence field for already-mined detection (issue #3).
+    #[serde(default)]
+    pub sentence_field: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

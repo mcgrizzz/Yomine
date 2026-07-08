@@ -8,17 +8,36 @@
 
 	/** `SettingsData::default().anki_interval` (core/settings.rs). */
 	const DEFAULT_INTERVAL = 30;
+	/** `SettingsData::default().yomitan_url` (core/settings.rs). */
+	const DEFAULT_YOMITAN_URL = 'http://127.0.0.1:19633';
 
 	// ---- Staged settings ----
 	let tempMappings = $state<Record<string, ipc.FieldMapping>>({});
 	let originalMappings = $state<Record<string, ipc.FieldMapping>>({});
 	let tempInterval = $state(DEFAULT_INTERVAL);
 	let originalInterval = $state(DEFAULT_INTERVAL);
+	let tempYomitanUrl = $state(DEFAULT_YOMITAN_URL);
+	let originalYomitanUrl = $state(DEFAULT_YOMITAN_URL);
+
+	// ---- Yomitan API status (one-click mining, issue #105) ----
+	let yomitanChecking = $state(false);
+	let yomitanStatus = $state<ipc.YomitanStatus | null>(null);
+
+	async function checkYomitan() {
+		yomitanChecking = true;
+		try {
+			yomitanStatus = await ipc.getYomitanStatus(tempYomitanUrl.trim());
+		} finally {
+			yomitanChecking = false;
+		}
+	}
 
 	// ---- Note-type cache ----
 	let models = $state<ipc.AnkiModelInfo[]>([]);
 	/** Per-model field guesses, cached alongside the sample note. */
-	let guesses = $state<Record<string, { term: string | null; reading: string | null }>>({});
+	let guesses = $state<
+		Record<string, { term: string | null; reading: string | null; sentence: string | null }>
+	>({});
 	let loadingModels = $state(false);
 	let fetchError = $state<string | null>(null);
 
@@ -26,6 +45,7 @@
 	let edModel = $state('');
 	let edTerm = $state('');
 	let edReading = $state('');
+	let edSentence = $state('');
 	let edEditing = $state(false);
 	let edOriginalName = $state<string | null>(null);
 
@@ -41,7 +61,10 @@
 		originalMappings = cloneMappings(s?.anki_model_mappings ?? {});
 		tempInterval = s?.anki_interval ?? DEFAULT_INTERVAL;
 		originalInterval = tempInterval;
+		tempYomitanUrl = s?.yomitan_url ?? DEFAULT_YOMITAN_URL;
+		originalYomitanUrl = tempYomitanUrl;
 		resetEditor();
+		void checkYomitan();
 		if (models.length === 0) fetchModels();
 		else fetchMappedSamples();
 	}
@@ -58,12 +81,18 @@
 		const kb = Object.keys(b);
 		if (ka.length !== kb.length) return false;
 		return ka.every(
-			(k) => b[k] && a[k].term_field === b[k].term_field && a[k].reading_field === b[k].reading_field
+			(k) =>
+				b[k] &&
+				a[k].term_field === b[k].term_field &&
+				a[k].reading_field === b[k].reading_field &&
+				(a[k].sentence_field ?? null) === (b[k].sentence_field ?? null)
 		);
 	}
 
 	const dirty = $derived(
-		tempInterval !== originalInterval || !mappingsEqual(tempMappings, originalMappings)
+		tempInterval !== originalInterval ||
+			tempYomitanUrl !== originalYomitanUrl ||
+			!mappingsEqual(tempMappings, originalMappings)
 	);
 
 	// ---- Connection status (egui ui_connection_status, colored by content; the
@@ -105,7 +134,11 @@
 		if (!model) return;
 		const res = await ipc.getAnkiSampleNote(name, model.fields);
 		model.sample_note = res.sample_note;
-		guesses[name] = { term: res.guessed_term, reading: res.guessed_reading };
+		guesses[name] = {
+			term: res.guessed_term,
+			reading: res.guessed_reading,
+			sentence: res.guessed_sentence
+		};
 		if (edModel === name && !edTerm && !edReading) applyGuess(name);
 	}
 
@@ -114,6 +147,7 @@
 		if (!g) return;
 		if (g.term) edTerm = g.term;
 		if (g.reading) edReading = g.reading;
+		if (g.sentence && !edSentence) edSentence = g.sentence;
 	}
 
 	const selectedModel = $derived(models.find((m) => m.name === edModel));
@@ -123,6 +157,7 @@
 	function onModelSelect() {
 		edTerm = '';
 		edReading = '';
+		edSentence = '';
 		if (!edModel) return;
 		const m = models.find((m) => m.name === edModel);
 		if (m?.sample_note) applyGuess(edModel);
@@ -135,6 +170,7 @@
 		edModel = name;
 		edTerm = mapping.term_field;
 		edReading = mapping.reading_field;
+		edSentence = mapping.sentence_field ?? '';
 		edEditing = true;
 		edOriginalName = name;
 	}
@@ -147,7 +183,11 @@
 		if (!edModel || !edTerm || !edReading) return;
 		const next = { ...tempMappings };
 		if (edOriginalName && edOriginalName !== edModel) delete next[edOriginalName];
-		next[edModel] = { term_field: edTerm, reading_field: edReading };
+		next[edModel] = {
+			term_field: edTerm,
+			reading_field: edReading,
+			sentence_field: edSentence || null
+		};
 		tempMappings = next;
 		resetEditor();
 	}
@@ -156,6 +196,7 @@
 		edModel = '';
 		edTerm = '';
 		edReading = '';
+		edSentence = '';
 		edEditing = false;
 		edOriginalName = null;
 	}
@@ -170,8 +211,20 @@
 		return chars.length > 30 ? chars.slice(0, 27).join('') + '...' : value;
 	}
 
+	/** Strip only FORMATTING tags — content markup (ruby, 漢字[かな]) must stay
+	 * visible in previews. */
+	function preview(value: string): string {
+		return truncate(
+			value
+				.replace(/<\/?(?:b|i|u|em|strong|span|div|font|br)\b[^>]*>/gi, ' ')
+				.replace(/&nbsp;/g, ' ')
+				.replace(/\s+/g, ' ')
+				.trim()
+		);
+	}
+
 	async function save() {
-		if (await saveAnkiSettings(cloneMappings(tempMappings), tempInterval)) {
+		if (await saveAnkiSettings(cloneMappings(tempMappings), tempInterval, tempYomitanUrl.trim())) {
 			ankiModalOpen.set(false);
 		}
 		// On failure the lastError banner shows; staged state stays for a retry.
@@ -180,12 +233,14 @@
 	function cancel() {
 		tempMappings = cloneMappings(originalMappings);
 		tempInterval = originalInterval;
+		tempYomitanUrl = originalYomitanUrl;
 	}
 
-	// Scoped to the two fields this modal owns so Save can't clobber unrelated settings.
+	// Scoped to the fields this modal owns so Save can't clobber unrelated settings.
 	function restoreDefault() {
 		tempMappings = {};
 		tempInterval = DEFAULT_INTERVAL;
+		tempYomitanUrl = DEFAULT_YOMITAN_URL;
 	}
 </script>
 
@@ -248,17 +303,23 @@
 				<section>
 					<h3>Current Notetypes</h3>
 					{#each Object.entries(tempMappings) as [name, mapping] (name)}
-						<div class="row mapping-row">
-							<span class="lbl">Notetype:</span>
-							<strong class="model-name">{name}</strong>
-							<span class="vsep"></span>
-							<span class="lbl">Term Field:</span>
-							<code class="model-name">{mapping.term_field}</code>
-							<span class="vsep"></span>
-							<span class="lbl">Reading Field:</span>
-							<code class="model-name">{mapping.reading_field}</code>
-							<button onclick={() => editMapping(name)}>Edit</button>
-							<button onclick={() => deleteMapping(name)}>Delete</button>
+						<div class="mapping-row">
+							<div class="mapping-text">
+								<strong class="model-name">{name}</strong>
+								<span class="mapping-fields">
+									Term: <code>{mapping.term_field}</code>
+									<span class="dot">·</span>
+									Reading: <code>{mapping.reading_field}</code>
+									{#if mapping.sentence_field}
+										<span class="dot">·</span>
+										Sentence: <code>{mapping.sentence_field}</code>
+									{/if}
+								</span>
+							</div>
+							<div class="mapping-actions">
+								<button onclick={() => editMapping(name)}>Edit</button>
+								<button onclick={() => deleteMapping(name)}>Delete</button>
+							</div>
 						</div>
 					{/each}
 				</section>
@@ -298,6 +359,9 @@
 						{@const readingExample = edReading
 							? selectedModel.sample_note?.[edReading]
 							: undefined}
+						{@const sentenceExample = edSentence
+							? selectedModel.sample_note?.[edSentence]
+							: undefined}
 						<div class="row">
 							<label for="anki-term-field">Term Field:</label>
 							{#if edTerm && selectedModel.sample_note}
@@ -312,7 +376,7 @@
 							{#if termExample !== undefined}
 								<span class="vsep"></span>
 								<span class="lbl">Example:</span>
-								<span class="example">"{truncate(termExample)}"</span>
+								<span class="example">"{preview(termExample)}"</span>
 							{/if}
 						</div>
 						<div class="row">
@@ -329,7 +393,28 @@
 							{#if readingExample !== undefined}
 								<span class="vsep"></span>
 								<span class="lbl">Example:</span>
-								<span class="example reading">"{truncate(readingExample)}"</span>
+								<span class="example reading">"{preview(readingExample)}"</span>
+							{/if}
+						</div>
+						<div class="row">
+							<label
+								for="anki-sentence-field"
+								title="Optional — marks sentences already mined into this notetype"
+								>Sentence Field:</label
+							>
+							{#if edSentence && selectedModel.sample_note}
+								<span class="guessed" title="This field was guessed based on its content">＊</span>
+							{/if}
+							<select id="anki-sentence-field" bind:value={edSentence}>
+								<option value="">(none)</option>
+								{#each selectedModel.fields as f (f)}
+									<option value={f}>{f}</option>
+								{/each}
+							</select>
+							{#if sentenceExample !== undefined}
+								<span class="vsep"></span>
+								<span class="lbl">Example:</span>
+								<span class="example">"{preview(sentenceExample)}"</span>
 							{/if}
 						</div>
 					{/if}
@@ -338,6 +423,32 @@
 						<button disabled={!edModel || !edTerm || !edReading} onclick={addOrUpdate}>
 							{edEditing ? 'Update' : 'Add'}
 						</button>
+					</div>
+				</section>
+
+				<hr />
+
+				<!-- yomitan-api connection (one-click mining, issue #105). -->
+				<section>
+					<h3>
+						Yomitan API
+						<span
+							class="info-icon"
+							title="One-click mining renders card content with your own Yomitan templates via the yomitan-api companion (github.com/yomidevs/yomitan-api)."
+							>ℹ</span
+						>
+					</h3>
+					<div class="row">
+						<label for="yomitan-url">URL:</label>
+						<input id="yomitan-url" type="text" bind:value={tempYomitanUrl} />
+						{#if yomitanChecking}
+							<span class="spinner" aria-label="Checking Yomitan API"></span>
+						{:else if yomitanStatus?.reachable}
+							<span class="status ok">Connected (Yomitan {yomitanStatus.version})</span>
+						{:else if yomitanStatus}
+							<span class="status error">Unreachable</span>
+						{/if}
+						<button disabled={yomitanChecking} onclick={checkYomitan}>Check</button>
 					</div>
 				</section>
 			</div>
@@ -371,8 +482,8 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.6rem;
-		width: min(720px, 94vw);
-		max-height: 86vh;
+		width: min(720px, 94%);
+		max-height: 86%;
 		padding-bottom: 0.75rem;
 		background: var(--bg-dark);
 		border: 1px solid var(--border);
@@ -396,6 +507,9 @@
 	}
 	.body {
 		overflow-y: auto;
+		/* Flexbox: without this the body refuses to shrink, pushing the footer
+		   off-screen instead of scrolling. */
+		min-height: 0;
 		display: flex;
 		flex-direction: column;
 		gap: 0.6rem;
@@ -422,9 +536,35 @@
 		flex-wrap: wrap;
 	}
 	.mapping-row {
-		padding: 0.25rem 0.4rem;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		padding: 0.4rem 0.6rem;
 		background: var(--bg-light);
 		border-radius: var(--radius);
+	}
+	.mapping-text {
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+		min-width: 0;
+	}
+	.mapping-fields {
+		font-size: 0.82rem;
+		color: var(--comment);
+	}
+	.mapping-fields code {
+		font-family: monospace;
+		color: var(--blue);
+	}
+	.dot {
+		margin: 0 0.25rem;
+	}
+	.mapping-actions {
+		display: flex;
+		gap: 0.4rem;
+		flex-shrink: 0;
 	}
 	.lbl {
 		font-size: 0.85rem;
@@ -461,6 +601,14 @@
 	}
 	input[type='number'] {
 		width: 5.5rem;
+		padding: 0.3rem 0.5rem;
+		background: var(--bg-light);
+		color: var(--fg);
+		border: 1px solid var(--border);
+		border-radius: 3px;
+	}
+	input[type='text'] {
+		width: 15rem;
 		padding: 0.3rem 0.5rem;
 		background: var(--bg-light);
 		color: var(--fg);

@@ -9,6 +9,7 @@ import { posCatalog, posEnabled } from './controls';
 import { settings } from './settings';
 import { refreshIgnoredLemmas } from './ignore';
 import { refreshRecommendedDicts } from './dictionaries';
+import { refreshMinedState } from './mining';
 import { refreshSetupStatus } from './setup';
 
 let hydrated = false;
@@ -97,6 +98,8 @@ export async function hydrate(): Promise<void> {
 	refreshSetupStatus();
 	refreshIgnoredLemmas();
 	refreshRecommendedDicts();
+	// Restores mined state / mine-button gating on a webview reload.
+	void refreshMinedState(true);
 
 	// Best-effort update check; a failure just means no notice.
 	void checkForUpdate();

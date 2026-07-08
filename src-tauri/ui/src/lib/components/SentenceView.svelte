@@ -14,19 +14,33 @@
 <script lang="ts">
 	import { comprehensionColor } from '$lib/comprehension';
 	import { posColor } from '$lib/pos';
-	import { ankiFilterActive, playerConnected, playerStatus, seekTimestamp } from '$lib/stores';
+	import {
+		ankiFilterActive,
+		minedSentences,
+		normalizeSentence,
+		playerBusy,
+		playerConnected,
+		playerStatus,
+		seekTimestamp,
+		sessionMinedSentences
+	} from '$lib/stores';
 	import Furigana from './Furigana.svelte';
 
-	let { occurrences, term }: { occurrences: Occurrence[]; term: Term } = $props();
+	// No $bindable fallback — Svelte forbids binding undefined (the initial
+	// record entry) onto one; reads coalesce to 0 instead.
+	let {
+		occurrences,
+		term,
+		currentIndex = $bindable()
+	}: { occurrences: Occurrence[]; term: Term; currentIndex?: number } = $props();
 
 	// Clamped in case a refresh shrinks the occurrence list.
-	let idx = $state(0);
 	const count = $derived(occurrences.length);
-	const current = $derived(Math.min(idx, count - 1));
+	const current = $derived(Math.min(currentIndex ?? 0, count - 1));
 	const occ = $derived(occurrences[current]);
 
-	const prev = () => (idx = current === 0 ? count - 1 : current - 1);
-	const next = () => (idx = (current + 1) % count);
+	const prev = () => (currentIndex = current === 0 ? count - 1 : current - 1);
+	const next = () => (currentIndex = (current + 1) % count);
 
 	// Timestamp is null for TXT sources; 👁 once the player acknowledges the seek.
 	const ts = $derived(occ.sentence.timestamp);
@@ -48,6 +62,12 @@
 	// Bars only show while Anki filtering is active — without it everything is 0%.
 	const comprehensionPct = $derived(occ.sentence.comprehension * 100);
 	const filledBars = $derived(Math.min(Math.ceil(comprehensionPct / 20), 5));
+
+	// This exact sentence already lives in an Anki note (issue #3).
+	const sentenceMined = $derived.by(() => {
+		const key = normalizeSentence(occ.sentence.text);
+		return $minedSentences.has(key) || $sessionMinedSentences.has(key);
+	});
 </script>
 
 <!-- Each word is an atomic inline-block and Svelte strips inter-tag whitespace,
@@ -80,7 +100,10 @@
 			<button
 				class="ts"
 				class:confirmed
-				title={`Seek to ${t.start_label}`}
+				disabled={$playerBusy}
+				title={$playerBusy
+					? 'Waiting for asbplayer to finish recording the mined line…'
+					: `Seek to ${t.start_label}`}
 				onclick={() => seekTimestamp(t.start_secs, t.start_label)}
 			>
 				{confirmed ? '👁' : '▶'} {t.start_label}
@@ -88,6 +111,12 @@
 		{:else}
 			<span class="ts-label">{t.start_label}</span>
 		{/if}
+	{/if}
+
+	{#if sentenceMined}
+		<span class="sentence-mined" title="This sentence is already in one of your Anki notes"
+			>✓</span
+		>
 	{/if}
 
 	{#if $ankiFilterActive}
@@ -166,8 +195,12 @@
 		border-radius: var(--radius);
 		cursor: pointer;
 	}
-	.ts:hover {
+	.ts:hover:not(:disabled) {
 		background: var(--bg-lighter);
+	}
+	.ts:disabled {
+		opacity: 0.5;
+		cursor: default;
 	}
 	.ts.confirmed {
 		background: #559449;
@@ -179,6 +212,20 @@
 	}
 	.ts-label {
 		color: var(--comment);
+	}
+
+	.sentence-mined {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.2rem 0.45rem;
+		font-size: 0.78rem;
+		line-height: 1;
+		color: var(--green);
+		background: color-mix(in srgb, var(--green) 12%, transparent);
+		border: 1px solid color-mix(in srgb, var(--green) 35%, transparent);
+		border-radius: var(--radius);
+		cursor: help;
 	}
 
 	.bars {

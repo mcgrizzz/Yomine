@@ -4,6 +4,7 @@ import { get, writable } from 'svelte/store';
 import * as ipc from '$lib/ipc';
 import { lastError } from './ui';
 import { posEnabled } from './controls';
+import { refreshMinedState } from './mining';
 
 export const settings = writable<ipc.SettingsData | null>(null);
 
@@ -59,10 +60,18 @@ export async function saveWebsocketPort(port: number): Promise<boolean> {
 
 export async function saveAnkiSettings(
 	mappings: Record<string, ipc.FieldMapping>,
-	interval: number
+	interval: number,
+	yomitanUrl: string
 ): Promise<boolean> {
 	try {
-		return await patchSettings({ anki_model_mappings: mappings, anki_interval: interval });
+		const saved = await patchSettings({
+			anki_model_mappings: mappings,
+			anki_interval: interval,
+			yomitan_url: yomitanUrl
+		});
+		// Re-probe: the Yomitan URL / sentence mappings may have changed.
+		if (saved) void refreshMinedState(true);
+		return saved;
 	} catch (err) {
 		lastError.set({
 			title: 'Anki Settings',

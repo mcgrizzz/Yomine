@@ -88,6 +88,15 @@
 				actionText: 'Configure WebSocket'
 			},
 			{
+				title: 'Yomitan API Detected [Optional]',
+				description: 'Enables one-click mining — Anki cards rendered with your Yomitan templates',
+				status: s(st?.yomitan_connected ?? false),
+				optional: true,
+				helpUrl: 'https://github.com/mcgrizzz/Yomine?tab=readme-ov-file#one-click-mining',
+				action: openAnkiModal,
+				actionText: 'Configure URL'
+			},
+			{
 				title: 'Additional Frequency Dictionaries Installed [Optional]',
 				description: 'Load additional dictionaries via Mining → Frequency Dictionaries',
 				status: s(count > 1),
@@ -186,8 +195,8 @@
 	.dialog {
 		display: flex;
 		flex-direction: column;
-		width: min(600px, 92vw);
-		max-height: 85vh;
+		width: min(600px, 92%);
+		max-height: 85%;
 		background: var(--bg-dark);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
