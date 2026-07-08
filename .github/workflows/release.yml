@@ -54,7 +54,7 @@ jobs:
         run: |
           cd downloads
           rm -f SHA256SUMS.txt SHA256SUMS-detailed.txt
-          sha256sum * > ../SHA256SUMS.txt
+          sha256sum -- * > ../SHA256SUMS.txt
           echo "Generated checksums:"
           cat ../SHA256SUMS.txt
 
