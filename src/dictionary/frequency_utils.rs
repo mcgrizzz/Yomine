@@ -1,10 +1,10 @@
 use std::fs;
 
+// The egui task system; the Tauri app uses its own command layer instead.
+#[cfg(feature = "gui")]
+use crate::core::tasks::TaskManager;
 use crate::{
-    core::{
-        errors::YomineError,
-        tasks::TaskManager,
-    },
+    core::errors::YomineError,
     dictionary::frequency_manager::get_frequency_dict_dir,
 };
 
@@ -45,6 +45,7 @@ pub fn copy_frequency_dictionaries(
     Ok(copied_count)
 }
 
+#[cfg(feature = "gui")]
 pub fn select_frequency_dictionary_zips() -> Option<Vec<std::path::PathBuf>> {
     rfd::FileDialog::new()
         .add_filter("Yomitan Frequency Dictionaries", &["zip"])
@@ -52,6 +53,7 @@ pub fn select_frequency_dictionary_zips() -> Option<Vec<std::path::PathBuf>> {
         .pick_files()
 }
 
+#[cfg(feature = "gui")]
 pub fn handle_frequency_dictionary_copy() -> Result<usize, YomineError> {
     if let Some(zip_paths) = select_frequency_dictionary_zips() {
         if zip_paths.is_empty() {
@@ -72,6 +74,7 @@ pub fn handle_frequency_dictionary_copy() -> Result<usize, YomineError> {
     }
 }
 
+#[cfg(feature = "gui")]
 pub fn load_frequency_dictionaries(task_manager: &TaskManager) {
     match handle_frequency_dictionary_copy() {
         Ok(count) => {

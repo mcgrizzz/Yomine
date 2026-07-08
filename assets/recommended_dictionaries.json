@@ -1,0 +1,18 @@
+{
+	"dictionaries": [
+		{
+			"name": "JPDB v2.2 (Kana)",
+			"title": "JPDBv2㋕",
+			"description": "JPDB corpus frequency, rank-based with kana readings. The auto-installed default.",
+			"download_url": "https://github.com/Kuuuube/yomitan-dictionaries/raw/main/dictionaries/JPDB_v2.2_Frequency_Kana_2024-10-13.zip",
+			"latest_revision": "JPDB v2.2 Frequency Kana 2024-10-13"
+		},
+		{
+			"name": "Jiten (Global)",
+			"title": "Jiten",
+			"description": "Global media frequency from jiten.moe, regenerated regularly.",
+			"download_url": "https://api.jiten.moe/api/frequency-list/download",
+			"index_url": "https://api.jiten.moe/api/frequency-list/index"
+		}
+	]
+}

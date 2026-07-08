@@ -1,0 +1,5 @@
+# pnpm settings (pnpm v11 moved these out of package.json's "pnpm" field).
+# Allow esbuild's install script to run so Vite's bundler gets its native
+# binary; without it pnpm blocks the build and the pre-run deps check exits 1.
+allowBuilds:
+  esbuild: true

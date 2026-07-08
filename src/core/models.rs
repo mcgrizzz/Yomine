@@ -7,7 +7,7 @@ use time::Time;
 
 use crate::segmentation::word::POS;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum SourceFileType {
     SRT,
     SSA,
@@ -41,7 +41,7 @@ impl SourceFileType {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SourceFile {
     pub id: u32,                   // Unique identifier
     pub source: Option<String>,    // Source type (e.g., "YouTube", "Jimaku", "TXT")
@@ -137,7 +137,7 @@ impl PartOfSpeech {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Term {
     pub id: u32,
     pub lemma_form: String, // Base form of the term aka lemma form.. what is found in a dictionary

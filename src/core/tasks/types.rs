@@ -8,10 +8,10 @@ use crate::{
     anki::Model,
     core::{
         pipeline::FilterResult,
+        LanguageTools,
         Sentence,
         Term,
     },
-    gui::app::LanguageTools,
     tools::{
         analysis::FrequencyAnalysisResult,
         knowledge_summary::KnowledgeSummary,

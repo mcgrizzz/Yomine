@@ -1,0 +1,188 @@
+/* Global theme + shell. Dracula-based palette; dark is the default and
+ * `:root[data-theme='light']` swaps the layered backgrounds + accents. The
+ * active theme is driven by `settings.dark_mode` in +layout.svelte. */
+
+/* Bundled Japanese faces (assets/fonts/Noto{Sans,Serif}JP-Regular.ttf, copied
+ * to static/fonts so adapter-static serves them at /fonts/*). The `body` /
+ * `body.font-serif` rules below switch between these two families. */
+@font-face {
+	font-family: 'Noto Sans JP';
+	src: url('/fonts/NotoSansJP-Regular.ttf') format('truetype');
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'Noto Serif JP';
+	src: url('/fonts/NotoSerifJP-Regular.ttf') format('truetype');
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+}
+
+:root {
+	/* layered surfaces (darkest → lightest) */
+	--bg-darker: #191a21;
+	--bg-dark: #212335;
+	--bg: #282a36;
+	--bg-light: #343642;
+	--bg-lighter: #424550;
+
+	--fg: #f8f8f2;
+	--selection: #44475a;
+	--comment: #6272a4;
+
+	/* accents */
+	--red: #ff5555;
+	--orange: #ffb86c;
+	--yellow: #f1fa8c;
+	--green: #50fa7b;
+	--blue: #62a0ea;
+	--purple: #bd93f9;
+	--cyan: #8be9fd;
+	--pink: #ff79c6;
+
+	/* POS label colors (egui Theme::pos_color groups) */
+	--pos-verb: var(--blue);
+	--pos-noun: var(--green);
+	--pos-adjective: var(--orange);
+	--pos-adverb: var(--purple);
+	--pos-particle: var(--comment);
+	--pos-other: var(--fg);
+
+	--border: var(--bg-lighter);
+	--radius: 6px;
+
+	color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+	--bg-darker: #ebebe6;
+	--bg-dark: #f5f5f0;
+	--bg: #f8f8f2;
+	--bg-light: #fffffa;
+	--bg-lighter: #ffffff;
+
+	--fg: #282a36;
+	--selection: #c8c8dc;
+	--comment: #788aa0;
+
+	--red: #c85050;
+	--orange: #dc965a;
+	--yellow: #dce678;
+	--green: #50c878;
+	--blue: #4682b4;
+	--purple: #9678dc;
+	--cyan: #50bee6;
+	--pink: #e682c8;
+
+	--border: #d6d6cc;
+
+	color-scheme: light;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	margin: 0;
+	height: 100%;
+	/* The shell owns all scrolling; never let the window itself scroll (under
+	 * root zoom, any accidental overflow would scroll the whole app away). */
+	overflow: hidden;
+}
+
+body {
+	background: var(--bg);
+	color: var(--fg);
+	font-family: 'Noto Sans JP', system-ui, sans-serif;
+	font-size: 14px;
+	line-height: 1.5;
+	-webkit-font-smoothing: antialiased;
+}
+
+/* Serif toggle (the faces are bundled above; this class is the switch). */
+body.font-serif {
+	font-family: 'Noto Serif JP', Georgia, serif;
+}
+
+button {
+	font: inherit;
+	color: var(--fg);
+	background: var(--bg-light);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	padding: 0.4rem 0.8rem;
+	cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+	background: var(--bg-lighter);
+}
+
+button:disabled {
+	opacity: 0.55;
+	cursor: default;
+}
+
+/* Text-like inputs share the themed surface everywhere (checkbox/radio/range
+ * keep their native rendering). Component styles may tighten padding/width. */
+input:not([type='checkbox']):not([type='radio']):not([type='range']),
+select,
+textarea {
+	font: inherit;
+	color: var(--fg);
+	background: var(--bg-light);
+	border: 1px solid var(--border);
+	border-radius: 3px;
+	padding: 0.3rem 0.5rem;
+}
+
+/* Keyboard-focus affordance (mouse clicks don't trigger :focus-visible). */
+:focus-visible {
+	outline: 2px solid var(--cyan);
+	outline-offset: 1px;
+}
+
+a {
+	color: var(--blue);
+}
+
+::selection {
+	background: var(--selection);
+}
+
+::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+::-webkit-scrollbar-thumb {
+	background: var(--bg-lighter);
+	border-radius: 5px;
+}
+::-webkit-scrollbar-track {
+	background: var(--bg-dark);
+}
+
+/* App shell: fixed top bar over the main region. 100% (not 100vh): vh ignores
+ * the root `zoom` the Appearance scale applies, which would overflow the window. */
+.app-shell {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	overflow: hidden;
+}
+
+/* The main region never scrolls itself — each view scopes its own scroll
+ * region (the term rows, the recents list) so headers/controls stay put. */
+.app-main {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: hidden;
+	padding: 1.25rem 1.5rem;
+}

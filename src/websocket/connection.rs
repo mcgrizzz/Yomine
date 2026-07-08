@@ -67,19 +67,20 @@ pub async fn handle_connection(
                     match serde_json::from_str::<CommandResponse>(&message) {
                         Ok(response) if response.command == "response" => {
                             println!(
-                                "[WS] Received confirmation from ASBPlayer for message ID: {}",
+                                "[WS] Received response from ASBPlayer for message ID: {}",
                                 response.message_id
                             );
 
                             if let Some(sender) = command_sender.lock().unwrap().as_ref() {
-                                let confirmation_command = ServerCommand::ProcessConfirmation {
+                                let response_command = ServerCommand::ProcessResponse {
                                     message_id: response.message_id.clone(),
+                                    body: response.body,
                                 };
-                                if let Err(e) = sender.send(confirmation_command) {
-                                    eprintln!("[WS] Failed to send confirmation command: {}", e);
+                                if let Err(e) = sender.send(response_command) {
+                                    eprintln!("[WS] Failed to route response: {}", e);
                                 }
                             } else {
-                                eprintln!("[WS] Command sender not available for confirmation");
+                                eprintln!("[WS] Command sender not available for response");
                             }
                         }
                         Err(e) => {

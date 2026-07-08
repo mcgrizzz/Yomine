@@ -12,7 +12,7 @@ use crate::{
     },
 };
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct BandStats {
     /// Fraction (0..1) of the band's words present in Anki, regardless of study state.
     pub coverage: f32,
@@ -35,7 +35,7 @@ impl BandStats {
 }
 
 /// Which estimate the knowledge widget shows: raw Anki presence vs the graded comprehension.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum KnowledgeMode {
     #[default]
     Coverage,
@@ -58,7 +58,7 @@ impl KnowledgeMode {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct KnowledgeSummary {
     pub jlpt: Vec<(JlptLevel, BandStats)>,
     pub frequency: Vec<(String, BandStats)>,

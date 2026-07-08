@@ -1,0 +1,34 @@
+# Numeric compounds: UniDic splits multi-digit numbers one digit at a time; the
+# engine must merge the run and synthesize a place-value reading
+# (segmentation::numbers). Pins the original "8月22日 → がつにち" bug: digit
+# readings must survive into the word AND the display segment must carry the
+# full-segment reading, not the main word's.
+
+[[case]]
+name = "date compound keeps digit readings (the 8月22日 bug)"
+text = "8月22日に行きます。"
+segments = [
+	{ surface = "8月", reading = "はちがつ", pos = "Counter" },
+	{ surface = "22日", reading = "にじゅうににち", pos = "Counter" },
+	{ surface = "に", pos = "Postposition" },
+	{ surface = "行きます", reading = "いきます", pos = "Verb" },
+	{ surface = "。", pos = "Symbol" },
+]
+
+# Note: vibrato emits "3000" as ONE token (unlike 2+2 above), and the current
+# rules leave 3000/円 as separate words — this case pins the synthesized reading
+# of a single multi-digit token, not a counter merge.
+[[case]]
+name = "thousands with euphonic reading"
+text = "3000円です。"
+segments = [
+	{ surface = "3000", reading = "さんぜん", pos = "Number" },
+	{ surface = "円", reading = "えん", pos = "Noun" },
+	{ surface = "です", pos = "Copula" },
+	{ surface = "。", pos = "Symbol" },
+]
+
+[[case]]
+name = "myriad grouping"
+text = "12500人がいた。"
+terms = [{ surface = "12500人", surface_reading = "いちまんにせんごひゃくにん" }]

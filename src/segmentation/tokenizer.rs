@@ -133,7 +133,11 @@ pub fn extract_words(
                 .map(|(idx, _)| idx)
                 .unwrap_or(0);
             let end_index = start_index + term.full_segment.len();
-            (term.surface_reading.clone(), term.part_of_speech.clone(), start_index, end_index)
+            // The span covers the FULL segment, so the reading must too:
+            // `surface_reading` is the main word's alone (勉強します → べんきょう,
+            // 8月 → がつ), which smeared a partial reading across the whole span
+            // in furigana displays (the 8月22日 bug's second half).
+            (term.full_segment_reading.clone(), term.part_of_speech.clone(), start_index, end_index)
         }));
 
         //Add phrases without filtering the terms for now
@@ -142,10 +146,27 @@ pub fn extract_words(
                 let subrange = &sentence_terms[start..=end];
                 let mut phrase: Term = Term::from_slice(subrange);
 
-                let freq = frequency_manager.get_harmonic_frequency_for_pair(
-                    &phrase.surface_form.normalize_long_vowel(),
-                    &phrase.surface_reading.normalize_long_vowel(),
-                );
+                // Try the plain component-concat reading first, then rendaku
+                // variants (a non-initial component's first kana voiced:
+                // 土曜+日 → どようひ, どようび). Dictionaries store the true
+                // compound reading, and the pair lookup deliberately rejects a
+                // form whose entries all carry a *different* reading — so
+                // without the variants, no rendaku compound could ever be
+                // promoted. A variant hit also corrects the phrase's own
+                // reading for display/furigana.
+                let mut freq = None;
+                for candidate in phrase_reading_candidates(subrange) {
+                    if let Some(f) = frequency_manager.get_harmonic_frequency_for_pair(
+                        &phrase.surface_form.normalize_long_vowel(),
+                        &candidate.normalize_long_vowel(),
+                    ) {
+                        phrase.surface_reading = candidate.clone();
+                        phrase.lemma_reading = candidate.clone();
+                        phrase.full_segment_reading = candidate;
+                        freq = Some(f);
+                        break;
+                    }
+                }
 
                 if let Some(frequency) = freq {
                     let word_frequencies: Vec<(String, f32)> = subrange
@@ -451,6 +472,59 @@ pub fn batch_deinflect_terms(
         .collect();
 
     deinflection_map
+}
+
+/// Dakuten/handakuten variants of a leading kana — the sequential-voicing
+/// (rendaku) alternations a non-initial compound component can take.
+fn rendaku_variants(c: char) -> &'static [char] {
+    match c {
+        'か' => &['が'],
+        'き' => &['ぎ'],
+        'く' => &['ぐ'],
+        'け' => &['げ'],
+        'こ' => &['ご'],
+        'さ' => &['ざ'],
+        'し' => &['じ'],
+        'す' => &['ず'],
+        'せ' => &['ぜ'],
+        'そ' => &['ぞ'],
+        'た' => &['だ'],
+        'ち' => &['ぢ'],
+        'つ' => &['づ'],
+        'て' => &['で'],
+        'と' => &['ど'],
+        'は' => &['ば', 'ぱ'],
+        'ひ' => &['び', 'ぴ'],
+        'ふ' => &['ぶ', 'ぷ'],
+        'へ' => &['べ', 'ぺ'],
+        'ほ' => &['ぼ', 'ぽ'],
+        _ => &[],
+    }
+}
+
+/// Candidate readings for a compound: the plain component concat first, then —
+/// one boundary at a time — the same reading with an interior component's first
+/// kana voiced (土曜+日 → [どようひ, どようび, どようぴ]).
+fn phrase_reading_candidates(subrange: &[Term]) -> Vec<String> {
+    let base: String = subrange.iter().map(|t| t.full_segment_reading.as_str()).collect();
+    let base_chars: Vec<char> = base.chars().collect();
+    let mut candidates = vec![base];
+
+    let mut offset = subrange[0].full_segment_reading.chars().count();
+    for term in &subrange[1..] {
+        let len = term.full_segment_reading.chars().count();
+        if len > 0 {
+            if let Some(&first) = base_chars.get(offset) {
+                for &variant in rendaku_variants(first) {
+                    let mut chars = base_chars.clone();
+                    chars[offset] = variant;
+                    candidates.push(chars.into_iter().collect());
+                }
+            }
+        }
+        offset += len;
+    }
+    candidates
 }
 
 pub fn init_vibrato(

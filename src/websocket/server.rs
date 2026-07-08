@@ -1,10 +1,13 @@
 use std::{
+    collections::HashMap,
     net::SocketAddr,
     sync::{
+        mpsc::SyncSender,
         Arc,
         Mutex,
     },
     thread::JoinHandle,
+    time::Duration,
 };
 
 use tokio::{
@@ -17,7 +20,10 @@ use uuid::Uuid;
 use super::{
     connection::handle_connection,
     types::{
+        BoundMedia,
         ConnectedClient,
+        RemoteSubtitle,
+        RequestCommand,
         SeekBody,
         SeekCommand,
         SeekStatus,
@@ -37,6 +43,9 @@ pub struct WebSocketServer {
     server_port: Arc<Mutex<u16>>,
     server_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
     command_sender: Arc<Mutex<Option<UnboundedSender<ServerCommand>>>>,
+    /// In-flight request/response commands (get-bound-media, get-subtitles),
+    /// keyed by messageId; the caller blocks on the channel with a timeout.
+    pending_requests: Arc<Mutex<HashMap<String, SyncSender<Option<serde_json::Value>>>>>,
 }
 
 impl WebSocketServer {
@@ -67,6 +76,7 @@ impl WebSocketServer {
             server_port: Arc::new(Mutex::new(port)),
             server_handle: Arc::new(Mutex::new(None)),
             command_sender: Arc::new(Mutex::new(Some(command_sender))),
+            pending_requests: Arc::new(Mutex::new(HashMap::new())),
         };
 
         let server_arc = Arc::new(server);
@@ -160,9 +170,13 @@ impl WebSocketServer {
                                 });
                             }
                         }
-                        ServerCommand::ProcessConfirmation { message_id } => {
-                            println!("[WS] Processing confirmation for message ID: {}", message_id);
-                            if let Some(timestamp) = self.confirm_seek_status(&message_id) {
+                        ServerCommand::ProcessResponse { message_id, body } => {
+                            // A pending request wins the message id; anything else
+                            // is a seek confirmation (the original protocol).
+                            let pending = self.pending_requests.lock().unwrap().remove(&message_id);
+                            if let Some(reply) = pending {
+                                let _ = reply.try_send(body);
+                            } else if let Some(timestamp) = self.confirm_seek_status(&message_id) {
                                 println!("[WS] Processed confirmation for timestamp: {}", timestamp);
                             }
                         }
@@ -262,6 +276,98 @@ impl WebSocketServer {
         }
 
         Ok(())
+    }
+
+    /// Send a request-style command (asbplayer external API) and block for its
+    /// response body. Safe to call from any thread EXCEPT the server's own
+    /// runtime thread (callers are UI/command threads or `spawn_blocking`).
+    pub fn request_blocking(
+        &self,
+        command: &str,
+        body: serde_json::Value,
+        timeout: Duration,
+    ) -> Result<serde_json::Value, YomineError> {
+        let client_senders = {
+            self.cleanup_clients();
+            let clients = self.connected_clients.lock().unwrap();
+            if clients.is_empty() {
+                return Err(YomineError::Custom("asbplayer is not connected".to_string()));
+            }
+            clients.iter().map(|client| client.tx.clone()).collect::<Vec<_>>()
+        };
+
+        let message_id = Uuid::new_v4().to_string();
+        let (tx, rx) = std::sync::mpsc::sync_channel::<Option<serde_json::Value>>(1);
+        self.pending_requests.lock().unwrap().insert(message_id.clone(), tx);
+
+        let request =
+            RequestCommand { command: command.to_string(), message_id: message_id.clone(), body };
+        let json = serde_json::to_string(&request)?;
+
+        let sent = self
+            .command_sender
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|sender| {
+                sender.send(ServerCommand::SendToClients { json, clients: client_senders }).is_ok()
+            })
+            .unwrap_or(false);
+        if !sent {
+            self.pending_requests.lock().unwrap().remove(&message_id);
+            return Err(YomineError::Custom("WebSocket server is not running".to_string()));
+        }
+
+        match rx.recv_timeout(timeout) {
+            Ok(Some(body)) => Ok(body),
+            Ok(None) => Err(YomineError::Custom(format!(
+                "asbplayer returned an empty response to '{command}'"
+            ))),
+            Err(_) => {
+                self.pending_requests.lock().unwrap().remove(&message_id);
+                Err(YomineError::Custom(format!(
+                    "asbplayer did not respond to '{command}' — this needs the asbplayer \
+                     extension v1.20+"
+                )))
+            }
+        }
+    }
+
+    /// The media asbplayer is currently tracking (`get-bound-media`).
+    pub fn get_bound_media(&self) -> Result<Vec<BoundMedia>, YomineError> {
+        let body = self.request_blocking(
+            "get-bound-media",
+            serde_json::json!({}),
+            Duration::from_secs(5),
+        )?;
+        serde_json::from_value(body.get("media").cloned().unwrap_or_else(|| serde_json::json!([])))
+            .map_err(|e| YomineError::Custom(format!("Unexpected get-bound-media response: {e}")))
+    }
+
+    /// The subtitles loaded for a media (`get-subtitles`). `media_id` targets a
+    /// specific `get-bound-media` entry (active tab when `None`); `track_numbers`
+    /// limits tracks (all loaded tracks when `None`).
+    pub fn get_subtitles(
+        &self,
+        media_id: Option<&str>,
+        track_numbers: Option<&[u32]>,
+    ) -> Result<Vec<RemoteSubtitle>, YomineError> {
+        let mut body = serde_json::Map::new();
+        if let Some(id) = media_id {
+            body.insert("mediaId".to_string(), id.into());
+        }
+        if let Some(tracks) = track_numbers {
+            body.insert("trackNumbers".to_string(), serde_json::json!(tracks));
+        }
+        let response = self.request_blocking(
+            "get-subtitles",
+            serde_json::Value::Object(body),
+            Duration::from_secs(15),
+        )?;
+        serde_json::from_value(
+            response.get("subtitles").cloned().unwrap_or_else(|| serde_json::json!([])),
+        )
+        .map_err(|e| YomineError::Custom(format!("Unexpected get-subtitles response: {e}")))
     }
 
     pub fn seek_timestamp(&self, timestamp: f32, timestamp_str: &str) -> Result<(), YomineError> {

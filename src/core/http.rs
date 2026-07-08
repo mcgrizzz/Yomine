@@ -120,6 +120,18 @@ pub fn download_with_progress(
     }
 }
 
+/// GET a small text resource (a manifest or a dictionary's update index).
+pub fn fetch_text(url: &str) -> Result<String, YomineError> {
+    let client = http_client()?;
+    let resp = client
+        .get(url)
+        .header(USER_AGENT, "yomine/1.0 (+reqwest)")
+        .send()
+        .map_err(|e| YomineError::Custom(format!("Failed HTTP GET {}: {}", url, e)))?;
+    ensure_success(&resp)?;
+    resp.text().map_err(|e| YomineError::Custom(format!("Failed to read body of {}: {}", url, e)))
+}
+
 pub fn try_download_from_urls(
     urls: &[&str],
     download_path: &Path,

@@ -1,10 +1,13 @@
-use serde::Deserialize;
+use serde::{
+    Deserialize,
+    Serialize,
+};
 
 use crate::segmentation::word::POS;
 
 const JLPT_JSON: &str = include_str!("../../assets/jlpt_vocab.json");
 
-#[derive(Deserialize, Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum JlptLevel {
     N5,
     N4,

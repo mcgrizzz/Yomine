@@ -62,6 +62,17 @@ impl FrequencyManager {
         states.entry(name).or_insert(DictionaryState { weight: 1.0, enabled: true });
     }
 
+    /// Build a manager directly from in-memory dictionaries — for test fixtures
+    /// and debug tooling (the app path is `process_frequency_dictionaries`).
+    /// States seed to the same defaults `add_dictionary` uses.
+    pub fn from_dictionaries(dictionaries: Vec<FrequencyDictionary>) -> Self {
+        let mut manager = FrequencyManager::new(None);
+        for dict in dictionaries {
+            manager.add_dictionary(dict.title.clone(), dict);
+        }
+        manager
+    }
+
     pub fn get_enabled_dictionaries(&self) -> Vec<&FrequencyDictionary> {
         let states = self.states.read().expect("frequency states poisoned");
         self.dictionaries
@@ -154,6 +165,12 @@ impl FrequencyManager {
 
     pub fn get_dictionary_names(&self) -> Vec<String> {
         self.dictionaries.keys().cloned().collect()
+    }
+
+    /// (title → `index.json` revision) of every loaded dictionary — for UIs that
+    /// need install/update state (the Tauri dictionary manager, issue #100).
+    pub fn dictionary_revisions(&self) -> HashMap<String, String> {
+        self.dictionaries.iter().map(|(name, d)| (name.clone(), d.revision.clone())).collect()
     }
 
     /// Retrieves all frequency data entries for the exact term from enabled dictionaries,

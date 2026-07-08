@@ -1,0 +1,29 @@
+# Phrase/compound promotion: adjacent words are promoted to one expression term
+# when the compound exists in the frequency data and its score beats the
+# components (extract_words' phrase loop). Entirely frequency-driven — the
+# synthetic dictionary controls it. Compound readings in dictionaries carry
+# rendaku (かいしゃ → がいしゃ), which the naive component concat lacks; the
+# lookup tries voiced variants at component boundaries and adopts the reading
+# that matched.
+
+frequencies = [
+	{ term = "株式会社", reading = "かぶしきがいしゃ", rank = 1000 },
+	{ term = "株式", reading = "かぶしき", rank = 2000 },
+	{ term = "会社", reading = "かいしゃ", rank = 300 },
+	{ term = "土曜日", reading = "どようび", rank = 1000 },
+	{ term = "土曜", reading = "どよう", rank = 4000 },
+	{ term = "日", reading = "ひ", rank = 500 },
+]
+
+[[case]]
+name = "rendaku compound promoted with the corrected reading"
+text = "株式会社で働いています。"
+terms = [{ surface = "株式会社", reading = "かぶしきがいしゃ", pos = "NounExpression" }]
+
+# Pins the current promotion threshold: compounds under 4 characters are never
+# promoted (`min_len` in extract_words), even with a dictionary entry — so
+# 土曜日 stays split. If min_len is ever tuned, this case flags it.
+[[case]]
+name = "3-char compounds stay unpromoted (min_len = 4)"
+text = "土曜日に会いましょう。"
+absent = ["土曜日"]

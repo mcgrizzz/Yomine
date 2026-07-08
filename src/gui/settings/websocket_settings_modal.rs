@@ -4,7 +4,7 @@ use super::data::{
     SettingsData,
     WebSocketSettings,
 };
-use crate::gui::websocket_manager::WebSocketManager;
+use crate::websocket::WebSocketManager;
 
 #[derive(Clone)]
 pub struct WebSocketSettingsData {

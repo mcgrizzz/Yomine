@@ -1,6 +1,7 @@
 pub mod anki;
 pub mod core;
 pub mod dictionary;
+#[cfg(feature = "gui")]
 pub mod gui;
 pub mod jlpt;
 pub mod mpv;
@@ -10,3 +11,7 @@ pub mod player;
 pub mod segmentation;
 pub mod tools;
 pub mod websocket;
+
+// Re-exported so integration tests / external tools can name tokenizer types
+// (`init_vibrato` returns `vibrato::Tokenizer`) without duplicating the git dep.
+pub use vibrato;

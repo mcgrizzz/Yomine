@@ -58,7 +58,7 @@ pub enum AnalysisState {
     Error(String),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ExportOptions {
     pub dict_name: String,
     pub dict_author: String,

@@ -1,7 +1,7 @@
 use crate::{
     core::errors::YomineError,
-    gui::websocket_manager::WebSocketManager,
     mpv::MpvManager,
+    websocket::WebSocketManager,
 };
 
 pub struct PlayerManager {

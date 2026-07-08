@@ -34,6 +34,15 @@ static STRIP_INLINE_TAGS: LazyLock<Regex> = LazyLock::new(|| {
         .expect("Failed to compile inline_strip_tags regex")
 });
 
+/// Shared subtitle-text cleanup: collapse whitespace, strip kana-reading
+/// parentheses and inline styling tags. Used by the subtitle parsers and the
+/// asbplayer subtitle importer (issue #105).
+pub fn clean_subtitle_text(raw: &str) -> String {
+    let text = raw.split_whitespace().collect::<Vec<_>>().join(" ");
+    let text = KANA_READING_REGEX.replace_all(&text, "");
+    STRIP_INLINE_TAGS.replace_all(&text, "").trim().to_string()
+}
+
 fn parse_srt(srt: SRT, source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
     let sentences: Vec<Sentence> = srt
         .lines
@@ -41,11 +50,7 @@ fn parse_srt(srt: SRT, source_file: &SourceFile) -> Result<Vec<Sentence>, Yomine
         .filter(|s| !s.text.is_empty())
         .enumerate()
         .filter_map(|(id, entry)| {
-            let raw_text = entry.text.split_whitespace().collect::<Vec<_>>().join(" ");
-
-            let text = raw_text;
-            let text = KANA_READING_REGEX.replace_all(&text, "");
-            let text = STRIP_INLINE_TAGS.replace_all(&text, "").to_string();
+            let text = clean_subtitle_text(&entry.text);
 
             if text.is_empty() {
                 return None;

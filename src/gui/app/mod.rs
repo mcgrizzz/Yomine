@@ -4,10 +4,7 @@ mod modals;
 use std::{
     collections::HashMap,
     mem,
-    sync::{
-        Arc,
-        Mutex,
-    },
+    sync::Arc,
 };
 
 use eframe::egui::{
@@ -16,7 +13,6 @@ use eframe::egui::{
 };
 use file_data::FileData;
 use modals::Modals;
-use vibrato::Tokenizer;
 
 use super::{
     file_modal::FileModal,
@@ -36,7 +32,6 @@ use super::{
         Theme,
     },
     top_bar::TopBar,
-    websocket_manager::WebSocketManager,
 };
 use crate::{
     anki::FieldMapping,
@@ -47,7 +42,7 @@ use crate::{
             TaskManager,
             TaskResult,
         },
-        IgnoreList,
+        LanguageTools,
         Sentence,
         SourceFile,
         Term,
@@ -65,25 +60,8 @@ use crate::{
         KnowledgeMode,
         KnowledgeSummary,
     },
+    websocket::WebSocketManager,
 };
-
-#[derive(Clone)]
-pub struct LanguageTools {
-    pub tokenizer: Arc<Tokenizer>,
-    pub frequency_manager: Arc<FrequencyManager>,
-    pub ignore_list: Arc<Mutex<IgnoreList>>,
-    pub known_interval: u32,
-}
-
-impl std::fmt::Debug for LanguageTools {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("LanguageTools")
-            .field("tokenizer", &"Arc<Tokenizer>")
-            .field("frequency_manager", &"Arc<FrequencyManager>")
-            .field("ignore_list", &"Arc<Mutex<IgnoreList>>")
-            .finish()
-    }
-}
 
 pub struct YomineApp {
     // File Data

@@ -1,7 +1,10 @@
 use core::fmt;
 use std::collections::HashMap;
 
-use serde::Deserialize;
+use serde::{
+    Deserialize,
+    Serialize,
+};
 use wana_kana::IsJapaneseStr;
 
 use super::{
@@ -10,7 +13,7 @@ use super::{
 };
 use crate::core::Term;
 
-#[derive(PartialEq, Clone, Copy, Debug, Hash, Eq, Deserialize)]
+#[derive(PartialEq, Clone, Copy, Debug, Hash, Eq, Serialize, Deserialize)]
 pub enum POS {
     Noun,
     ProperNoun,
@@ -133,6 +136,38 @@ impl POS {
             "Unknown" => Some(POS::Unknown),
             _ => None,
         }
+    }
+
+    /// Every variant, in display order. Canonical source for POS catalogs/filters.
+    pub fn all() -> &'static [POS] {
+        use POS::*;
+        &[
+            Noun,
+            ProperNoun,
+            CompoundNoun,
+            NounExpression,
+            Pronoun,
+            Adjective,
+            AdjectivalNoun,
+            Adverb,
+            Determiner,
+            Preposition,
+            Postposition,
+            Verb,
+            SuruVerb,
+            Copula,
+            Suffix,
+            Prefix,
+            Conjunction,
+            Interjection,
+            Onomatopoeia,
+            Number,
+            Counter,
+            Symbol,
+            Expression,
+            Other,
+            Unknown,
+        ]
     }
 }
 

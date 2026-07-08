@@ -30,6 +30,7 @@ use zip::{
 use crate::{
     core::{
         utils::NormalizeLongVowel,
+        LanguageTools,
         SourceFile,
         Term,
         YomineError,
@@ -39,7 +40,6 @@ use crate::{
         JsonFrequency,
         JsonFrequencyData,
     },
-    gui::LanguageTools,
     parser,
     segmentation::tokenizer::{
         batch_deinflect_terms,
