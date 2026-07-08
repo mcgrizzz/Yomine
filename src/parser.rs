@@ -28,9 +28,10 @@ static KANA_READING_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 
 static STRIP_INLINE_TAGS: LazyLock<Regex> = LazyLock::new(|| {
     // Matches:
-    // - HTML-style tags: <b>, <i>, <u>, <font ...>, etc.
+    // - any HTML/WebVTT-style tag (<b>, <font ...>, <c.jp>, <span ...>, <ruby>, …)
+    //   — a whitelist kept leaking whatever tag it didn't know about
     // - ASS/SSA style overrides: {\...}
-    Regex::new(r"(?i)</?(?:b|i|u|font)[^>]*>|\{\\[^}]*\}")
+    Regex::new(r"(?i)</?[a-z][^<>]*>|\{\\[^}]*\}")
         .expect("Failed to compile inline_strip_tags regex")
 });
 
@@ -126,8 +127,10 @@ pub fn read_txt(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> 
                 continue;
             }
 
-            // Remove kana readings in parentheses (e.g., 漢字（かんじ）)
+            // Remove kana readings in parentheses (e.g., 漢字（かんじ）) and any
+            // styling tags (text copied out of subtitles often keeps them).
             let text = KANA_READING_REGEX.replace_all(part, "");
+            let text = STRIP_INLINE_TAGS.replace_all(&text, "");
             let text = text.trim().to_string();
 
             if !text.is_empty() {
@@ -157,5 +160,31 @@ pub fn read(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
         SourceFileType::SSA => read_ssa(source_file),
         SourceFileType::TXT => read_txt(source_file),
         SourceFileType::Other(ref format) => Err(YomineError::UnsupportedFileType(format.clone())),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::clean_subtitle_text;
+
+    #[test]
+    fn strips_basic_styling_tags() {
+        assert_eq!(clean_subtitle_text("自分の強さを<b>誇りなさい</b>"), "自分の強さを誇りなさい");
+        assert_eq!(clean_subtitle_text("<b>全力</b>で走れ。"), "全力で走れ。");
+        assert_eq!(clean_subtitle_text("<i>心の声</i>"), "心の声");
+        assert_eq!(clean_subtitle_text(r##"<font color="#fff">台詞</font>"##), "台詞");
+    }
+
+    #[test]
+    fn strips_arbitrary_tags_not_just_the_old_whitelist() {
+        assert_eq!(clean_subtitle_text("<c.japanese>字幕</c>"), "字幕");
+        assert_eq!(clean_subtitle_text("<span style=\"x\">言葉</span>"), "言葉");
+        assert_eq!(clean_subtitle_text("<em>強調</em>と<strong>太字</strong>"), "強調と太字");
+    }
+
+    #[test]
+    fn strips_ass_overrides_and_keeps_plain_text() {
+        assert_eq!(clean_subtitle_text(r"{\i1}斜体{\i0}のまま"), "斜体のまま");
+        assert_eq!(clean_subtitle_text("タグなしの文。"), "タグなしの文。");
     }
 }
