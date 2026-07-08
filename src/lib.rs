@@ -1,8 +1,6 @@
 pub mod anki;
 pub mod core;
 pub mod dictionary;
-#[cfg(feature = "gui")]
-pub mod gui;
 pub mod jlpt;
 pub mod mpv;
 pub mod parser;

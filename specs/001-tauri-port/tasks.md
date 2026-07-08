@@ -1350,6 +1350,25 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
   **Remaining T071 (maintainer):** merge the PR, then a `workflow_dispatch` release build with
   `build_only: true` for installer smoke tests (T052) — Windows .msi/.exe is the one that matters
   most; Linux .deb/.AppImage and macOS .dmg come out of the same run.
+  **SHIPPED (2026-07-07): v0.6.0 tagged and released** — the Tauri port is the shipping app.
+  T052 smoke tests all passed (data continuity via the shared %LOCALAPPDATA%\yomine dir needed
+  no migration by design); release notes drafted from the tasks log. **T071 DONE.**
+- **T072 DONE (2026-07-07) — egui retired (T055 decision executed).** The egui code is preserved
+  on the **`egui` branch** (cut from main at the v0.6.0 bump commit — push it BEFORE merging this
+  change). On main: deleted `src/gui/`, `src/main.rs`, and `src/core/tasks/` (the egui task
+  system, only ever consumed by gui code); removed the `gui` feature, the `[[bin]]` target, and
+  the six egui-only deps (eframe, egui_extras, egui_flex, egui_double_slider, egui_ltreeview,
+  rfd) plus `open` from Cargo.toml — the engine is now a plain lib crate with no features;
+  frequency_utils lost its three rfd/TaskManager-gated fns; src-tauri drops the now-meaningless
+  `default-features = false`. Workflows: test.yml's engine job needs only libssl (gtk/xcb were
+  egui's), the "check without egui" step is gone (that IS the build now); release.yml loses the
+  `build-and-upload` + `build-macos-universal` egui-binary jobs, and `create-checksums` now
+  `needs: [build-tauri]` and checksums the actual installers (`sha256sum *` with updated
+  descriptions — closes the gap flagged at T071 pre-flight). README: Tauri build instructions
+  (pnpm + cargo tauri dev), egui → Tauri/Svelte in credits. Checks: fmt clean, all engine tests
+  green, tauri check clean under CI RUSTFLAGS, release.yml YAML validated, zero
+  `feature = "gui"` references left. **Verify:** push `egui` branch first; PR CI green; next
+  tagged release produces installers + correct SHA256SUMS only.
 - **NEXT options:**
   - **`load_frequency_dictionaries` import command (freq-dict import)** — the File-menu "Load New
     Frequency Dictionaries" entry and the checklist's two "+ Install Dictionary" actions (T045)
@@ -1668,7 +1687,10 @@ stories render inside it.
 - [x] T051 Declare bundled resources in `tauri.conf.json` (fonts handled in-frontend; icon;
       `assets/jlpt_vocab.json` per O1 outcome); confirm runtime downloads (unidic, freq dicts,
       Anki cache) still resolve to `dirs::data_local_dir()/yomine`.
-- [ ] T052 `cargo tauri build` produces installers on Win/macOS/Linux; smoke-test each artifact.
+- [x] T052 `cargo tauri build` produces installers on Win/macOS/Linux; smoke-test each artifact.
+      *(2026-07-07: Manual Release build_only run green on all 6 jobs; Windows installer
+      smoke-tested — install, first launch, shared %LOCALAPPDATA%\yomine data continuity,
+      core mining loop, WebSocket bind, Appearance persistence, clean uninstall.)*
 - [x] T053 CI: replace/augment `.github/workflows/release*.yml` + `manual-release.yml` with the
       Tauri bundler; update `test.yml` to build the workspace (egui on/off matrix) + run
       `svelte-check`. *(First green run 2026-07-07 on PR #107 after the apt-deps fix,
@@ -1757,13 +1779,21 @@ sub-states, above) belongs to the same gate.
 - [x] T070 **Code structure + comments pass (tauri code).** Stores split by concern (index.ts →
       11 focused modules, re-exported); task-ID/date/attribution comments stripped, provenance
       egui refs dropped, behavioral ones kept.
-- [ ] T071 **Ship the port.** Push → first green CI run (ticks T053), release build + installer
+- [x] T071 **Ship the port.** Push → first green CI run (ticks T053), release build + installer
       smoke tests (T052), tag/release.
-- [ ] T072 **Retire the egui build.** After the shipped port is validated: remove the egui build
+- [x] T072 **Retire the egui build.** After the shipped port is validated: remove the egui build
       system/feature, move egui code to an `egui` branch, `main` becomes the Tauri port (T055
       decision executed).
 - [ ] T073 **Resume the GitHub issue backlog** (#91 mouse-less mining, #3, #71, #68/#92,
       quick wins #94/#106/#82/#14, engine quality #6/#81/#102, #105 phase 2 one-click mining).
+- [ ] T074 **Update checker.** Launch-time GitHub releases API check (same pattern as the
+      recommended-dictionaries manifest check); non-blocking "new version available" notice
+      linking to the release. Full `tauri-plugin-updater` auto-update is a separate follow-up
+      (needs an updater keypair + latest.json generation in the release workflow).
+- [ ] T075 **Code signing (Windows "unknown publisher").** Evaluate SignPath.io Foundation
+      (free for qualifying OSS) first, Azure Trusted Signing (~$10/mo) as fallback; wire into
+      `tauri.conf.json` `signCommand` + the release workflow. macOS Developer ID/notarization
+      ($99/yr) is its own decision.
 
 ---
 

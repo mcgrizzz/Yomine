@@ -1,8 +1,5 @@
 use std::fs;
 
-// The egui task system; the Tauri app uses its own command layer instead.
-#[cfg(feature = "gui")]
-use crate::core::tasks::TaskManager;
 use crate::{
     core::errors::YomineError,
     dictionary::frequency_manager::get_frequency_dict_dir,
@@ -43,50 +40,4 @@ pub fn copy_frequency_dictionaries(
     }
 
     Ok(copied_count)
-}
-
-#[cfg(feature = "gui")]
-pub fn select_frequency_dictionary_zips() -> Option<Vec<std::path::PathBuf>> {
-    rfd::FileDialog::new()
-        .add_filter("Yomitan Frequency Dictionaries", &["zip"])
-        .add_filter("All Files", &["*"])
-        .pick_files()
-}
-
-#[cfg(feature = "gui")]
-pub fn handle_frequency_dictionary_copy() -> Result<usize, YomineError> {
-    if let Some(zip_paths) = select_frequency_dictionary_zips() {
-        if zip_paths.is_empty() {
-            return Ok(0);
-        }
-
-        let copied_count = copy_frequency_dictionaries(zip_paths)?;
-
-        if copied_count > 0 {
-            println!("Successfully added {} frequency dictionaries. Restart the application to load them.", copied_count);
-        } else {
-            println!("No new frequency dictionaries were added.");
-        }
-
-        Ok(copied_count)
-    } else {
-        Ok(0)
-    }
-}
-
-#[cfg(feature = "gui")]
-pub fn load_frequency_dictionaries(task_manager: &TaskManager) {
-    match handle_frequency_dictionary_copy() {
-        Ok(count) => {
-            if count > 0 {
-                println!("Successfully added {} frequency dictionaries. Reloading...", count);
-                task_manager.reload_frequency_dictionaries();
-            } else {
-                println!("No new frequency dictionaries were selected.");
-            }
-        }
-        Err(e) => {
-            eprintln!("Failed to load frequency dictionaries: {}", e);
-        }
-    }
 }
