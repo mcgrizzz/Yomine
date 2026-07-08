@@ -30,6 +30,17 @@ events (see [events.md](./events.md)). Engine handles come from `tauri::State<Ap
 `FileLoadResult = { source_file: SourceFile, terms: array<Term>, sentences: array<SentenceDto>,
 file_comprehension: f32 }`.
 
+`SegmentDto.knowledge: "unknown" | "new" | "young" | "mature" | null` (issue #94): the covering
+term's Anki state for underline coloring — in-Anki membership from `anki_known_lemmas`, sub-state
+from the interval-derived comprehension (0 = new, <1 = young, ≥1 = mature; ignored terms map to
+mature). Worst state wins over overlapping terms (computed in `load_result` from `base_terms`, so
+known/ignored words are covered too); `null` when no extracted term covers the segment. Paired
+with `SettingsData.sentence_coloring: "knowledge" | "none"` (serde-defaulted to `knowledge`;
+unknown values — e.g. the removed `"pos"` — deserialize to the default; Appearance modal) and
+`SettingsData.sentence_underlines: { unknown, new, young, mature: bool }` (all default true;
+per-state visibility checkboxes shown when knowledge mode is selected — filtering is
+frontend-only, the DTO always carries the state).
+
 ## Ignore list
 
 | Command | Args | Returns | Maps to | Notes |

@@ -40,6 +40,7 @@ use yomine::{
 
 use crate::{
     dto::{
+        term_spans_by_sentence,
         FileLoadResult,
         SentenceDto,
     },
@@ -62,10 +63,16 @@ const DEFAULT_SOURCE_FILE_ID: u32 = 3;
 /// Build a `FileLoadResult` from the stored file state (sentences → DTOs).
 pub(crate) fn load_result(file: &FileData) -> Option<FileLoadResult> {
     let source_file = file.source_file.clone()?;
+    // base_terms (not the filtered `terms`) so known/ignored words color too.
+    let spans = term_spans_by_sentence(&file.base_terms, &file.anki_known_lemmas);
     Some(FileLoadResult {
         source_file,
         terms: file.terms.clone(),
-        sentences: file.sentences.iter().map(SentenceDto::from_sentence).collect(),
+        sentences: file
+            .sentences
+            .iter()
+            .map(|s| SentenceDto::from_sentence(s, spans.get(&s.id).map_or(&[], Vec::as_slice)))
+            .collect(),
         file_comprehension: file.file_comprehension,
         anki_filter_active: !file.anki_known_lemmas.is_empty(),
         total_terms: file.base_terms.len(),

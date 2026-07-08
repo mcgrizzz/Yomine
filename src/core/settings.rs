@@ -32,6 +32,45 @@ impl Default for WebSocketSettings {
     }
 }
 
+/// How sentence segments are marked in the term table (issue #94).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SentenceColoring {
+    #[default]
+    Knowledge,
+    None,
+}
+
+// Manual so an unrecognized value (e.g. the removed "pos") falls back to the
+// default instead of failing the whole settings.json load.
+impl<'de> serde::Deserialize<'de> for SentenceColoring {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(match String::deserialize(deserializer)?.as_str() {
+            "none" => Self::None,
+            _ => Self::Knowledge,
+        })
+    }
+}
+
+/// Per-state visibility of the knowledge underlines (issue #94).
+#[derive(Clone, Copy, serde::Serialize, serde::Deserialize)]
+pub struct UnderlineToggles {
+    #[serde(default = "default_true")]
+    pub unknown: bool,
+    #[serde(default = "default_true")]
+    pub new: bool,
+    #[serde(default = "default_true")]
+    pub young: bool,
+    #[serde(default = "default_true")]
+    pub mature: bool,
+}
+
+impl Default for UnderlineToggles {
+    fn default() -> Self {
+        Self { unknown: true, new: true, young: true, mature: true }
+    }
+}
+
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct SettingsData {
     pub anki_model_mappings: HashMap<String, FieldMapping>,
@@ -64,6 +103,10 @@ pub struct SettingsData {
     /// yomitan-api base URL (one-click mining, issue #105).
     #[serde(default = "default_yomitan_url")]
     pub yomitan_url: String,
+    #[serde(default)]
+    pub sentence_coloring: SentenceColoring,
+    #[serde(default)]
+    pub sentence_underlines: UnderlineToggles,
 }
 
 const fn default_font_scale() -> f32 {
@@ -101,6 +144,8 @@ impl Default for SettingsData {
             asbplayer_poll_secs: default_asbplayer_poll_secs(),
             font_scale: default_font_scale(),
             yomitan_url: default_yomitan_url(),
+            sentence_coloring: SentenceColoring::default(),
+            sentence_underlines: UnderlineToggles::default(),
         }
     }
 }

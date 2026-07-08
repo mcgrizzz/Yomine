@@ -1,6 +1,11 @@
 //! Wire DTOs (data-model.md). Domain types serialize directly when cheap; a
 //! DTO exists only where the domain type is awkward on the wire.
 
+use std::collections::{
+    HashMap,
+    HashSet,
+};
+
 use serde::{
     Deserialize,
     Serialize,
@@ -52,6 +57,58 @@ pub struct SegmentDto {
     pub pos: POS,
     pub start: usize,
     pub end: usize,
+    /// Anki knowledge of the covering term (underline coloring, issue #94);
+    /// `None` for segments no extracted term covers (particles, punctuation).
+    pub knowledge: Option<SegmentKnowledge>,
+}
+
+/// Anki state of a term, least → most known (`Ord` picks the worst overlap).
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum SegmentKnowledge {
+    Unknown,
+    New,
+    Young,
+    Mature,
+}
+
+impl SegmentKnowledge {
+    /// `in_anki` = the Anki filter matched the lemma; within that, comprehension
+    /// encodes the card interval (0 = unreviewed, ≥1 = past the known interval).
+    /// Outside Anki, comprehension 1.0 means ignored — user-declared known.
+    fn classify(in_anki: bool, comprehension: f32) -> Self {
+        match (in_anki, comprehension) {
+            (true, c) if c >= 1.0 => Self::Mature,
+            (true, c) if c <= 0.0 => Self::New,
+            (true, _) => Self::Young,
+            (false, c) if c >= 1.0 => Self::Mature,
+            (false, _) => Self::Unknown,
+        }
+    }
+}
+
+/// One term occurrence as `(start, end, knowledge)` byte offsets.
+pub type TermSpan = (usize, usize, SegmentKnowledge);
+
+/// Group every term occurrence by sentence id. Expressions span their full
+/// segment — must match `isTermSeg` in `SentenceView.svelte`.
+pub fn term_spans_by_sentence(
+    terms: &[Term],
+    anki_lemmas: &HashSet<String>,
+) -> HashMap<usize, Vec<TermSpan>> {
+    let mut map: HashMap<usize, Vec<TermSpan>> = HashMap::new();
+    for term in terms {
+        let knowledge =
+            SegmentKnowledge::classify(anki_lemmas.contains(&term.lemma_form), term.comprehension);
+        let len = match term.part_of_speech {
+            POS::Expression | POS::NounExpression => term.full_segment.len(),
+            _ => term.surface_form.len(),
+        };
+        for (sentence_id, start) in &term.sentence_references {
+            map.entry(*sentence_id).or_default().push((*start, start + len, knowledge));
+        }
+    }
+    map
 }
 
 /// Seconds (for seeking, FR-008) + human-readable labels (for display). Replaces
@@ -75,7 +132,7 @@ pub struct SentenceDto {
 }
 
 impl SentenceDto {
-    pub fn from_sentence(s: &Sentence) -> Self {
+    pub fn from_sentence(s: &Sentence, term_spans: &[TermSpan]) -> Self {
         let text = &s.text;
         let segments = s
             .segments
@@ -86,6 +143,13 @@ impl SentenceDto {
                 pos: *pos,
                 start: *start,
                 end: *end,
+                // Min over covering terms: an unknown compound outweighs a
+                // known component word.
+                knowledge: term_spans
+                    .iter()
+                    .filter(|(ts, te, _)| ts < end && te > start)
+                    .map(|(_, _, k)| *k)
+                    .min(),
             })
             .collect();
 
@@ -296,5 +360,77 @@ impl From<yomine::websocket::BoundMedia> for BoundMediaDto {
                 .collect(),
             active: m.active,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn term(surface: &str, pos: POS, comprehension: f32, start: usize) -> Term {
+        Term {
+            id: 1,
+            lemma_form: surface.to_string(),
+            lemma_reading: String::new(),
+            surface_form: surface.to_string(),
+            surface_reading: String::new(),
+            is_kana: false,
+            part_of_speech: pos,
+            frequencies: HashMap::new(),
+            full_segment: surface.to_string(),
+            full_segment_reading: String::new(),
+            sentence_references: vec![(1, start)],
+            comprehension,
+        }
+    }
+
+    #[test]
+    fn segment_knowledge_from_term_spans() {
+        use SegmentKnowledge::*;
+
+        // 気になる人がよく来る: expression 気になる (0..12) overlaps mature 気
+        // (0..3); が (15..18) belongs to no term.
+        let sentence = Sentence {
+            id: 1,
+            source_id: 3,
+            text: "気になる人がよく来る".to_string(),
+            segments: vec![
+                ("キ".to_string(), POS::Noun, 0, 3),
+                ("ニ".to_string(), POS::Postposition, 3, 6),
+                ("ナル".to_string(), POS::Verb, 6, 12),
+                ("ヒト".to_string(), POS::Noun, 12, 15),
+                ("ガ".to_string(), POS::Postposition, 15, 18),
+                ("ヨク".to_string(), POS::Adverb, 18, 24),
+                ("クル".to_string(), POS::Verb, 24, 30),
+            ],
+            timestamp: None,
+            comprehension: 0.0,
+        };
+        let terms = vec![
+            term("気になる", POS::Expression, 0.2, 0), // not in Anki → Unknown
+            term("気", POS::Noun, 1.0, 0),             // mature, masked by the expression
+            term("人", POS::Noun, 0.0, 12),            // in Anki, unreviewed → New
+            term("よく", POS::Adverb, 1.0, 18),        // ignored (not in Anki) → Mature
+            term("来る", POS::Verb, 0.4, 24),          // in Anki, short interval → Young
+        ];
+        let anki: HashSet<String> = ["気", "人", "来る"].iter().map(|s| s.to_string()).collect();
+
+        let spans = term_spans_by_sentence(&terms, &anki);
+        let dto = SentenceDto::from_sentence(&sentence, &spans[&1]);
+
+        let knowledge: Vec<Option<SegmentKnowledge>> =
+            dto.segments.iter().map(|s| s.knowledge).collect();
+        assert_eq!(
+            knowledge,
+            vec![
+                Some(Unknown), // the unknown expression outweighs mature 気
+                Some(Unknown),
+                Some(Unknown),
+                Some(New),
+                None,
+                Some(Mature),
+                Some(Young),
+            ]
+        );
     }
 }

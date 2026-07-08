@@ -1958,6 +1958,34 @@ sub-states, above) belongs to the same gate.
       MY_PAT so `published` still triggers auto-release-notes. Failed-run recovery
       (re-run release.yml with same tag) documented in docs/RELEASES.md.
 
+- [ ] T078 **Sentence coloring by knowledge (#94).** *(Code-complete 2026-07-08 — verify on
+      Windows.)* Sentence segments color by comprehension instead of POS.
+      `SegmentDto.comprehension: f32 | null` computed in `load_result` from `base_terms`
+      (known/ignored words included, so it refreshes with live Anki data); span rule
+      mirrors the frontend `isTermSeg` highlight (surface form, full segment for
+      expressions); overlapping terms take the min (unknown compound beats known
+      component); `null` = no covering term (particles/punctuation) → default fg.
+      New `SettingsData.sentence_coloring: "knowledge" (default) | "pos" | "none"`
+      (serde-defaulted; egui-era settings.json loads unchanged), staged select in the
+      Appearance modal. Knowledge mode reuses `comprehensionColor` (red→green ramp, same
+      as the bars) and gates on `ankiFilterActive` like the bars — without Anki data
+      everything is 0% and would glow red. Unit test: span→segment attribution
+      (`src-tauri/src/dto.rs`).
+      Round 2 (maintainer feedback): no text-color gradient — text color is reserved
+      for future pitch accent. Segments now get 2px **underlines** by discrete Anki
+      state: red = not in Anki, blue = new (in Anki, unreviewed), orange = young,
+      green = mature (`SegmentDto.knowledge`, worst state over overlapping terms;
+      in-Anki membership from `anki_known_lemmas` + interval-derived comprehension
+      for the sub-state; ignored → mature). POS coloring removed from sentences
+      entirely (untrustworthy POS); `SentenceColoring` is knowledge/none, with a
+      tolerant deserializer so a saved `"pos"` falls back to the default instead of
+      failing the settings load.
+      Round 3: underlines drawn as inset background bars (border-bottom fused across
+      adjacent words), and per-state visibility toggles
+      (`SettingsData.sentence_underlines`, all-true default) — checkbox row in the
+      Appearance modal when knowledge mode is selected; display-only filtering in
+      `SentenceView.mark`.
+
 ---
 
 ## Dependencies & Execution Order

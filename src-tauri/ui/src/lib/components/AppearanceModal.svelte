@@ -2,7 +2,14 @@
 	// Staged, but live-previews while adjusting so the user can judge readability;
 	// Cancel/✕/backdrop revert the preview to the saved value.
 	import { untrack } from 'svelte';
-	import { settings, appearanceModalOpen, setFontScale } from '$lib/stores';
+	import type { SegmentKnowledge, SentenceColoring, UnderlineToggles } from '$lib/ipc';
+	import {
+		settings,
+		appearanceModalOpen,
+		setFontScale,
+		setSentenceColoring,
+		setSentenceUnderlines
+	} from '$lib/stores';
 
 	/** `default_font_scale()` (core/settings.rs), as a percentage. */
 	const DEFAULT_PCT = 100;
@@ -12,6 +19,27 @@
 
 	let tempPct = $state(DEFAULT_PCT);
 	let originalPct = $state(DEFAULT_PCT);
+
+	const DEFAULT_COLORING: SentenceColoring = 'knowledge';
+	let tempColoring = $state<SentenceColoring>(DEFAULT_COLORING);
+	let originalColoring = $state<SentenceColoring>(DEFAULT_COLORING);
+
+	const STATES: SegmentKnowledge[] = ['unknown', 'new', 'young', 'mature'];
+	const STATE_LABELS: Record<SegmentKnowledge, string> = {
+		unknown: 'Not in Anki',
+		new: 'New',
+		young: 'Young',
+		mature: 'Mature'
+	};
+	const STATE_COLORS: Record<SegmentKnowledge, string> = {
+		unknown: 'var(--red)',
+		new: 'var(--blue)',
+		young: 'var(--orange)',
+		mature: 'var(--green)'
+	};
+	const DEFAULT_TOGGLES: UnderlineToggles = { unknown: true, new: true, young: true, mature: true };
+	let tempToggles = $state<UnderlineToggles>({ ...DEFAULT_TOGGLES });
+	let originalToggles = $state<UnderlineToggles>({ ...DEFAULT_TOGGLES });
 
 	// Hydrate from the settings mirror each time the modal opens; untrack so
 	// settings changes while open don't clobber the staged value.
@@ -23,6 +51,12 @@
 		const pct = Math.round(($settings?.font_scale ?? 1) * 100);
 		tempPct = pct;
 		originalPct = pct;
+		const coloring = $settings?.sentence_coloring ?? DEFAULT_COLORING;
+		tempColoring = coloring;
+		originalColoring = coloring;
+		const toggles = { ...DEFAULT_TOGGLES, ...$settings?.sentence_underlines };
+		tempToggles = { ...toggles };
+		originalToggles = { ...toggles };
 	}
 
 	// Live preview: mirror what the root layout does with the saved setting.
@@ -33,20 +67,29 @@
 		if ($appearanceModalOpen) applyZoom(tempPct);
 	});
 
-	const dirty = $derived(tempPct !== originalPct);
+	const togglesDirty = $derived(STATES.some((s) => tempToggles[s] !== originalToggles[s]));
+	const dirty = $derived(
+		tempPct !== originalPct || tempColoring !== originalColoring || togglesDirty
+	);
 
 	function step(delta: number) {
 		tempPct = Math.min(MAX_PCT, Math.max(MIN_PCT, tempPct + delta));
 	}
 
 	async function save() {
-		await setFontScale(tempPct / 100);
+		if (tempPct !== originalPct) await setFontScale(tempPct / 100);
+		if (tempColoring !== originalColoring) await setSentenceColoring(tempColoring);
+		if (togglesDirty) await setSentenceUnderlines(tempToggles);
 		originalPct = tempPct;
+		originalColoring = tempColoring;
+		originalToggles = { ...tempToggles };
 		appearanceModalOpen.set(false);
 	}
 
 	function cancel() {
 		tempPct = originalPct;
+		tempColoring = originalColoring;
+		tempToggles = { ...originalToggles };
 	}
 
 	// Closing without saving discards the preview.
@@ -57,6 +100,8 @@
 
 	function restoreDefault() {
 		tempPct = DEFAULT_PCT;
+		tempColoring = DEFAULT_COLORING;
+		tempToggles = { ...DEFAULT_TOGGLES };
 	}
 </script>
 
@@ -101,6 +146,25 @@
 				<span class="value">{tempPct}%</span>
 			</div>
 			<p class="hint">Scales the whole interface — text, controls, and spacing.</p>
+
+			<div class="coloring-row">
+				<label for="sentence-coloring">Sentence marking:</label>
+				<select id="sentence-coloring" bind:value={tempColoring}>
+					<option value="knowledge">Knowledge underlines</option>
+					<option value="none">None</option>
+				</select>
+			</div>
+			{#if tempColoring === 'knowledge'}
+				<div class="underline-toggles">
+					{#each STATES as s (s)}
+						<label class="state-toggle">
+							<input type="checkbox" bind:checked={tempToggles[s]} />
+							<span style="border-bottom: 2.5px solid {STATE_COLORS[s]}">{STATE_LABELS[s]}</span>
+						</label>
+					{/each}
+				</div>
+				<p class="hint">Underlines words by Anki state; untick a state to hide it.</p>
+			{/if}
 
 			<hr />
 
@@ -167,6 +231,30 @@
 		padding: 0.1rem 0.5rem;
 		font-size: 0.95rem;
 		line-height: 1.2;
+	}
+	.coloring-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0 1rem;
+	}
+	.coloring-row select {
+		flex: 1;
+	}
+	.underline-toggles {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem 1rem;
+		padding: 0 1rem;
+	}
+	.state-toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		cursor: pointer;
+	}
+	.state-toggle span {
+		padding-bottom: 1px;
 	}
 	.value {
 		min-width: 3.2rem;

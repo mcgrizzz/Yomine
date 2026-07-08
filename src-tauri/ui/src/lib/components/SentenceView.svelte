@@ -12,8 +12,8 @@
 </script>
 
 <script lang="ts">
+	import type { SegmentDto, SegmentKnowledge } from '$lib/ipc';
 	import { comprehensionColor } from '$lib/comprehension';
-	import { posColor } from '$lib/pos';
 	import {
 		ankiFilterActive,
 		minedSentences,
@@ -22,7 +22,8 @@
 		playerConnected,
 		playerStatus,
 		seekTimestamp,
-		sessionMinedSentences
+		sessionMinedSentences,
+		settings
 	} from '$lib/stores';
 	import Furigana from './Furigana.svelte';
 
@@ -59,6 +60,16 @@
 	const isTermSeg = (seg: { start: number; end: number }): boolean =>
 		seg.start < termEnd && seg.end > occ.start;
 
+	// Underlines need Anki data — without the filter everything is unknown and
+	// the whole sentence would underline red (same gate as the bars).
+	const underlines = $derived(
+		($settings?.sentence_coloring ?? 'knowledge') === 'knowledge' && $ankiFilterActive
+	);
+	const mark = (seg: SegmentDto): SegmentKnowledge | null =>
+		underlines && seg.knowledge && ($settings?.sentence_underlines[seg.knowledge] ?? true)
+			? seg.knowledge
+			: null;
+
 	// Bars only show while Anki filtering is active — without it everything is 0%.
 	const comprehensionPct = $derived(occ.sentence.comprehension * 100);
 	const filledBars = $derived(Math.min(Math.ceil(comprehensionPct / 20), 5));
@@ -75,9 +86,14 @@
 <p class="sentence" lang="ja">
 	{#each occ.sentence.segments as seg, i (i)}
 		{@const isTerm = isTermSeg(seg)}
+		{@const know = mark(seg)}
 		{#if i > 0}<wbr />{/if}<span
 			class:term={isTerm}
-			style="color: {isTerm ? 'var(--red)' : posColor(seg.pos)}"
+			class:know-unknown={know === 'unknown'}
+			class:know-new={know === 'new'}
+			class:know-young={know === 'young'}
+			class:know-mature={know === 'mature'}
+			style="color: {isTerm ? 'var(--red)' : 'inherit'}"
 			><Furigana surface={seg.surface} reading={seg.reading} /></span
 		>
 	{/each}
@@ -142,6 +158,33 @@
 	}
 	.sentence .term {
 		font-weight: 700;
+	}
+
+	/* Knowledge underlines (issue #94): text color stays free for future pitch
+	 * accent. States follow Anki: new = blue, young = orange, mature = green.
+	 * Drawn as an inset background bar, not border-bottom — adjacent borders
+	 * fuse into one continuous line and word boundaries disappear. */
+	.sentence .know-unknown {
+		--know-color: var(--red);
+	}
+	.sentence .know-new {
+		--know-color: var(--blue);
+	}
+	.sentence .know-young {
+		--know-color: var(--orange);
+	}
+	.sentence .know-mature {
+		--know-color: var(--green);
+	}
+	.sentence .know-unknown,
+	.sentence .know-new,
+	.sentence .know-young,
+	.sentence .know-mature {
+		background-image: linear-gradient(var(--know-color), var(--know-color));
+		background-repeat: no-repeat;
+		background-size: calc(100% - 7px) 2.5px;
+		background-position: bottom center;
+		padding-bottom: 3px;
 	}
 
 	.meta {
