@@ -70,7 +70,7 @@ jobs:
         git tag --sort=-version:refname | head -10
         echo ""        
         echo "📦 Cargo.toml version:"
-        grep -A 20 '^\[package\]' Cargo.toml | grep '^version =' | head -1
+        grep -A 5 '^\[workspace.package\]' Cargo.toml | grep '^version =' | head -1
         echo ""
         echo "🌿 Current branch:"
         git branch --show-current
