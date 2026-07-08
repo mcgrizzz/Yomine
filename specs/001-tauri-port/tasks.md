@@ -1837,7 +1837,20 @@ sub-states, above) belongs to the same gate.
       rewritten for Tauri artifacts (installers per platform, in-app-update callout, unsigned
       SmartScreen/Gatekeeper notes, latest.json/.sig explainer — egui binary instructions
       removed); SHA256SUMS-detailed header mentions updater files; release-helper's
-      check-version-status grep now reads `[workspace.package]`.
+      check-version-status grep now reads `[workspace.package]`. Full pipeline audit:
+      README install section rewritten for Tauri installers (+ macOS xattr note, in-app
+      updates); docs/RELEASES.md rewritten (no version input — tag computed from Cargo.toml;
+      build-only dry run; required secrets incl. MY_PAT rationale); ensure-tests.js now
+      gates on the whole Tests workflow-run conclusion instead of the first check run
+      matching "tests" (which only covered rust-tests, ignoring tauri-/svelte-check).
+      **Draft-until-built releases (maintainer request):** Manual Release now creates a
+      DRAFT release, so users/updater never see a binary-less release. Drafts don't fire
+      `release: created`, so manual-release invokes release.yml via workflow_call (new
+      build-release job); tauri-action gets `releaseDraft: true`; checksums job switched
+      robinraju-downloader/softprops-upload → `gh release download/upload` (gh can see
+      drafts by tag); new publish-release job (needs checksums) flips draft→live via
+      MY_PAT so `published` still triggers auto-release-notes. Failed-run recovery
+      (re-run release.yml with same tag) documented in docs/RELEASES.md.
 
 ---
 

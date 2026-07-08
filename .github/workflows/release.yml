@@ -40,15 +40,15 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ !inputs.build_only }}
     
-    steps:      
+    steps:
+      # gh (unlike release-downloader actions) can find draft releases by tag.
       - name: Download release assets
-        uses: robinraju/release-downloader@v1.11
-        with:        
-          repository: ${{ github.repository }}
-          tag: ${{ env.TAG_NAME }}
-          fileName: "*"
-          out-file-path: "downloads"
-          token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir downloads
+          cd downloads
+          gh release download "$TAG_NAME" --repo "$GITHUB_REPOSITORY"
 
       - name: Generate consolidated checksums
         run: |
@@ -72,14 +72,46 @@ jobs:
         shell: bash
 
       - name: Upload checksums to release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.TAG_NAME }}
-          files: |
-            SHA256SUMS.txt
-            SHA256SUMS-detailed.txt
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "$TAG_NAME" SHA256SUMS.txt SHA256SUMS-detailed.txt \
+            --clobber --repo "$GITHUB_REPOSITORY"
+
+  # The release stays a draft while installers build; it goes live only once
+  # every asset (installers, latest.json, checksums) is up, so the in-app
+  # updater and /releases/latest never see a half-built release. MY_PAT rather
+  # than GITHUB_TOKEN so the `published` event still triggers auto-release-notes.
+  publish-release:
+    needs: [create-checksums]
+    runs-on: ubuntu-latest
+    if: ${{ !inputs.build_only }}
+
+    steps:
+      - name: Publish release
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.MY_PAT }}
+          script: |
+            const tag = process.env.TAG_NAME;
+            const { data: releases } = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100,
+            });
+            const release = releases.find((r) => r.tag_name === tag);
+            if (!release) throw new Error(`No release found for tag ${tag}`);
+            if (!release.draft) {
+              console.log(`${tag} is already published`);
+              return;
+            }
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: release.id,
+              draft: false,
+            });
+            console.log(`Published ${tag}: ${release.html_url}`);
   # `tauri-action` runs `beforeBuildCommand` (pnpm build in ui/) itself; we only
   # install the frontend deps first. With a tag it uploads the installers to
   # that release; in build_only mode it just builds and we attach artifacts.
@@ -147,6 +179,9 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ env.TAG_NAME }}
+          # Upload into the draft created by manual-release (create one as a
+          # draft if it doesn't exist); publish-release flips it live at the end.
+          releaseDraft: true
           args: ${{ matrix.platform.args }}
 
       - name: Build installers (build-only mode)
