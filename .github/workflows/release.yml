@@ -140,6 +140,10 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Updater artifact signing; also makes tauri-action generate and
+          # upload latest.json for the in-app updater.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ env.TAG_NAME }}
           args: ${{ matrix.platform.args }}
@@ -147,6 +151,9 @@ jobs:
       - name: Build installers (build-only mode)
         if: ${{ inputs.build_only }}
         uses: tauri-apps/tauri-action@v0
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           args: ${{ matrix.platform.args }}
 
@@ -162,11 +169,13 @@ jobs:
             src-tauri/target/**/bundle/**/*.deb
             src-tauri/target/**/bundle/**/*.rpm
             src-tauri/target/**/bundle/**/*.AppImage
+            src-tauri/target/**/bundle/**/*.sig
             target/**/bundle/**/*.msi
             target/**/bundle/**/*.exe
             target/**/bundle/**/*.dmg
             target/**/bundle/**/*.deb
             target/**/bundle/**/*.rpm
             target/**/bundle/**/*.AppImage
+            target/**/bundle/**/*.sig
           retention-days: 7
           if-no-files-found: warn

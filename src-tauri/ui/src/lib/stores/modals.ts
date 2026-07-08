@@ -11,6 +11,7 @@ export const analyzerModalOpen = writable(false);
 export const setupModalOpen = writable(false);
 export const asbplayerModalOpen = writable(false);
 export const appearanceModalOpen = writable(false);
+export const aboutModalOpen = writable(false);
 
 export const openIgnoreModal = (): void => ignoreModalOpen.set(true);
 export const openWebsocketModal = (): void => websocketModalOpen.set(true);
@@ -21,3 +22,4 @@ export const openAnalyzerModal = (): void => analyzerModalOpen.set(true);
 export const openSetupModal = (): void => setupModalOpen.set(true);
 export const openAsbplayerModal = (): void => asbplayerModalOpen.set(true);
 export const openAppearanceModal = (): void => appearanceModalOpen.set(true);
+export const openAboutModal = (): void => aboutModalOpen.set(true);

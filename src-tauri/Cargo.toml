@@ -1,6 +1,6 @@
 [package]
 name = "yomine-tauri"
-version = "0.6.0"
+version.workspace = true
 description = "Yomine — Japanese sentence mining (Tauri + SvelteKit shell)"
 edition = "2021"
 license = "MIT OR Apache-2.0"
@@ -10,28 +10,29 @@ name = "yomine_tauri_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "2.6.3", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
-tauri-plugin-dialog = "2"
-tauri-plugin-opener = "2"
+tauri = { version = "2.11.5", features = [] }
+tauri-plugin-dialog = "2.7.1"
+tauri-plugin-opener = "2.5.4"
+tauri-plugin-process = "2.3.1"
+tauri-plugin-updater = "2.10.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["sync", "time", "macros"] }
+tokio = { version = "1.52.3", features = ["sync", "time", "macros"] }
 # Dated default filename for the ignore-list export dialog (egui parity); unifies to
 # the version the engine already compiles.
 chrono = "0.4"
 # Katakana→hiragana for furigana readings in the sentence DTO (matches the
 # engine's version so only one copy is compiled).
-wana_kana = "4.0.0"
+wana_kana = "5.0.0"
 yomine = { path = ".." }
 
-# Pin the wry runtime stack to the matched 2.11.2 set (`tauri` 2.11.2 →
-# `tauri-runtime`/`tauri-runtime-wry` 2.11.2 → `wry` 0.55.1). These three must move
-# in lockstep: a `tauri-runtime` vs `tauri-runtime-wry` skew breaks the build
-# (`tauri-runtime` ≥2.10 added a trait method and ≥2.11 dropped a `Sync` bound that
-# older `-wry` revisions don't match → E0046 + E0277). The `=` pins stop cargo from
-# greedily resolving a mismatched pair; bump all three together.
-tauri-runtime = "=2.11.2"
+# Pin the wry runtime stack to a matched set (currently `tauri` 2.11.5 →
+# `tauri-runtime` 2.11.3 / `tauri-runtime-wry` 2.11.4 → `wry` 0.55.1). These must
+# move in lockstep: a `tauri-runtime` vs `tauri-runtime-wry` skew breaks the build
+# (trait-method/`Sync`-bound mismatches → E0046 + E0277). The `=` pins stop cargo
+# from greedily resolving a mismatched pair; bump the set together.
+tauri-runtime = "=2.11.3"
 wry = "=0.55.1"

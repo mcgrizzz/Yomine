@@ -553,6 +553,18 @@ export function getSetupStatus(): Promise<SetupStatus> {
 	return invoke('get_setup_status');
 }
 
+export interface UpdateInfo {
+	current: string;
+	/** Latest release tag, e.g. "v0.6.1". */
+	latest: string;
+	url: string;
+}
+
+/** `null` = up to date. Checks the newest (non-prerelease) GitHub release. */
+export function checkForUpdate(): Promise<UpdateInfo | null> {
+	return invoke('check_for_update');
+}
+
 /** Expand a picked folder to the supported subtitle/text files under it
  * (recurses subdirectories) — used to build the selection tree. */
 export function findAnalysisFiles(dir: string): Promise<string[]> {

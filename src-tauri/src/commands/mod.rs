@@ -14,6 +14,7 @@ pub mod lifecycle;
 pub mod player;
 pub mod recommended;
 pub mod setup;
+pub mod update;
 
 use std::collections::HashMap;
 

@@ -3,3 +3,6 @@
 # binary; without it pnpm blocks the build and the pre-run deps check exits 1.
 allowBuilds:
   esbuild: true
+minimumReleaseAgeExclude:
+  - '@sveltejs/kit@2.69.2'
+  - '@types/node@26.1.1'

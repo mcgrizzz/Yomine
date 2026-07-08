@@ -1786,14 +1786,50 @@ sub-states, above) belongs to the same gate.
       decision executed).
 - [ ] T073 **Resume the GitHub issue backlog** (#91 mouse-less mining, #3, #71, #68/#92,
       quick wins #94/#106/#82/#14, engine quality #6/#81/#102, #105 phase 2 one-click mining).
-- [ ] T074 **Update checker.** Launch-time GitHub releases API check (same pattern as the
+- [x] T074 **Update checker.** Launch-time GitHub releases API check (same pattern as the
       recommended-dictionaries manifest check); non-blocking "new version available" notice
       linking to the release. Full `tauri-plugin-updater` auto-update is a separate follow-up
       (needs an updater keypair + latest.json generation in the release workflow).
+      *(2026-07-07: `check_for_update` command — GitHub `releases/latest` (excludes prereleases)
+      via the engine's UA-bearing `fetch_text` on spawn_blocking, numeric x.y.z compare against
+      `CARGO_PKG_VERSION` (unit-tested incl. beta-suffix and short-version cases). Frontend:
+      one best-effort check at the end of hydrate — swallowed on failure — sets `updateInfo`,
+      shows the toast once, and a green "⬆ vX.Y.Z available" pill sits left of the status
+      indicators opening the release page. Verify on Windows: pill + toast appear once a newer
+      release exists (or temporarily lower the version to test); clicking opens the release
+      page; offline launch shows nothing.)*
 - [ ] T075 **Code signing (Windows "unknown publisher").** Evaluate SignPath.io Foundation
       (free for qualifying OSS) first, Azure Trusted Signing (~$10/mo) as fallback; wire into
       `tauri.conf.json` `signCommand` + the release workflow. macOS Developer ID/notarization
       ($99/yr) is its own decision.
+- [ ] T076 **Auto-updater (`tauri-plugin-updater`).** *(Code-complete 2026-07-08 — tick after
+      the maintainer key setup + the first signed release verifies in-app updating.)*
+      Backend: updater + process plugins registered; `bundle.createUpdaterArtifacts: true`;
+      `plugins.updater` config with the GitHub `releases/latest/download/latest.json` endpoint,
+      Windows `installMode: passive`, and a PLACEHOLDER pubkey; capabilities gain
+      `updater:default` + `process:default`. Frontend: `stores/update.ts` — plugin `check()`
+      first (signed latest.json), the T074 GitHub-API check as fallback (pill links to the
+      release page when not installable); installable updates download+install with overlay
+      progress then `relaunch()`. release.yml passes `TAURI_SIGNING_PRIVATE_KEY(_PASSWORD)`
+      to both tauri-action steps — tauri-action then also generates + uploads latest.json.
+      **Maintainer setup (blocking, in order):** (1) `cargo tauri signer generate -w
+      %USERPROFILE%\.tauri\yomine.key` (pick a password, BACK THE KEY UP — losing it orphans
+      all installed apps); (2) paste the printed PUBLIC key into `tauri.conf.json`
+      `plugins.updater.pubkey`; (3) add repo secrets `TAURI_SIGNING_PRIVATE_KEY` (file
+      contents) + `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`; (4) `pnpm install` in src-tauri/ui
+      (two new JS plugins; clears the 3 expected svelte-check errors). NOTE: with
+      `createUpdaterArtifacts` on, `cargo tauri build` fails without the signing env — set
+      the two vars locally for manual builds; `cargo tauri dev` is unaffected. Verify: release
+      vNEXT, then run vCURRENT → pill says "click to download and install" → progress →
+      relaunches as vNEXT; a release without latest.json falls back to the link-only pill.
+      **Single-source versioning (2026-07-08, maintainer request):** the version now lives in
+      exactly one place — `[workspace.package] version` in the root Cargo.toml. Both crates use
+      `version.workspace = true`; tauri.conf.json's `version` field was removed (Tauri v2 falls
+      back to the crate version, which cargo resolves through the workspace — verified via
+      `cargo metadata`: both crates report 0.6.0). `compute-version.js` now reads
+      `[workspace.package]` first with the old `[package]` layout as fallback (tested against
+      both + the no-version error case). ui/package.json's version is decoupled/cosmetic — it
+      no longer needs bumping. Release procedure is now: edit the one line → Manual Release.
 
 ---
 

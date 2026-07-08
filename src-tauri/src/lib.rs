@@ -22,6 +22,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Mutex::new(AppState::new(settings)))
         .invoke_handler(tauri::generate_handler![
             commands::lifecycle::load_language_tools,
@@ -62,6 +64,7 @@ pub fn run() {
             commands::player::set_websocket_port,
             commands::player::get_asbplayer_media,
             commands::setup::get_setup_status,
+            commands::update::check_for_update,
             commands::knowledge::get_knowledge_summary,
         ])
         .setup(move |app| {

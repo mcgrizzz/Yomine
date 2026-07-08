@@ -1,7 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Yomine",
-  "version": "0.6.0",
   "identifier": "com.yomine.app",
   "build": {
     "frontendDist": "ui/build",
@@ -39,6 +38,18 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFBRTZEODc3RDhERTEzRTQKUldUa0U5N1lkOWptcXVEU1ZtK2dyT0wxbWVFek5HWkZQdkdlNzJLSDEzVzJML2ZLd050c3FQUVcK",
+      "endpoints": [
+        "https://github.com/mcgrizzz/Yomine/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

@@ -2,6 +2,7 @@ import { get } from 'svelte/store';
 import * as ipc from '$lib/ipc';
 import { dragHovering, lastError, overlay, showNotice } from './ui';
 import { ankiStatus, knowledge, languageToolsStatus } from './status';
+import { checkForUpdate } from './update';
 import { playerStatus } from './player';
 import { fileResult, isSupportedPath, loadAndStore, recentFiles } from './file';
 import { posCatalog, posEnabled } from './controls';
@@ -96,4 +97,7 @@ export async function hydrate(): Promise<void> {
 	refreshSetupStatus();
 	refreshIgnoredLemmas();
 	refreshRecommendedDicts();
+
+	// Best-effort update check; a failure just means no notice.
+	void checkForUpdate();
 }
