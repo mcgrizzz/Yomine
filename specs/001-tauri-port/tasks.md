@@ -1333,9 +1333,17 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
   across tauri.conf.json / ui package.json / both Cargo.tomls; identifier + frontendDist OK.
   Noted, not blocking: release.yml's `create-checksums` only covers the egui `yomine-*` binaries,
   not the tauri installers (different naming + job not in its `needs`) — fine while both ship,
-  revisit at T072. **Remaining T071 (maintainer):** commit + open the PR to main (test.yml
-  triggers on PR/push to main only), watch the first run, then a `workflow_dispatch` release
-  build with `build_only` for installer smoke tests (T052).
+  revisit at T072.
+  **First run failed + fixed (2026-07-07):** "Check Tauri app" died on glib-sys — the
+  `cache-apt-pkgs-action` restores listed packages but NOT their transitive dev deps
+  (libglib2.0-dev, owner of glib-2.0.pc, never landed; the engine steps passed because they
+  don't link GTK). Replaced it with plain `apt-get install` (what release.yml already uses),
+  and split the Tauri check into its own `tauri-check` job (release.yml's dep set + the
+  frontendDist placeholder) so the heavy GTK/WebKit compile runs IN PARALLEL with the engine
+  tests — addresses the "slow" complaint too; later runs also get warm rust-cache + the UniDic
+  cache. Dropped `--verbose` from cargo test (log noise). YAML validated locally.
+  **Remaining T071 (maintainer):** commit + push, watch the re-run, then a `workflow_dispatch`
+  release build with `build_only` for installer smoke tests (T052).
 - **NEXT options:**
   - **`load_frequency_dictionaries` import command (freq-dict import)** — the File-menu "Load New
     Frequency Dictionaries" entry and the checklist's two "+ Install Dictionary" actions (T045)

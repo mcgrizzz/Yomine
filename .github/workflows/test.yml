@@ -91,21 +91,13 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Install and Cache Linux Dependencies
-        uses: awalsh128/cache-apt-pkgs-action@latest
-        with:
-          packages: |
-            libgtk-3-dev
-            libxcb-render0-dev
-            libxcb-shape0-dev
-            libxcb-xfixes0-dev
-            libxkbcommon-dev
-            libssl-dev
-            libwebkit2gtk-4.1-dev
-            libayatana-appindicator3-dev
-            librsvg2-dev
-            libxdo-dev
-          version: 1.0
+      # Plain apt-get: cache-apt-pkgs-action skips transitive dev deps
+      # (libglib2.0-dev etc.), which breaks any GTK-linked build.
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libxcb-render0-dev \
+            libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev
 
       # The segmentation suite (tests/segmentation.rs) runs the real UniDic
       # tokenizer; cache the auto-downloaded model so only the first run pays.
@@ -118,8 +110,6 @@ jobs:
       - name: Setup test environment
         run: |
           mkdir -p dictionaries/frequency dictionaries/tokenizer
-          # generate_context! needs the frontendDist dir to exist even for check.
-          mkdir -p src-tauri/ui/build
           echo "CI_ENVIRONMENT=true" >> "$GITHUB_ENV"
           # With the model cached/downloadable, a silent skip of the
           # segmentation fixtures is a CI bug — fail instead.
@@ -130,11 +120,42 @@ jobs:
 
       - name: Run engine tests (egui feature on)
         run: |
-          cargo test -p yomine --verbose -- \
+          cargo test -p yomine -- \
             --skip segmentation::rule_matcher_tests::tests::inspect_tokens
 
       - name: Check engine without egui (the Tauri configuration)
         run: cargo check -p yomine --no-default-features
+
+  # 3b) Check the Tauri app — its own job so the heavy GTK/WebKit dependency
+  # compile runs in parallel with the engine tests instead of after them.
+  tauri-check:
+    needs: filter
+    if: >
+      needs.filter.outputs.code == 'true' ||
+      needs.filter.outputs.is_push_to_main == 'true'
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_PROFILE_DEV_DEBUG: 0
+      RUSTFLAGS: "-D warnings -A deprecated"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Same set the release build-tauri job installs.
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+            librsvg2-dev libxdo-dev libssl-dev libgtk-3-dev patchelf
+
+      # generate_context! needs the frontendDist dir to exist even for check.
+      - name: Create frontendDist placeholder
+        run: mkdir -p src-tauri/ui/build
 
       - name: Check Tauri app
         run: cargo check -p yomine-tauri
