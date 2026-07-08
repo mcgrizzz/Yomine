@@ -1,6 +1,6 @@
 import { get, writable } from 'svelte/store';
 import * as ipc from '$lib/ipc';
-import { lastError, overlay } from './ui';
+import { lastError } from './ui';
 import { languageToolsStatus } from './status';
 import { settings } from './settings';
 
@@ -27,24 +27,6 @@ export async function saveDictionaryStates(entries: ipc.DictionaryState[]): Prom
 			detail: String(err)
 		});
 		return false;
-	}
-}
-
-/** Zip import. The overlay only appears once the reload streams progress, so
- * nothing flashes behind the native picker; a cancelled dialog is a no-op. */
-export async function loadFrequencyDictionaries(): Promise<void> {
-	if (get(languageToolsStatus) !== 'ready') return;
-	try {
-		const copied = await ipc.loadFrequencyDictionaries((msg) => overlay.set(msg.message));
-		if (copied > 0) refreshRecommendedDicts();
-	} catch (err) {
-		lastError.set({
-			title: 'Reload Error',
-			message: 'Failed to reload frequency dictionaries',
-			detail: String(err)
-		});
-	} finally {
-		overlay.set(null);
 	}
 }
 
