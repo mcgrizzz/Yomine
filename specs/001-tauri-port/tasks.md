@@ -1830,6 +1830,14 @@ sub-states, above) belongs to the same gate.
       `[workspace.package]` first with the old `[package]` layout as fallback (tested against
       both + the no-version error case). ui/package.json's version is decoupled/cosmetic — it
       no longer needs bumping. Release procedure is now: edit the one line → Manual Release.
+      **Release build/notes fixes (2026-07-08):** macOS/Linux release builds failed —
+      esbuild 0.28 (vite 8) refuses to down-transpile destructuring below Safari 14.1; fixed
+      with `esbuild.supported.destructuring: true` in vite.config.ts (keeps the safari13
+      target, same output as the pre-vite-8 toolchain). `.github/release-notes-template.md`
+      rewritten for Tauri artifacts (installers per platform, in-app-update callout, unsigned
+      SmartScreen/Gatekeeper notes, latest.json/.sig explainer — egui binary instructions
+      removed); SHA256SUMS-detailed header mentions updater files; release-helper's
+      check-version-status grep now reads `[workspace.package]`.
 
 ---
 

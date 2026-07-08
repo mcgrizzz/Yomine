@@ -65,6 +65,7 @@ jobs:
           # - *.msi / *-setup.exe: Windows installers
           # - *.dmg: macOS universal app (Intel + Apple Silicon)
           # - *.deb / *.rpm / *.AppImage: Linux packages
+          # - latest.json / *.sig / *.tar.gz: in-app updater metadata
           
           EOF
           cat ../SHA256SUMS.txt >> ../SHA256SUMS-detailed.txt

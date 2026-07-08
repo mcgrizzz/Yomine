@@ -12,25 +12,30 @@ Please report any issues you encounter to help us improve the final release.
 
 ## Downloads
 
-**Available Binaries:**
-- **Windows (x64):** `yomine-{VERSION}-windows-x64.exe` *(Ready to run)*
-- **macOS (Universal):** `yomine-{VERSION}-macos-universal` *(Intel + Apple Silicon)*
-- **Linux (x64):** `yomine-{VERSION}-linux-x64`
+- **Windows:** the `-setup.exe` installer *(recommended)*, or the `.msi`
+- **macOS:** the `.dmg` *(universal: Intel + Apple Silicon)*
+- **Linux:** the `.AppImage`, `.deb`, or `.rpm`
+
+**Already have Yomine installed?** It checks for updates on launch and can install this version in-app — no download needed.
 
 <details>
-<summary><strong>Installation & Usage</strong></summary>
+<summary><strong>Installation notes</strong></summary>
 
-**Windows:** Download and run the `.exe` file directly.
+**Windows:** Run the setup `.exe`. If SmartScreen warns about an unknown publisher, click *More info → Run anyway*.
 
-**macOS/Linux:** Download the binary, make executable, then run:
+**macOS:** Open the `.dmg` and drag Yomine to Applications. The app isn't notarized yet, so if macOS refuses to open it, clear the quarantine flag:
 ```bash
-chmod +x yomine-{VERSION}-[platform]
-./yomine-{VERSION}-[platform]
+xattr -cr /Applications/Yomine.app
 ```
 
-**macOS Security:** If blocked, go to *System Preferences → Security & Privacy* and click *"Allow Anyway"*.
+**Linux:** Install the `.deb`/`.rpm` with your package manager, or make the AppImage executable and run it:
+```bash
+chmod +x Yomine_*.AppImage && ./Yomine_*.AppImage
+```
 
-📋 **Verification:** SHA256 checksums available in `SHA256SUMS.txt`
+📋 **Verification:** SHA256 checksums for all files are in `SHA256SUMS.txt`.
+
+ℹ️ `latest.json` and the `.sig`/`.tar.gz` files power the in-app updater — you can ignore them.
 
 </details>
 

@@ -35,6 +35,12 @@ export default defineConfig({
 
 	// expose Tauri env vars to the frontend
 	envPrefix: ['VITE_', 'TAURI_ENV_*'],
+	// esbuild 0.28+ treats destructuring as buggy below Safari 14.1 and errors
+	// because it can't down-transpile SvelteKit's output; ship it natively like
+	// the pre-vite-8 toolchain did (Safari 13 supports it, minus an obscure bug).
+	esbuild: {
+		supported: { destructuring: true }
+	},
 	build: {
 		// Tauri uses Chromium on Windows and WebKit on macOS/Linux
 		target: process.env.TAURI_ENV_PLATFORM == 'windows' ? 'chrome105' : 'safari13',
