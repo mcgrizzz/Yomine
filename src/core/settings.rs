@@ -32,14 +32,24 @@ impl Default for WebSocketSettings {
     }
 }
 
-/// How sentence segments are colored in the term table (issue #94).
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, serde::Serialize, serde::Deserialize)]
+/// How sentence segments are marked in the term table (issue #94).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SentenceColoring {
     #[default]
     Knowledge,
-    Pos,
     None,
+}
+
+// Manual so an unrecognized value (e.g. the removed "pos") falls back to the
+// default instead of failing the whole settings.json load.
+impl<'de> serde::Deserialize<'de> for SentenceColoring {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(match String::deserialize(deserializer)?.as_str() {
+            "none" => Self::None,
+            _ => Self::Knowledge,
+        })
+    }
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]

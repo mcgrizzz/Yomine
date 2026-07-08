@@ -12,9 +12,8 @@
 </script>
 
 <script lang="ts">
-	import type { SegmentDto } from '$lib/ipc';
+	import type { SegmentDto, SegmentKnowledge } from '$lib/ipc';
 	import { comprehensionColor } from '$lib/comprehension';
-	import { posColor } from '$lib/pos';
 	import {
 		ankiFilterActive,
 		minedSentences,
@@ -61,15 +60,13 @@
 	const isTermSeg = (seg: { start: number; end: number }): boolean =>
 		seg.start < termEnd && seg.end > occ.start;
 
-	// Knowledge mode needs Anki data — without the filter every term is 0%
-	// and the whole sentence would read as unknown (same gate as the bars).
-	const coloring = $derived($settings?.sentence_coloring ?? 'knowledge');
-	function segColor(seg: SegmentDto): string {
-		if (coloring === 'pos') return posColor(seg.pos);
-		if (coloring === 'knowledge' && $ankiFilterActive && seg.comprehension !== null)
-			return comprehensionColor(seg.comprehension * 100);
-		return 'inherit';
-	}
+	// Underlines need Anki data — without the filter everything is unknown and
+	// the whole sentence would underline red (same gate as the bars).
+	const underlines = $derived(
+		($settings?.sentence_coloring ?? 'knowledge') === 'knowledge' && $ankiFilterActive
+	);
+	const mark = (seg: SegmentDto): SegmentKnowledge | null =>
+		underlines ? seg.knowledge : null;
 
 	// Bars only show while Anki filtering is active — without it everything is 0%.
 	const comprehensionPct = $derived(occ.sentence.comprehension * 100);
@@ -87,9 +84,14 @@
 <p class="sentence" lang="ja">
 	{#each occ.sentence.segments as seg, i (i)}
 		{@const isTerm = isTermSeg(seg)}
+		{@const know = mark(seg)}
 		{#if i > 0}<wbr />{/if}<span
 			class:term={isTerm}
-			style="color: {isTerm ? 'var(--red)' : segColor(seg)}"
+			class:know-unknown={know === 'unknown'}
+			class:know-new={know === 'new'}
+			class:know-young={know === 'young'}
+			class:know-mature={know === 'mature'}
+			style="color: {isTerm ? 'var(--red)' : 'inherit'}"
 			><Furigana surface={seg.surface} reading={seg.reading} /></span
 		>
 	{/each}
@@ -154,6 +156,21 @@
 	}
 	.sentence .term {
 		font-weight: 700;
+	}
+
+	/* Knowledge underlines (issue #94): text color stays free for future pitch
+	 * accent. States follow Anki: new = blue, young = orange, mature = green. */
+	.sentence .know-unknown {
+		border-bottom: 2px solid var(--red);
+	}
+	.sentence .know-new {
+		border-bottom: 2px solid var(--blue);
+	}
+	.sentence .know-young {
+		border-bottom: 2px solid var(--orange);
+	}
+	.sentence .know-mature {
+		border-bottom: 2px solid var(--green);
 	}
 
 	.meta {

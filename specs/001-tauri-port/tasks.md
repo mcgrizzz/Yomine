@@ -1971,6 +1971,15 @@ sub-states, above) belongs to the same gate.
       as the bars) and gates on `ankiFilterActive` like the bars — without Anki data
       everything is 0% and would glow red. Unit test: span→segment attribution
       (`src-tauri/src/dto.rs`).
+      Round 2 (maintainer feedback): no text-color gradient — text color is reserved
+      for future pitch accent. Segments now get 2px **underlines** by discrete Anki
+      state: red = not in Anki, blue = new (in Anki, unreviewed), orange = young,
+      green = mature (`SegmentDto.knowledge`, worst state over overlapping terms;
+      in-Anki membership from `anki_known_lemmas` + interval-derived comprehension
+      for the sub-state; ignored → mature). POS coloring removed from sentences
+      entirely (untrustworthy POS); `SentenceColoring` is knowledge/none, with a
+      tolerant deserializer so a saved `"pos"` falls back to the default instead of
+      failing the settings load.
 
 ---
 

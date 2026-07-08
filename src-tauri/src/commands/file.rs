@@ -64,7 +64,7 @@ const DEFAULT_SOURCE_FILE_ID: u32 = 3;
 pub(crate) fn load_result(file: &FileData) -> Option<FileLoadResult> {
     let source_file = file.source_file.clone()?;
     // base_terms (not the filtered `terms`) so known/ignored words color too.
-    let spans = term_spans_by_sentence(&file.base_terms);
+    let spans = term_spans_by_sentence(&file.base_terms, &file.anki_known_lemmas);
     Some(FileLoadResult {
         source_file,
         terms: file.terms.clone(),

@@ -39,10 +39,13 @@ export interface SegmentDto {
 	/** UTF-8 byte offsets into the sentence text (for the term-overlap test). */
 	start: number;
 	end: number;
-	/** Covering term's comprehension (0–1) for knowledge coloring (issue #94);
+	/** Covering term's Anki state for underline coloring (issue #94);
 	 * `null` when no extracted term covers the segment. */
-	comprehension: number | null;
+	knowledge: SegmentKnowledge | null;
 }
+
+/** Mirrors `SegmentKnowledge` (dto.rs): worst state over overlapping terms. */
+export type SegmentKnowledge = 'unknown' | 'new' | 'young' | 'mature';
 
 export interface TimeStampDto {
 	start_secs: number;
@@ -193,7 +196,7 @@ export interface FrequencyDictionarySetting {
 }
 
 /** Mirrors `SentenceColoring` (core/settings.rs, serde lowercase). */
-export type SentenceColoring = 'knowledge' | 'pos' | 'none';
+export type SentenceColoring = 'knowledge' | 'none';
 
 export interface SettingsData {
 	anki_model_mappings: Record<string, FieldMapping>;

@@ -115,15 +115,16 @@
 			<p class="hint">Scales the whole interface — text, controls, and spacing.</p>
 
 			<div class="coloring-row">
-				<label for="sentence-coloring">Sentence coloring:</label>
+				<label for="sentence-coloring">Sentence marking:</label>
 				<select id="sentence-coloring" bind:value={tempColoring}>
-					<option value="knowledge">Knowledge</option>
-					<option value="pos">Part of speech</option>
+					<option value="knowledge">Knowledge underlines</option>
 					<option value="none">None</option>
 				</select>
 			</div>
 			<p class="hint">
-				Knowledge colors words in sentences red → green by how well Anki says you know them.
+				Underlines words by Anki state: <span class="k-red">not in Anki</span>,
+				<span class="k-blue">new</span>, <span class="k-orange">young</span>,
+				<span class="k-green">mature</span>.
 			</p>
 
 			<hr />
@@ -200,6 +201,18 @@
 	}
 	.coloring-row select {
 		flex: 1;
+	}
+	.hint .k-red {
+		border-bottom: 2px solid var(--red);
+	}
+	.hint .k-blue {
+		border-bottom: 2px solid var(--blue);
+	}
+	.hint .k-orange {
+		border-bottom: 2px solid var(--orange);
+	}
+	.hint .k-green {
+		border-bottom: 2px solid var(--green);
 	}
 	.value {
 		min-width: 3.2rem;
