@@ -30,6 +30,12 @@ events (see [events.md](./events.md)). Engine handles come from `tauri::State<Ap
 `FileLoadResult = { source_file: SourceFile, terms: array<Term>, sentences: array<SentenceDto>,
 file_comprehension: f32 }`.
 
+`SegmentDto.comprehension: f32 | null` (issue #94): the covering term's comprehension for
+knowledge-based sentence coloring, min over overlapping terms (computed in `load_result` from
+`base_terms`, so known/ignored words are covered too); `null` when no extracted term covers the
+segment. Paired with `SettingsData.sentence_coloring: "knowledge" | "pos" | "none"`
+(serde-defaulted to `knowledge`; Appearance modal).
+
 ## Ignore list
 
 | Command | Args | Returns | Maps to | Notes |

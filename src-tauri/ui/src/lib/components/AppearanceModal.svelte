@@ -2,7 +2,8 @@
 	// Staged, but live-previews while adjusting so the user can judge readability;
 	// Cancel/✕/backdrop revert the preview to the saved value.
 	import { untrack } from 'svelte';
-	import { settings, appearanceModalOpen, setFontScale } from '$lib/stores';
+	import type { SentenceColoring } from '$lib/ipc';
+	import { settings, appearanceModalOpen, setFontScale, setSentenceColoring } from '$lib/stores';
 
 	/** `default_font_scale()` (core/settings.rs), as a percentage. */
 	const DEFAULT_PCT = 100;
@@ -12,6 +13,10 @@
 
 	let tempPct = $state(DEFAULT_PCT);
 	let originalPct = $state(DEFAULT_PCT);
+
+	const DEFAULT_COLORING: SentenceColoring = 'knowledge';
+	let tempColoring = $state<SentenceColoring>(DEFAULT_COLORING);
+	let originalColoring = $state<SentenceColoring>(DEFAULT_COLORING);
 
 	// Hydrate from the settings mirror each time the modal opens; untrack so
 	// settings changes while open don't clobber the staged value.
@@ -23,6 +28,9 @@
 		const pct = Math.round(($settings?.font_scale ?? 1) * 100);
 		tempPct = pct;
 		originalPct = pct;
+		const coloring = $settings?.sentence_coloring ?? DEFAULT_COLORING;
+		tempColoring = coloring;
+		originalColoring = coloring;
 	}
 
 	// Live preview: mirror what the root layout does with the saved setting.
@@ -33,20 +41,23 @@
 		if ($appearanceModalOpen) applyZoom(tempPct);
 	});
 
-	const dirty = $derived(tempPct !== originalPct);
+	const dirty = $derived(tempPct !== originalPct || tempColoring !== originalColoring);
 
 	function step(delta: number) {
 		tempPct = Math.min(MAX_PCT, Math.max(MIN_PCT, tempPct + delta));
 	}
 
 	async function save() {
-		await setFontScale(tempPct / 100);
+		if (tempPct !== originalPct) await setFontScale(tempPct / 100);
+		if (tempColoring !== originalColoring) await setSentenceColoring(tempColoring);
 		originalPct = tempPct;
+		originalColoring = tempColoring;
 		appearanceModalOpen.set(false);
 	}
 
 	function cancel() {
 		tempPct = originalPct;
+		tempColoring = originalColoring;
 	}
 
 	// Closing without saving discards the preview.
@@ -57,6 +68,7 @@
 
 	function restoreDefault() {
 		tempPct = DEFAULT_PCT;
+		tempColoring = DEFAULT_COLORING;
 	}
 </script>
 
@@ -101,6 +113,18 @@
 				<span class="value">{tempPct}%</span>
 			</div>
 			<p class="hint">Scales the whole interface — text, controls, and spacing.</p>
+
+			<div class="coloring-row">
+				<label for="sentence-coloring">Sentence coloring:</label>
+				<select id="sentence-coloring" bind:value={tempColoring}>
+					<option value="knowledge">Knowledge</option>
+					<option value="pos">Part of speech</option>
+					<option value="none">None</option>
+				</select>
+			</div>
+			<p class="hint">
+				Knowledge colors words in sentences red → green by how well Anki says you know them.
+			</p>
 
 			<hr />
 
@@ -167,6 +191,15 @@
 		padding: 0.1rem 0.5rem;
 		font-size: 0.95rem;
 		line-height: 1.2;
+	}
+	.coloring-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0 1rem;
+	}
+	.coloring-row select {
+		flex: 1;
 	}
 	.value {
 		min-width: 3.2rem;

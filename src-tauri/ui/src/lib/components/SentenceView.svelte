@@ -12,6 +12,7 @@
 </script>
 
 <script lang="ts">
+	import type { SegmentDto } from '$lib/ipc';
 	import { comprehensionColor } from '$lib/comprehension';
 	import { posColor } from '$lib/pos';
 	import {
@@ -22,7 +23,8 @@
 		playerConnected,
 		playerStatus,
 		seekTimestamp,
-		sessionMinedSentences
+		sessionMinedSentences,
+		settings
 	} from '$lib/stores';
 	import Furigana from './Furigana.svelte';
 
@@ -59,6 +61,16 @@
 	const isTermSeg = (seg: { start: number; end: number }): boolean =>
 		seg.start < termEnd && seg.end > occ.start;
 
+	// Knowledge mode needs Anki data — without the filter every term is 0%
+	// and the whole sentence would read as unknown (same gate as the bars).
+	const coloring = $derived($settings?.sentence_coloring ?? 'knowledge');
+	function segColor(seg: SegmentDto): string {
+		if (coloring === 'pos') return posColor(seg.pos);
+		if (coloring === 'knowledge' && $ankiFilterActive && seg.comprehension !== null)
+			return comprehensionColor(seg.comprehension * 100);
+		return 'inherit';
+	}
+
 	// Bars only show while Anki filtering is active — without it everything is 0%.
 	const comprehensionPct = $derived(occ.sentence.comprehension * 100);
 	const filledBars = $derived(Math.min(Math.ceil(comprehensionPct / 20), 5));
@@ -77,7 +89,7 @@
 		{@const isTerm = isTermSeg(seg)}
 		{#if i > 0}<wbr />{/if}<span
 			class:term={isTerm}
-			style="color: {isTerm ? 'var(--red)' : posColor(seg.pos)}"
+			style="color: {isTerm ? 'var(--red)' : segColor(seg)}"
 			><Furigana surface={seg.surface} reading={seg.reading} /></span
 		>
 	{/each}

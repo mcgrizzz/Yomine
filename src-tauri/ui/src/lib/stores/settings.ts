@@ -33,6 +33,9 @@ export async function toggleSerifFont(): Promise<void> {
 export const setFontScale = (scale: number) =>
 	patchSettings({ font_scale: Math.min(1.5, Math.max(0.75, scale)) });
 
+export const setSentenceColoring = (mode: ipc.SentenceColoring) =>
+	patchSettings({ sentence_coloring: mode });
+
 export const setAsbplayerFollowNewMedia = (on: boolean) =>
 	patchSettings({ asbplayer_follow_new_media: on });
 export const setAsbplayerFollowActiveTab = (on: boolean) =>

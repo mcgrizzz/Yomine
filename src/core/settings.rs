@@ -32,6 +32,16 @@ impl Default for WebSocketSettings {
     }
 }
 
+/// How sentence segments are colored in the term table (issue #94).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SentenceColoring {
+    #[default]
+    Knowledge,
+    Pos,
+    None,
+}
+
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct SettingsData {
     pub anki_model_mappings: HashMap<String, FieldMapping>,
@@ -64,6 +74,8 @@ pub struct SettingsData {
     /// yomitan-api base URL (one-click mining, issue #105).
     #[serde(default = "default_yomitan_url")]
     pub yomitan_url: String,
+    #[serde(default)]
+    pub sentence_coloring: SentenceColoring,
 }
 
 const fn default_font_scale() -> f32 {
@@ -101,6 +113,7 @@ impl Default for SettingsData {
             asbplayer_poll_secs: default_asbplayer_poll_secs(),
             font_scale: default_font_scale(),
             yomitan_url: default_yomitan_url(),
+            sentence_coloring: SentenceColoring::default(),
         }
     }
 }

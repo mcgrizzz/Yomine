@@ -1,6 +1,8 @@
 //! Wire DTOs (data-model.md). Domain types serialize directly when cheap; a
 //! DTO exists only where the domain type is awkward on the wire.
 
+use std::collections::HashMap;
+
 use serde::{
     Deserialize,
     Serialize,
@@ -52,6 +54,28 @@ pub struct SegmentDto {
     pub pos: POS,
     pub start: usize,
     pub end: usize,
+    /// Comprehension of the covering term (knowledge coloring, issue #94);
+    /// `None` for segments no extracted term covers (particles, punctuation).
+    pub comprehension: Option<f32>,
+}
+
+/// One term occurrence as `(start, end, comprehension)` byte offsets.
+pub type TermSpan = (usize, usize, f32);
+
+/// Group every term occurrence by sentence id. Expressions span their full
+/// segment — must match `isTermSeg` in `SentenceView.svelte`.
+pub fn term_spans_by_sentence(terms: &[Term]) -> HashMap<usize, Vec<TermSpan>> {
+    let mut map: HashMap<usize, Vec<TermSpan>> = HashMap::new();
+    for term in terms {
+        let len = match term.part_of_speech {
+            POS::Expression | POS::NounExpression => term.full_segment.len(),
+            _ => term.surface_form.len(),
+        };
+        for (sentence_id, start) in &term.sentence_references {
+            map.entry(*sentence_id).or_default().push((*start, start + len, term.comprehension));
+        }
+    }
+    map
 }
 
 /// Seconds (for seeking, FR-008) + human-readable labels (for display). Replaces
@@ -75,7 +99,7 @@ pub struct SentenceDto {
 }
 
 impl SentenceDto {
-    pub fn from_sentence(s: &Sentence) -> Self {
+    pub fn from_sentence(s: &Sentence, term_spans: &[TermSpan]) -> Self {
         let text = &s.text;
         let segments = s
             .segments
@@ -86,6 +110,13 @@ impl SentenceDto {
                 pos: *pos,
                 start: *start,
                 end: *end,
+                // Min over covering terms: an unknown compound outweighs a
+                // known component word.
+                comprehension: term_spans
+                    .iter()
+                    .filter(|(ts, te, _)| ts < end && te > start)
+                    .map(|(_, _, c)| *c)
+                    .reduce(f32::min),
             })
             .collect();
 
@@ -296,5 +327,61 @@ impl From<yomine::websocket::BoundMedia> for BoundMediaDto {
                 .collect(),
             active: m.active,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn term(surface: &str, pos: POS, comprehension: f32, start: usize) -> Term {
+        Term {
+            id: 1,
+            lemma_form: surface.to_string(),
+            lemma_reading: String::new(),
+            surface_form: surface.to_string(),
+            surface_reading: String::new(),
+            is_kana: false,
+            part_of_speech: pos,
+            frequencies: HashMap::new(),
+            full_segment: surface.to_string(),
+            full_segment_reading: String::new(),
+            sentence_references: vec![(1, start)],
+            comprehension,
+        }
+    }
+
+    #[test]
+    fn segment_comprehension_from_term_spans() {
+        // 気になる人がいる: expression 気になる (0..12) overlaps noun 気 (0..3);
+        // が (15..18) belongs to no term.
+        let sentence = Sentence {
+            id: 1,
+            source_id: 3,
+            text: "気になる人がいる".to_string(),
+            segments: vec![
+                ("キ".to_string(), POS::Noun, 0, 3),
+                ("ニ".to_string(), POS::Postposition, 3, 6),
+                ("ナル".to_string(), POS::Verb, 6, 12),
+                ("ヒト".to_string(), POS::Noun, 12, 15),
+                ("ガ".to_string(), POS::Postposition, 15, 18),
+                ("イル".to_string(), POS::Verb, 18, 24),
+            ],
+            timestamp: None,
+            comprehension: 0.0,
+        };
+        let terms = vec![
+            term("気になる", POS::Expression, 0.2, 0),
+            term("気", POS::Noun, 0.9, 0),
+            term("人", POS::Noun, 0.5, 12),
+            term("いる", POS::Verb, 1.0, 18),
+        ];
+
+        let spans = term_spans_by_sentence(&terms);
+        let dto = SentenceDto::from_sentence(&sentence, &spans[&1]);
+
+        let comps: Vec<Option<f32>> = dto.segments.iter().map(|s| s.comprehension).collect();
+        // The unknown expression (0.2) wins over the known 気 (0.9).
+        assert_eq!(comps, vec![Some(0.2), Some(0.2), Some(0.2), Some(0.5), None, Some(1.0)]);
     }
 }

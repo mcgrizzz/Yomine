@@ -39,6 +39,9 @@ export interface SegmentDto {
 	/** UTF-8 byte offsets into the sentence text (for the term-overlap test). */
 	start: number;
 	end: number;
+	/** Covering term's comprehension (0–1) for knowledge coloring (issue #94);
+	 * `null` when no extracted term covers the segment. */
+	comprehension: number | null;
 }
 
 export interface TimeStampDto {
@@ -189,6 +192,9 @@ export interface FrequencyDictionarySetting {
 	enabled: boolean;
 }
 
+/** Mirrors `SentenceColoring` (core/settings.rs, serde lowercase). */
+export type SentenceColoring = 'knowledge' | 'pos' | 'none';
+
 export interface SettingsData {
 	anki_model_mappings: Record<string, FieldMapping>;
 	anki_interval: number;
@@ -209,6 +215,8 @@ export interface SettingsData {
 	font_scale: number;
 	/** yomitan-api base URL (one-click mining, issue #105). */
 	yomitan_url: string;
+	/** How sentence segments are colored in the term table (issue #94). */
+	sentence_coloring: SentenceColoring;
 }
 
 /** Aggregated setup readiness for the checklist/banner (`get_setup_status`).

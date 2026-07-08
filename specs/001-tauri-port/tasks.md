@@ -1958,6 +1958,20 @@ sub-states, above) belongs to the same gate.
       MY_PAT so `published` still triggers auto-release-notes. Failed-run recovery
       (re-run release.yml with same tag) documented in docs/RELEASES.md.
 
+- [ ] T078 **Sentence coloring by knowledge (#94).** *(Code-complete 2026-07-08 — verify on
+      Windows.)* Sentence segments color by comprehension instead of POS.
+      `SegmentDto.comprehension: f32 | null` computed in `load_result` from `base_terms`
+      (known/ignored words included, so it refreshes with live Anki data); span rule
+      mirrors the frontend `isTermSeg` highlight (surface form, full segment for
+      expressions); overlapping terms take the min (unknown compound beats known
+      component); `null` = no covering term (particles/punctuation) → default fg.
+      New `SettingsData.sentence_coloring: "knowledge" (default) | "pos" | "none"`
+      (serde-defaulted; egui-era settings.json loads unchanged), staged select in the
+      Appearance modal. Knowledge mode reuses `comprehensionColor` (red→green ramp, same
+      as the bars) and gates on `ankiFilterActive` like the bars — without Anki data
+      everything is 0% and would glow red. Unit test: span→segment attribution
+      (`src-tauri/src/dto.rs`).
+
 ---
 
 ## Dependencies & Execution Order
