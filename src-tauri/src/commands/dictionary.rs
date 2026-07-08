@@ -143,13 +143,12 @@ pub(crate) async fn reload_and_swap(
 ) -> Result<(), String> {
     let progress_for_blocking = progress.clone();
     let reloaded = tauri::async_runtime::spawn_blocking(move || {
-        let _ = progress_for_blocking
-            .send(LoadingMessage::new("Reloading frequency dictionaries..."));
+        let _ =
+            progress_for_blocking.send(LoadingMessage::new("Reloading frequency dictionaries..."));
         let callback = Box::new(move |message: String| {
             let _ = progress_for_blocking.send(LoadingMessage::new(message));
         });
-        frequency_manager::process_frequency_dictionaries(Some(callback))
-            .map_err(|e| e.to_string())
+        frequency_manager::process_frequency_dictionaries(Some(callback)).map_err(|e| e.to_string())
     })
     .await
     .map_err(|e| e.to_string())?;

@@ -99,9 +99,7 @@ pub fn number_to_katakana(digits: &str) -> Option<String> {
     }
     // Leading zeros: a code/ID, not a quantity — read each digit.
     if digits.len() > 1 && digits.starts_with('0') {
-        return Some(
-            digits.bytes().map(|b| ZERO_DIGITS[(b - b'0') as usize]).collect::<String>(),
-        );
+        return Some(digits.bytes().map(|b| ZERO_DIGITS[(b - b'0') as usize]).collect::<String>());
     }
     let n: u64 = digits.parse().ok()?;
     if n == 0 {

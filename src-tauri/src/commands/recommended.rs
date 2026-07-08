@@ -160,9 +160,10 @@ pub async fn remove_dictionary(
     }
 
     let for_removal = title.clone();
-    let removed = tauri::async_runtime::spawn_blocking(move || remove_dictionary_files(&for_removal))
-        .await
-        .map_err(|e| e.to_string())??;
+    let removed =
+        tauri::async_runtime::spawn_blocking(move || remove_dictionary_files(&for_removal))
+            .await
+            .map_err(|e| e.to_string())??;
     if !removed {
         return Err(format!("No installed dictionary titled '{title}' was found on disk"));
     }

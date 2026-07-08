@@ -29,15 +29,13 @@ use yomine::{
 };
 
 fn main() {
-    let text: String =
-        std::env::args().skip(1).collect::<Vec<_>>().join(" ").trim().to_string();
+    let text: String = std::env::args().skip(1).collect::<Vec<_>>().join(" ").trim().to_string();
     if text.is_empty() {
         eprintln!("usage: cargo run --example segment -- \"<sentence>\"");
         std::process::exit(2);
     }
 
-    let tokenizer =
-        init_vibrato(&DictType::Unidic, None).expect("UniDic tokenizer unavailable");
+    let tokenizer = init_vibrato(&DictType::Unidic, None).expect("UniDic tokenizer unavailable");
 
     let mut worker = tokenizer.new_worker();
     worker.reset_sentence(&text);

@@ -70,7 +70,10 @@ async fn mutate_ignore_list(
 ) -> Result<(), String> {
     let tools = {
         let guard = state.lock().unwrap();
-        guard.language_tools.clone().ok_or_else(|| "Language tools are still loading".to_string())?
+        guard
+            .language_tools
+            .clone()
+            .ok_or_else(|| "Language tools are still loading".to_string())?
     };
 
     let mut list =

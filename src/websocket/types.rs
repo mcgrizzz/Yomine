@@ -26,10 +26,16 @@ impl Default for ServerState {
 
 #[derive(Debug, Clone)]
 pub enum ServerCommand {
-    SendToClients { json: String, clients: Vec<mpsc::Sender<String>> },
+    SendToClients {
+        json: String,
+        clients: Vec<mpsc::Sender<String>>,
+    },
     /// An inbound `"response"` message: routed to a pending request by
     /// `messageId`, else treated as a seek confirmation (the original protocol).
-    ProcessResponse { message_id: String, body: Option<serde_json::Value> },
+    ProcessResponse {
+        message_id: String,
+        body: Option<serde_json::Value>,
+    },
     Shutdown,
 }
 
@@ -118,10 +124,7 @@ impl RemoteSubtitle {
             source_id,
             text,
             segments: Vec::new(),
-            timestamp: Some(TimeStamp {
-                start: ms_to_time(self.start),
-                end: ms_to_time(self.end),
-            }),
+            timestamp: Some(TimeStamp { start: ms_to_time(self.start), end: ms_to_time(self.end) }),
             comprehension: 0.0,
         })
     }

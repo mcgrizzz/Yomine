@@ -17,9 +17,9 @@ pub use actions::{
 };
 pub use app::YomineApp;
 
-// `LanguageTools` now lives in `core`; re-exported here so existing `gui::LanguageTools`
-// references keep resolving.
-pub use crate::core::LanguageTools;
 // `recent_files` now lives in `core` (shared with the Tauri backend, which doesn't
 // compile `gui`); re-exported here so `gui::recent_files::*` paths keep resolving.
 pub use crate::core::recent_files;
+// `LanguageTools` now lives in `core`; re-exported here so existing `gui::LanguageTools`
+// references keep resolving.
+pub use crate::core::LanguageTools;

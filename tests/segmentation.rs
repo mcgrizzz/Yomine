@@ -202,9 +202,8 @@ fn run_case(tok: &Tokenizer, manager: &FrequencyManager, case: &Case) -> Vec<Str
     }
 
     for exp in &case.terms {
-        let Some(term) = terms
-            .iter()
-            .find(|t| t.full_segment == exp.surface || t.surface_form == exp.surface)
+        let Some(term) =
+            terms.iter().find(|t| t.full_segment == exp.surface || t.surface_form == exp.surface)
         else {
             failures.push(format!("term {:?}: not found", exp.surface));
             continue;
@@ -299,9 +298,8 @@ fn segmentation_fixtures() {
     let mut case_count = 0;
     for path in &fixture_paths {
         let file_name = path.file_name().unwrap().to_string_lossy().into_owned();
-        let fixture: FixtureFile =
-            toml::from_str(&fs::read_to_string(path).expect("read fixture"))
-                .unwrap_or_else(|e| panic!("{file_name}: bad fixture TOML: {e}"));
+        let fixture: FixtureFile = toml::from_str(&fs::read_to_string(path).expect("read fixture"))
+            .unwrap_or_else(|e| panic!("{file_name}: bad fixture TOML: {e}"));
         let manager = build_manager(&fixture.frequencies);
         for case in &fixture.cases {
             case_count += 1;

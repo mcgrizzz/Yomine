@@ -111,11 +111,8 @@ pub async fn start_analysis(
 
     // Sum file sizes up front so the per-file ETA is computable (egui pre-sums
     // `total_bytes` before starting; the callback only reports per-file sizes).
-    let total_bytes: u64 = file_paths
-        .iter()
-        .filter_map(|p| std::fs::metadata(p).ok())
-        .map(|m| m.len())
-        .sum();
+    let total_bytes: u64 =
+        file_paths.iter().filter_map(|p| std::fs::metadata(p).ok()).map(|m| m.len()).sum();
 
     // The blocking engine call calls `progress_callback(file_index_1based,
     // message, file_size)` once per file. We accumulate `bytes_processed`, derive

@@ -1321,6 +1321,21 @@ so each is independently demoable against egui. `[P]` = parallelizable (differen
   seeding semantics. Net ≈ −1000 comment lines. Checks: cargo check clean, svelte-check
   0 errors / 9 known warnings; regex-artifact scan clean. Same verify: behavior-neutral
   smoke test.
+- **T071 pre-flight (2026-07-07) — every CI gate run locally, two fixes.** Ran the full
+  test.yml gauntlet locally before the first real run: `cargo +nightly fmt -- --check` was
+  FAILING (formatting drift since T065 — examples/segment.rs, numbers.rs, websocket, tests,
+  gui files — plus reflow from the T070 comment edits); applied `cargo +nightly fmt`,
+  format-only diff across 13 rs files, now clean. Fixed a test.yml typo: `ARGO_PROFILE_DEV_DEBUG`
+  → `CARGO_PROFILE_DEV_DEBUG`. Then with CI's `RUSTFLAGS="-D warnings -A deprecated"`:
+  `cargo test -p yomine` (all suites green incl. segmentation fixtures), `cargo check -p yomine
+  --no-default-features`, `cargo check -p yomine-tauri` — all clean; `pnpm run build`
+  (production adapter-static build) passes; svelte-check 0 errors. Versions aligned at 0.5.5
+  across tauri.conf.json / ui package.json / both Cargo.tomls; identifier + frontendDist OK.
+  Noted, not blocking: release.yml's `create-checksums` only covers the egui `yomine-*` binaries,
+  not the tauri installers (different naming + job not in its `needs`) — fine while both ship,
+  revisit at T072. **Remaining T071 (maintainer):** commit + open the PR to main (test.yml
+  triggers on PR/push to main only), watch the first run, then a `workflow_dispatch` release
+  build with `build_only` for installer smoke tests (T052).
 - **NEXT options:**
   - **`load_frequency_dictionaries` import command (freq-dict import)** — the File-menu "Load New
     Frequency Dictionaries" entry and the checklist's two "+ Install Dictionary" actions (T045)

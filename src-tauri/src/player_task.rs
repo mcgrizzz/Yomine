@@ -34,12 +34,20 @@ use crate::events::{
 const UPDATE_INTERVAL: Duration = Duration::from_millis(250);
 
 pub enum PlayerCommand {
-    Seek { seconds: f32, label: String, reply: oneshot::Sender<Result<(), String>> },
-    Status { reply: oneshot::Sender<PlayerStatus> },
+    Seek {
+        seconds: f32,
+        label: String,
+        reply: oneshot::Sender<Result<(), String>>,
+    },
+    Status {
+        reply: oneshot::Sender<PlayerStatus>,
+    },
     SetPort(u16),
     /// asbplayer `get-bound-media` (issue #105). Runs on `spawn_blocking` off
     /// the task loop — the request blocks up to its timeout.
-    GetBoundMedia { reply: oneshot::Sender<Result<Vec<BoundMedia>, String>> },
+    GetBoundMedia {
+        reply: oneshot::Sender<Result<Vec<BoundMedia>, String>>,
+    },
     /// asbplayer `get-subtitles` for one media (all tracks when `track_numbers`
     /// is `None`).
     GetSubtitles {

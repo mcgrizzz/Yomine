@@ -335,8 +335,11 @@ impl WebSocketServer {
 
     /// The media asbplayer is currently tracking (`get-bound-media`).
     pub fn get_bound_media(&self) -> Result<Vec<BoundMedia>, YomineError> {
-        let body =
-            self.request_blocking("get-bound-media", serde_json::json!({}), Duration::from_secs(5))?;
+        let body = self.request_blocking(
+            "get-bound-media",
+            serde_json::json!({}),
+            Duration::from_secs(5),
+        )?;
         serde_json::from_value(body.get("media").cloned().unwrap_or_else(|| serde_json::json!([])))
             .map_err(|e| YomineError::Custom(format!("Unexpected get-bound-media response: {e}")))
     }

@@ -101,9 +101,7 @@ pub async fn open_file_dialog(app: AppHandle) -> Result<Option<String>, String> 
             let _ = tx.send(path);
         });
     let chosen = rx.await.map_err(|_| "file dialog closed unexpectedly".to_string())?;
-    Ok(chosen
-        .and_then(|p| p.into_path().ok())
-        .map(|p| p.display().to_string()))
+    Ok(chosen.and_then(|p| p.into_path().ok()).map(|p| p.display().to_string()))
 }
 
 /// Parse + segment + filter a source file (cached Anki snapshot, offline-safe) and
@@ -224,8 +222,7 @@ pub(crate) async fn load_asbplayer_into_state(
 
     // Save the cues as a real .srt in the app data dir (best-effort): the session
     // then lands in recent files and can be reopened later without asbplayer.
-    let title =
-        if title.trim().is_empty() { "asbplayer video".to_string() } else { title.clone() };
+    let title = if title.trim().is_empty() { "asbplayer video".to_string() } else { title.clone() };
     let saved_path = save_subtitles_srt(&subtitles, &title);
     let source_file = SourceFile {
         id: DEFAULT_SOURCE_FILE_ID,
@@ -358,10 +355,8 @@ pub(crate) async fn live_refresh(app: &AppHandle) -> Result<(), String> {
     }
     .await;
 
-    let _ = app.emit(
-        names::ANKI_STATUS,
-        AnkiStatus { connected: outcome.is_ok(), fetching: false },
-    );
+    let _ =
+        app.emit(names::ANKI_STATUS, AnkiStatus { connected: outcome.is_ok(), fetching: false });
     let payload = outcome?;
     let _ = app.emit(names::TERMS_REFRESHED, &payload);
     Ok(())
@@ -415,11 +410,8 @@ fn save_subtitles_srt(
         eprintln!("[asbplayer] Failed to create subtitle dir: {e}");
         return None;
     }
-    let stem: String = title
-        .chars()
-        .map(|c| if r#"\/:*?"<>|"#.contains(c) { '_' } else { c })
-        .take(80)
-        .collect();
+    let stem: String =
+        title.chars().map(|c| if r#"\/:*?"<>|"#.contains(c) { '_' } else { c }).take(80).collect();
     let stem = stem.trim();
     let path = dir.join(format!("{}.srt", if stem.is_empty() { "asbplayer video" } else { stem }));
     match std::fs::write(&path, yomine::websocket::subtitles_to_srt(subtitles)) {
