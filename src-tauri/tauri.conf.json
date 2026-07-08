@@ -1,7 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Yomine",
-  "version": "0.6.0",
   "identifier": "com.yomine.app",
   "build": {
     "frontendDist": "ui/build",

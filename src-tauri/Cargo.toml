@@ -1,6 +1,6 @@
 [package]
 name = "yomine-tauri"
-version = "0.6.0"
+version.workspace = true
 description = "Yomine — Japanese sentence mining (Tauri + SvelteKit shell)"
 edition = "2021"
 license = "MIT OR Apache-2.0"

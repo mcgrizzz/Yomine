@@ -1,12 +1,17 @@
 [package]
 name = "yomine"
-version = "0.6.0"
+version.workspace = true
 edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [workspace]
 members = [".", "src-tauri"]
 resolver = "2"
+
+# THE version: both crates inherit it, and tauri.conf.json (no `version` field)
+# falls back to src-tauri/Cargo.toml — bump this one line to cut a release.
+[workspace.package]
+version = "0.6.0"
 
 [dependencies]
 zip = { version = "4.3.0", features = ["xz"]}

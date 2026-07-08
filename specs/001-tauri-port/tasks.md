@@ -1822,6 +1822,14 @@ sub-states, above) belongs to the same gate.
       the two vars locally for manual builds; `cargo tauri dev` is unaffected. Verify: release
       vNEXT, then run vCURRENT → pill says "click to download and install" → progress →
       relaunches as vNEXT; a release without latest.json falls back to the link-only pill.
+      **Single-source versioning (2026-07-08, maintainer request):** the version now lives in
+      exactly one place — `[workspace.package] version` in the root Cargo.toml. Both crates use
+      `version.workspace = true`; tauri.conf.json's `version` field was removed (Tauri v2 falls
+      back to the crate version, which cargo resolves through the workspace — verified via
+      `cargo metadata`: both crates report 0.6.0). `compute-version.js` now reads
+      `[workspace.package]` first with the old `[package]` layout as fallback (tested against
+      both + the no-version error case). ui/package.json's version is decoupled/cosmetic — it
+      no longer needs bumping. Release procedure is now: edit the one line → Manual Release.
 
 ---
 

@@ -1,19 +1,26 @@
 function parseCargoVersion(cargoToml) {
-  const afterPackage = cargoToml.split(/\r?\n/);
-  let inPackage = false;
-  for (let i = 0; i < afterPackage.length; i++) {
-    const line = afterPackage[i].trim();
-    if (line === '[package]') {
-      inPackage = true;
+  // The version lives in [workspace.package] (both crates inherit it);
+  // fall back to a quoted [package] version for older layouts.
+  const lines = cargoToml.split(/\r?\n/);
+  let section = '';
+  let packageVersion = null;
+  for (const raw of lines) {
+    const line = raw.trim();
+    const sec = line.match(/^\[(.+)\]$/);
+    if (sec) {
+      section = sec[1];
       continue;
     }
-    if (inPackage) {
-      if (line.startsWith('[') && line !== '[package]') break;
-      const m = line.match(/^version\s*=\s*"(.*?)"/);
-      if (m) return m[1];
+    const m = line.match(/^version\s*=\s*"(.*?)"/);
+    if (m) {
+      if (section === 'workspace.package') return m[1];
+      if (section === 'package') packageVersion = m[1];
     }
   }
-  throw new Error('Could not find version in Cargo.toml [package] section');
+  if (packageVersion) return packageVersion;
+  throw new Error(
+    'Could not find version in Cargo.toml ([workspace.package] or [package])'
+  );
 }
 
 function toTag(version) {
