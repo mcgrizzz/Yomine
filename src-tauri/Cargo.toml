@@ -5,9 +5,6 @@ description = "Yomine — Japanese sentence mining (Tauri + SvelteKit shell)"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 
-# The Tauri app reuses the `yomine` engine crate with the egui `gui` feature OFF,
-# so no egui/eframe code is compiled into this binary (Constitution IV).
-
 [lib]
 name = "yomine_tauri_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
@@ -28,7 +25,7 @@ chrono = "0.4"
 # Katakana→hiragana for furigana readings in the sentence DTO (matches the
 # engine's version so only one copy is compiled).
 wana_kana = "4.0.0"
-yomine = { path = "..", default-features = false }
+yomine = { path = ".." }
 
 # Pin the wry runtime stack to the matched 2.11.2 set (`tauri` 2.11.2 →
 # `tauri-runtime`/`tauri-runtime-wry` 2.11.2 → `wry` 0.55.1). These three must move

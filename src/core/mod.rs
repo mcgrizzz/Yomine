@@ -7,8 +7,6 @@ pub mod models;
 pub mod pipeline;
 pub mod recent_files;
 pub mod settings;
-#[cfg(feature = "gui")]
-pub mod tasks;
 pub mod utils;
 
 pub use errors::YomineError;

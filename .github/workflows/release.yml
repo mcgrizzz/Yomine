@@ -35,150 +35,8 @@ env:
   TAG_NAME: ${{ github.event.release.tag_name || inputs.tag_name }}
 
 jobs:
-  build-and-upload:
-    name: ${{ inputs.build_only && 'Build' || 'Release' }} - ${{ matrix.platform.os-name }}
-    strategy:
-      matrix:
-        platform:
-          - os-name: Windows-x86_64
-            runs-on: windows-latest
-            target: x86_64-pc-windows-msvc
-            name: yomine-${{ github.event.release.tag_name || inputs.tag_name }}-windows-x64.exe
-          - os-name: Linux-x86_64
-            runs-on: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            name: yomine-${{ github.event.release.tag_name || inputs.tag_name }}-linux-x64
-
-    runs-on: ${{ matrix.platform.runs-on }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Cache Rust build artifacts
-        uses: Swatinem/rust-cache@v2
-
-      - name: Build binary
-        uses: houseabsolute/actions-rust-cross@v1
-        with:
-          command: build
-          target: ${{ matrix.platform.target }}
-          args: "--release"
-          strip: true
-
-      - name: List target directory contents
-        run: |
-          echo "Contents of target directory:"
-          ls -la target/ || dir "target" /s
-          echo "Contents of target/${{ matrix.platform.target }}:"
-          ls -la target/${{ matrix.platform.target }}/ || dir "target/${{ matrix.platform.target }}" /s
-          echo "Contents of target/${{ matrix.platform.target }}/release:"
-          ls -la target/${{ matrix.platform.target }}/release/ || dir "target/${{ matrix.platform.target }}/release" /s
-        shell: bash
-
-      - name: Prepare binary (Windows)
-        if: matrix.platform.runs-on == 'windows-latest'
-        run: |
-          copy target\${{ matrix.platform.target }}\release\yomine.exe ${{ matrix.platform.name }}
-        shell: cmd
-
-      - name: Prepare binary (Linux)
-        if: matrix.platform.runs-on == 'ubuntu-latest'
-        run: |
-          cp target/${{ matrix.platform.target }}/release/yomine ${{ matrix.platform.name }}
-          chmod +x ${{ matrix.platform.name }}
-        shell: bash
-
-      - name: Upload binary as artifact (build-only mode)
-        if: ${{ inputs.build_only }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.platform.name }}
-          path: ${{ matrix.platform.name }}
-          retention-days: 7
-
-      - name: Upload binary to release
-        if: ${{ !inputs.build_only }}
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.TAG_NAME }}
-          files: ${{ matrix.platform.name }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  build-macos-universal:
-    name: ${{ inputs.build_only && 'Build' || 'Release' }} - macOS Universal
-    runs-on: macos-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Cache Rust build artifacts
-        uses: Swatinem/rust-cache@v2
-
-      - name: Build Intel binary
-        uses: houseabsolute/actions-rust-cross@v1
-        with:
-          command: build
-          target: x86_64-apple-darwin
-          args: "--release"
-          strip: true
-
-      - name: Build ARM64 binary
-        uses: houseabsolute/actions-rust-cross@v1
-        with:
-          command: build
-          target: aarch64-apple-darwin
-          args: "--release"
-          strip: true
-
-      - name: Create Universal Binary
-        run: |
-          lipo -create \
-            target/x86_64-apple-darwin/release/yomine \
-            target/aarch64-apple-darwin/release/yomine \
-            -output yomine-${{ env.TAG_NAME }}-macos-universal
-
-          chmod +x yomine-${{ env.TAG_NAME }}-macos-universal
-          echo "Universal binary architecture info:"
-          lipo -info yomine-${{ env.TAG_NAME }}-macos-universal
-          echo "Universal binary size:"
-          ls -lh yomine-${{ env.TAG_NAME }}-macos-universal
-          echo "File permissions:"
-          ls -la yomine-${{ env.TAG_NAME }}-macos-universal
-          echo "File type:"
-          file yomine-${{ env.TAG_NAME }}-macos-universal
-        shell: bash
-
-      - name: Ad-hoc Code Sign macOS Binary
-        run: |
-          codesign --force --sign - --options runtime --timestamp yomine-${{ env.TAG_NAME }}-macos-universal
-          echo "Verifying binary code signature:"
-          codesign --verify --verbose yomine-${{ env.TAG_NAME }}-macos-universal
-          echo "Binary code signature details:"
-          codesign --display --verbose yomine-${{ env.TAG_NAME }}-macos-universal
-          echo "macOS binary successfully ad-hoc signed!"
-        shell: bash
-
-      - name: Upload macOS binary as artifact (build-only mode)
-        if: ${{ inputs.build_only }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: yomine-${{ env.TAG_NAME }}-macos-universal
-          path: yomine-${{ env.TAG_NAME }}-macos-universal
-          retention-days: 7
-
-      - name: Upload macOS Universal Binary to release
-        if: ${{ !inputs.build_only }}
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.TAG_NAME }}
-          files: yomine-${{ env.TAG_NAME }}-macos-universal
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
   create-checksums:
-    needs: [build-and-upload, build-macos-universal]
+    needs: [build-tauri]
     runs-on: ubuntu-latest
     if: ${{ !inputs.build_only }}
     
@@ -188,26 +46,25 @@ jobs:
         with:        
           repository: ${{ github.repository }}
           tag: ${{ env.TAG_NAME }}
-          fileName: "yomine-*"
+          fileName: "*"
           out-file-path: "downloads"
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate consolidated checksums
         run: |
           cd downloads
-          sha256sum yomine-* > ../SHA256SUMS.txt
+          rm -f SHA256SUMS.txt SHA256SUMS-detailed.txt
+          sha256sum -- * > ../SHA256SUMS.txt
           echo "Generated checksums:"
           cat ../SHA256SUMS.txt
-          
+
           cat > ../SHA256SUMS-detailed.txt << 'EOF'
           # SHA256 Checksums for Yomine Release
-          # 
-          # File descriptions:
-          # - *-windows-x86_64.exe: Windows 64-bit executable
-          # - *-linux-x86_64: Linux 64-bit executable  
-          # - *-macos-universal: macOS universal binary (Intel + Apple Silicon)
           #
-          # For macOS users: Download the universal binary - it works on both Intel and Apple Silicon Macs
+          # File descriptions:
+          # - *.msi / *-setup.exe: Windows installers
+          # - *.dmg: macOS universal app (Intel + Apple Silicon)
+          # - *.deb / *.rpm / *.AppImage: Linux packages
           
           EOF
           cat ../SHA256SUMS.txt >> ../SHA256SUMS-detailed.txt
@@ -222,8 +79,6 @@ jobs:
             SHA256SUMS-detailed.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  # Tauri app installers (T053). Bundles the new Tauri build alongside the
-  # egui binaries above (which stay until Open Item O4 / T055 retires them).
   # `tauri-action` runs `beforeBuildCommand` (pnpm build in ui/) itself; we only
   # install the frontend deps first. With a tag it uploads the installers to
   # that release; in build_only mode it just builds and we attach artifacts.

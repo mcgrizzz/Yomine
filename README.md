@@ -196,13 +196,16 @@ The name comes from 読み ("yomi" for reading) + "mine" (as in mining vocabular
 
 **Prerequisites**: 
 - [Rust](https://www.rust-lang.org/tools/install) with Cargo
+- [Node.js](https://nodejs.org/) 22+ with [pnpm](https://pnpm.io/)
+- [Tauri prerequisites](https://tauri.app/start/prerequisites/) for your platform
 
 **Steps:**
 ```bash
 git clone https://github.com/mcgrizzz/Yomine.git
-cd yomine
-cargo build --release
-cargo run --release
+cd Yomine/src-tauri/ui
+pnpm install
+cd ..
+cargo tauri dev    # or: cargo tauri build
 ```
 
 ## License
@@ -213,7 +216,7 @@ Yomine is licensed under [MIT](LICENSE-MIT) OR [Apache-2.0](LICENSE-APACHE)
 
 **Key Dependencies:**
 * [Vibrato](https://github.com/daac-tools/vibrato) for text segmentation - [MIT](https://github.com/daac-tools/vibrato/blob/main/LICENSE-MIT) or [Apache-2.0](https://github.com/daac-tools/vibrato/blob/main/LICENSE-APACHE)
-* [egui](https://github.com/emilk/egui) for user interface - [MIT](https://github.com/emilk/egui/blob/main/LICENSE-MIT) or [Apache-2.0](https://github.com/emilk/egui/blob/main/LICENSE-APACHE)
+* [Tauri](https://tauri.app/) + [Svelte](https://svelte.dev/) for the user interface - [MIT](https://github.com/tauri-apps/tauri/blob/dev/LICENSE_MIT) or [Apache-2.0](https://github.com/tauri-apps/tauri/blob/dev/LICENSE_APACHE-2.0)
 * [WanaKana Rust](https://github.com/PSeitz/wana_kana_rust) for Japanese text utilities - [MIT](https://github.com/PSeitz/wana_kana_rust/blob/master/LICENSE)
 * [jp-deinflector](https://github.com/btrkeks/jp-deinflector) for Japanese deinflection
 * Noto Sans/Serif JP fonts - [SIL Open Font License](https://openfontlicense.org/open-font-license-official-text/)
