@@ -11,8 +11,7 @@ pub struct Model {
 pub struct FieldMapping {
     pub term_field: String,
     pub reading_field: String,
-    /// Sentence field for already-mined detection (issue #3); optional so
-    /// existing settings.json files load unchanged.
+    /// Sentence field for already-mined detection (issue #3).
     #[serde(default)]
     pub sentence_field: Option<String>,
 }

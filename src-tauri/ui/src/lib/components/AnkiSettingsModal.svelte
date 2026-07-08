@@ -211,10 +211,8 @@
 		return chars.length > 30 ? chars.slice(0, 27).join('') + '...' : value;
 	}
 
-	/** Example previews render as plain text, so FORMATTING tags (<b>, <br>, …)
-	 * would show literally — strip only those. Anything content-bearing (ruby
-	 * furigana, Anki's 漢字[かな] notation, …) must stay visible: the preview's
-	 * whole point is showing what the field holds. */
+	/** Strip only FORMATTING tags — content markup (ruby, 漢字[かな]) must stay
+	 * visible in previews. */
 	function preview(value: string): string {
 		return truncate(
 			value

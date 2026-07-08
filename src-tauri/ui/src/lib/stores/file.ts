@@ -7,7 +7,6 @@ import { refreshMinedState } from './mining';
 /** The currently loaded file + its terms, or `null` before any file is opened. */
 export const fileResult = writable<ipc.FileLoadResult | null>(null);
 
-
 /** Gates the per-sentence comprehension bars — without Anki filtering every
  * sentence reads 0%. */
 export const ankiFilterActive = derived(fileResult, ($f) => $f?.anki_filter_active ?? false);

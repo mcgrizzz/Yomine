@@ -370,9 +370,8 @@ impl WebSocketServer {
         .map_err(|e| YomineError::Custom(format!("Unexpected get-subtitles response: {e}")))
     }
 
-    /// Ask asbplayer to mine its current subtitle (`mine-subtitle`), merging our
-    /// rendered `fields` into the card it exports (one-click mining, issue #105).
-    /// `post_mine_action`: 0 none, 1 show Anki dialog, 2 update last card, 3 export.
+    /// asbplayer `mine-subtitle`. `post_mine_action`: 0 none, 1 Anki dialog,
+    /// 2 update last card, 3 export.
     pub fn mine_subtitle(
         &self,
         fields: &HashMap<String, String>,

@@ -69,8 +69,7 @@ export async function saveAnkiSettings(
 			anki_interval: interval,
 			yomitan_url: yomitanUrl
 		});
-		// The Yomitan URL / sentence mappings may have changed — re-probe so the
-		// ⛏ buttons and sentence badges pick it up without a reload.
+		// Re-probe: the Yomitan URL / sentence mappings may have changed.
 		if (saved) void refreshMinedState(true);
 		return saved;
 	} catch (err) {

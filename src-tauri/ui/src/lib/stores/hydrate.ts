@@ -98,8 +98,7 @@ export async function hydrate(): Promise<void> {
 	refreshSetupStatus();
 	refreshIgnoredLemmas();
 	refreshRecommendedDicts();
-	// Restores ⛏ availability + mined state on a webview reload (the file-load
-	// trigger doesn't run then — the current file comes from getTerms above).
+	// Restores mined state / mine-button gating on a webview reload.
 	void refreshMinedState(true);
 
 	// Best-effort update check; a failure just means no notice.

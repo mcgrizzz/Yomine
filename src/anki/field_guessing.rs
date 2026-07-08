@@ -12,10 +12,8 @@ use wana_kana::{
     IsJapaneseChar,
 };
 
-/// Sentence-field guess (issue #3), in priority order: a field literally named
-/// "Sentence" (space/case-insensitive), the shortest sentence-named field that
-/// isn't a derived variant (audio/furigana/meaning/…), a context-ish name, and
-/// finally the first field whose sample content looks like a Japanese sentence.
+/// Sentence-field guess: exact "Sentence", then non-derived sentence-ish
+/// names, then context-ish names, then content sniffing.
 pub fn guess_sentence_field(
     sample_note: &std::collections::HashMap<String, String>,
     available_fields: &[String],
@@ -23,8 +21,7 @@ pub fn guess_sentence_field(
     fn norm(s: &str) -> String {
         s.to_lowercase().replace([' ', '_', '-'], "")
     }
-    // "SentenceAudio", "Sentence Meaning", "IsSentenceCard" etc. are metadata
-    // ABOUT the sentence, not the sentence text itself.
+    // "SentenceAudio" etc. are metadata ABOUT the sentence, not its text.
     const EXCLUDED: &[&str] = &[
         "audio",
         "furigana",

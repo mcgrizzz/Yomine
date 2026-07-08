@@ -1,9 +1,5 @@
-//! yomitan-api client (one-click mining, issue #105).
-//!
-//! Talks to the yomitan-api companion (github.com/yomidevs/yomitan-api), which
-//! exposes the user's own Yomitan config: `/ankiCardFormats` is their deck /
-//! model / field→marker mapping, `/ankiFields` renders marker values with their
-//! templates. Yomine therefore needs no field-mapping UI for card content.
+//! yomitan-api client (github.com/yomidevs/yomitan-api, issue #105): the
+//! user's own Yomitan config supplies deck/model/templates for mined cards.
 
 use std::collections::HashMap;
 
@@ -11,8 +7,7 @@ use serde::Deserialize;
 
 use crate::core::errors::YomineError;
 
-/// Markers Yomitan can't render without source context; Yomine substitutes them
-/// (direct path) or leaves them to asbplayer (mine-subtitle path).
+/// Markers Yomitan can't render without the source sentence.
 const SENTENCE_MARKER: &str = "sentence";
 const CLOZE_PREFIX: &str = "cloze-prefix";
 const CLOZE_BODY: &str = "cloze-body";
@@ -60,8 +55,7 @@ async fn post<T: for<'de> Deserialize<'de>>(
     body: serde_json::Value,
 ) -> Result<T, YomineError> {
     let url = format!("{}/{}", base_url.trim_end_matches('/'), path);
-    // Local API — a generous cap that still keeps status probes from hanging
-    // on unroutable URLs.
+    // 10s cap so status probes can't hang on unroutable URLs.
     let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(10)).build()?;
     let response = client.post(&url).json(&body).send().await?;
     Ok(response.json().await?)
@@ -89,8 +83,7 @@ pub async fn get_term_card_format(base_url: &str) -> Result<CardFormat, YomineEr
     })
 }
 
-/// Render `markers` for `text` with the user's Yomitan templates. `include_media`
-/// also returns audio/dictionary media as base64 for `storeMediaFile`.
+/// Render `markers` for `text`; `include_media` adds base64 audio/images.
 pub async fn render_fields(
     base_url: &str,
     text: &str,
@@ -139,15 +132,14 @@ fn parse_markers(template: &str) -> Vec<String> {
     markers
 }
 
-/// Source-sentence context for markers Yomitan can't render (direct path only).
+/// Source-sentence context for the markers Yomitan can't render.
 pub struct SentenceContext<'a> {
     pub sentence: &'a str,
     pub term: &'a str,
 }
 
-/// Substitute rendered marker values into the format's field templates. Fields
-/// that come out empty are dropped so they never overwrite what Anki/asbplayer
-/// would otherwise fill (empty markers render as "" — matching Yomitan).
+/// Substitute rendered markers into the field templates. Empty results are
+/// dropped so they never overwrite what Anki/asbplayer would fill.
 pub fn assemble_fields(
     format: &CardFormat,
     rendered: &HashMap<String, String>,

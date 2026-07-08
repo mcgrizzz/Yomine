@@ -27,10 +27,7 @@ static KANA_READING_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 static STRIP_INLINE_TAGS: LazyLock<Regex> = LazyLock::new(|| {
-    // Matches:
-    // - any HTML/WebVTT-style tag (<b>, <font ...>, <c.jp>, <span ...>, <ruby>, …)
-    //   — a whitelist kept leaking whatever tag it didn't know about
-    // - ASS/SSA style overrides: {\...}
+    // Any HTML/WebVTT-style tag (a whitelist kept leaking) + ASS {\...} overrides.
     Regex::new(r"(?i)</?[a-z][^<>]*>|\{\\[^}]*\}")
         .expect("Failed to compile inline_strip_tags regex")
 });
@@ -127,8 +124,7 @@ pub fn read_txt(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> 
                 continue;
             }
 
-            // Remove kana readings in parentheses (e.g., 漢字（かんじ）) and any
-            // styling tags (text copied out of subtitles often keeps them).
+            // Remove kana-reading parentheses and styling tags.
             let text = KANA_READING_REGEX.replace_all(part, "");
             let text = STRIP_INLINE_TAGS.replace_all(&text, "");
             let text = text.trim().to_string();

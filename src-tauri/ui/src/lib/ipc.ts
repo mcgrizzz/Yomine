@@ -449,9 +449,7 @@ export async function loadAsbplayerMedia(
 	return invoke('load_asbplayer_media', { mediaId, trackNumbers, title, progress: channel });
 }
 
-/** Outcome of `mine_term` (issue #105). `warning` is set when the note was
- * created but asbplayer enrichment (audio/screenshot) failed. `note_id`
- * (created only) powers "open in Anki". */
+/** `mine_term` outcome; `warning` = note created but enrichment failed. */
 export interface MineResult {
 	status: 'created' | 'duplicate';
 	via: string;
@@ -459,8 +457,7 @@ export interface MineResult {
 	note_id: number | null;
 }
 
-/** Already-mined state (issue #3). `mined_sentences` are normalized match keys
- * (tags stripped, whitespace removed) — compare with `normalizeSentence`. */
+/** Already-mined state (issue #3); sentences are `normalizeSentence` keys. */
 export interface MinedState {
 	added_terms: string[];
 	mined_sentences: string[];
@@ -471,10 +468,7 @@ export interface YomitanStatus {
 	version: string | null;
 }
 
-/** One-click mine (issue #105): Yomitan renders the card content and the note
- * is created via AnkiConnect; `via: 'asbplayer'` then seeks and has asbplayer
- * enrich the fresh note with audio/screenshot. Stage updates stream through
- * `onProgress`. */
+/** One-click mine (issue #105); stage updates stream through `onProgress`. */
 export function mineTerm(
 	args: {
 		term: string;
@@ -495,14 +489,12 @@ export function openInAnki(noteId: number): Promise<void> {
 	return invoke('open_in_anki', { noteId });
 }
 
-/** Terms with a card added in the last day + the mined-sentence set (issue #3).
- * Best-effort: an offline AnkiConnect still returns cached sentences. */
+/** Best-effort: an offline AnkiConnect still returns cached sentences. */
 export function getMinedState(): Promise<MinedState> {
 	return invoke('get_mined_state');
 }
 
-/** Reachability probe for the Anki settings modal's Yomitan section.
- * `url` tests a staged (unsaved) value; omitted = the saved setting. */
+/** Reachability probe; `url` tests a staged value (omitted = saved setting). */
 export function getYomitanStatus(url?: string): Promise<YomitanStatus> {
 	return invoke('get_yomitan_status', { url: url ?? null });
 }

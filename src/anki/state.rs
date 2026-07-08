@@ -316,9 +316,7 @@ pub async fn get_total_vocab(
         notes_request_time.as_secs_f32()
     );
 
-    // Harvest sentence-field values while we have every note in hand (issue #3);
-    // `get_mined_state` reads the cache instead of re-downloading the collection.
-    // Entries are note-id-keyed so deletions can be pruned between harvests.
+    // Harvest sentence-field values while every note is in hand (issue #3).
     let mined_sentences: Vec<super::mined::MinedSentence> = notes
         .iter()
         .filter_map(|note| {

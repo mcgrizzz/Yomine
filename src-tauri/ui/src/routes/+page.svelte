@@ -74,8 +74,7 @@
 	}
 </script>
 
-<!-- Focus refresh catches cards mined outside Yomine (e.g. via Yomitan while
-     watching); debounced inside the store (issue #3). -->
+<!-- Focus refresh catches cards mined outside Yomine (issue #3). -->
 <svelte:window onkeydown={onKeydown} onfocus={() => void refreshMinedState()} />
 
 <div class="app-shell">

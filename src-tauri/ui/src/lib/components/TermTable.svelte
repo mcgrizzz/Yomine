@@ -107,12 +107,11 @@
 		return out;
 	}
 
-	// One-click mining (issue #105): the mine button uses the sentence its
-	// SentenceView is showing, so each row's occurrence index is bound up here.
+	// Each row's occurrence index, bound up so the mine button and the
+	// search-jump below target the sentence on display.
 	let occIdx = $state<Record<string, number>>({});
 
-	// A search that matches inside a sentence jumps the row to that sentence
-	// (the filter alone would show the row on occurrence 1 with no hit visible).
+	// A search matching inside a sentence jumps the row to that sentence.
 	$effect(() => {
 		const q = $tableSearch.trim();
 		if (!q) return;
@@ -131,9 +130,7 @@
 	function mine(term: Term, occs: Occurrence[]) {
 		const occ = occs[Math.min(occIdx[termKey(term)] ?? 0, occs.length - 1)];
 		const ts = occ?.sentence.timestamp ?? null;
-		// The note is always created via AnkiConnect; when asbplayer is the
-		// active player (same rule as seeking) and the row has a cue, asbplayer
-		// then enriches the fresh note with audio/screenshot.
+		// asbplayer enrichment needs asbplayer active (same rule as seeking) + a cue.
 		const via =
 			$playerStatus.mode === 'asbplayer' && $playerStatus.ws_clients > 0 && ts !== null
 				? 'asbplayer'
@@ -370,8 +367,7 @@
 		color: var(--red);
 		line-height: 1.1;
 	}
-	/* Mined terms read as "done" — green, like the confirmed-seek pill. Kept
-	   above .ignored so an ignored term still greys out. */
+	/* Kept above .ignored so an ignored term still greys out. */
 	.term.mined-term {
 		color: var(--green);
 	}

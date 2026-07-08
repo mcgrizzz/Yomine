@@ -11,23 +11,20 @@ use super::{
     types::FieldMapping,
 };
 
-/// Sentence-field harvest, overwritten during the full note pass in
-/// `get_total_vocab`; read (and pruned) by `get_mined_state`.
+/// Sentence-field harvest, overwritten by each `get_total_vocab` pass.
 pub const MINED_SENTENCE_CACHE: &str = "anki_mined_sentences.json";
 
 /// Sentences Yomine itself mined — survives without a sentence-field mapping.
 const RECORDED_MINES_CACHE: &str = "yomine_mined_notes.json";
 
-/// Both caches key sentences by note id so Anki-side deletions can be pruned
-/// between full harvests.
+/// Note-id-keyed so Anki-side deletions can be pruned between harvests.
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct MinedSentence {
     pub note_id: u64,
     pub sentence: String,
 }
 
-/// Terms + sentences from notes added in the last day (`added:1`). Term fields
-/// are tag-stripped/trimmed; sentences are normalized for exact matching.
+/// Terms + normalized sentences from notes added in the last day (`added:1`).
 pub async fn get_recently_added(
     model_mapping: &HashMap<String, FieldMapping>,
 ) -> Result<(Vec<String>, Vec<String>), reqwest::Error> {
@@ -66,8 +63,6 @@ pub fn save_harvested_sentences(entries: &[MinedSentence]) {
     }
 }
 
-/// Record a sentence Yomine itself just mined, so "sentence mined" marks
-/// survive restarts even without a sentence-field mapping.
 pub fn record_mined_sentence(note_id: u64, raw: &str) {
     let normalized = normalize_sentence(raw);
     if normalized.is_empty() {
@@ -83,8 +78,7 @@ pub fn record_mined_sentence(note_id: u64, raw: &str) {
     }
 }
 
-/// Note ids that still exist in Anki, queried in chunks (`nid:a,b,c`). `None`
-/// when Anki is unreachable — callers keep their caches as-is.
+/// Note ids that still exist in Anki; `None` when unreachable (keep caches).
 async fn existing_note_ids(ids: &[u64]) -> Option<std::collections::HashSet<u64>> {
     let mut existing = std::collections::HashSet::new();
     for chunk in ids.chunks(500) {
@@ -98,10 +92,8 @@ async fn existing_note_ids(ids: &[u64]) -> Option<std::collections::HashSet<u64>
     Some(existing)
 }
 
-/// All mined-sentence match keys (harvest + Yomine's own mines), minus notes
-/// since deleted in Anki — both caches are pruned in passing, so a deleted
-/// note's sentence unmarks on the next refresh instead of the next full
-/// harvest. Offline Anki returns the caches untouched.
+/// Harvest + recorded mines, minus notes since deleted in Anki (both caches
+/// pruned in passing).
 pub async fn mined_sentences_pruned() -> Vec<String> {
     let mut harvested: Vec<MinedSentence> =
         crate::persistence::load_json_or_default(MINED_SENTENCE_CACHE);
@@ -131,9 +123,8 @@ pub async fn mined_sentences_pruned() -> Vec<String> {
     sentences.into_iter().collect()
 }
 
-/// Match key for sentence comparison: tags stripped, all whitespace removed.
-/// The frontend applies the same whitespace rule to its (plain-text) sentences,
-/// so the two sides must stay in sync.
+/// Sentence match key: tags stripped, whitespace removed. Must stay in sync
+/// with the frontend's `normalizeSentence`.
 pub fn normalize_sentence(raw: &str) -> String {
     strip_html(raw).chars().filter(|c| !c.is_whitespace()).collect()
 }

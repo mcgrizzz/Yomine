@@ -26,17 +26,15 @@
 	} from '$lib/stores';
 	import Furigana from './Furigana.svelte';
 
-	// No $bindable fallback: the parent binds a record entry that starts
-	// undefined, and Svelte forbids binding undefined onto a fallback
-	// (props_invalid_value). Reads coalesce to 0 instead.
+	// No $bindable fallback — Svelte forbids binding undefined (the initial
+	// record entry) onto one; reads coalesce to 0 instead.
 	let {
 		occurrences,
 		term,
 		currentIndex = $bindable()
 	}: { occurrences: Occurrence[]; term: Term; currentIndex?: number } = $props();
 
-	// Clamped in case a refresh shrinks the occurrence list. The index is
-	// bindable so the row's ⛏ button (TermTable) mines the sentence on display.
+	// Clamped in case a refresh shrinks the occurrence list.
 	const count = $derived(occurrences.length);
 	const current = $derived(Math.min(currentIndex ?? 0, count - 1));
 	const occ = $derived(occurrences[current]);
@@ -65,9 +63,7 @@
 	const comprehensionPct = $derived(occ.sentence.comprehension * 100);
 	const filledBars = $derived(Math.min(Math.ceil(comprehensionPct / 20), 5));
 
-	// This exact sentence already lives in an Anki note — either harvested from
-	// the collection (needs a sentence-field mapping) or mined this session, so
-	// a mined term shows WHICH of its sentences was used (issue #3).
+	// This exact sentence already lives in an Anki note (issue #3).
 	const sentenceMined = $derived.by(() => {
 		const key = normalizeSentence(occ.sentence.text);
 		return $minedSentences.has(key) || $sessionMinedSentences.has(key);
@@ -218,7 +214,6 @@
 		color: var(--comment);
 	}
 
-	/* Same visual language as the term-side ✓ chip, sized to the meta row. */
 	.sentence-mined {
 		display: inline-flex;
 		align-items: center;

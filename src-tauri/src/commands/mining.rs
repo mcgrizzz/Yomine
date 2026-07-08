@@ -1,12 +1,6 @@
-//! One-click mining (issue #105) + mined-state tracking (issue #3).
-//!
-//! Card content comes from the user's own Yomitan config via yomitan-api
-//! (`src/yomitan`): their term card format decides deck/model/fields, their
-//! templates render the marker values. The note is always created by Yomine
-//! via AnkiConnect; when asbplayer is the active player (`via: "asbplayer"`)
-//! we then seek to the cue and send `mine-subtitle` with "update last card",
-//! so asbplayer enriches the fresh note with its audio/screenshot — the same
-//! order as asbplayer's own one-click-mining architecture.
+//! One-click mining (issue #105) + mined-state tracking (issue #3). The note
+//! is always created via AnkiConnect from Yomitan-rendered fields; the
+//! asbplayer path then enriches it (audio/screenshot) via "update last card".
 
 use std::{
     sync::Mutex,
@@ -36,8 +30,6 @@ use crate::{
     state::AppState,
 };
 
-/// How long we poll for the seek confirmation before mining anyway — asbplayer
-/// acks confirmed seeks well inside this in practice.
 const SEEK_CONFIRM_TIMEOUT: Duration = Duration::from_secs(3);
 const SEEK_CONFIRM_POLL: Duration = Duration::from_millis(250);
 
@@ -93,8 +85,7 @@ pub async fn mine_term(
     let note_id = match response.error {
         None => response.result,
         Some(err) if err.contains("duplicate") => {
-            // Don't enrich a duplicate: "update last card" would hit whatever
-            // note happens to be newest, not this term's existing card.
+            // No enrichment: "update last card" would hit an unrelated note.
             return Ok(MineResultDto {
                 status: "duplicate".to_string(),
                 via,
@@ -108,9 +99,7 @@ pub async fn mine_term(
         mined::record_mined_sentence(id, &sentence);
     }
 
-    // asbplayer enrichment: seek to the cue, then "update last card" (2) makes
-    // asbplayer attach its audio/screenshot to the note just created. Failures
-    // don't undo the mine — the note exists — so they come back as a warning.
+    // Enrichment failures don't undo the mine (the note exists) — warn instead.
     let mut warning = None;
     if via == "asbplayer" {
         let _ = progress.send(LoadingMessage::new("Adding audio & screenshot via asbplayer…"));
@@ -145,8 +134,8 @@ pub async fn open_in_anki(note_id: u64) -> Result<(), String> {
     }
 }
 
-/// Best-effort wait for asbplayer to ack the seek, so `mine-subtitle` sees the
-/// term's subtitle as "current". Proceeds on timeout rather than failing.
+/// Best-effort seek-ack wait so asbplayer records the right cue; proceeds on
+/// timeout rather than failing.
 async fn wait_for_seek_confirmation(player: &PlayerHandle, secs: f32) {
     let deadline = std::time::Instant::now() + SEEK_CONFIRM_TIMEOUT;
     while std::time::Instant::now() < deadline {
@@ -159,9 +148,8 @@ async fn wait_for_seek_confirmation(player: &PlayerHandle, secs: f32) {
     }
 }
 
-/// Mined/added state for the table (issue #3): terms with a card added in the
-/// last day, plus the harvested + freshly-added sentence sets. Best-effort —
-/// an offline AnkiConnect still returns the cached sentences.
+/// Mined/added state for the table (issue #3). Best-effort: an offline
+/// AnkiConnect still returns the cached sentences.
 #[tauri::command]
 pub async fn get_mined_state(state: State<'_, Mutex<AppState>>) -> Result<MinedStateDto, String> {
     let mappings = { state.lock().unwrap().settings.anki_model_mappings.clone() };
@@ -173,8 +161,7 @@ pub async fn get_mined_state(state: State<'_, Mutex<AppState>>) -> Result<MinedS
     Ok(MinedStateDto { added_terms, mined_sentences })
 }
 
-/// Reachability probe for the Anki settings modal. `url` overrides the saved
-/// setting so the modal can test a staged (unsaved) value.
+/// Reachability probe; `url` lets the modal test a staged (unsaved) value.
 #[tauri::command]
 pub async fn get_yomitan_status(
     state: State<'_, Mutex<AppState>>,

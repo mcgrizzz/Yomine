@@ -19,9 +19,8 @@ use yomine::{
     },
 };
 
-/// Outcome of `mine_term` (issue #105). `status`: `"created"` | `"duplicate"`.
-/// `warning` is set when the note exists but asbplayer enrichment failed.
-/// `note_id` (created only) powers the "open in Anki" affordance.
+/// `mine_term` outcome. `status`: `"created"` | `"duplicate"`; `warning` =
+/// note created but asbplayer enrichment failed.
 #[derive(Serialize, Clone)]
 pub struct MineResultDto {
     pub status: String,
@@ -30,8 +29,7 @@ pub struct MineResultDto {
     pub note_id: Option<u64>,
 }
 
-/// Already-mined state (issue #3): term fields from `added:1` notes plus the
-/// normalized sentence set (cache + fresh additions).
+/// Already-mined state (issue #3): `added:1` terms + normalized sentence keys.
 #[derive(Serialize, Clone)]
 pub struct MinedStateDto {
     pub added_terms: Vec<String>,
