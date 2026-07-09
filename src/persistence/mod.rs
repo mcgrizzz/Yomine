@@ -11,6 +11,11 @@ use serde::{
 const APP_NAME: &str = "yomine";
 
 pub fn get_app_data_dir() -> PathBuf {
+    if let Ok(dir) = std::env::var("YOMINE_DATA_DIR") {
+        let app_dir = PathBuf::from(dir);
+        let _ = fs::create_dir_all(&app_dir);
+        return app_dir;
+    }
     if let Some(data_dir) = dirs::data_local_dir() {
         let app_dir = data_dir.join(APP_NAME);
         let _ = fs::create_dir_all(&app_dir);
