@@ -39,6 +39,8 @@ export const setSentenceColoring = (mode: ipc.SentenceColoring) =>
 export const setSentenceUnderlines = (toggles: ipc.UnderlineToggles) =>
 	patchSettings({ sentence_underlines: { ...toggles } });
 
+export const setShowJlptTags = (on: boolean) => patchSettings({ show_jlpt_tags: on });
+
 export const setAsbplayerFollowNewMedia = (on: boolean) =>
 	patchSettings({ asbplayer_follow_new_media: on });
 export const setAsbplayerFollowActiveTab = (on: boolean) =>

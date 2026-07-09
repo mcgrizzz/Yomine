@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { SentenceDto, Term } from '$lib/ipc';
-	import { defaultDir, harmonic, textMatches, type SortField } from '$lib/table';
+	import { defaultDir, harmonic, termKey, textMatches, type SortField } from '$lib/table';
 	import {
 		addedTerms,
 		ankiStatus,
@@ -15,6 +15,7 @@
 		playerStatus,
 		posCatalog,
 		retryMedia,
+		settings,
 		tableSearch,
 		tableSort,
 		toggleIgnore,
@@ -92,10 +93,6 @@
 	// key → display label ("Postposition" → "Particle"), from get_pos_catalog.
 	const posLabels = $derived(Object.fromEntries($posCatalog.map((p) => [p.key, p.display_name])));
 
-	// `Term.id` is not unique (the engine doesn't assign distinct ids); the pipeline
-	// dedups by (lemma_form, hiragana reading), so this pair is a stable unique key.
-	const termKey = (t: Term): string => `${t.lemma_form} ${t.lemma_reading}`;
-
 	function freqLabel(term: Term): string {
 		const v = harmonic(term);
 		return v === Infinity ? '？' : String(v);
@@ -145,11 +142,19 @@
 		const occ = occs[Math.min(occIdx[termKey(term)] ?? 0, occs.length - 1)];
 		void retryMedia(term, occ?.sentence.timestamp ?? null);
 	}
+
+	// The JLPT column collapses when tags are hidden or no visible term has one.
+	const showJlpt = $derived(
+		($settings?.show_jlpt_tags ?? true) && terms.some((t) => t.jlpt_level !== null)
+	);
 </script>
 
-<div class="table">
+<div class="table" class:no-jlpt={!showJlpt}>
 	<div class="row head">
 		<span>Term</span>
+		{#if showJlpt}
+			<span class="jlpt-cell">JLPT</span>
+		{/if}
 		<span class="head-cell">
 			<button
 				class="head-btn"
@@ -250,6 +255,13 @@
 					</button>
 				{/if}
 			</span>
+			{#if showJlpt}
+				<span class="jlpt-cell">
+					{#if term.jlpt_level}
+						<span class="jlpt-chip">{term.jlpt_level}</span>
+					{/if}
+				</span>
+			{/if}
 			<div class="sentence">
 				{#if occs.length > 0}
 					<SentenceView occurrences={occs} {term} bind:currentIndex={occIdx[key]} />
@@ -283,15 +295,24 @@
 />
 
 <style>
+	/* One shared track list for every row (via subgrid), so the max-content
+	   term column is sized by the widest term overall — per-row grids would
+	   each size their own columns and misalign horizontally. */
 	.table {
-		display: flex;
-		flex-direction: column;
+		display: grid;
+		grid-template-columns: minmax(7rem, max-content) 3rem 1fr 6rem 8rem;
+		/* Subgrid rows inherit this; a gap on .row would be ignored. */
+		column-gap: 0.75rem;
 		font-variant-numeric: tabular-nums;
 	}
-	.row {
-		display: grid;
+	/* JLPT tags hidden (setting) or absent → the column collapses entirely. */
+	.table.no-jlpt {
 		grid-template-columns: minmax(7rem, max-content) 1fr 6rem 8rem;
-		gap: 0.75rem;
+	}
+	.row {
+		grid-column: 1 / -1;
+		display: grid;
+		grid-template-columns: subgrid;
 		align-items: center;
 		padding: 0.5rem;
 		border-bottom: 1px solid var(--border);
@@ -380,6 +401,9 @@
 		align-items: center;
 		gap: 0.45rem;
 	}
+	.jlpt-cell {
+		text-align: center;
+	}
 	.term {
 		font-size: 1.5rem;
 		color: var(--red);
@@ -452,10 +476,20 @@
 	.pos {
 		font-size: 0.9rem;
 	}
+	.jlpt-chip {
+		padding: 0.05rem 0.3rem;
+		font-size: 0.7rem;
+		color: var(--cyan);
+		background: color-mix(in srgb, var(--cyan) 10%, transparent);
+		border: 1px solid color-mix(in srgb, var(--cyan) 35%, transparent);
+		border-radius: var(--radius);
+		white-space: nowrap;
+	}
 	.empty {
 		color: var(--comment);
 	}
 	.no-match {
+		grid-column: 1 / -1;
 		margin: 0;
 		padding: 1.5rem 0.5rem;
 		color: var(--comment);

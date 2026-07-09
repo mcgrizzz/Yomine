@@ -383,6 +383,7 @@ mod tests {
             full_segment_reading: String::new(),
             sentence_references: vec![(1, start)],
             comprehension,
+            jlpt_level: None,
         }
     }
 

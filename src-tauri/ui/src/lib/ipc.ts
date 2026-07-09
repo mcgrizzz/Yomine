@@ -13,6 +13,8 @@ import { getCurrentWebview } from '@tauri-apps/api/webview';
 /** POS variant key (`POS::as_key()`), e.g. "Noun", "Verb". */
 export type Pos = string;
 
+export type JlptLevel = 'N5' | 'N4' | 'N3' | 'N2' | 'N1';
+
 export interface Term {
 	id: number;
 	lemma_form: string;
@@ -28,6 +30,8 @@ export interface Term {
 	/** (sentence_id, start_index) pairs. */
 	sentence_references: [number, number][];
 	comprehension: number;
+	/** `null` when the lemma isn't in the JLPT corpus. */
+	jlpt_level: JlptLevel | null;
 }
 
 export interface SegmentDto {
@@ -225,6 +229,8 @@ export interface SettingsData {
 	sentence_coloring: SentenceColoring;
 	/** Which underline states are shown in knowledge mode. */
 	sentence_underlines: UnderlineToggles;
+	/** JLPT level tags in the term table (issue #112); filtering is unaffected. */
+	show_jlpt_tags: boolean;
 }
 
 /** Aggregated setup readiness for the checklist/banner (`get_setup_status`).

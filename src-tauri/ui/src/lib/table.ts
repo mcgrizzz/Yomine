@@ -56,7 +56,16 @@ export interface TableControlState {
 	/** POS-key → enabled; a missing key counts as enabled. */
 	pos: Record<string, boolean>;
 	freq: FreqRange | null;
+	/** JLPT chip key → enabled; a missing key counts as enabled. */
+	jlpt: Record<string, boolean>;
 }
+
+/** Filter chip keys: the five levels plus 'none' ("Non-JLPT" terms). */
+export const JLPT_CHIPS = ['N5', 'N4', 'N3', 'N2', 'N1', 'none'] as const;
+
+/** `Term.id` is not unique; the pipeline dedups by (lemma, reading), so this
+ * pair is the stable row/selection key. */
+export const termKey = (t: Term): string => `${t.lemma_form} ${t.lemma_reading}`;
 
 /**
  * Min/max of the known (non-unknown) harmonic frequencies, mirroring egui's
@@ -143,6 +152,8 @@ export function applyControls(
 		}
 		// POS filter.
 		if (c.pos[t.part_of_speech] === false) return false;
+		// JLPT filter.
+		if (c.jlpt[t.jlpt_level ?? 'none'] === false) return false;
 		// Search.
 		return matchesSearch(t, sentences, c.search);
 	});

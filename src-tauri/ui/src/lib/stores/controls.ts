@@ -15,6 +15,9 @@ export const tableSort = writable<{ field: SortField; dir: SortDir }>({
 /** POS-key → enabled; a missing key means enabled. */
 export const posEnabled = writable<Record<string, boolean>>({});
 
+/** JLPT chip key (N5..N1, 'none') → enabled; session-only. */
+export const jlptEnabled = writable<Record<string, boolean>>({});
+
 /** `lo`/`hi` are the data bounds (slider extent), `min`/`max` the selection. */
 export interface FreqFilterState {
 	lo: number;
@@ -38,14 +41,15 @@ fileResult.subscribe((r) => {
 
 /** The filtered + sorted term list the table renders. */
 export const visibleTerms = derived(
-	[fileResult, tableSearch, tableSort, posEnabled, freqFilter],
-	([$file, $search, $sort, $pos, $freq]) =>
+	[fileResult, tableSearch, tableSort, posEnabled, freqFilter, jlptEnabled],
+	([$file, $search, $sort, $pos, $freq, $jlpt]) =>
 		$file
 			? applyControls($file.terms, $file.sentences, {
 					search: $search,
 					sort: $sort,
 					pos: $pos,
-					freq: $freq
+					freq: $freq,
+					jlpt: $jlpt
 				})
 			: []
 );

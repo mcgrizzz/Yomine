@@ -8,6 +8,7 @@ use vibrato::Tokenizer;
 use crate::{
     core::IgnoreList,
     dictionary::frequency_manager::FrequencyManager,
+    jlpt::JlptDatabase,
 };
 
 /// Shared, heavy language resources loaded once and reused across the app.
@@ -20,6 +21,7 @@ pub struct LanguageTools {
     pub tokenizer: Arc<Tokenizer>,
     pub frequency_manager: Arc<FrequencyManager>,
     pub ignore_list: Arc<Mutex<IgnoreList>>,
+    pub jlpt: Arc<JlptDatabase>,
     pub known_interval: u32,
 }
 
@@ -29,6 +31,7 @@ impl std::fmt::Debug for LanguageTools {
             .field("tokenizer", &"Arc<Tokenizer>")
             .field("frequency_manager", &"Arc<FrequencyManager>")
             .field("ignore_list", &"Arc<Mutex<IgnoreList>>")
+            .field("jlpt", &"Arc<JlptDatabase>")
             .finish()
     }
 }
