@@ -16,12 +16,12 @@ export const sessionMinedSentences = writable<Set<string>>(new Set());
 export const miningTerm = writable<string | null>(null);
 /** lemma → Anki note id for this session's mines ("open in Anki"). */
 export const minedNoteIds = writable<Record<string, number>>({});
+/** Lemmas whose note exists but asbplayer media never landed (retry chip). */
+export const mediaMissing = writable<Set<string>>(new Set());
 /** Gates the mine button — no yomitan-api, no card content. */
 export const yomitanReachable = writable(false);
 /** Seek/mine lock while asbplayer records the mined line. */
 export const playerBusy = writable(false);
-
-const RECORD_BUFFER_MS = 1500;
 
 /** Must stay in sync with the engine's `anki::mined::normalize_sentence`. */
 export const normalizeSentence = (s: string): string => s.replace(/\s+/g, '');
@@ -62,13 +62,15 @@ export async function mineTerm(
 	if (get(miningTerm) !== null || get(playerBusy)) return;
 	miningTerm.set(term.lemma_form);
 	playerBusy.set(true);
-	let recordHoldMs = 0;
 	try {
+		// The backend waits out the asbplayer recording and verifies the media
+		// landed, so the result is definitive by the time it resolves.
 		const result = await ipc.mineTerm(
 			{
 				term: term.lemma_form,
 				sentence,
 				timestampSecs: timestamp?.start_secs ?? null,
+				timestampEndSecs: timestamp?.end_secs ?? null,
 				timestampLabel: timestamp?.start_label ?? null,
 				via
 			},
@@ -80,6 +82,9 @@ export async function mineTerm(
 		if (result.note_id !== null) {
 			minedNoteIds.update((m) => ({ ...m, [term.lemma_form]: result.note_id! }));
 		}
+		if (result.media_missing) {
+			mediaMissing.update((s) => new Set(s).add(term.lemma_form));
+		}
 		if (sentence && result.status === 'created') {
 			sessionMinedSentences.update((s) => new Set(s).add(normalizeSentence(sentence)));
 		}
@@ -89,22 +94,49 @@ export async function mineTerm(
 					? `「${term.lemma_form}」 is already in Anki`
 					: `Added 「${term.lemma_form}」 to Anki`)
 		);
-		// mine-subtitle returns while asbplayer is still recording the cue.
-		if (via === 'asbplayer' && result.status === 'created' && !result.warning && timestamp) {
-			const durationMs = Math.max(0, (timestamp.end_secs - timestamp.start_secs) * 1000);
-			recordHoldMs = durationMs + RECORD_BUFFER_MS;
-		}
-		// The asbplayer path exports asynchronously; confirm it landed.
-		setTimeout(() => void refreshMinedState(true), 2000 + recordHoldMs);
+		setTimeout(() => void refreshMinedState(true), 2000);
 	} catch (err) {
 		lastError.set({ title: 'Mining failed', message: String(err), detail: null });
 	} finally {
 		miningTerm.set(null);
-		if (recordHoldMs > 0) {
-			setTimeout(() => playerBusy.set(false), recordHoldMs);
-		} else {
-			playerBusy.set(false);
-		}
+		playerBusy.set(false);
+	}
+}
+
+/** Retry asbplayer enrichment for a media-missing note (session-scoped: needs
+ * the note id from this session's mine). */
+export async function retryMedia(
+	term: ipc.Term,
+	timestamp: ipc.TimeStampDto | null
+): Promise<void> {
+	if (get(miningTerm) !== null || get(playerBusy)) return;
+	const noteId = get(minedNoteIds)[term.lemma_form];
+	if (noteId === undefined) return;
+	miningTerm.set(term.lemma_form);
+	playerBusy.set(true);
+	try {
+		await ipc.retryMineMedia(
+			{
+				noteId,
+				timestampSecs: timestamp?.start_secs ?? null,
+				timestampEndSecs: timestamp?.end_secs ?? null,
+				timestampLabel: timestamp?.start_label ?? null
+			},
+			(msg) => {
+				if (msg.message) showNotice(msg.message);
+			}
+		);
+		mediaMissing.update((s) => {
+			const next = new Set(s);
+			next.delete(term.lemma_form);
+			return next;
+		});
+		showNotice(`Added media to 「${term.lemma_form}」`);
+	} catch (err) {
+		showNotice(`Media retry failed: ${String(err)}`);
+	} finally {
+		miningTerm.set(null);
+		playerBusy.set(false);
 	}
 }
 

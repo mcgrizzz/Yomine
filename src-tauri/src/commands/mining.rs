@@ -32,6 +32,10 @@ use crate::{
 
 const SEEK_CONFIRM_TIMEOUT: Duration = Duration::from_secs(3);
 const SEEK_CONFIRM_POLL: Duration = Duration::from_millis(250);
+/// Extra wait past the cue's duration for asbplayer to finish recording.
+const RECORD_BUFFER: Duration = Duration::from_millis(1500);
+const MEDIA_VERIFY_TIMEOUT: Duration = Duration::from_secs(6);
+const MEDIA_VERIFY_POLL: Duration = Duration::from_millis(500);
 
 #[tauri::command]
 pub async fn mine_term(
@@ -40,6 +44,7 @@ pub async fn mine_term(
     term: String,
     sentence: String,
     timestamp_secs: Option<f32>,
+    timestamp_end_secs: Option<f32>,
     timestamp_label: Option<String>,
     via: String,
     progress: Channel<LoadingMessage>,
@@ -91,6 +96,7 @@ pub async fn mine_term(
                 via,
                 warning: None,
                 note_id: None,
+                media_missing: false,
             });
         }
         Some(err) => return Err(err),
@@ -101,25 +107,112 @@ pub async fn mine_term(
 
     // Enrichment failures don't undo the mine (the note exists) — warn instead.
     let mut warning = None;
+    let mut media_missing = false;
     if via == "asbplayer" {
-        let _ = progress.send(LoadingMessage::new("Adding audio & screenshot via asbplayer…"));
-        let mut enrich_err: Option<String> = None;
-        if let Some(secs) = timestamp_secs {
-            match player.seek(secs, timestamp_label.unwrap_or_default()).await {
-                Ok(()) => wait_for_seek_confirmation(&player, secs).await,
-                Err(e) => enrich_err = Some(e),
+        if let Some(id) = note_id {
+            let record_secs = cue_duration_secs(timestamp_secs, timestamp_end_secs);
+            if let Err(e) = enrich_and_verify(
+                &player,
+                id,
+                timestamp_secs,
+                timestamp_label,
+                record_secs,
+                &progress,
+            )
+            .await
+            {
+                warning = Some(format!("Card created, but media wasn't added: {}", e));
+                media_missing = true;
             }
         }
-        if enrich_err.is_none() {
-            if let Err(e) = player.mine_subtitle(std::collections::HashMap::new(), 2).await {
-                enrich_err = Some(e);
-            }
-        }
-        warning =
-            enrich_err.map(|e| format!("Card created, but asbplayer couldn't enrich it: {}", e));
     }
 
-    Ok(MineResultDto { status: "created".to_string(), via, warning, note_id })
+    Ok(MineResultDto { status: "created".to_string(), via, warning, note_id, media_missing })
+}
+
+/// Re-run asbplayer enrichment on a note whose media never landed. Only safe
+/// while the note is still Anki's newest — "update last card" has no way to
+/// target a specific note.
+#[tauri::command]
+pub async fn retry_mine_media(
+    player: State<'_, PlayerHandle>,
+    note_id: u64,
+    timestamp_secs: Option<f32>,
+    timestamp_end_secs: Option<f32>,
+    timestamp_label: Option<String>,
+    progress: Channel<LoadingMessage>,
+) -> Result<(), String> {
+    let recent = anki_api::get_note_ids("added:7")
+        .await
+        .map_err(|e| format!("AnkiConnect is unreachable: {}", e))?;
+    match recent.iter().max() {
+        Some(&max) if max == note_id => {}
+        Some(&max) if max > note_id => {
+            return Err("A newer note was added since — asbplayer can only update the most \
+                        recent note. Add the media in Anki instead."
+                .to_string());
+        }
+        _ => return Err("Couldn't confirm the card is still Anki's most recent note.".to_string()),
+    }
+
+    let record_secs = cue_duration_secs(timestamp_secs, timestamp_end_secs);
+    enrich_and_verify(&player, note_id, timestamp_secs, timestamp_label, record_secs, &progress)
+        .await
+}
+
+fn cue_duration_secs(start: Option<f32>, end: Option<f32>) -> f32 {
+    match (start, end) {
+        (Some(s), Some(e)) => (e - s).max(0.0),
+        _ => 0.0,
+    }
+}
+
+/// The note's current field values, or `None` when AnkiConnect can't serve it.
+async fn snapshot_fields(note_id: u64) -> Option<std::collections::HashMap<String, String>> {
+    let notes = anki_api::get_notes(vec![note_id]).await.ok()?;
+    let note = notes.into_iter().next()?;
+    Some(note.fields.into_iter().map(|(name, field)| (name, field.value)).collect())
+}
+
+/// Seek, mine, then verify the enrichment actually changed the note: asbplayer's
+/// `published: true` only means the command was broadcast — recording and the
+/// "update last card" write happen asynchronously afterwards.
+async fn enrich_and_verify(
+    player: &PlayerHandle,
+    note_id: u64,
+    timestamp_secs: Option<f32>,
+    timestamp_label: Option<String>,
+    record_secs: f32,
+    progress: &Channel<LoadingMessage>,
+) -> Result<(), String> {
+    let _ = progress.send(LoadingMessage::new("Adding audio & screenshot via asbplayer…"));
+    let baseline = snapshot_fields(note_id).await;
+
+    if let Some(secs) = timestamp_secs {
+        player.seek(secs, timestamp_label.unwrap_or_default()).await?;
+        wait_for_seek_confirmation(player, secs).await;
+    }
+    player.mine_subtitle(std::collections::HashMap::new(), 2).await?;
+
+    // AnkiConnect hiccup on the baseline read: enrichment ran, verification can't.
+    let Some(baseline) = baseline else { return Ok(()) };
+
+    let _ = progress.send(LoadingMessage::new("Waiting for asbplayer to record the cue…"));
+    tokio::time::sleep(Duration::from_secs_f32(record_secs) + RECORD_BUFFER).await;
+
+    let _ = progress.send(LoadingMessage::new("Verifying the media landed in Anki…"));
+    let deadline = std::time::Instant::now() + MEDIA_VERIFY_TIMEOUT;
+    loop {
+        if snapshot_fields(note_id).await.is_some_and(|now| now != baseline) {
+            return Ok(());
+        }
+        if std::time::Instant::now() >= deadline {
+            return Err("asbplayer accepted the mine but never updated the card — check its \
+                        Anki settings (deck, note type, and field mappings)"
+                .to_string());
+        }
+        tokio::time::sleep(MEDIA_VERIFY_POLL).await;
+    }
 }
 
 /// Open Anki's browser on the mined note (`guiBrowse nid:`).
