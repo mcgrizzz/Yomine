@@ -17,11 +17,15 @@ use tauri::{
 use yomine::{
     anki,
     tools::knowledge_summary::compute_knowledge_summary,
+    yomitan,
 };
 
 use crate::{
     commands::file::load_asbplayer_into_state,
-    dto::KnowledgeSummaryDto,
+    dto::{
+        KnowledgeSummaryDto,
+        YomitanStatusDto,
+    },
     events::{
         names,
         AnkiStatus,
@@ -44,6 +48,7 @@ const KNOWLEDGE_POLL_INTERVAL: Duration = Duration::from_secs(1);
 /// Spawn the background poll loops. Call once at app setup.
 pub fn spawn(app: AppHandle) {
     tauri::async_runtime::spawn(poll_anki(app.clone()));
+    tauri::async_runtime::spawn(poll_yomitan(app.clone()));
     tauri::async_runtime::spawn(poll_knowledge(app.clone()));
     tauri::async_runtime::spawn(poll_asbplayer_follow(app));
 }
@@ -61,6 +66,31 @@ async fn poll_anki(app: AppHandle) {
         if last_connected != Some(connected) {
             let _ = app.emit(names::ANKI_STATUS, AnkiStatus { connected, fetching: false });
             last_connected = Some(connected);
+        }
+    }
+}
+
+/// yomitan-api reachability probe (drives the TopBar dot and the mine-button
+/// gate even when nothing else pulls it): emit `yomitan-status` on change.
+async fn poll_yomitan(app: AppHandle) {
+    let mut last: Option<YomitanStatusDto> = None;
+    let mut tick = tokio::time::interval(POLL_INTERVAL);
+
+    loop {
+        tick.tick().await;
+
+        let url = {
+            let state = app.state::<Mutex<AppState>>();
+            let guard = state.lock().unwrap();
+            guard.settings.yomitan_url.clone()
+        };
+        let status = match yomitan::get_version(&url).await {
+            Ok(version) => YomitanStatusDto { reachable: true, version: Some(version) },
+            Err(_) => YomitanStatusDto { reachable: false, version: None },
+        };
+        if last.as_ref() != Some(&status) {
+            let _ = app.emit(names::YOMITAN_STATUS, status.clone());
+            last = Some(status);
         }
     }
 }

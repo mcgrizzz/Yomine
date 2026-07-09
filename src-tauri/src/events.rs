@@ -10,6 +10,7 @@ use serde::{
 pub mod names {
     pub const LANGUAGE_TOOLS_STATUS: &str = "language-tools-status";
     pub const ANKI_STATUS: &str = "anki-status";
+    pub const YOMITAN_STATUS: &str = "yomitan-status";
     pub const PLAYER_STATUS: &str = "player-status";
     pub const TERMS_REFRESHED: &str = "terms-refreshed";
     pub const DICTIONARIES_CHANGED: &str = "dictionaries-changed";

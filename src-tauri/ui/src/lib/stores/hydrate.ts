@@ -10,7 +10,7 @@ import { posCatalog, posEnabled } from './controls';
 import { settings } from './settings';
 import { refreshIgnoredLemmas } from './ignore';
 import { refreshRecommendedDicts } from './dictionaries';
-import { refreshMinedState } from './mining';
+import { refreshMinedState, yomitanReachable } from './mining';
 import { selectedTerms } from './selection';
 import { refreshSetupStatus } from './setup';
 
@@ -41,6 +41,9 @@ export async function hydrate(): Promise<void> {
 		knowledgeEventSeen = true;
 		knowledge.set(s);
 	});
+	// Backend probe (5s poll, change-only) — keeps the dot fresh even when no
+	// file is loaded and nothing calls refreshMinedState.
+	ipc.onYomitanStatus((s) => yomitanReachable.set(s.reachable));
 	ipc.onTermsRefreshed((r) => fileResult.set(r));
 	ipc.onError((e) => lastError.set(e));
 	ipc.onAsbplayerMediaLoaded((r) => {

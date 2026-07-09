@@ -719,6 +719,7 @@ export function onDragDrop(handlers: DragDropHandlers): Promise<UnlistenFn> {
 export const onLanguageToolsStatus = (cb: (s: LanguageToolsStatus) => void) =>
 	listenTo('language-tools-status', cb);
 export const onAnkiStatus = (cb: (s: AnkiStatus) => void) => listenTo('anki-status', cb);
+export const onYomitanStatus = (cb: (s: YomitanStatus) => void) => listenTo('yomitan-status', cb);
 export const onPlayerStatus = (cb: (s: PlayerStatus) => void) => listenTo('player-status', cb);
 export const onTermsRefreshed = (cb: (r: FileLoadResult) => void) =>
 	listenTo('terms-refreshed', cb);
