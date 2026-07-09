@@ -4,8 +4,12 @@
 	import {
 		addedTerms,
 		ankiStatus,
+		cancelQueue,
+		clearSelection,
 		ignoredLemmas,
 		mediaMissing,
+		mineQueue,
+		mineQueueState,
 		mineTerm,
 		minedNoteIds,
 		minedTerms,
@@ -15,10 +19,13 @@
 		playerStatus,
 		posCatalog,
 		retryMedia,
+		selectedTerms,
+		setSelected,
 		settings,
 		tableSearch,
 		tableSort,
 		toggleIgnore,
+		toggleSelected,
 		yomitanReachable
 	} from '$lib/stores';
 	import { posColor } from '$lib/pos';
@@ -147,10 +154,77 @@
 	const showJlpt = $derived(
 		($settings?.show_jlpt_tags ?? true) && terms.some((t) => t.jlpt_level !== null)
 	);
+
+	// Batch mining (issue #114): checkbox selection over the visible rows.
+	const canMine = $derived($yomitanReachable && $ankiStatus.connected);
+	const selectableKeys = $derived(terms.filter((t) => !isMined(t)).map(termKey));
+	const allSelected = $derived(
+		selectableKeys.length > 0 && selectableKeys.every((k) => $selectedTerms.has(k))
+	);
+	const someSelected = $derived(selectableKeys.some((k) => $selectedTerms.has(k)));
+
+	// Row-as-checkbox: clicks on the row body toggle selection, but never
+	// clicks on controls, modifier-clicks (ignore toggle), or text drags.
+	function rowClick(e: MouseEvent, term: Term) {
+		if (!canMine || isMined(term)) return;
+		if (e.ctrlKey || e.metaKey) return;
+		if ((e.target as HTMLElement).closest('button, input, a')) return;
+		if (window.getSelection()?.toString()) return;
+		toggleSelected(termKey(term));
+	}
+
+	function startBatch() {
+		const items = terms
+			.filter((t) => $selectedTerms.has(termKey(t)) && !isMined(t))
+			.map((t) => {
+				const occs = occurrencesOf(t);
+				const occ = occs[Math.min(occIdx[termKey(t)] ?? 0, occs.length - 1)];
+				return {
+					term: t,
+					sentence: occ?.sentence.text ?? '',
+					timestamp: occ?.sentence.timestamp ?? null
+				};
+			});
+		void mineQueue(items);
+	}
 </script>
+
+{#if $mineQueueState}
+	<div class="bulk-bar">
+		<span class="bulk-info">
+			Mining {$mineQueueState.done + 1}/{$mineQueueState.total} 「{$mineQueueState.current}」
+		</span>
+		<button class="bulk-btn" onclick={cancelQueue}>Cancel</button>
+	</div>
+{:else if $selectedTerms.size > 0}
+	<div class="bulk-bar">
+		<span class="bulk-info">{$selectedTerms.size} selected</span>
+		{#if canMine}
+			<button
+				class="bulk-btn primary"
+				disabled={$miningTerm !== null || $playerBusy}
+				title="Mine the selected terms one by one, in timestamp order"
+				onclick={startBatch}>Mine {$selectedTerms.size}</button
+			>
+		{/if}
+		<button class="bulk-btn" onclick={clearSelection}>Clear</button>
+	</div>
+{/if}
 
 <div class="table" class:no-jlpt={!showJlpt}>
 	<div class="row head">
+		<span class="sel">
+			{#if canMine && selectableKeys.length > 0}
+				<input
+					type="checkbox"
+					checked={allSelected}
+					indeterminate={someSelected && !allSelected}
+					onchange={() => setSelected(selectableKeys, !allSelected)}
+					title="Select all visible terms"
+					aria-label="Select all visible terms"
+				/>
+			{/if}
+		</span>
 		<span>Term</span>
 		{#if showJlpt}
 			<span class="jlpt-cell">JLPT</span>
@@ -202,7 +276,23 @@
 	{#each terms as term (termKey(term))}
 		{@const occs = occurrencesOf(term)}
 		{@const key = termKey(term)}
-		<div class="row">
+		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions --
+		     row click mirrors the row's checkbox, which stays keyboard-accessible. -->
+		<div
+			class="row"
+			class:selected={$selectedTerms.has(key)}
+			onclick={(e) => rowClick(e, term)}
+		>
+			<span class="sel">
+				{#if canMine && !isMined(term)}
+					<input
+						type="checkbox"
+						checked={$selectedTerms.has(key)}
+						onchange={() => toggleSelected(key)}
+						aria-label={`Select ${term.lemma_form}`}
+					/>
+				{/if}
+			</span>
 			<span class="term-cell">
 				<!-- svelte-ignore a11y_click_events_have_key_events -- Ctrl/Cmd+Click is a
 				     mouse-modifier ignore toggle (egui parity); no keyboard equivalent. -->
@@ -300,14 +390,14 @@
 	   each size their own columns and misalign horizontally. */
 	.table {
 		display: grid;
-		grid-template-columns: minmax(7rem, max-content) 3rem 1fr 6rem 8rem;
+		grid-template-columns: 1.5rem minmax(7rem, max-content) 3rem 1fr 6rem 8rem;
 		/* Subgrid rows inherit this; a gap on .row would be ignored. */
 		column-gap: 0.75rem;
 		font-variant-numeric: tabular-nums;
 	}
 	/* JLPT tags hidden (setting) or absent → the column collapses entirely. */
 	.table.no-jlpt {
-		grid-template-columns: minmax(7rem, max-content) 1fr 6rem 8rem;
+		grid-template-columns: 1.5rem minmax(7rem, max-content) 1fr 6rem 8rem;
 	}
 	.row {
 		grid-column: 1 / -1;
@@ -317,8 +407,22 @@
 		padding: 0.5rem;
 		border-bottom: 1px solid var(--border);
 	}
+	.sel {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.sel input {
+		cursor: pointer;
+	}
 	.row:not(.head):hover {
 		background: var(--bg-light);
+	}
+	.row.selected {
+		background: color-mix(in srgb, var(--cyan) 7%, transparent);
+	}
+	.row.selected:hover {
+		background: color-mix(in srgb, var(--cyan) 12%, transparent);
 	}
 	.row.head {
 		position: sticky;
@@ -484,6 +588,44 @@
 		border: 1px solid color-mix(in srgb, var(--cyan) 35%, transparent);
 		border-radius: var(--radius);
 		white-space: nowrap;
+	}
+	/* Floating selection/queue bar (issue #114): fixed so appearing/disappearing
+	   never reflows the table (the header would jump under the pointer). */
+	.bulk-bar {
+		position: fixed;
+		bottom: 1.25rem;
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 40;
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		max-width: 90vw;
+		padding: 0.45rem 0.9rem;
+		background: var(--bg-dark);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+		font-size: 0.85rem;
+	}
+	.bulk-info {
+		color: var(--fg);
+	}
+	.bulk-btn {
+		cursor: pointer;
+		padding: 0.25rem 0.6rem;
+		background: var(--bg-dark);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		color: var(--fg);
+	}
+	.bulk-btn.primary {
+		color: var(--cyan);
+		border-color: color-mix(in srgb, var(--cyan) 35%, transparent);
+	}
+	.bulk-btn:disabled {
+		opacity: 0.5;
+		cursor: default;
 	}
 	.empty {
 		color: var(--comment);

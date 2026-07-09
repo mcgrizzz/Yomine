@@ -1,7 +1,11 @@
-// One-click mining (issue #105) + already-mined state (issue #3).
+// One-click mining (issue #105), batch mining (issue #114) + already-mined
+// state (issue #3).
 
 import { get, writable } from 'svelte/store';
 import * as ipc from '$lib/ipc';
+import { termKey } from '$lib/table';
+import { playerStatus } from './player';
+import { selectedTerms } from './selection';
 import { lastError, showNotice } from './ui';
 
 /** Lemmas mined this session (optimistic, until the next refresh). */
@@ -52,6 +56,41 @@ export async function refreshMinedState(force = false): Promise<void> {
 	}
 }
 
+/** One mine: IPC + bookkeeping. No locking, summary toasts, or refresh —
+ * `mineTerm` and `mineQueue` own those. The backend waits out the asbplayer
+ * recording and verifies the media landed, so the result is definitive. */
+async function mineOne(
+	term: ipc.Term,
+	sentence: string,
+	timestamp: ipc.TimeStampDto | null,
+	via: 'asbplayer' | 'direct'
+): Promise<ipc.MineResult> {
+	const result = await ipc.mineTerm(
+		{
+			term: term.lemma_form,
+			sentence,
+			timestampSecs: timestamp?.start_secs ?? null,
+			timestampEndSecs: timestamp?.end_secs ?? null,
+			timestampLabel: timestamp?.start_label ?? null,
+			via
+		},
+		(msg) => {
+			if (msg.message) showNotice(msg.message);
+		}
+	);
+	minedTerms.update((s) => new Set(s).add(term.lemma_form));
+	if (result.note_id !== null) {
+		minedNoteIds.update((m) => ({ ...m, [term.lemma_form]: result.note_id! }));
+	}
+	if (result.media_missing) {
+		mediaMissing.update((s) => new Set(s).add(term.lemma_form));
+	}
+	if (sentence && result.status === 'created') {
+		sessionMinedSentences.update((s) => new Set(s).add(normalizeSentence(sentence)));
+	}
+	return result;
+}
+
 /** Mine one term from its displayed sentence; the caller decides `via`. */
 export async function mineTerm(
 	term: ipc.Term,
@@ -63,31 +102,7 @@ export async function mineTerm(
 	miningTerm.set(term.lemma_form);
 	playerBusy.set(true);
 	try {
-		// The backend waits out the asbplayer recording and verifies the media
-		// landed, so the result is definitive by the time it resolves.
-		const result = await ipc.mineTerm(
-			{
-				term: term.lemma_form,
-				sentence,
-				timestampSecs: timestamp?.start_secs ?? null,
-				timestampEndSecs: timestamp?.end_secs ?? null,
-				timestampLabel: timestamp?.start_label ?? null,
-				via
-			},
-			(msg) => {
-				if (msg.message) showNotice(msg.message);
-			}
-		);
-		minedTerms.update((s) => new Set(s).add(term.lemma_form));
-		if (result.note_id !== null) {
-			minedNoteIds.update((m) => ({ ...m, [term.lemma_form]: result.note_id! }));
-		}
-		if (result.media_missing) {
-			mediaMissing.update((s) => new Set(s).add(term.lemma_form));
-		}
-		if (sentence && result.status === 'created') {
-			sessionMinedSentences.update((s) => new Set(s).add(normalizeSentence(sentence)));
-		}
+		const result = await mineOne(term, sentence, timestamp, via);
 		showNotice(
 			result.warning ??
 				(result.status === 'duplicate'
@@ -100,6 +115,91 @@ export async function mineTerm(
 	} finally {
 		miningTerm.set(null);
 		playerBusy.set(false);
+	}
+}
+
+/** One selected row, with the occurrence the table displayed at queue time. */
+export interface QueueItem {
+	term: ipc.Term;
+	sentence: string;
+	timestamp: ipc.TimeStampDto | null;
+}
+
+/** Batch-mine progress (`null` = no queue running). */
+export const mineQueueState = writable<{ total: number; done: number; current: string } | null>(
+	null
+);
+
+let queueCancelled = false;
+
+/** Stops the running queue between items; the in-flight mine still finishes. */
+export function cancelQueue(): void {
+	queueCancelled = true;
+}
+
+/** Mine the items one by one in timestamp order (timestamp-less last).
+ * Failures are collected, never abort the queue. */
+export async function mineQueue(items: QueueItem[]): Promise<void> {
+	if (get(miningTerm) !== null || get(playerBusy) || items.length === 0) return;
+	const sorted = [...items].sort((a, b) => {
+		const ka = a.timestamp?.start_secs ?? Infinity;
+		const kb = b.timestamp?.start_secs ?? Infinity;
+		return ka === kb ? 0 : ka - kb;
+	});
+	queueCancelled = false;
+	playerBusy.set(true);
+	let created = 0;
+	let duplicates = 0;
+	let mediaMissed = 0;
+	let done = 0;
+	const failures: string[] = [];
+	try {
+		for (const item of sorted) {
+			if (queueCancelled) break;
+			miningTerm.set(item.term.lemma_form);
+			mineQueueState.set({ total: sorted.length, done, current: item.term.lemma_form });
+			// Same rule as the single-mine path; re-read per item so an
+			// asbplayer disconnect mid-run degrades to direct mines.
+			const status = get(playerStatus);
+			const via =
+				status.mode === 'asbplayer' && status.ws_clients > 0 && item.timestamp !== null
+					? 'asbplayer'
+					: 'direct';
+			try {
+				const result = await mineOne(item.term, item.sentence, item.timestamp, via);
+				if (result.status === 'duplicate') duplicates++;
+				else created++;
+				if (result.media_missing) mediaMissed++;
+				selectedTerms.update((s) => {
+					const next = new Set(s);
+					next.delete(termKey(item.term));
+					return next;
+				});
+			} catch (err) {
+				failures.push(`「${item.term.lemma_form}」: ${String(err)}`);
+			}
+			done++;
+		}
+	} finally {
+		miningTerm.set(null);
+		playerBusy.set(false);
+		mineQueueState.set(null);
+		void refreshMinedState(true);
+		const parts = [`Mined ${created}`];
+		if (duplicates > 0) parts.push(`${duplicates} duplicate${duplicates === 1 ? '' : 's'}`);
+		if (mediaMissed > 0) parts.push(`${mediaMissed} missing media`);
+		if (failures.length > 0) parts.push(`${failures.length} failed`);
+		showNotice(
+			(queueCancelled && done < sorted.length ? `Cancelled after ${done} — ` : '') +
+				parts.join(' · ')
+		);
+		if (failures.length > 0) {
+			lastError.set({
+				title: 'Batch mining',
+				message: `${failures.length} term${failures.length === 1 ? '' : 's'} failed`,
+				detail: failures.join('\n')
+			});
+		}
 	}
 }
 

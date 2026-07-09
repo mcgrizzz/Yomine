@@ -1,5 +1,6 @@
 import { get } from 'svelte/store';
 import * as ipc from '$lib/ipc';
+import { termKey } from '$lib/table';
 import { dragHovering, lastError, overlay, showNotice } from './ui';
 import { ankiStatus, knowledge, languageToolsStatus } from './status';
 import { checkForUpdate } from './update';
@@ -10,6 +11,7 @@ import { settings } from './settings';
 import { refreshIgnoredLemmas } from './ignore';
 import { refreshRecommendedDicts } from './dictionaries';
 import { refreshMinedState } from './mining';
+import { selectedTerms } from './selection';
 import { refreshSetupStatus } from './setup';
 
 let hydrated = false;
@@ -49,6 +51,13 @@ export async function hydrate(): Promise<void> {
 		const current = await ipc.getTerms();
 		if (current) fileResult.set(current);
 		refreshSetupStatus();
+	});
+
+	// Rows dropped by a refresh (mined/ignored) silently leave the selection.
+	// Wired here, not in selection.ts — see the note there.
+	fileResult.subscribe((r) => {
+		const live = new Set(r?.terms.map(termKey) ?? []);
+		selectedTerms.update((s) => new Set([...s].filter((k) => live.has(k))));
 	});
 
 	// Drag-drop is a no-op until the language tools can process a file.
