@@ -465,12 +465,14 @@ export async function loadAsbplayerMedia(
 	return invoke('load_asbplayer_media', { mediaId, trackNumbers, title, progress: channel });
 }
 
-/** `mine_term` outcome; `warning` = note created but enrichment failed. */
+/** `mine_term` outcome; `warning` = note created but enrichment failed;
+ * `media_missing` = enrichment verifiably didn't land (drives the retry chip). */
 export interface MineResult {
 	status: 'created' | 'duplicate';
 	via: string;
 	warning: string | null;
 	note_id: number | null;
+	media_missing: boolean;
 }
 
 /** Already-mined state (issue #3); sentences are `normalizeSentence` keys. */
@@ -490,6 +492,7 @@ export function mineTerm(
 		term: string;
 		sentence: string;
 		timestampSecs: number | null;
+		timestampEndSecs: number | null;
 		timestampLabel: string | null;
 		via: 'asbplayer' | 'direct';
 	},
@@ -498,6 +501,22 @@ export function mineTerm(
 	const channel = new Channel<LoadingMessage>();
 	channel.onmessage = onProgress;
 	return invoke('mine_term', { ...args, progress: channel });
+}
+
+/** Re-run asbplayer enrichment on a media-missing note. Rejects when the note
+ * is no longer Anki's newest ("update last card" can't target a specific note). */
+export function retryMineMedia(
+	args: {
+		noteId: number;
+		timestampSecs: number | null;
+		timestampEndSecs: number | null;
+		timestampLabel: string | null;
+	},
+	onProgress: (msg: LoadingMessage) => void
+): Promise<void> {
+	const channel = new Channel<LoadingMessage>();
+	channel.onmessage = onProgress;
+	return invoke('retry_mine_media', { ...args, progress: channel });
 }
 
 /** Open Anki's card browser on a mined note (`guiBrowse nid:`). */

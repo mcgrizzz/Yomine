@@ -5,6 +5,7 @@
 		addedTerms,
 		ankiStatus,
 		ignoredLemmas,
+		mediaMissing,
 		mineTerm,
 		minedNoteIds,
 		minedTerms,
@@ -13,6 +14,7 @@
 		playerBusy,
 		playerStatus,
 		posCatalog,
+		retryMedia,
 		tableSearch,
 		tableSort,
 		toggleIgnore,
@@ -138,6 +140,11 @@
 				: 'direct';
 		void mineTerm(term, occ?.sentence.text ?? '', ts, via);
 	}
+
+	function retry(term: Term, occs: Occurrence[]) {
+		const occ = occs[Math.min(occIdx[termKey(term)] ?? 0, occs.length - 1)];
+		void retryMedia(term, occ?.sentence.timestamp ?? null);
+	}
 </script>
 
 <div class="table">
@@ -211,7 +218,16 @@
 					>
 				{#if isMined(term)}
 					{@const noteId = $minedNoteIds[term.lemma_form]}
-					{#if noteId !== undefined}
+					{#if noteId !== undefined && $mediaMissing.has(term.lemma_form)}
+						<button
+							class="chip warn"
+							disabled={$miningTerm !== null || $playerBusy}
+							title="Card is in Anki, but asbplayer never added the audio/screenshot — click to retry"
+							onclick={() => retry(term, occs)}
+						>
+							{$miningTerm === term.lemma_form ? '…' : '⚠'}
+						</button>
+					{:else if noteId !== undefined}
 						<button
 							class="chip mined openable"
 							title="In Anki — click to open the card"
@@ -410,6 +426,20 @@
 	}
 	.mined.openable:hover {
 		background: color-mix(in srgb, var(--green) 25%, transparent);
+	}
+	/* Note exists but asbplayer media never landed — click retries the enrichment. */
+	.warn {
+		color: var(--yellow);
+		background: color-mix(in srgb, var(--yellow) 12%, transparent);
+		border: 1px solid color-mix(in srgb, var(--yellow) 35%, transparent);
+		cursor: pointer;
+	}
+	.warn:hover:not(:disabled) {
+		background: color-mix(in srgb, var(--yellow) 25%, transparent);
+	}
+	.warn:disabled {
+		opacity: 0.5;
+		cursor: default;
 	}
 	/* Ignored-in-place: greyed until the next refresh drops the row. */
 	.term.ignored {

@@ -64,6 +64,7 @@ pub fn run() {
             commands::player::set_websocket_port,
             commands::player::get_asbplayer_media,
             commands::mining::mine_term,
+            commands::mining::retry_mine_media,
             commands::mining::get_mined_state,
             commands::mining::get_yomitan_status,
             commands::mining::open_in_anki,
