@@ -18,7 +18,6 @@
 	const posOn = $derived($posCatalog.filter((p) => $posEnabled[p.key] !== false).length);
 
 	const hasJlpt = $derived($fileResult?.terms.some((t) => t.jlpt_level) ?? false);
-	// Only levels the loaded file actually contains get a chip.
 	const jlptChips = $derived(
 		JLPT_CHIPS.filter(
 			(key) => $fileResult?.terms.some((t) => (t.jlpt_level ?? 'none') === key) ?? false
@@ -26,8 +25,6 @@
 	);
 	const jlptLabel = (key: string) => (key === 'none' ? 'Non-JLPT' : key);
 
-	// Explorer-style: click solos a level (re-click resets to all), Ctrl/Cmd+
-	// Click toggles it, Shift+Click ranges from the last plainly-clicked chip.
 	let jlptAnchor = $state<JlptChip | null>(null);
 	function jlptClick(e: MouseEvent, key: JlptChip) {
 		const chips = jlptChips;

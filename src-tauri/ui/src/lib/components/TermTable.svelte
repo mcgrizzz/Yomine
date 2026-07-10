@@ -153,7 +153,6 @@
 		void retryMedia(term, occ?.sentence.timestamp ?? null);
 	}
 
-	// The JLPT column collapses when tags are hidden or no visible term has one.
 	const showJlpt = $derived(
 		($settings?.show_jlpt_tags ?? true) && terms.some((t) => t.jlpt_level !== null)
 	);
@@ -165,8 +164,6 @@
 	);
 	const someSelected = $derived(selectableKeys.some((k) => $selectedTerms.has(k)));
 
-	// Row-as-checkbox: clicks on the row body toggle selection, but never
-	// clicks on controls, modifier-clicks (ignore toggle), or text drags.
 	function rowClick(e: MouseEvent, term: Term) {
 		if (!canMine || isMined(term)) return;
 		if (e.ctrlKey || e.metaKey) return;
@@ -175,7 +172,6 @@
 		toggleSelected(termKey(term));
 	}
 
-	// Non-null while the pre-mine sentence-conflict dialog is up.
 	let batchEntries = $state<BatchEntry[] | null>(null);
 
 	function startBatch() {
@@ -430,7 +426,6 @@
 		column-gap: 0.75rem;
 		font-variant-numeric: tabular-nums;
 	}
-	/* JLPT tags hidden (setting) or absent → the column collapses entirely. */
 	.table.no-jlpt {
 		grid-template-columns: 1.5rem minmax(7rem, max-content) 1fr 6rem 8rem;
 	}

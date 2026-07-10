@@ -152,13 +152,13 @@ export async function mineQueue(items: QueueItem[]): Promise<void> {
 	let mediaMissed = 0;
 	let done = 0;
 	const failures: string[] = [];
+	const noteIds: number[] = [];
 	try {
 		for (const item of sorted) {
 			if (queueCancelled) break;
 			miningTerm.set(item.term.lemma_form);
 			mineQueueState.set({ total: sorted.length, done, current: item.term.lemma_form });
-			// Same rule as the single-mine path; re-read per item so an
-			// asbplayer disconnect mid-run degrades to direct mines.
+			// Must match the `via` rule in TermTable's mine().
 			const status = get(playerStatus);
 			const via =
 				status.mode === 'asbplayer' && status.ws_clients > 0 && item.timestamp !== null
@@ -168,6 +168,7 @@ export async function mineQueue(items: QueueItem[]): Promise<void> {
 				const result = await mineOne(item.term, item.sentence, item.timestamp, via);
 				if (result.status === 'duplicate') duplicates++;
 				else created++;
+				if (result.note_id !== null) noteIds.push(result.note_id);
 				if (result.media_missing) mediaMissed++;
 				selectedTerms.update((s) => {
 					const next = new Set(s);
@@ -199,6 +200,9 @@ export async function mineQueue(items: QueueItem[]): Promise<void> {
 				message: `${failures.length} term${failures.length === 1 ? '' : 's'} failed`,
 				detail: failures.join('\n')
 			});
+		}
+		if (noteIds.length > 0) {
+			ipc.openNotesInAnki(noteIds).catch(() => {});
 		}
 	}
 }

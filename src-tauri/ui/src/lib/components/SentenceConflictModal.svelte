@@ -39,17 +39,15 @@
 
 	let work = $state(entries.map((e) => ({ ...e })));
 	let skipped = $state(new Set<string>());
-	/** Sentence keys the user chose to mine as duplicates. */
-	let allowed = $state(new Set<string>());
+	let allowedDupes = $state(new Set<string>());
 	let patch = $state<Record<string, number>>({});
 	let intro = $state(true);
 
-	// Unresolved conflict groups, each in timestamp order.
 	const groups = $derived.by(() => {
 		const map = new Map<string, BatchEntry[]>();
 		for (const e of work) {
 			const k = skey(e.sentence);
-			if (k === '' || skipped.has(e.key) || allowed.has(k)) continue;
+			if (k === '' || skipped.has(e.key) || allowedDupes.has(k)) continue;
 			const g = map.get(k);
 			if (g) g.push(e);
 			else map.set(k, [e]);
@@ -67,7 +65,6 @@
 	const group = $derived(groups[0]);
 	const used = $derived(new Set(work.filter((e) => !skipped.has(e.key)).map((e) => skey(e.sentence))));
 
-	// The user's explicit pick outranks defaults; ties go to the earliest cue.
 	const keeperOf = (g: BatchEntry[]) => g.find((e) => e.explicit) ?? g[0];
 	const freeAltOf = (e: BatchEntry, usedNow: Set<string>) =>
 		e.alternatives.find((a) => !usedNow.has(skey(a.sentence)));
@@ -96,7 +93,6 @@
 		return null;
 	};
 
-	// Group entries in sentence order, so buttons read left-to-right with the text.
 	const ordered = $derived.by(() => {
 		if (!group) return [];
 		const text = group[0].sentence;
@@ -105,7 +101,6 @@
 		);
 	});
 
-	// The current sentence split into plain and per-term highlighted spans.
 	const parts = $derived.by(() => {
 		if (!group) return [];
 		const text = group[0].sentence;
@@ -144,7 +139,6 @@
 		);
 	}
 
-	/** Move every non-explicit duplicate with an unused sentence off it. */
 	function autoResolve() {
 		intro = false;
 		const usedNow = new Set(used);
@@ -163,12 +157,10 @@
 	}
 
 	function mineAll() {
-		allowed = new Set(allowed).add(skey(group[0].sentence));
+		allowedDupes = new Set(allowedDupes).add(skey(group[0].sentence));
 		maybeFinish();
 	}
 
-	/** The chosen term keeps the sentence; the others move to an unused
-	 * sentence when they have one, otherwise they're skipped. */
 	function pickTerm(chosen: BatchEntry) {
 		const g = [...group];
 		const usedNow = new Set(used);

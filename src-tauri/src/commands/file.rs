@@ -238,8 +238,8 @@ pub(crate) async fn load_asbplayer_into_state(
             .to_string());
     }
 
-    // Saved as a real .srt (best-effort) so the session lands in recents; the
-    // track's file name beats the tab title and feeds the filename parser.
+    // Save the cues as a real .srt (best-effort): the session then lands in
+    // recents and reopens without asbplayer.
     let title = if title.trim().is_empty() { "asbplayer video".to_string() } else { title };
     let file_name = subtitle_file_name.filter(|n| !n.trim().is_empty());
     let (stem, display_title, creator) = match &file_name {

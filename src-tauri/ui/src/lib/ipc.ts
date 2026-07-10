@@ -458,10 +458,8 @@ export function getAsbplayerMedia(): Promise<BoundMedia[]> {
 }
 
 /** Fetch a media's subtitles from asbplayer and run them through the same
- * pipeline as a file; resolves with the loaded terms (issue #105). Timestamps
- * are preserved, so seeking works. `trackNumbers = null` loads all tracks.
- * `subtitleFileName` names the saved .srt and feeds the filename parser;
- * `title` (the tab title) is only the fallback. */
+ * pipeline as a file (issue #105). `trackNumbers = null` loads all tracks;
+ * `subtitleFileName` names the saved .srt, `title` is only the fallback. */
 export async function loadAsbplayerMedia(
 	mediaId: string,
 	trackNumbers: number[] | null,
@@ -534,9 +532,14 @@ export function retryMineMedia(
 	return invoke('retry_mine_media', { ...args, progress: channel });
 }
 
-/** Open Anki's card browser on a mined note (`guiBrowse nid:`). */
+/** Open Anki's browser on recent adds with the mined note's card selected. */
 export function openInAnki(noteId: number): Promise<void> {
 	return invoke('open_in_anki', { noteId });
+}
+
+/** Open Anki's browser on several notes (`guiBrowse nid:a,b,c`). */
+export function openNotesInAnki(noteIds: number[]): Promise<void> {
+	return invoke('open_notes_in_anki', { noteIds });
 }
 
 /** Best-effort: an offline AnkiConnect still returns cached sentences. */

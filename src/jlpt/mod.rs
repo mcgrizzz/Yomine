@@ -47,8 +47,7 @@ pub struct JlptEntry {
 
 pub struct JlptDatabase {
     entries: Vec<JlptEntry>,
-    /// (form, hiragana reading) → level; forms are both kanji and kana
-    /// spellings so kana-written lemmas of kanji entries still match.
+    /// (form, hiragana reading) → level; keyed under both kanji and kana spellings.
     index: HashMap<(String, String), JlptLevel>,
 }
 

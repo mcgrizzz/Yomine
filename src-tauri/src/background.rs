@@ -70,8 +70,7 @@ async fn poll_anki(app: AppHandle) {
     }
 }
 
-/// yomitan-api reachability probe (drives the TopBar dot and the mine-button
-/// gate even when nothing else pulls it): emit `yomitan-status` on change.
+/// yomitan-api reachability probe: emit `yomitan-status` on change.
 async fn poll_yomitan(app: AppHandle) {
     let mut last: Option<YomitanStatusDto> = None;
     let mut tick = tokio::time::interval(POLL_INTERVAL);

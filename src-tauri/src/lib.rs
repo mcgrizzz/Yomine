@@ -68,6 +68,7 @@ pub fn run() {
             commands::mining::get_mined_state,
             commands::mining::get_yomitan_status,
             commands::mining::open_in_anki,
+            commands::mining::open_notes_in_anki,
             commands::setup::get_setup_status,
             commands::update::check_for_update,
             commands::knowledge::get_knowledge_summary,
