@@ -22,6 +22,7 @@
 </script>
 
 <script lang="ts">
+	import { harmonic } from '$lib/table';
 	import { normalizeSentence, type QueueItem } from '$lib/stores';
 
 	let {
@@ -77,9 +78,55 @@
 			return n + g.filter((e) => e !== keep && !e.explicit && freeAltOf(e, used)).length;
 		}, 0)
 	);
-	const groupHasAlt = $derived(
-		group !== undefined && group.some((e) => e !== keeperOf(group) && freeAltOf(e, used))
-	);
+
+	const COLORS = ['var(--cyan)', 'var(--orange)', 'var(--green)', 'var(--yellow)'];
+	const colorOf = (i: number) => COLORS[i % COLORS.length];
+
+	// Must match `freqLabel` in TermTable.svelte.
+	const freqOf = (e: BatchEntry) => {
+		const v = harmonic(e.term);
+		return v === Infinity ? '？' : String(v);
+	};
+
+	const matchIn = (text: string, e: BatchEntry) => {
+		for (const form of [e.term.surface_form, e.term.full_segment, e.term.lemma_form]) {
+			const at = form ? text.indexOf(form) : -1;
+			if (at >= 0) return { start: at, end: at + form.length };
+		}
+		return null;
+	};
+
+	// Group entries in sentence order, so buttons read left-to-right with the text.
+	const ordered = $derived.by(() => {
+		if (!group) return [];
+		const text = group[0].sentence;
+		return [...group].sort(
+			(a, b) => (matchIn(text, a)?.start ?? Infinity) - (matchIn(text, b)?.start ?? Infinity)
+		);
+	});
+
+	// The current sentence split into plain and per-term highlighted spans.
+	const parts = $derived.by(() => {
+		if (!group) return [];
+		const text = group[0].sentence;
+		const spans: { start: number; end: number; color: string }[] = [];
+		ordered.forEach((e, i) => {
+			const m = matchIn(text, e);
+			if (m && !spans.some((s) => m.start < s.end && m.end > s.start)) {
+				spans.push({ ...m, color: colorOf(i) });
+			}
+		});
+		spans.sort((a, b) => a.start - b.start);
+		const out: { text: string; color: string | null }[] = [];
+		let pos = 0;
+		for (const s of spans) {
+			if (s.start > pos) out.push({ text: text.slice(pos, s.start), color: null });
+			out.push({ text: text.slice(s.start, s.end), color: s.color });
+			pos = s.end;
+		}
+		if (pos < text.length) out.push({ text: text.slice(pos), color: null });
+		return out;
+	});
 
 	function reassign(e: BatchEntry, alt: OccurrenceAlt) {
 		e.sentence = alt.sentence;
@@ -115,37 +162,27 @@
 		maybeFinish();
 	}
 
-	function mineAnyway() {
+	function mineAll() {
 		allowed = new Set(allowed).add(skey(group[0].sentence));
 		maybeFinish();
 	}
 
-	/** Keeper keeps; others move where an unused sentence exists, the rest
-	 * stay shared. */
-	function useOthers() {
+	/** The chosen term keeps the sentence; the others move to an unused
+	 * sentence when they have one, otherwise they're skipped. */
+	function pickTerm(chosen: BatchEntry) {
 		const g = [...group];
-		const keep = keeperOf(g);
 		const usedNow = new Set(used);
-		let leftover = false;
+		const next = new Set(skipped);
 		for (const e of g) {
-			if (e === keep) continue;
+			if (e === chosen) continue;
 			const alt = freeAltOf(e, usedNow);
 			if (alt) {
 				reassign(e, alt);
 				usedNow.add(skey(alt.sentence));
 			} else {
-				leftover = true;
+				next.add(e.key);
 			}
 		}
-		if (leftover) allowed = new Set(allowed).add(skey(keep.sentence));
-		maybeFinish();
-	}
-
-	function skipDupes() {
-		const g = [...group];
-		const keep = keeperOf(g);
-		const next = new Set(skipped);
-		for (const e of g) if (e !== keep) next.add(e.key);
 		skipped = next;
 		maybeFinish();
 	}
@@ -187,28 +224,34 @@
 			</footer>
 		{:else if group}
 			<p class="count">
-				{groups.length} conflict{groups.length === 1 ? '' : 's'} remaining — these terms would all
-				mine:
+				{groups.length} conflict{groups.length === 1 ? '' : 's'} remaining — click the term this
+				sentence should mine:
 			</p>
-			<blockquote class="sentence" lang="ja">{group[0].sentence}</blockquote>
-			<ul class="terms">
-				{#each group as e (e.key)}
-					<li>
-						<span class="lemma" lang="ja">{e.term.lemma_form}</span>
-						{#if e === keeperOf(group)}
-							<span class="tag">keeps this sentence</span>
-						{:else if e.explicit}
-							<span class="tag">your pick</span>
-						{/if}
-					</li>
+			<blockquote class="sentence" lang="ja">
+				{#each parts as p, i (i)}
+					{#if p.color}<span class="hl" style:color={p.color}>{p.text}</span>{:else}{p.text}{/if}
 				{/each}
-			</ul>
+			</blockquote>
+			<div class="choices">
+				{#each ordered as e, i (e.key)}
+					<button
+						class="pick"
+						style:color={colorOf(i)}
+						style:border-color={colorOf(i)}
+						lang="ja"
+						title={`Mine 「${e.term.lemma_form}」 from this sentence`}
+						onclick={() => pickTerm(e)}
+					>
+						{e.term.lemma_form}
+						<span class="freq">{freqOf(e)}</span>
+					</button>
+				{/each}
+			</div>
+			<p class="hint">
+				Unpicked terms move to another sentence when one exists, otherwise they're skipped.
+			</p>
 			<footer>
-				<button onclick={mineAnyway}>Mine anyway</button>
-				{#if groupHasAlt}
-					<button onclick={useOthers}>Use another sentence</button>
-				{/if}
-				<button onclick={skipDupes}>Skip duplicates</button>
+				<button onclick={mineAll}>{group.length === 2 ? 'Mine both' : `Mine all ${group.length}`}</button>
 				<button class="right" onclick={oncancel}>Cancel batch</button>
 			</footer>
 		{/if}
@@ -268,20 +311,36 @@
 		border-radius: var(--radius);
 		font-size: 1.05rem;
 	}
-	.terms {
-		margin: 0;
-		padding: 0 1rem 0 2.2rem;
+	.hl {
+		font-weight: 600;
 	}
-	.terms li {
-		padding: 0.1rem 0;
+	.choices {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		padding: 0 1rem;
 	}
-	.lemma {
-		font-size: 1.1rem;
-		color: var(--red);
+	.pick {
+		cursor: pointer;
+		padding: 0.3rem 0.8rem;
+		font-size: 1.15rem;
+		background: var(--bg-light);
+		border: 1px solid;
+		border-radius: var(--radius);
 	}
-	.tag {
-		margin-left: 0.5rem;
+	.pick:hover {
+		background: var(--bg-lighter);
+	}
+	.pick .freq {
+		margin-left: 0.35rem;
 		font-size: 0.75rem;
+		color: var(--comment);
+		font-variant-numeric: tabular-nums;
+	}
+	.hint {
+		margin: 0;
+		padding: 0 1rem;
+		font-size: 0.8rem;
 		color: var(--comment);
 	}
 	footer {
