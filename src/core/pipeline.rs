@@ -80,6 +80,11 @@ pub async fn process_sentences(
     });
     println!("Extracted {} unique terms", terms.len());
 
+    for term in &mut terms {
+        term.jlpt_level =
+            language_tools.jlpt.level_for(&term.lemma_form, &term.lemma_reading.to_hiragana());
+    }
+
     // Apply filters using the cached Anki snapshot for a fast, offline-safe load.
     // The GUI refreshes against live Anki in the background when connected.
     let filter_result = apply_filters(terms, language_tools, AnkiFilter::Cached).await?;

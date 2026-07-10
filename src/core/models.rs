@@ -151,6 +151,8 @@ pub struct Term {
     pub full_segment_reading: String, //If we have main word, this includes the non-main part of the segment, in surface form
     pub sentence_references: Vec<(usize, usize)>, // Vec<(sentence_id, start_index)>
     pub comprehension: f32,           // 0.0 to 1.0, calculated from Anki interval and ignore list
+    #[serde(default)]
+    pub jlpt_level: Option<crate::jlpt::JlptLevel>,
 }
 
 impl Term {
@@ -177,6 +179,7 @@ impl Term {
             frequencies: HashMap::new(),
             sentence_references: Vec::new(),
             comprehension: 0.0,
+            jlpt_level: None,
         }
     }
 }

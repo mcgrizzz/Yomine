@@ -158,6 +158,13 @@ pub async fn gui_browse(query: &str) -> Result<ApiResponse<Vec<u64>>, reqwest::E
     make_request("guiBrowse", Some(params)).await
 }
 
+/// Select a card in the open browser (`guiSelectCard`); returns false when no
+/// browser is open.
+pub async fn gui_select_card(card_id: u64) -> Result<ApiResponse<bool>, reqwest::Error> {
+    let params = serde_json::json!({ "card": card_id });
+    make_request("guiSelectCard", Some(params)).await
+}
+
 /// Store a base64 media payload in Anki's collection (`storeMediaFile`).
 pub async fn store_media_file(
     filename: &str,

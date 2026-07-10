@@ -13,6 +13,8 @@ import { getCurrentWebview } from '@tauri-apps/api/webview';
 /** POS variant key (`POS::as_key()`), e.g. "Noun", "Verb". */
 export type Pos = string;
 
+export type JlptLevel = 'N5' | 'N4' | 'N3' | 'N2' | 'N1';
+
 export interface Term {
 	id: number;
 	lemma_form: string;
@@ -28,6 +30,8 @@ export interface Term {
 	/** (sentence_id, start_index) pairs. */
 	sentence_references: [number, number][];
 	comprehension: number;
+	/** `null` when the lemma isn't in the JLPT corpus. */
+	jlpt_level: JlptLevel | null;
 }
 
 export interface SegmentDto {
@@ -225,6 +229,8 @@ export interface SettingsData {
 	sentence_coloring: SentenceColoring;
 	/** Which underline states are shown in knowledge mode. */
 	sentence_underlines: UnderlineToggles;
+	/** JLPT level tags in the term table (issue #112); filtering is unaffected. */
+	show_jlpt_tags: boolean;
 }
 
 /** Aggregated setup readiness for the checklist/banner (`get_setup_status`).
@@ -452,17 +458,24 @@ export function getAsbplayerMedia(): Promise<BoundMedia[]> {
 }
 
 /** Fetch a media's subtitles from asbplayer and run them through the same
- * pipeline as a file; resolves with the loaded terms (issue #105). Timestamps
- * are preserved, so seeking works. `trackNumbers = null` loads all tracks. */
+ * pipeline as a file (issue #105). `trackNumbers = null` loads all tracks;
+ * `subtitleFileName` names the saved .srt, `title` is only the fallback. */
 export async function loadAsbplayerMedia(
 	mediaId: string,
 	trackNumbers: number[] | null,
 	title: string,
+	subtitleFileName: string | null,
 	onProgress: (msg: LoadingMessage) => void
 ): Promise<FileLoadResult> {
 	const channel = new Channel<LoadingMessage>();
 	channel.onmessage = onProgress;
-	return invoke('load_asbplayer_media', { mediaId, trackNumbers, title, progress: channel });
+	return invoke('load_asbplayer_media', {
+		mediaId,
+		trackNumbers,
+		title,
+		subtitleFileName,
+		progress: channel
+	});
 }
 
 /** `mine_term` outcome; `warning` = note created but enrichment failed;
@@ -519,9 +532,14 @@ export function retryMineMedia(
 	return invoke('retry_mine_media', { ...args, progress: channel });
 }
 
-/** Open Anki's card browser on a mined note (`guiBrowse nid:`). */
+/** Open Anki's browser on recent adds with the mined note's card selected. */
 export function openInAnki(noteId: number): Promise<void> {
 	return invoke('open_in_anki', { noteId });
+}
+
+/** Open Anki's browser on several notes (`guiBrowse nid:a,b,c`). */
+export function openNotesInAnki(noteIds: number[]): Promise<void> {
+	return invoke('open_notes_in_anki', { noteIds });
 }
 
 /** Best-effort: an offline AnkiConnect still returns cached sentences. */
@@ -713,6 +731,7 @@ export function onDragDrop(handlers: DragDropHandlers): Promise<UnlistenFn> {
 export const onLanguageToolsStatus = (cb: (s: LanguageToolsStatus) => void) =>
 	listenTo('language-tools-status', cb);
 export const onAnkiStatus = (cb: (s: AnkiStatus) => void) => listenTo('anki-status', cb);
+export const onYomitanStatus = (cb: (s: YomitanStatus) => void) => listenTo('yomitan-status', cb);
 export const onPlayerStatus = (cb: (s: PlayerStatus) => void) => listenTo('player-status', cb);
 export const onTermsRefreshed = (cb: (r: FileLoadResult) => void) =>
 	listenTo('terms-refreshed', cb);

@@ -43,7 +43,7 @@ pub struct MinedStateDto {
     pub mined_sentences: Vec<String>,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, PartialEq)]
 pub struct YomitanStatusDto {
     pub reachable: bool,
     pub version: Option<String>,
@@ -383,6 +383,7 @@ mod tests {
             full_segment_reading: String::new(),
             sentence_references: vec![(1, start)],
             comprehension,
+            jlpt_level: None,
         }
     }
 

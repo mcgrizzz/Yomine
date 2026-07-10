@@ -37,10 +37,16 @@ export async function loadFromAsbplayer(
 	if (get(languageToolsStatus) !== 'ready') return false;
 	try {
 		overlay.set('Fetching subtitles from asbplayer…');
+		const tracks = media.loaded_subtitles;
+		const track =
+			trackNumbers === null
+				? tracks[0]
+				: (tracks.find((t) => trackNumbers.includes(t.track_number)) ?? tracks[0]);
 		const result = await ipc.loadAsbplayerMedia(
 			media.id,
 			trackNumbers,
 			media.title ?? 'asbplayer video',
+			track?.file_name ?? null,
 			(msg) => overlay.set(msg.message)
 		);
 		fileResult.set(result);

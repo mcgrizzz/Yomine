@@ -107,6 +107,9 @@ pub struct SettingsData {
     pub sentence_coloring: SentenceColoring,
     #[serde(default)]
     pub sentence_underlines: UnderlineToggles,
+    /// JLPT level tags in the term table (issue #112); filtering is unaffected.
+    #[serde(default = "default_true")]
+    pub show_jlpt_tags: bool,
 }
 
 const fn default_font_scale() -> f32 {
@@ -146,6 +149,7 @@ impl Default for SettingsData {
             yomitan_url: default_yomitan_url(),
             sentence_coloring: SentenceColoring::default(),
             sentence_underlines: UnderlineToggles::default(),
+            show_jlpt_tags: true,
         }
     }
 }

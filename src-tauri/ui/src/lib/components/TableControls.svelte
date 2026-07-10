@@ -6,14 +6,44 @@
 		posEnabled,
 		posCatalog,
 		freqFilter,
+		jlptEnabled,
 		visibleTerms,
 		fileResult,
 		openPosModal
 	} from '$lib/stores';
+	import { JLPT_CHIPS, type JlptChip } from '$lib/table';
 	import DualSlider from './DualSlider.svelte';
 
 	const posTotal = $derived($posCatalog.length);
 	const posOn = $derived($posCatalog.filter((p) => $posEnabled[p.key] !== false).length);
+
+	const hasJlpt = $derived($fileResult?.terms.some((t) => t.jlpt_level) ?? false);
+	const jlptChips = $derived(
+		JLPT_CHIPS.filter(
+			(key) => $fileResult?.terms.some((t) => (t.jlpt_level ?? 'none') === key) ?? false
+		)
+	);
+	const jlptLabel = (key: string) => (key === 'none' ? 'Non-JLPT' : key);
+
+	let jlptAnchor = $state<JlptChip | null>(null);
+	function jlptClick(e: MouseEvent, key: JlptChip) {
+		const chips = jlptChips;
+		if (e.shiftKey) {
+			const anchorIdx = jlptAnchor ? chips.indexOf(jlptAnchor) : -1;
+			const from = anchorIdx >= 0 ? anchorIdx : chips.indexOf(key);
+			const to = chips.indexOf(key);
+			const [lo, hi] = from <= to ? [from, to] : [to, from];
+			jlptEnabled.set(Object.fromEntries(chips.map((k, i) => [k, i >= lo && i <= hi])));
+			return;
+		}
+		jlptAnchor = key;
+		jlptEnabled.update((m) => {
+			if (e.ctrlKey || e.metaKey) return { ...m, [key]: m[key] === false };
+			const isSolo = chips.every((k) => (m[k] !== false) === (k === key));
+			if (isSolo) return {};
+			return Object.fromEntries(chips.map((k) => [k, k === key]));
+		});
+	}
 
 	// Slider drags apply live; the numeric fields commit on change, clamped to
 	// the bounds and to each other.
@@ -50,6 +80,22 @@
 	<button class="pos" onclick={openPosModal} title="Edit part-of-speech filters">
 		POS ({posOn}/{posTotal})
 	</button>
+
+	{#if hasJlpt}
+		<div class="group">
+			<span class="lbl">JLPT</span>
+			{#each jlptChips as key (key)}
+				<button
+					class="jlpt"
+					class:off={$jlptEnabled[key] === false}
+					title={`Show only ${jlptLabel(key)} — Ctrl+Click to combine, Shift+Click for a range`}
+					onclick={(e) => jlptClick(e, key)}
+				>
+					{jlptLabel(key)}
+				</button>
+			{/each}
+		</div>
+	{/if}
 
 	{#if $freqFilter && $freqFilter.hi > $freqFilter.lo}
 		<div class="group freq">
@@ -129,6 +175,20 @@
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		color: var(--fg);
+	}
+	.jlpt {
+		cursor: pointer;
+		padding: 0.2rem 0.45rem;
+		background: color-mix(in srgb, var(--cyan) 10%, transparent);
+		border: 1px solid color-mix(in srgb, var(--cyan) 35%, transparent);
+		border-radius: var(--radius);
+		color: var(--fg);
+		font-size: 0.75rem;
+	}
+	.jlpt.off {
+		background: var(--bg-light);
+		border-color: var(--border);
+		color: var(--comment);
 	}
 	/* Min/Max numeric bounds beside the slider (egui's DragValues). */
 	.bound {

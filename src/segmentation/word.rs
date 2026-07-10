@@ -204,6 +204,7 @@ impl From<Word> for Term {
                 frequencies: HashMap::new(),
                 sentence_references: Vec::new(),
                 comprehension: 0.0,
+                jlpt_level: None,
             }
         } else {
             let is_kana = word.surface_form.as_str().is_kana();
@@ -220,6 +221,7 @@ impl From<Word> for Term {
                 frequencies: HashMap::new(),
                 sentence_references: Vec::new(),
                 comprehension: 0.0,
+                jlpt_level: None,
             }
         }
     }

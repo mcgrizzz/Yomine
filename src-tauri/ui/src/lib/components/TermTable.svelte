@@ -1,27 +1,38 @@
 <script lang="ts">
 	import type { SentenceDto, Term } from '$lib/ipc';
-	import { defaultDir, harmonic, textMatches, type SortField } from '$lib/table';
+	import { defaultDir, harmonic, termKey, textMatches, type SortField } from '$lib/table';
 	import {
 		addedTerms,
 		ankiStatus,
+		cancelQueue,
+		clearSelection,
 		ignoredLemmas,
 		mediaMissing,
+		mineQueue,
+		mineQueueState,
 		mineTerm,
 		minedNoteIds,
 		minedTerms,
 		miningTerm,
+		normalizeSentence,
 		openInAnki,
 		playerBusy,
 		playerStatus,
 		posCatalog,
 		retryMedia,
+		selectedTerms,
+		setSelected,
+		settings,
 		tableSearch,
 		tableSort,
 		toggleIgnore,
-		yomitanReachable
+		toggleSelected,
+		yomitanReachable,
+		type QueueItem
 	} from '$lib/stores';
 	import { posColor } from '$lib/pos';
 	import Furigana from './Furigana.svelte';
+	import SentenceConflictModal, { type BatchEntry } from './SentenceConflictModal.svelte';
 	import SentenceView, { type Occurrence } from './SentenceView.svelte';
 
 	let { terms, sentences }: { terms: Term[]; sentences: SentenceDto[] } = $props();
@@ -92,10 +103,6 @@
 	// key → display label ("Postposition" → "Particle"), from get_pos_catalog.
 	const posLabels = $derived(Object.fromEntries($posCatalog.map((p) => [p.key, p.display_name])));
 
-	// `Term.id` is not unique (the engine doesn't assign distinct ids); the pipeline
-	// dedups by (lemma_form, hiragana reading), so this pair is a stable unique key.
-	const termKey = (t: Term): string => `${t.lemma_form} ${t.lemma_reading}`;
-
 	function freqLabel(term: Term): string {
 		const v = harmonic(term);
 		return v === Infinity ? '？' : String(v);
@@ -145,11 +152,115 @@
 		const occ = occs[Math.min(occIdx[termKey(term)] ?? 0, occs.length - 1)];
 		void retryMedia(term, occ?.sentence.timestamp ?? null);
 	}
+
+	const showJlpt = $derived(
+		($settings?.show_jlpt_tags ?? true) && terms.some((t) => t.jlpt_level !== null)
+	);
+
+	const canMine = $derived($yomitanReachable && $ankiStatus.connected);
+	const selectableKeys = $derived(terms.filter((t) => !isMined(t)).map(termKey));
+	const allSelected = $derived(
+		selectableKeys.length > 0 && selectableKeys.every((k) => $selectedTerms.has(k))
+	);
+	const someSelected = $derived(selectableKeys.some((k) => $selectedTerms.has(k)));
+
+	function rowClick(e: MouseEvent, term: Term) {
+		if (!canMine || isMined(term)) return;
+		if (e.ctrlKey || e.metaKey) return;
+		if ((e.target as HTMLElement).closest('button, input, a')) return;
+		if (window.getSelection()?.toString()) return;
+		toggleSelected(termKey(term));
+	}
+
+	let batchEntries = $state<BatchEntry[] | null>(null);
+
+	function startBatch() {
+		const entries: BatchEntry[] = terms
+			.filter((t) => $selectedTerms.has(termKey(t)) && !isMined(t))
+			.map((t) => {
+				const key = termKey(t);
+				const occs = occurrencesOf(t);
+				const occ = occs[Math.min(occIdx[key] ?? 0, occs.length - 1)];
+				const seen = new Set([normalizeSentence(occ?.sentence.text ?? '')]);
+				const alternatives = occs.flatMap((o, idx) => {
+					const k = normalizeSentence(o.sentence.text);
+					if (seen.has(k)) return [];
+					seen.add(k);
+					return [{ idx, sentence: o.sentence.text, timestamp: o.sentence.timestamp }];
+				});
+				return {
+					term: t,
+					key,
+					sentence: occ?.sentence.text ?? '',
+					timestamp: occ?.sentence.timestamp ?? null,
+					explicit: occIdx[key] !== undefined,
+					alternatives
+				};
+			});
+		const keys = entries.map((e) => normalizeSentence(e.sentence)).filter((s) => s !== '');
+		if (new Set(keys).size === keys.length) {
+			void mineQueue(entries.map(({ term, sentence, timestamp }) => ({ term, sentence, timestamp })));
+			return;
+		}
+		batchEntries = entries;
+	}
+
+	function conflictsResolved(items: QueueItem[], occIdxPatch: Record<string, number>) {
+		// Sync the rows to any reassigned occurrences so display = mined.
+		for (const [key, idx] of Object.entries(occIdxPatch)) occIdx[key] = idx;
+		batchEntries = null;
+		void mineQueue(items);
+	}
 </script>
 
-<div class="table">
+{#if batchEntries}
+	<SentenceConflictModal
+		entries={batchEntries}
+		ondone={conflictsResolved}
+		oncancel={() => (batchEntries = null)}
+	/>
+{/if}
+
+{#if $mineQueueState}
+	<div class="bulk-bar">
+		<span class="bulk-info">
+			Mining {$mineQueueState.done + 1}/{$mineQueueState.total} 「{$mineQueueState.current}」
+		</span>
+		<button class="bulk-btn" onclick={cancelQueue}>Cancel</button>
+	</div>
+{:else if $selectedTerms.size > 0}
+	<div class="bulk-bar">
+		<span class="bulk-info">{$selectedTerms.size} selected</span>
+		{#if canMine}
+			<button
+				class="bulk-btn primary"
+				disabled={$miningTerm !== null || $playerBusy}
+				title="Mine the selected terms one by one, in timestamp order"
+				onclick={startBatch}>Mine {$selectedTerms.size}</button
+			>
+		{/if}
+		<button class="bulk-btn" onclick={clearSelection}>Clear</button>
+	</div>
+{/if}
+
+<div class="table" class:no-jlpt={!showJlpt}>
 	<div class="row head">
+		<span class="sel">
+			{#if canMine && selectableKeys.length > 0}
+				<input
+					type="checkbox"
+					checked={allSelected}
+					indeterminate={someSelected && !allSelected}
+					onchange={() => setSelected(selectableKeys, !allSelected)}
+					title="Select all visible terms"
+					aria-label="Select all visible terms"
+				/>
+			{/if}
+		</span>
 		<span>Term</span>
+		{#if showJlpt}
+			<span class="jlpt-cell">JLPT</span>
+		{/if}
 		<span class="head-cell">
 			<button
 				class="head-btn"
@@ -197,7 +308,23 @@
 	{#each terms as term (termKey(term))}
 		{@const occs = occurrencesOf(term)}
 		{@const key = termKey(term)}
-		<div class="row">
+		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions --
+		     row click mirrors the row's checkbox, which stays keyboard-accessible. -->
+		<div
+			class="row"
+			class:selected={$selectedTerms.has(key)}
+			onclick={(e) => rowClick(e, term)}
+		>
+			<span class="sel">
+				{#if canMine && !isMined(term)}
+					<input
+						type="checkbox"
+						checked={$selectedTerms.has(key)}
+						onchange={() => toggleSelected(key)}
+						aria-label={`Select ${term.lemma_form}`}
+					/>
+				{/if}
+			</span>
 			<span class="term-cell">
 				<!-- svelte-ignore a11y_click_events_have_key_events -- Ctrl/Cmd+Click is a
 				     mouse-modifier ignore toggle (egui parity); no keyboard equivalent. -->
@@ -250,6 +377,13 @@
 					</button>
 				{/if}
 			</span>
+			{#if showJlpt}
+				<span class="jlpt-cell">
+					{#if term.jlpt_level}
+						<span class="jlpt-chip">{term.jlpt_level}</span>
+					{/if}
+				</span>
+			{/if}
 			<div class="sentence">
 				{#if occs.length > 0}
 					<SentenceView occurrences={occs} {term} bind:currentIndex={occIdx[key]} />
@@ -283,21 +417,42 @@
 />
 
 <style>
+	/* One shared track list (rows subgrid it) so the max-content term column is
+	   sized globally — per-row grids each size their own and misalign. */
 	.table {
-		display: flex;
-		flex-direction: column;
+		display: grid;
+		grid-template-columns: 1.5rem minmax(7rem, max-content) 3rem 1fr 6rem 8rem;
+		/* Subgrid rows inherit this; a gap on .row would be ignored. */
+		column-gap: 0.75rem;
 		font-variant-numeric: tabular-nums;
 	}
+	.table.no-jlpt {
+		grid-template-columns: 1.5rem minmax(7rem, max-content) 1fr 6rem 8rem;
+	}
 	.row {
+		grid-column: 1 / -1;
 		display: grid;
-		grid-template-columns: minmax(7rem, max-content) 1fr 6rem 8rem;
-		gap: 0.75rem;
+		grid-template-columns: subgrid;
 		align-items: center;
 		padding: 0.5rem;
 		border-bottom: 1px solid var(--border);
 	}
+	.sel {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.sel input {
+		cursor: pointer;
+	}
 	.row:not(.head):hover {
 		background: var(--bg-light);
+	}
+	.row.selected {
+		background: color-mix(in srgb, var(--cyan) 7%, transparent);
+	}
+	.row.selected:hover {
+		background: color-mix(in srgb, var(--cyan) 12%, transparent);
 	}
 	.row.head {
 		position: sticky;
@@ -380,6 +535,9 @@
 		align-items: center;
 		gap: 0.45rem;
 	}
+	.jlpt-cell {
+		text-align: center;
+	}
 	.term {
 		font-size: 1.5rem;
 		color: var(--red);
@@ -452,10 +610,58 @@
 	.pos {
 		font-size: 0.9rem;
 	}
+	.jlpt-chip {
+		padding: 0.05rem 0.3rem;
+		font-size: 0.7rem;
+		color: var(--cyan);
+		background: color-mix(in srgb, var(--cyan) 10%, transparent);
+		border: 1px solid color-mix(in srgb, var(--cyan) 35%, transparent);
+		border-radius: var(--radius);
+		white-space: nowrap;
+	}
+	/* Floating selection/queue bar (issue #114): fixed so appearing/disappearing
+	   never reflows the table (the header would jump under the pointer). */
+	.bulk-bar {
+		position: fixed;
+		bottom: 1.25rem;
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 40;
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		max-width: 90vw;
+		padding: 0.45rem 0.9rem;
+		background: var(--bg-dark);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+		font-size: 0.85rem;
+	}
+	.bulk-info {
+		color: var(--fg);
+	}
+	.bulk-btn {
+		cursor: pointer;
+		padding: 0.25rem 0.6rem;
+		background: var(--bg-dark);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		color: var(--fg);
+	}
+	.bulk-btn.primary {
+		color: var(--cyan);
+		border-color: color-mix(in srgb, var(--cyan) 35%, transparent);
+	}
+	.bulk-btn:disabled {
+		opacity: 0.5;
+		cursor: default;
+	}
 	.empty {
 		color: var(--comment);
 	}
 	.no-match {
+		grid-column: 1 / -1;
 		margin: 0;
 		padding: 1.5rem 0.5rem;
 		color: var(--comment);

@@ -191,9 +191,19 @@ pub async fn load_asbplayer_media(
     media_id: String,
     track_numbers: Option<Vec<u32>>,
     title: String,
+    subtitle_file_name: Option<String>,
     progress: Channel<LoadingMessage>,
 ) -> Result<FileLoadResult, String> {
-    load_asbplayer_into_state(&app, &player, media_id, track_numbers, title, Some(&progress)).await
+    load_asbplayer_into_state(
+        &app,
+        &player,
+        media_id,
+        track_numbers,
+        title,
+        subtitle_file_name,
+        Some(&progress),
+    )
+    .await
 }
 
 /// The shared asbplayer-load path — the command above (picker, with progress)
@@ -204,6 +214,7 @@ pub(crate) async fn load_asbplayer_into_state(
     media_id: String,
     track_numbers: Option<Vec<u32>>,
     title: String,
+    subtitle_file_name: Option<String>,
     progress: Option<&Channel<LoadingMessage>>,
 ) -> Result<FileLoadResult, String> {
     let state = app.state::<Mutex<AppState>>();
@@ -227,10 +238,28 @@ pub(crate) async fn load_asbplayer_into_state(
             .to_string());
     }
 
-    // Save the cues as a real .srt in the app data dir (best-effort): the session
-    // then lands in recent files and can be reopened later without asbplayer.
-    let title = if title.trim().is_empty() { "asbplayer video".to_string() } else { title.clone() };
-    let saved_path = save_subtitles_srt(&subtitles, &title);
+    // Save the cues as a real .srt (best-effort): the session then lands in
+    // recents and reopens without asbplayer.
+    let title = if title.trim().is_empty() { "asbplayer video".to_string() } else { title };
+    let file_name = subtitle_file_name.filter(|n| !n.trim().is_empty());
+    let (stem, display_title, creator) = match &file_name {
+        Some(name) => {
+            let stem = std::path::Path::new(name)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or(name)
+                .to_string();
+            let media_info = filename_parser::parse_filename(name);
+            let metadata = media_info.get_metadata_string();
+            (
+                stem,
+                media_info.display_title(),
+                if metadata.is_empty() { None } else { Some(metadata) },
+            )
+        }
+        None => (title.clone(), title, None),
+    };
+    let saved_path = save_subtitles_srt(&subtitles, &stem);
     let source_file = SourceFile {
         id: DEFAULT_SOURCE_FILE_ID,
         source: Some("asbplayer".to_string()),
@@ -239,8 +268,8 @@ pub(crate) async fn load_asbplayer_into_state(
         } else {
             SourceFileType::Other("asbplayer".to_string())
         },
-        title,
-        creator: None,
+        title: display_title,
+        creator,
         original_file: saved_path.unwrap_or_else(|| format!("asbplayer://{media_id}")),
     };
 

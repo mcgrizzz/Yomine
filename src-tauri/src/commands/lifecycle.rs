@@ -23,6 +23,7 @@ use yomine::{
         frequency_manager,
         token_dictionary::DictType,
     },
+    jlpt::JlptDatabase,
     persistence,
     segmentation::{
         tokenizer::init_vibrato,
@@ -87,7 +88,9 @@ pub async fn load_language_tools(
         let _ = progress_for_blocking.send(LoadingMessage::new("Loading ignore list..."));
         let ignore_list = Arc::new(Mutex::new(IgnoreList::load().map_err(|e| e.to_string())?));
 
-        Ok(LanguageTools { tokenizer, frequency_manager, ignore_list, known_interval })
+        let jlpt = Arc::new(JlptDatabase::load());
+
+        Ok(LanguageTools { tokenizer, frequency_manager, ignore_list, jlpt, known_interval })
     })
     .await
     .map_err(|e| e.to_string())?;

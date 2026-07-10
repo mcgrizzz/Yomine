@@ -215,10 +215,28 @@ async fn enrich_and_verify(
     }
 }
 
-/// Open Anki's browser on the mined note (`guiBrowse nid:`).
+/// Open Anki's browser on recent adds with the mined note's card selected.
 #[tauri::command]
 pub async fn open_in_anki(note_id: u64) -> Result<(), String> {
-    let response = anki_api::gui_browse(&format!("nid:{}", note_id))
+    let response = anki_api::gui_browse(&format!("added:1 OR nid:{}", note_id))
+        .await
+        .map_err(|e| format!("AnkiConnect is unreachable: {}", e))?;
+    if let Some(err) = response.error {
+        return Err(err);
+    }
+    if let Ok(notes) = anki_api::get_notes(vec![note_id]).await {
+        if let Some(card) = notes.first().and_then(|n| n.cards.first()) {
+            let _ = anki_api::gui_select_card(*card).await;
+        }
+    }
+    Ok(())
+}
+
+/// Open Anki's browser on a set of notes (post-batch review).
+#[tauri::command]
+pub async fn open_notes_in_anki(note_ids: Vec<u64>) -> Result<(), String> {
+    let ids = note_ids.iter().map(u64::to_string).collect::<Vec<_>>().join(",");
+    let response = anki_api::gui_browse(&format!("nid:{}", ids))
         .await
         .map_err(|e| format!("AnkiConnect is unreachable: {}", e))?;
     match response.error {
