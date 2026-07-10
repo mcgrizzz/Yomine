@@ -158,7 +158,6 @@
 		($settings?.show_jlpt_tags ?? true) && terms.some((t) => t.jlpt_level !== null)
 	);
 
-	// Batch mining (issue #114): checkbox selection over the visible rows.
 	const canMine = $derived($yomitanReachable && $ankiStatus.connected);
 	const selectableKeys = $derived(terms.filter((t) => !isMined(t)).map(termKey));
 	const allSelected = $derived(
@@ -422,9 +421,8 @@
 />
 
 <style>
-	/* One shared track list for every row (via subgrid), so the max-content
-	   term column is sized by the widest term overall — per-row grids would
-	   each size their own columns and misalign horizontally. */
+	/* One shared track list (rows subgrid it) so the max-content term column is
+	   sized globally — per-row grids each size their own and misalign. */
 	.table {
 		display: grid;
 		grid-template-columns: 1.5rem minmax(7rem, max-content) 3rem 1fr 6rem 8rem;

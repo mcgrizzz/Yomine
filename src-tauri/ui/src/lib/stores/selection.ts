@@ -1,7 +1,6 @@
-// Multi-select for batch mining (issue #114), keyed by `termKey`. No cross-
-// store imports here: this module sits inside the player→mining→selection
-// import cycle, so eval-time access to another store is a TDZ crash. The
-// fileResult prune subscription lives in `hydrate.ts` for that reason.
+// Multi-select for batch mining (issue #114), keyed by `termKey`.
+// No module-scope store access: player→mining→selection is an import cycle
+// (TDZ crash) — the fileResult prune subscription lives in hydrate.ts.
 
 import { writable } from 'svelte/store';
 

@@ -26,9 +26,8 @@
 	);
 	const jlptLabel = (key: string) => (key === 'none' ? 'Non-JLPT' : key);
 
-	// Explorer-style selection: click solos a level (clicking the soloed chip
-	// resets to all), Ctrl/Cmd+Click toggles it, Shift+Click selects the range
-	// from the last plainly-clicked chip.
+	// Explorer-style: click solos a level (re-click resets to all), Ctrl/Cmd+
+	// Click toggles it, Shift+Click ranges from the last plainly-clicked chip.
 	let jlptAnchor = $state<JlptChip | null>(null);
 	function jlptClick(e: MouseEvent, key: JlptChip) {
 		const chips = jlptChips;

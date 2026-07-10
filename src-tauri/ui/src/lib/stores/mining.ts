@@ -56,9 +56,8 @@ export async function refreshMinedState(force = false): Promise<void> {
 	}
 }
 
-/** One mine: IPC + bookkeeping. No locking, summary toasts, or refresh —
- * `mineTerm` and `mineQueue` own those. The backend waits out the asbplayer
- * recording and verifies the media landed, so the result is definitive. */
+/** One mine: IPC + bookkeeping only — locking, toasts, and refresh belong to
+ * the callers. Resolves once the backend has verified the mine end-to-end. */
 async function mineOne(
 	term: ipc.Term,
 	sentence: string,
