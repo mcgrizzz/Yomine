@@ -459,16 +459,25 @@ export function getAsbplayerMedia(): Promise<BoundMedia[]> {
 
 /** Fetch a media's subtitles from asbplayer and run them through the same
  * pipeline as a file; resolves with the loaded terms (issue #105). Timestamps
- * are preserved, so seeking works. `trackNumbers = null` loads all tracks. */
+ * are preserved, so seeking works. `trackNumbers = null` loads all tracks.
+ * `subtitleFileName` names the saved .srt and feeds the filename parser;
+ * `title` (the tab title) is only the fallback. */
 export async function loadAsbplayerMedia(
 	mediaId: string,
 	trackNumbers: number[] | null,
 	title: string,
+	subtitleFileName: string | null,
 	onProgress: (msg: LoadingMessage) => void
 ): Promise<FileLoadResult> {
 	const channel = new Channel<LoadingMessage>();
 	channel.onmessage = onProgress;
-	return invoke('load_asbplayer_media', { mediaId, trackNumbers, title, progress: channel });
+	return invoke('load_asbplayer_media', {
+		mediaId,
+		trackNumbers,
+		title,
+		subtitleFileName,
+		progress: channel
+	});
 }
 
 /** `mine_term` outcome; `warning` = note created but enrichment failed;

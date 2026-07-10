@@ -206,7 +206,18 @@ async fn poll_asbplayer_follow(app: AppHandle) {
         let Some(next) = target else { continue };
         seen_ids.insert(next.id.clone());
         let title = next.title.clone().unwrap_or_else(|| "asbplayer video".to_string());
-        match load_asbplayer_into_state(&app, &player, next.id.clone(), None, title, None).await {
+        let file_name = next.loaded_subtitles.first().map(|t| t.file_name.clone());
+        match load_asbplayer_into_state(
+            &app,
+            &player,
+            next.id.clone(),
+            None,
+            title,
+            file_name,
+            None,
+        )
+        .await
+        {
             Ok(payload) => {
                 let _ = app.emit(names::ASBPLAYER_MEDIA_LOADED, payload);
             }
