@@ -11,7 +11,7 @@
 		fileResult,
 		openPosModal
 	} from '$lib/stores';
-	import { JLPT_CHIPS } from '$lib/table';
+	import { JLPT_CHIPS, type JlptChip } from '$lib/table';
 	import DualSlider from './DualSlider.svelte';
 
 	const posTotal = $derived($posCatalog.length);
@@ -29,8 +29,8 @@
 	// Explorer-style selection: click solos a level (clicking the soloed chip
 	// resets to all), Ctrl/Cmd+Click toggles it, Shift+Click selects the range
 	// from the last plainly-clicked chip.
-	let jlptAnchor = $state<string | null>(null);
-	function jlptClick(e: MouseEvent, key: string) {
+	let jlptAnchor = $state<JlptChip | null>(null);
+	function jlptClick(e: MouseEvent, key: JlptChip) {
 		const chips = jlptChips;
 		if (e.shiftKey) {
 			const anchorIdx = jlptAnchor ? chips.indexOf(jlptAnchor) : -1;

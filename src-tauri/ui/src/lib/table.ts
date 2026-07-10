@@ -62,6 +62,7 @@ export interface TableControlState {
 
 /** Filter chip keys: the five levels plus 'none' ("Non-JLPT" terms). */
 export const JLPT_CHIPS = ['N5', 'N4', 'N3', 'N2', 'N1', 'none'] as const;
+export type JlptChip = (typeof JLPT_CHIPS)[number];
 
 /** `Term.id` is not unique; the pipeline dedups by (lemma, reading), so this
  * pair is the stable row/selection key. */
