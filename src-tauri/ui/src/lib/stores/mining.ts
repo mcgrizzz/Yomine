@@ -5,7 +5,7 @@ import { get, writable } from 'svelte/store';
 import * as ipc from '$lib/ipc';
 import { termKey } from '$lib/table';
 import { playerStatus } from './player';
-import { selectedTerms } from './selection';
+import { clearSelection, selectedTerms } from './selection';
 import { lastError, showNotice } from './ui';
 
 /** Lemmas mined this session (optimistic, until the next refresh). */
@@ -184,6 +184,7 @@ export async function mineQueue(items: QueueItem[]): Promise<void> {
 		miningTerm.set(null);
 		playerBusy.set(false);
 		mineQueueState.set(null);
+		clearSelection();
 		void refreshMinedState(true);
 		const parts = [`Mined ${created}`];
 		if (duplicates > 0) parts.push(`${duplicates} duplicate${duplicates === 1 ? '' : 's'}`);
