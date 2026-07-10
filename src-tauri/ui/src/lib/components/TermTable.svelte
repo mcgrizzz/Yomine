@@ -14,6 +14,7 @@
 		minedNoteIds,
 		minedTerms,
 		miningTerm,
+		normalizeSentence,
 		openInAnki,
 		playerBusy,
 		playerStatus,
@@ -26,10 +27,12 @@
 		tableSort,
 		toggleIgnore,
 		toggleSelected,
-		yomitanReachable
+		yomitanReachable,
+		type QueueItem
 	} from '$lib/stores';
 	import { posColor } from '$lib/pos';
 	import Furigana from './Furigana.svelte';
+	import SentenceConflictModal, { type BatchEntry } from './SentenceConflictModal.svelte';
 	import SentenceView, { type Occurrence } from './SentenceView.svelte';
 
 	let { terms, sentences }: { terms: Term[]; sentences: SentenceDto[] } = $props();
@@ -173,21 +176,55 @@
 		toggleSelected(termKey(term));
 	}
 
+	// Non-null while the pre-mine sentence-conflict dialog is up.
+	let batchEntries = $state<BatchEntry[] | null>(null);
+
 	function startBatch() {
-		const items = terms
+		const entries: BatchEntry[] = terms
 			.filter((t) => $selectedTerms.has(termKey(t)) && !isMined(t))
 			.map((t) => {
+				const key = termKey(t);
 				const occs = occurrencesOf(t);
-				const occ = occs[Math.min(occIdx[termKey(t)] ?? 0, occs.length - 1)];
+				const occ = occs[Math.min(occIdx[key] ?? 0, occs.length - 1)];
+				const seen = new Set([normalizeSentence(occ?.sentence.text ?? '')]);
+				const alternatives = occs.flatMap((o, idx) => {
+					const k = normalizeSentence(o.sentence.text);
+					if (seen.has(k)) return [];
+					seen.add(k);
+					return [{ idx, sentence: o.sentence.text, timestamp: o.sentence.timestamp }];
+				});
 				return {
 					term: t,
+					key,
 					sentence: occ?.sentence.text ?? '',
-					timestamp: occ?.sentence.timestamp ?? null
+					timestamp: occ?.sentence.timestamp ?? null,
+					explicit: occIdx[key] !== undefined,
+					alternatives
 				};
 			});
+		const keys = entries.map((e) => normalizeSentence(e.sentence)).filter((s) => s !== '');
+		if (new Set(keys).size === keys.length) {
+			void mineQueue(entries.map(({ term, sentence, timestamp }) => ({ term, sentence, timestamp })));
+			return;
+		}
+		batchEntries = entries;
+	}
+
+	function conflictsResolved(items: QueueItem[], occIdxPatch: Record<string, number>) {
+		// Sync the rows to any reassigned occurrences so display = mined.
+		for (const [key, idx] of Object.entries(occIdxPatch)) occIdx[key] = idx;
+		batchEntries = null;
 		void mineQueue(items);
 	}
 </script>
+
+{#if batchEntries}
+	<SentenceConflictModal
+		entries={batchEntries}
+		ondone={conflictsResolved}
+		oncancel={() => (batchEntries = null)}
+	/>
+{/if}
 
 {#if $mineQueueState}
 	<div class="bulk-bar">
