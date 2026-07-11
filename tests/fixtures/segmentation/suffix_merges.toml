@@ -1,0 +1,44 @@
+# Suffix/stem merge rules: 様態そう and nominal suffixes bind onto adjective
+# and na-adjective stems, suffixes bind onto pronouns, and サ変 nouns keep
+# their frequency match.
+
+frequencies = [
+	{ term = "悪い", reading = "わるい", rank = 500 },
+	{ term = "柔らかさ", reading = "やわらかさ", rank = 8000 },
+	{ term = "静かさ", reading = "しずかさ", rank = 9000 },
+	{ term = "高い", reading = "たかい", rank = 300 },
+	{ term = "何気", reading = "なにげ", rank = 9000 },
+	{ term = "説得", reading = "せっとく", rank = 2000 },
+]
+
+[[case]]
+name = "悪そう merges and deinflects to 悪い"
+text = "具合が悪そうに道端でうずくまっていたから"
+terms = [{ surface = "悪そう", lemma = "悪い", reading = "わるい", pos = "Adjective" }]
+absent = ["悪"]
+
+[[case]]
+name = "柔らかさ merges as a noun"
+text = "この関節の柔らかさ…人並み外れている"
+terms = [{ surface = "柔らかさ", lemma = "柔らかさ", reading = "やわらかさ", pos = "Noun" }]
+
+[[case]]
+name = "静かさ never becomes 静かい"
+text = "静かさが好きだ"
+terms = [{ surface = "静かさ", lemma = "静かさ", reading = "しずかさ" }]
+absent = ["静かい"]
+
+[[case]]
+name = "高さ keeps the adjective lemma 高い"
+text = "北部高原の標高の高さが成せる業だ"
+terms = [{ surface = "高さ", lemma = "高い", reading = "たかい" }]
+
+[[case]]
+name = "何気 binds the suffix to the pronoun"
+text = "私何気にお昼からフェリー乗るの初めてな気がします"
+terms = [{ surface = "何気", lemma = "何気", reading = "なにげ" }]
+
+[[case]]
+name = "説得する keeps 説得 as the mineable term"
+text = "私は君を説得するだけの言葉を持ち合わせていない"
+terms = [{ surface = "説得する", lemma = "説得", reading = "せっとく", pos = "SuruVerb" }]

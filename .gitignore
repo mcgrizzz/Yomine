@@ -23,3 +23,6 @@ assets/n2.csv
 assets/n3.csv
 assets/n4.csv
 assets/n5.csv
+
+# Local review-sentence corpus (examples/review.rs)
+tests/fixtures/review_corpus.txt

@@ -12,5 +12,6 @@ pub mod websocket;
 pub mod yomitan;
 
 // Re-exported so integration tests / external tools can name tokenizer types
-// (`init_vibrato` returns `vibrato::Tokenizer`) without duplicating the git dep.
+// (`init_vibrato` returns `vibrato::Tokenizer`) without duplicating the dep
+// (`vibrato` is the renamed `vibrato-rkyv` fork).
 pub use vibrato;

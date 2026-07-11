@@ -148,9 +148,10 @@ pub fn create_default_rules() -> Vec<Rule> {
             },
         },
         Rule {
-            name: "Prefix Noun",
+            name: "Honorific prefix + noun",
             current: TokenMatcher {
                 pos1: Matcher::Any(vec![UnidicTag::Settouji]),
+                surface: Matcher::Any(vec!["お".to_string(), "ご".to_string(), "御".to_string()]),
                 ..Default::default()
             },
             next: Some(TokenMatcher {
@@ -167,6 +168,26 @@ pub fn create_default_rules() -> Vec<Rule> {
             },
         },
         Rule {
+            // Unlike honorifics, the prefix is part of the word (第一, not 一).
+            name: "Prefix Noun",
+            current: TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Settouji]),
+                ..Default::default()
+            },
+            next: Some(TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Meishi]),
+                ..Default::default()
+            }),
+            prev: None,
+            prev_word: WordMatcher::None,
+            action: RuleAction::CreateWord {
+                eat_next: true,
+                eat_next_lemma: true,
+                pos: POS::Noun,
+                main_word_policy: None,
+            },
+        },
+        Rule {
             name: "Te-form binding",
             current: TokenMatcher {
                 pos1: Matcher::Any(vec![UnidicTag::Joshi]),
@@ -175,16 +196,34 @@ pub fn create_default_rules() -> Vec<Rule> {
                 ..Default::default()
             },
             next: None,
-            prev: Some(TokenMatcher {
-                pos1: Matcher::Any(vec![UnidicTag::Doushi]),
-                ..Default::default()
-            }),
-            prev_word: WordMatcher::None,
+            prev: None,
+            prev_word: WordMatcher::PosAny(vec![POS::Verb, POS::SuruVerb]),
             action: RuleAction::MergeWithPrevious {
                 attach_prev: true,
                 attach_prev_lemma: true,
                 update_prev_pos: None,
-                main_word_policy: None,
+                main_word_policy: Some(MainWordPolicy::UseFirstToken),
+            },
+        },
+        Rule {
+            name: "Ba-conditional binding",
+            current: TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Joshi]),
+                pos2: Matcher::Any(vec![UnidicTag::Setsuzokujoshi]),
+                surface: Matcher::Any(vec!["ば".to_string()]),
+                ..Default::default()
+            },
+            next: None,
+            prev: Some(TokenMatcher {
+                conjugation_form: Matcher::Any(vec![UnidicTag::Kateikei]),
+                ..Default::default()
+            }),
+            prev_word: WordMatcher::PosAny(vec![POS::Verb, POS::SuruVerb, POS::Adjective]),
+            action: RuleAction::MergeWithPrevious {
+                attach_prev: true,
+                attach_prev_lemma: true,
+                update_prev_pos: None,
+                main_word_policy: Some(MainWordPolicy::UseFirstToken),
             },
         },
         Rule {
@@ -228,6 +267,87 @@ pub fn create_default_rules() -> Vec<Rule> {
             },
         },
         Rule {
+            name: "Suffix to pronoun",
+            current: TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Setsubiji]),
+                ..Default::default()
+            },
+            next: None,
+            prev: Some(TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Daimeshi]),
+                ..Default::default()
+            }),
+            prev_word: WordMatcher::None,
+            action: RuleAction::MergeWithPrevious {
+                attach_prev: true,
+                attach_prev_lemma: true,
+                update_prev_pos: None,
+                main_word_policy: None,
+            },
+        },
+        // The stem keeps its い-form lemma (悪 → 悪い), so attaching the
+        // suffix's lemma would corrupt it (悪いそう); surface only.
+        Rule {
+            name: "Sou(appearance) after adjective stem",
+            current: TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Keijoushi]),
+                pos2: Matcher::Any(vec![UnidicTag::Jodoushigokan]),
+                ..Default::default()
+            },
+            next: None,
+            prev: Some(TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Keiyoushi]),
+                ..Default::default()
+            }),
+            prev_word: WordMatcher::None,
+            action: RuleAction::MergeWithPrevious {
+                attach_prev: true,
+                attach_prev_lemma: false,
+                update_prev_pos: Some(POS::Adjective),
+                main_word_policy: None,
+            },
+        },
+        Rule {
+            name: "Noun-suffix after adjective stem",
+            current: TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Setsubiji]),
+                pos2: Matcher::Any(vec![UnidicTag::Meishiteki]),
+                ..Default::default()
+            },
+            next: None,
+            prev: Some(TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Keiyoushi]),
+                ..Default::default()
+            }),
+            prev_word: WordMatcher::None,
+            action: RuleAction::MergeWithPrevious {
+                attach_prev: true,
+                attach_prev_lemma: false,
+                update_prev_pos: Some(POS::Adjective),
+                main_word_policy: None,
+            },
+        },
+        Rule {
+            name: "Noun-suffix after na-adjective stem",
+            current: TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Setsubiji]),
+                pos2: Matcher::Any(vec![UnidicTag::Meishiteki]),
+                ..Default::default()
+            },
+            next: None,
+            prev: Some(TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Keijoushi]),
+                ..Default::default()
+            }),
+            prev_word: WordMatcher::None,
+            action: RuleAction::MergeWithPrevious {
+                attach_prev: true,
+                attach_prev_lemma: true,
+                update_prev_pos: Some(POS::Noun),
+                main_word_policy: None,
+            },
+        },
+        Rule {
             name: "Join numbers",
             current: TokenMatcher {
                 pos1: Matcher::Any(vec![UnidicTag::Meishi]),
@@ -258,6 +378,23 @@ pub fn create_default_rules() -> Vec<Rule> {
                 attach_prev_lemma: true,
                 update_prev_pos: Some(POS::Counter),
                 main_word_policy: Some(MainWordPolicy::UseSecondToken),
+            },
+        },
+        Rule {
+            name: "Half after counter",
+            current: TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Meishi]),
+                surface: Matcher::Any(vec!["半".to_string()]),
+                ..Default::default()
+            },
+            next: None,
+            prev: None,
+            prev_word: WordMatcher::PosAny(vec![POS::Counter]),
+            action: RuleAction::MergeWithPrevious {
+                attach_prev: true,
+                attach_prev_lemma: true,
+                update_prev_pos: None,
+                main_word_policy: None,
             },
         },
         Rule {

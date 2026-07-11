@@ -1,0 +1,17 @@
+# N-best rescue must NOT fire when the 1-best analysis already has dictionary
+# support, and must leave spans it can't validate untouched.
+
+frequencies = [
+	{ term = "犬", reading = "けん", rank = 1000 },
+	{ term = "行く", reading = "いく", rank = 200 },
+]
+
+[[case]]
+name = "validated 1-best reading is left alone"
+text = "犬なの？"
+terms = [{ surface = "犬", reading = "けん" }]
+
+[[case]]
+name = "proper noun without frequency data is untouched"
+text = "夏子が行った"
+terms = [{ surface = "夏子", pos = "ProperNoun" }, { surface = "行った", lemma = "行く" }]

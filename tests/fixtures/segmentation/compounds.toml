@@ -1,0 +1,23 @@
+# Proper+common compound merges are kept only when a frequency dictionary
+# corroborates the merged pair; otherwise the proper noun splits back off.
+
+frequencies = [
+	{ term = "京都駅", reading = "きょうとえき", rank = 3000 },
+	{ term = "取り戻す", reading = "とりもどす", rank = 4000 },
+	{ term = "行く", reading = "いく", rank = 100 },
+]
+
+[[case]]
+name = "unvalidated 夏子おばさん splits into 夏子 + おばさん"
+text = "夏子おばさんを取り戻さなきゃ。"
+terms = [
+	{ surface = "夏子", pos = "ProperNoun" },
+	{ surface = "おばさん", lemma = "おばさん" },
+	{ surface = "取り戻さ", lemma = "取り戻す" },
+]
+absent = ["夏子おばさん", "夏子おば"]
+
+[[case]]
+name = "dictionary-backed compound stays merged"
+text = "京都駅に行った"
+terms = [{ surface = "京都駅", pos = "CompoundNoun" }]

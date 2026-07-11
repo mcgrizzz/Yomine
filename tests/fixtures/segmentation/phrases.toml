@@ -13,6 +13,19 @@ frequencies = [
 	{ term = "土曜日", reading = "どようび", rank = 1000 },
 	{ term = "土曜", reading = "どよう", rank = 4000 },
 	{ term = "日", reading = "ひ", rank = 500 },
+	{ term = "一筋縄", reading = "ひとすじなわ", rank = 8000 },
+	{ term = "一筋", reading = "ひとすじ", rank = 9000 },
+	{ term = "縄", reading = "なわ", rank = 7000 },
+	{ term = "辺り一面", reading = "あたりいちめん", rank = 6000 },
+	{ term = "辺り", reading = "あたり", rank = 1000 },
+	{ term = "一面", reading = "いちめん", rank = 6000 },
+	{ term = "丘", reading = "おか", rank = 2000 },
+	{ term = "になると", reading = "になると", rank = 4000 },
+	{ term = "手がかり", reading = "てがかり", rank = 3000 },
+	{ term = "なる", reading = "なる", rank = 100 },
+	{ term = "複合体", reading = "ふくごうたい", rank = 78145 },
+	{ term = "複合", reading = "ふくごう", rank = 15917 },
+	{ term = "体", reading = "たい", rank = 1401 },
 ]
 
 [[case]]
@@ -20,10 +33,33 @@ name = "rendaku compound promoted with the corrected reading"
 text = "株式会社で働いています。"
 terms = [{ surface = "株式会社", reading = "かぶしきがいしゃ", pos = "NounExpression" }]
 
-# Pins the current promotion threshold: compounds under 4 characters are never
-# promoted (`min_len` in extract_words), even with a dictionary entry — so
-# 土曜日 stays split. If min_len is ever tuned, this case flags it.
+# 3-char compounds are promoted only when every component is a noun and the
+# surface is all kanji (min_len drops from 4 to 3 for that shape).
 [[case]]
-name = "3-char compounds stay unpromoted (min_len = 4)"
+name = "3-char all-kanji noun compound is promoted"
 text = "土曜日に会いましょう。"
-absent = ["土曜日"]
+terms = [{ surface = "土曜日", reading = "どようび", pos = "NounExpression" }]
+
+[[case]]
+name = "一筋縄 is promoted"
+text = "やはり一筋縄ではいかないか"
+terms = [{ surface = "一筋縄", reading = "ひとすじなわ", pos = "NounExpression" }]
+
+[[case]]
+name = "辺り一面 is promoted"
+text = "さっきまで辺り一面丘だったのに"
+terms = [{ surface = "辺り一面", reading = "あたりいちめん", pos = "NounExpression" }]
+
+# A rare compound of common parts (score/ratio would reject it) still
+# promotes: all-kanji noun compounds trust the dictionary reading match alone.
+[[case]]
+name = "複合体 is promoted despite common components"
+text = "頭脳の新しい受容器の複合体を識別する。"
+terms = [{ surface = "複合体", reading = "ふくごうたい", pos = "NounExpression" }]
+
+# A dictionary carrying junk n-gram "phrases" must not force them on us: a
+# phrase may not start or end on a particle.
+[[case]]
+name = "になると is not pulled out as a phrase"
+text = "ココの存在が手がかりになると思っていたけど"
+absent = ["になると"]

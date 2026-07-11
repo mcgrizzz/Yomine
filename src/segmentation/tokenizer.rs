@@ -7,13 +7,11 @@ use vibrato::{
 use wana_kana::IsJapaneseStr;
 
 use super::{
+    nbest::rescue_words,
     rule_matcher::parse_into_words,
-    token_models::{
-        RawToken,
-        UnidicToken,
-        VibratoToken,
-    },
+    token_models::UnidicToken,
     word::{
+        get_default_pos,
         Word,
         POS,
     },
@@ -21,6 +19,8 @@ use super::{
 use crate::{
     core::{
         utils::{
+            is_kanji_char,
+            normalize_reading,
             pairwise_deinflection,
             NormalizeLongVowel,
         },
@@ -31,7 +31,6 @@ use crate::{
     dictionary::{
         frequency_manager::FrequencyManager,
         token_dictionary::{
-            ensure_dictionary,
             load_dictionary,
             DictType,
         },
@@ -39,7 +38,7 @@ use crate::{
 };
 
 pub fn extract_words(
-    mut worker: Worker<'_>,
+    mut worker: Worker,
     sentences: &mut [Sentence],
     frequency_manager: &FrequencyManager,
 ) -> Vec<Term> {
@@ -52,15 +51,7 @@ pub fn extract_words(
         let tokens: Vec<UnidicToken> = worker
             .token_iter()
             .map(|token| {
-                let vibrato_token: VibratoToken = VibratoToken {
-                    surface: token.surface().to_string(),
-                    features: token.feature().to_string(),
-                };
-
-                let surface = vibrato_token.surface.clone();
-                let raw_token: RawToken = vibrato_token.into();
-
-                (surface, raw_token).into()
+                UnidicToken::from_parts(token.surface(), token.feature(), token.range_byte())
             })
             .collect();
 
@@ -68,82 +59,90 @@ pub fn extract_words(
             Ok(parsed_words) => parsed_words,
             Err(_) => Vec::new(),
         };
+        let words = rescue_words(&mut worker, &sentence.text, words, frequency_manager);
+        let words = split_unvalidated_compounds(words, frequency_manager);
 
-        let mut sentence_terms: Vec<Term> = words
-            .into_iter()
-            .map(|word| {
-                let mut term: Term = word.into();
-                if term.surface_form.as_str().is_japanese() {
-                    match term.part_of_speech {
-                        POS::Verb
-                        | POS::SuruVerb
-                        | POS::AdjectivalNoun
-                        | POS::Adjective
-                        | POS::Noun => {
-                            let deinflections: Vec<(String, String)> =
-                                pairwise_deinflection(&term.surface_form, &term.surface_reading);
+        let mut term_spans: Vec<(usize, usize)> = Vec::with_capacity(words.len());
+        let mut sentence_terms: Vec<Term> = Vec::with_capacity(words.len());
+        for word in words {
+            let span = word.byte_span();
+            // The highlight span ends at start + surface_form.len(), so the
+            // reference must point at the main word, not the segment.
+            let ref_start = word.main_word.as_ref().map_or(span.0, |m| m.start_byte);
+            let mut term: Term = word.into();
+            if term.surface_form.as_str().is_japanese() {
+                match term.part_of_speech {
+                    POS::Verb
+                    | POS::SuruVerb
+                    | POS::AdjectivalNoun
+                    | POS::Adjective
+                    | POS::Noun => {
+                        let deinflections: Vec<(String, String)> =
+                            pairwise_deinflection(&term.surface_form, &term.surface_reading);
 
-                            let mut sorted_deinflections: Vec<(String, String)> = deinflections
-                                .into_iter()
-                                .filter(|(word, reading)| {
-                                    frequency_manager
-                                        .get_harmonic_frequency_for_pair(word, reading)
-                                        .is_some()
-                                })
-                                .collect();
+                        let mut sorted_deinflections: Vec<(String, String)> = deinflections
+                            .into_iter()
+                            .filter(|(word, reading)| {
+                                frequency_manager
+                                    .get_harmonic_frequency_for_pair(word, reading)
+                                    .is_some()
+                            })
+                            .collect();
 
-                            sorted_deinflections.sort_by_key(|(word, reading)| {
-                                frequency_manager.get_harmonic_frequency_for_pair(word, reading)
-                            });
+                        sorted_deinflections.sort_by_key(|(word, reading)| {
+                            frequency_manager.get_harmonic_frequency_for_pair(word, reading)
+                        });
 
-                            if sorted_deinflections.len() > 0 {
-                                term.lemma_form = sorted_deinflections[0].0.clone();
-                                term.lemma_reading = sorted_deinflections[0].1.clone();
-                            }
+                        if sorted_deinflections.len() > 0 {
+                            let unidic_lemma =
+                                (term.lemma_form.clone(), term.lemma_reading.clone());
+                            let chosen = sorted_deinflections
+                                .iter()
+                                .find(|candidate| **candidate == unidic_lemma)
+                                .unwrap_or(&sorted_deinflections[0]);
+                            term.lemma_form = chosen.0.clone();
+                            term.lemma_reading = chosen.1.clone();
                         }
-                        _ => {}
                     }
+                    _ => {}
                 }
+            }
 
-                let freq_map: HashMap<String, u32> = frequency_manager.build_freq_map(
-                    &term.lemma_form,
-                    &term.lemma_reading,
-                    term.is_kana,
-                );
-                term.frequencies = freq_map;
+            let freq_map: HashMap<String, u32> = frequency_manager.build_freq_map(
+                &term.lemma_form,
+                &term.lemma_reading,
+                term.is_kana,
+            );
+            term.frequencies = freq_map;
 
-                let index_in_sentence = sentence
-                    .text
-                    .match_indices(&term.surface_form)
-                    .next()
-                    .map(|(idx, _)| idx)
-                    .unwrap_or(0);
+            term.sentence_references.push((ord, ref_start));
+            term_spans.push(span);
+            sentence_terms.push(term);
+        }
 
-                term.sentence_references.push((ord, index_in_sentence));
-
-                term
-            })
-            .collect();
-
-        sentence.segments.extend(sentence_terms.iter().map(|term| {
-            let start_index = sentence
-                .text
-                .match_indices(&term.full_segment)
-                .next()
-                .map(|(idx, _)| idx)
-                .unwrap_or(0);
-            let end_index = start_index + term.full_segment.len();
-            // The span covers the FULL segment, so the reading must too:
-            // `surface_reading` is the main word's alone (勉強します → べんきょう,
-            // 8月 → がつ), which smeared a partial reading across the whole span
-            // in furigana displays (the 8月22日 bug's second half).
-            (term.full_segment_reading.clone(), term.part_of_speech.clone(), start_index, end_index)
-        }));
+        sentence.segments.extend(sentence_terms.iter().zip(&term_spans).map(
+            |(term, &(start_index, end_index))| {
+                // The span covers the FULL segment, so the reading must too:
+                // `surface_reading` is the main word's alone (勉強します → べんきょう,
+                // 8月 → がつ), which smeared a partial reading across the whole span
+                // in furigana displays (the 8月22日 bug's second half).
+                (
+                    term.full_segment_reading.clone(),
+                    term.part_of_speech.clone(),
+                    start_index,
+                    end_index,
+                )
+            },
+        ));
 
         //Add phrases without filtering the terms for now
         for start in 0..sentence_terms.len() {
             for end in (start + 1..sentence_terms.len()).rev() {
                 let subrange = &sentence_terms[start..=end];
+                if !phrase_endpoint_ok(&subrange[0]) || !phrase_endpoint_ok(&subrange[end - start])
+                {
+                    continue;
+                }
                 let mut phrase: Term = Term::from_slice(subrange);
 
                 // Try the plain component-concat reading first, then rendaku
@@ -195,9 +194,21 @@ pub fn extract_words(
                     let max_ratio: f32 = ratios.iter().fold(0.0, |acc, &x| acc.max(x));
                     let char_count = phrase.lemma_form.chars().count();
 
+                    let all_nouns = subrange.iter().all(|term| {
+                        matches!(
+                            term.part_of_speech,
+                            POS::Noun | POS::CompoundNoun | POS::ProperNoun
+                        )
+                    });
+
                     let score_threshold = 10.0;
                     let ratio_threshold = 120.0;
-                    let min_len = 4;
+                    // The score/ratio gates guard against junk n-gram entries
+                    // some dictionaries carry; all-kanji noun compounds with
+                    // an exact reading match (複合体) don't need them.
+                    let kanji_noun_compound =
+                        all_nouns && phrase.lemma_form.chars().all(is_kanji_char);
+                    let min_len = if kanji_noun_compound { 3 } else { 4 };
 
                     let override_ratio_threshold = 40.0;
                     let phrase_freq_threshold = 10000;
@@ -206,30 +217,21 @@ pub fn extract_words(
                         continue;
                     }
 
-                    if frequency > phrase_freq_threshold && max_ratio < override_ratio_threshold {
+                    if !kanji_noun_compound
+                        && frequency > phrase_freq_threshold
+                        && max_ratio < override_ratio_threshold
+                    {
                         continue;
                     }
 
-                    phrase.part_of_speech = POS::NounExpression;
-                    for term in subrange {
-                        if !matches!(
-                            term.part_of_speech,
-                            POS::Noun | POS::CompoundNoun | POS::ProperNoun
-                        ) {
-                            phrase.part_of_speech = POS::Expression;
-                            break;
-                        }
-                    }
+                    phrase.part_of_speech =
+                        if all_nouns { POS::NounExpression } else { POS::Expression };
 
-                    if score <= score_threshold || max_ratio >= ratio_threshold {
-                        let index_in_sentence = sentence
-                            .text
-                            .match_indices(&phrase.surface_form)
-                            .next()
-                            .map(|(idx, _)| idx)
-                            .unwrap_or(0);
-
-                        phrase.sentence_references.push((ord, index_in_sentence));
+                    if kanji_noun_compound
+                        || score <= score_threshold
+                        || max_ratio >= ratio_threshold
+                    {
+                        phrase.sentence_references.push((ord, term_spans[start].0));
                         let freq_map = frequency_manager.build_freq_map(
                             &phrase.lemma_form,
                             &phrase.lemma_reading,
@@ -274,131 +276,124 @@ pub fn extract_words(
 }
 
 pub fn extract_words_for_frequency(
-    mut worker: Worker<'_>,
+    tokenizer: &Tokenizer,
     sentences: &mut [Sentence],
     frequency_manager: &FrequencyManager,
     progress_callback: Option<&(dyn Fn(bool, usize, usize) + Sync)>,
 ) -> Vec<Term> {
-    use rayon::prelude::*;
-
-    let total_sentences = sentences.len();
-
-    // Phase 1: Tokenize all sentences sequentially
-    let mut sentence_tokens: Vec<(usize, String, Vec<UnidicToken>)> =
-        Vec::with_capacity(total_sentences);
-    let report_interval = std::cmp::min(1000, std::cmp::max(1, total_sentences / 20));
-
-    for (ord, sentence) in sentences.iter().enumerate() {
-        worker.reset_sentence(&sentence.text);
-        worker.tokenize();
-
-        let tokens: Vec<UnidicToken> = worker
-            .token_iter()
-            .map(|token| {
-                let vibrato_token: VibratoToken = VibratoToken {
-                    surface: token.surface().to_string(),
-                    features: token.feature().to_string(),
-                };
-
-                let surface = vibrato_token.surface.clone();
-                let raw_token: RawToken = vibrato_token.into();
-
-                (surface, raw_token).into()
-            })
-            .collect();
-
-        sentence_tokens.push((ord, sentence.text.clone(), tokens));
-
-        // Report progress during tokenization
-        if let Some(ref callback) = progress_callback {
-            if (ord + 1) % report_interval == 0 || ord + 1 == total_sentences {
-                callback(false, ord + 1, total_sentences);
-            }
-        }
-    }
-
-    // Phase 2: Process tokens in parallel
     use std::sync::atomic::{
         AtomicUsize,
         Ordering,
     };
+
+    use rayon::prelude::*;
+
+    let total_sentences = sentences.len();
+    let report_interval = std::cmp::min(1000, std::cmp::max(1, total_sentences / 20));
     let processed_count = AtomicUsize::new(0);
 
-    let all_terms: Vec<Vec<Term>> = sentence_tokens
+    let all_terms: Vec<Vec<Term>> = sentences
         .par_iter()
-        .map(|(_ord, _sentence_text, tokens)| {
-            let words: Vec<Word> = match parse_into_words(tokens.clone()) {
-                Ok(parsed_words) => parsed_words,
-                Err(_) => Vec::new(),
-            };
+        .map_init(
+            || tokenizer.new_worker(),
+            |worker, sentence| {
+                worker.reset_sentence(&sentence.text);
+                worker.tokenize();
 
-            let mut sentence_terms: Vec<Term> = words
-                .into_iter()
-                .filter_map(|word| {
-                    let mut term: Term = word.into();
+                let tokens: Vec<UnidicToken> = worker
+                    .token_iter()
+                    .map(|token| {
+                        UnidicToken::from_parts(
+                            token.surface(),
+                            token.feature(),
+                            token.range_byte(),
+                        )
+                    })
+                    .collect();
 
-                    // Filter out blank/whitespace tokens
-                    if term.surface_form.trim().is_empty() {
-                        return None;
-                    }
+                let words: Vec<Word> = match parse_into_words(tokens) {
+                    Ok(parsed_words) => parsed_words,
+                    Err(_) => Vec::new(),
+                };
+                let words = rescue_words(worker, &sentence.text, words, frequency_manager);
+                let words = split_unvalidated_compounds(words, frequency_manager);
 
-                    // For frequency analysis, use surface forms as lemma forms initially
-                    // Deinflection will be applied in batch later
-                    term.lemma_form = term.surface_form.clone();
-                    term.lemma_reading = term.surface_reading.clone();
+                let mut sentence_terms: Vec<Term> = words
+                    .into_iter()
+                    .filter_map(|word| {
+                        let mut term: Term = word.into();
 
-                    Some(term)
-                })
-                .collect();
+                        // Filter out blank/whitespace tokens
+                        if term.surface_form.trim().is_empty() {
+                            return None;
+                        }
 
-            // Phrase detection - check if phrase exists in loaded dictionaries
-            // Adds the largest matching phrase at each starting position.
-            for start in 0..sentence_terms.len() {
-                for end in (start + 1..sentence_terms.len()).rev() {
-                    let subrange = &sentence_terms[start..=end];
-                    let mut phrase: Term = Term::from_slice(subrange);
+                        // For frequency analysis, use surface forms as lemma forms initially
+                        // Deinflection will be applied in batch later
+                        term.lemma_form = term.surface_form.clone();
+                        term.lemma_reading = term.surface_reading.clone();
 
-                    let freq = frequency_manager.get_harmonic_frequency_for_pair(
-                        &phrase.surface_form.normalize_long_vowel(),
-                        &phrase.surface_reading.normalize_long_vowel(),
-                    );
+                        Some(term)
+                    })
+                    .collect();
 
-                    if let Some(_frequency) = freq {
-                        let char_count = phrase.lemma_form.chars().count();
-                        let min_len = 4;
-
-                        if char_count < min_len {
+                // Phrase detection - check if phrase exists in loaded dictionaries
+                // Adds the largest matching phrase at each starting position.
+                for start in 0..sentence_terms.len() {
+                    for end in (start + 1..sentence_terms.len()).rev() {
+                        let subrange = &sentence_terms[start..=end];
+                        if !phrase_endpoint_ok(&subrange[0])
+                            || !phrase_endpoint_ok(&subrange[end - start])
+                        {
                             continue;
                         }
+                        let mut phrase: Term = Term::from_slice(subrange);
 
-                        phrase.part_of_speech = POS::NounExpression;
-                        for term in subrange {
-                            if !matches!(
-                                term.part_of_speech,
-                                POS::Noun | POS::CompoundNoun | POS::ProperNoun
-                            ) {
-                                phrase.part_of_speech = POS::Expression;
-                                break;
+                        let freq = frequency_manager.get_harmonic_frequency_for_pair(
+                            &phrase.surface_form.normalize_long_vowel(),
+                            &phrase.surface_reading.normalize_long_vowel(),
+                        );
+
+                        if let Some(_frequency) = freq {
+                            let char_count = phrase.lemma_form.chars().count();
+                            let all_nouns = subrange.iter().all(|term| {
+                                matches!(
+                                    term.part_of_speech,
+                                    POS::Noun | POS::CompoundNoun | POS::ProperNoun
+                                )
+                            });
+                            let min_len =
+                                if all_nouns && phrase.lemma_form.chars().all(is_kanji_char) {
+                                    3
+                                } else {
+                                    4
+                                };
+
+                            if char_count < min_len {
+                                continue;
                             }
-                        }
 
-                        sentence_terms.push(phrase);
-                        // Move to next start position (was `break 'outer`).
-                        break;
+                            phrase.part_of_speech =
+                                if all_nouns { POS::NounExpression } else { POS::Expression };
+
+                            sentence_terms.push(phrase);
+                            // Move to next start position (was `break 'outer`).
+                            break;
+                        }
                     }
                 }
-            }
 
-            // Update progress counter (phase = true)
-            let current = processed_count.fetch_add(1, Ordering::Relaxed) + 1;
-            if let Some(ref callback) = progress_callback {
-                if current % report_interval == 0 || current == total_sentences {
-                    callback(true, current, total_sentences);
+                // Update progress counter (phase = true)
+                let current = processed_count.fetch_add(1, Ordering::Relaxed) + 1;
+                if let Some(ref callback) = progress_callback {
+                    if current % report_interval == 0 || current == total_sentences {
+                        callback(true, current, total_sentences);
+                    }
                 }
-            }
 
-            sentence_terms
-        })
+                sentence_terms
+            },
+        )
         .collect();
 
     let terms: Vec<Term> = all_terms.into_iter().flatten().collect();
@@ -474,6 +469,49 @@ pub fn batch_deinflect_terms(
     deinflection_map
 }
 
+fn phrase_endpoint_ok(term: &Term) -> bool {
+    !matches!(term.part_of_speech, POS::Postposition | POS::Copula | POS::Symbol)
+}
+
+/// Split rule-merged proper+common compounds back apart (夏子おばさん →
+/// 夏子 + おばさん) unless a frequency dictionary corroborates the merged pair.
+fn split_unvalidated_compounds(
+    words: Vec<Word>,
+    frequency_manager: &FrequencyManager,
+) -> Vec<Word> {
+    if frequency_manager.get_enabled_dictionaries().is_empty() {
+        return words;
+    }
+    let mut out: Vec<Word> = Vec::with_capacity(words.len());
+    for word in words {
+        if word.part_of_speech != POS::CompoundNoun
+            || word.tokens.len() < 2
+            || frequency_manager
+                .get_harmonic_frequency_for_pair(&word.surface_form, &word.surface_hatsuon)
+                .is_some()
+        {
+            out.push(word);
+            continue;
+        }
+        let Ok(rest_words) = parse_into_words(word.tokens[1..].to_vec()) else {
+            out.push(word);
+            continue;
+        };
+        let first = &word.tokens[0];
+        out.push(Word {
+            surface_form: first.surface.clone(),
+            surface_hatsuon: normalize_reading(&first.surface, &first.surface_hatsuon),
+            lemma_form: first.lemma_form.clone(),
+            lemma_hatsuon: normalize_reading(&first.surface, &first.lemma_hatsuon),
+            part_of_speech: get_default_pos(first),
+            tokens: vec![first.clone()],
+            main_word: None,
+        });
+        out.extend(rest_words);
+    }
+    out
+}
+
 /// Dakuten/handakuten variants of a leading kana — the sequential-voicing
 /// (rendaku) alternations a non-initial compound component can take.
 fn rendaku_variants(c: char) -> &'static [char] {
@@ -531,8 +569,7 @@ pub fn init_vibrato(
     dict_type: &DictType,
     progress_callback: Option<Box<dyn Fn(String) + Send>>,
 ) -> Result<Tokenizer, YomineError> {
-    let dict_path = ensure_dictionary(dict_type, progress_callback)?;
-    let dict = load_dictionary(dict_path.to_str().unwrap())?;
+    let dict = load_dictionary(dict_type, progress_callback)?;
     let tokenizer = vibrato::Tokenizer::new(dict);
     Ok(tokenizer)
 }

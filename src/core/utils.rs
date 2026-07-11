@@ -80,6 +80,10 @@ pub fn harmonic_frequency(nums: &[u32]) -> Option<u32> {
 }
 
 /// Normalize Japanese text for comparison
+pub fn is_kanji_char(c: char) -> bool {
+    matches!(c, '\u{3400}'..='\u{4DBF}' | '\u{4E00}'..='\u{9FFF}' | '々')
+}
+
 pub fn normalize_japanese_text(text: &str) -> String {
     // Only convert to hiragana for consistent kana comparison, preserve actual characters
     text.to_hiragana().normalize_long_vowel().to_string()

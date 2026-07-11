@@ -4,7 +4,10 @@ use wana_kana::IsJapaneseStr;
 
 use super::types::Vocab;
 use crate::{
-    core::utils::normalize_japanese_text,
+    core::utils::{
+        is_kanji_char,
+        normalize_japanese_text,
+    },
     dictionary::frequency_manager::FrequencyManager,
 };
 
@@ -12,6 +15,8 @@ pub const KEEP_TERM_THRESHOLD: f32 = 0.60; //Pretty much anything over low-confi
 pub const HIGH_CONFIDENCE_SCORE: f32 = 0.85; // Exact matches, kanji/kana pairs
 pub const MEDIUM_CONFIDENCE_SCORE: f32 = 0.70; // Normalized variations
 pub const LOW_CONFIDENCE_SCORE: f32 = 0.55; // Same readings only
+
+const UNGRADED_PAIR_CONFIDENCE: f32 = 0.9; // Kanji/kana pair, no data to grade the reading
 
 pub struct AnkiMatcher {
     frequency_manager: Arc<FrequencyManager>,
@@ -87,6 +92,13 @@ impl AnkiMatcher {
             return MEDIUM_CONFIDENCE_SCORE;
         }
 
+        // 4b. High confidence: okurigana spelling variants with the same reading
+        if norm_yomine_reading == norm_anki_reading
+            && is_okurigana_variant_pair(yomine_word, anki_word)
+        {
+            return HIGH_CONFIDENCE_SCORE;
+        }
+
         // 5. Low confidence: same reading, different kanji (both non-kana), this is below the threshold but maybe in the future we can use this.
         //Sometimes the same words have different kanji but are still the same word carrying different nuance.
         if !yomine_word.is_kana()
@@ -116,7 +128,7 @@ impl AnkiMatcher {
         // Get all frequency data for the kanji word
         let frequencies = self.frequency_manager.get_frequency_data_by_term(kanji_word);
         if frequencies.is_empty() {
-            return 0.0;
+            return UNGRADED_PAIR_CONFIDENCE;
         }
 
         // Group frequencies by reading and calculate averages
@@ -131,7 +143,7 @@ impl AnkiMatcher {
         }
 
         if grouped_frequencies.is_empty() {
-            return 0.0;
+            return UNGRADED_PAIR_CONFIDENCE;
         }
 
         let average_frequencies: Vec<(String, f32)> = grouped_frequencies
@@ -160,5 +172,134 @@ impl AnkiMatcher {
         } else {
             0.0
         }
+    }
+}
+
+/// The forms differ only where one side writes a segment in kanji and the
+/// other in kana (話し掛ける vs 話しかける ✓; 上る vs 昇る ✗).
+fn is_okurigana_variant_pair(a: &str, b: &str) -> bool {
+    if a.is_kana() || b.is_kana() {
+        return false;
+    }
+    let a_chars: Vec<char> = a.chars().collect();
+    let b_chars: Vec<char> = b.chars().collect();
+    let prefix = a_chars.iter().zip(&b_chars).take_while(|(x, y)| x == y).count();
+    let max_suffix = a_chars.len().min(b_chars.len()) - prefix;
+    let suffix = a_chars
+        .iter()
+        .rev()
+        .zip(b_chars.iter().rev())
+        .take(max_suffix)
+        .take_while(|(x, y)| x == y)
+        .count();
+    let mid_a: String = a_chars[prefix..a_chars.len() - suffix].iter().collect();
+    let mid_b: String = b_chars[prefix..b_chars.len() - suffix].iter().collect();
+
+    let kanji_vs_kana = |kanji: &str, kana: &str| {
+        kanji.chars().any(is_kanji_char) && !kana.is_empty() && kana.is_kana()
+    };
+    kanji_vs_kana(&mid_a, &mid_b) || kanji_vs_kana(&mid_b, &mid_a)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::*;
+    use crate::{
+        dictionary::{
+            frequency_dict::FrequencyDictionary,
+            JsonFrequency,
+            JsonFrequencyData,
+            TermMetaBankV3,
+        },
+        segmentation::word::POS,
+    };
+
+    fn matcher_with(entries: &[(&str, &str, u32)]) -> AnkiMatcher {
+        let metas = entries
+            .iter()
+            .map(|(term, reading, rank)| TermMetaBankV3 {
+                term: term.to_string(),
+                data_type: "freq".to_string(),
+                data: Some(JsonFrequencyData::Nested {
+                    reading: reading.to_string(),
+                    frequency: JsonFrequency::Number(*rank),
+                }),
+            })
+            .collect();
+        let dicts = if entries.is_empty() {
+            Vec::new()
+        } else {
+            vec![FrequencyDictionary::new("TEST".to_string(), "test".to_string(), metas)]
+        };
+        AnkiMatcher::new(Arc::new(FrequencyManager::from_dictionaries(dicts)))
+    }
+
+    fn vocab(term: &str, reading: &str) -> Vocab {
+        Vocab {
+            term: term.to_string(),
+            reading: reading.to_string(),
+            card_id: None,
+            interval: None,
+        }
+    }
+
+    #[test]
+    fn kana_subtitle_matches_kanji_card_without_frequency_data() {
+        let m = matcher_with(&[]);
+        let score = m.inclusivity_score("だます", "だます", &vocab("騙す", "だます"), &POS::Verb);
+        assert!(score >= KEEP_TERM_THRESHOLD, "got {score}");
+    }
+
+    #[test]
+    fn frequency_graded_kanji_kana_pair_matches() {
+        let m = matcher_with(&[("騙す", "だます", 3156)]);
+        let score = m.inclusivity_score("だます", "だます", &vocab("騙す", "だます"), &POS::Verb);
+        assert!(score >= KEEP_TERM_THRESHOLD, "got {score}");
+    }
+
+    #[test]
+    fn mixed_script_card_matches_kana_form() {
+        let m = matcher_with(&[]);
+        let score =
+            m.inclusivity_score("どういう", "どういう", &vocab("どう言う", "どういう"), &POS::Verb);
+        assert!(score >= KEEP_TERM_THRESHOLD, "got {score}");
+        let score = m.inclusivity_score(
+            "いくらでも",
+            "いくらでも",
+            &vocab("幾らでも", "いくらでも"),
+            &POS::Adverb,
+        );
+        assert!(score >= KEEP_TERM_THRESHOLD, "got {score}");
+    }
+
+    #[test]
+    fn okurigana_variants_match() {
+        let m = matcher_with(&[]);
+        let score = m.inclusivity_score(
+            "話し掛ける",
+            "はなしかける",
+            &vocab("話しかける", "はなしかける"),
+            &POS::Verb,
+        );
+        assert!(score >= KEEP_TERM_THRESHOLD, "got {score}");
+    }
+
+    #[test]
+    fn different_kanji_with_same_reading_stay_apart() {
+        let m = matcher_with(&[]);
+        for (a, b, reading) in [("上る", "昇る", "のぼる"), ("橋", "箸", "はし")] {
+            let score = m.inclusivity_score(a, reading, &vocab(b, reading), &POS::Noun);
+            assert!(score < KEEP_TERM_THRESHOLD, "{a} vs {b} got {score}");
+        }
+    }
+
+    #[test]
+    fn contradicted_kanji_kana_pair_stays_apart() {
+        // 犬's only dictionary reading is いぬ, so a けん kana form is not it.
+        let m = matcher_with(&[("犬", "いぬ", 300)]);
+        let score = m.inclusivity_score("けん", "けん", &vocab("犬", "けん"), &POS::Noun);
+        assert!(score < KEEP_TERM_THRESHOLD, "got {score}");
     }
 }

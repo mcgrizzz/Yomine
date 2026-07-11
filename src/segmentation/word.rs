@@ -187,6 +187,16 @@ pub struct Word {
     pub main_word: Option<UnidicToken>, // Optional core for the word (e.g., "勉強" in "勉強します")
 }
 
+impl Word {
+    /// Byte span of the whole word in its source sentence.
+    pub fn byte_span(&self) -> (usize, usize) {
+        (
+            self.tokens.first().map_or(0, |t| t.start_byte),
+            self.tokens.last().map_or(0, |t| t.end_byte),
+        )
+    }
+}
+
 impl From<Word> for Term {
     fn from(word: Word) -> Term {
         if let Some(main_word) = word.main_word {

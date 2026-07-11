@@ -71,6 +71,9 @@ struct FreqEntry {
     term: String,
     reading: String,
     rank: u32,
+    /// Kana-form entry (rendered with the ㋕ marker, like real dictionaries).
+    #[serde(default)]
+    kana: bool,
 }
 
 #[derive(Deserialize)]
@@ -127,13 +130,20 @@ fn build_manager(entries: &[FreqEntry]) -> FrequencyManager {
     }
     let metas = entries
         .iter()
-        .map(|e| TermMetaBankV3 {
-            term: e.term.clone(),
-            data_type: "freq".to_string(),
-            data: Some(JsonFrequencyData::Nested {
-                reading: e.reading.clone(),
-                frequency: JsonFrequency::Number(e.rank),
-            }),
+        .map(|e| {
+            let frequency = if e.kana {
+                JsonFrequency::Complex {
+                    value: e.rank,
+                    display_value: Some(format!("{}㋕", e.rank)),
+                }
+            } else {
+                JsonFrequency::Number(e.rank)
+            };
+            TermMetaBankV3 {
+                term: e.term.clone(),
+                data_type: "freq".to_string(),
+                data: Some(JsonFrequencyData::Nested { reading: e.reading.clone(), frequency }),
+            }
         })
         .collect();
     FrequencyManager::from_dictionaries(vec![FrequencyDictionary::new(

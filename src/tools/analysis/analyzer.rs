@@ -148,7 +148,7 @@ pub fn analyze_files(
 
         // Extract terms from this file
         let file_terms = extract_words_for_frequency(
-            language_tools.tokenizer.new_worker(),
+            &language_tools.tokenizer,
             &mut sentences,
             &language_tools.frequency_manager,
             None,
