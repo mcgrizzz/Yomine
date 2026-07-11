@@ -8,7 +8,7 @@ pub struct VibratoToken {
     pub features: String,
 }
 
-impl From<vibrato::token::Token<'_, '_>> for VibratoToken {
+impl From<vibrato::token::Token<'_>> for VibratoToken {
     fn from(value: vibrato::token::Token) -> Self {
         Self { surface: value.surface().into(), features: value.feature().into() }
     }
@@ -101,6 +101,21 @@ pub struct UnidicToken {
     pub surface_hatsuon: String,
     pub lemma_form: String,
     pub lemma_hatsuon: String,
+
+    /// Byte span in the source sentence; 0..0 for synthetic/test tokens.
+    pub start_byte: usize,
+    pub end_byte: usize,
+}
+
+impl UnidicToken {
+    pub fn from_parts(surface: &str, features: &str, span: std::ops::Range<usize>) -> Self {
+        let raw: RawToken =
+            VibratoToken { surface: surface.to_string(), features: features.to_string() }.into();
+        let mut token: UnidicToken = (surface.to_string(), raw).into();
+        token.start_byte = span.start;
+        token.end_byte = span.end;
+        token
+    }
 }
 
 impl From<(String, RawToken)> for UnidicToken {
@@ -123,6 +138,8 @@ impl From<(String, RawToken)> for UnidicToken {
             surface_hatsuon: surface_hatsuon,
             lemma_form: lemma_form,
             lemma_hatsuon: lemma_hatsuon,
+            start_byte: 0,
+            end_byte: 0,
         }
     }
 }

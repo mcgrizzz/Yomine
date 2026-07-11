@@ -32,3 +32,18 @@ segments = [
 name = "myriad grouping"
 text = "12500人がいた。"
 terms = [{ surface = "12500人", surface_reading = "いちまんにせんごひゃくにん" }]
+
+[[case]]
+name = "half past merges into the counter"
+text = "私たちは８時半に学校に着きました。"
+segments = [
+	{ surface = "私たち", reading = "わたくしたち", pos = "Pronoun" },
+	{ surface = "は", pos = "Postposition" },
+	{ surface = "８時半", reading = "はちじはん", pos = "Counter" },
+	{ surface = "に", pos = "Postposition" },
+	{ surface = "学校", reading = "がっこう", pos = "Noun" },
+	{ surface = "に", pos = "Postposition" },
+	{ surface = "着きました", reading = "つきました", pos = "Verb" },
+	{ surface = "。", pos = "Symbol" },
+]
+terms = [{ surface = "８時半", pos = "Counter" }]

@@ -7,6 +7,9 @@ frequencies = [
 	{ term = "行く", reading = "いく", rank = 100 },
 	{ term = "会う", reading = "あう", rank = 200 },
 	{ term = "食べる", reading = "たべる", rank = 300 },
+	{ term = "溺れる", reading = "おぼれる", rank = 4700 },
+	{ term = "殺す", reading = "ころす", rank = 400 },
+	{ term = "高い", reading = "たかい", rank = 250 },
 ]
 
 [[case]]
@@ -23,3 +26,25 @@ terms = [{ surface = "会いましょう", lemma = "会う", reading = "あう",
 name = "polite non-past resolves to dictionary form"
 text = "学校に行きます。"
 terms = [{ surface = "行きます", lemma = "行く", reading = "いく", pos = "Verb" }]
+
+# て binds through intervening auxiliaries (溺れ+させ+て is one word), and the
+# main-word policy keeps the verb's lemma even for chains the deinflector
+# can't unwind.
+[[case]]
+name = "te-form after causative stays one word"
+text = "彼女を溺れさせて殺した。"
+terms = [
+	{ surface = "溺れさせて", lemma = "溺れる", reading = "おぼれる", pos = "Verb" },
+	{ surface = "殺した", lemma = "殺す", reading = "ころす", pos = "Verb" },
+]
+
+# ば binds onto 仮定形 like て onto 連用形.
+[[case]]
+name = "conditional ば merges into the adjective"
+text = "高ければ買わない。"
+terms = [{ surface = "高ければ", lemma = "高い", reading = "たかい" }]
+
+[[case]]
+name = "conditional ば merges through ない"
+text = "食べなければならない。"
+terms = [{ surface = "食べなければ", lemma = "食べる", reading = "たべる" }]

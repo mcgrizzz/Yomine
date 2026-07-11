@@ -48,6 +48,7 @@ fn flush_run(run: &mut Vec<UnidicToken>, out: &mut Vec<UnidicToken>) {
     let digits: String = surface.chars().map(normalize_digit).collect();
     match number_to_katakana(&digits) {
         Some(reading) => {
+            let end_byte = run.last().unwrap().end_byte;
             let first = run.first().unwrap();
             out.push(UnidicToken {
                 surface: surface.clone(),
@@ -62,6 +63,8 @@ fn flush_run(run: &mut Vec<UnidicToken>, out: &mut Vec<UnidicToken>) {
                 // number the Arabic surface is the sensible dictionary form.
                 lemma_form: surface,
                 lemma_hatsuon: reading,
+                start_byte: first.start_byte,
+                end_byte,
             });
             run.clear();
         }

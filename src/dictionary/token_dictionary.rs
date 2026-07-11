@@ -6,7 +6,6 @@ use std::{
     io::{
         self,
         BufReader,
-        BufWriter,
     },
     path::{
         Path,
@@ -17,7 +16,6 @@ use std::{
 use liblzma::read::XzDecoder;
 use tar::Archive;
 use vibrato::Dictionary;
-use zstd::stream::copy_decode;
 
 use crate::{
     core::YomineError,
@@ -108,7 +106,7 @@ fn extract_and_finalize(
     download_path: &Path,
     tar_path: &Path,
     extract_path: &Path,
-    final_dic_path: &Path,
+    final_zst_path: &Path,
     folder_name: &str,
     progress_callback: &Option<Box<dyn Fn(String) + Send>>,
 ) -> Result<PathBuf, YomineError> {
@@ -149,17 +147,10 @@ fn extract_and_finalize(
         )));
     }
 
-    callback_message("Finalizing tokenizer setup...", progress_callback);
-    let zst_file = File::open(&zst_path).map_err(|e| {
-        YomineError::Custom(format!("Failed to open ZST file {:?}: {}.", zst_path, e))
-    })?;
-    let dic_file = File::create(final_dic_path).map_err(|e| {
-        YomineError::Custom(format!("Failed to create .dic file {:?}: {}", final_dic_path, e))
-    })?;
-    copy_decode(BufReader::new(zst_file), BufWriter::new(dic_file)).map_err(|e| {
-        YomineError::Custom(format!("Failed to decompress ZST to {:?}: {}.", final_dic_path, e))
-    })?;
-    callback_message("Tokenizer model ready", progress_callback);
+    // Kept compressed: vibrato-rkyv loads the .zst directly and manages its
+    // own decompressed cache next to it.
+    fs::rename(&zst_path, final_zst_path)
+        .map_err(|e| YomineError::Custom(format!("Failed to move ZST file: {}", e)))?;
 
     let inner_path = extract_path.join(folder_name);
     fs::rename(inner_path.join("BSD"), extract_path.join("BSD"))
@@ -169,19 +160,19 @@ fn extract_and_finalize(
 
     //Clean up extra files
     callback_message("Cleaning up temporary files", progress_callback);
-    let keep_files = ["system.dic", "BSD", "NOTICE"];
+    let keep_files = ["system.dic.zst", "BSD", "NOTICE"];
     cleanup_files(extract_path, &keep_files)?;
     println!("Removing download {:?}", download_path);
     fs::remove_file(download_path)?;
     println!("Removing tar {:?}", tar_path);
     fs::remove_file(tar_path)?;
 
-    Ok(final_dic_path.to_path_buf())
+    Ok(final_zst_path.to_path_buf())
 }
 
 pub fn ensure_dictionary(
     dict_type: &DictType,
-    progress_callback: Option<Box<dyn Fn(String) + Send>>,
+    progress_callback: &Option<Box<dyn Fn(String) + Send>>,
 ) -> Result<PathBuf, YomineError> {
     use crate::core::http::try_download_from_urls;
 
@@ -189,11 +180,11 @@ pub fn ensure_dictionary(
     let folder_name = dict_type.folder_name();
     let dict_dir = get_tokenizer_dict_dir();
     let extract_path = dict_dir.join(folder_name);
-    let final_dic_path = extract_path.join("system.dic");
+    let final_zst_path = extract_path.join("system.dic.zst");
 
-    if final_dic_path.exists() {
-        callback_message("Tokenizer model already downloaded, loading...", &progress_callback);
-        return Ok(final_dic_path);
+    if final_zst_path.exists() {
+        callback_message("Tokenizer model already downloaded, loading...", progress_callback);
+        return Ok(final_zst_path);
     }
 
     fs::create_dir_all(&dict_dir).map_err(|e| {
@@ -217,22 +208,27 @@ pub fn ensure_dictionary(
         ))
     })?;
 
-    callback_message("Downloaded tokenizer model successfully", &progress_callback);
+    callback_message("Downloaded tokenizer model successfully", progress_callback);
     extract_and_finalize(
         &download_path,
         &tar_path,
         &extract_path,
-        &final_dic_path,
+        &final_zst_path,
         folder_name,
-        &progress_callback,
+        progress_callback,
     )?;
 
-    Ok(final_dic_path)
+    Ok(final_zst_path)
 }
 
-pub fn load_dictionary(path: &str) -> Result<Dictionary, YomineError> {
-    let reader = BufReader::new(File::open(path)?);
-    let dict = Dictionary::read(reader)?;
+pub fn load_dictionary(
+    dict_type: &DictType,
+    progress_callback: Option<Box<dyn Fn(String) + Send>>,
+) -> Result<Dictionary, YomineError> {
+    let zst_path = ensure_dictionary(dict_type, &progress_callback)?;
+    let cache_dir = zst_path.parent().expect("zst path always has a parent");
+    callback_message("Loading tokenizer model...", &progress_callback);
+    let dict = Dictionary::from_zstd_with_options(&zst_path, cache_dir, false)?;
     Ok(dict)
 }
 

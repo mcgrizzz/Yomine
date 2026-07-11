@@ -1,0 +1,18 @@
+# Prefix + noun words: honorifics mine the bare noun (お昼 → 昼), every other
+# prefix keeps the whole word as the lemma (第一, not 一).
+
+frequencies = [
+	{ term = "第一", reading = "だいいち", rank = 2000 },
+	{ term = "昼", reading = "ひる", rank = 3000 },
+]
+
+[[case]]
+name = "第一 keeps the whole word as its lemma"
+text = "私は時間厳守を第一にしている。"
+terms = [{ surface = "第一", lemma = "第一", reading = "だいいち" }]
+absent = ["一"]
+
+[[case]]
+name = "honorific prefix still mines the bare noun"
+text = "お昼から始めよう"
+terms = [{ surface = "お昼", lemma = "昼", reading = "ひる" }]

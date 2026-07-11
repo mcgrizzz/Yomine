@@ -1,0 +1,67 @@
+# Targeted N-best rescue: each case's 1-best analysis carries a form/reading
+# no dictionary corroborates; an alternate tokenization that the synthetic
+# dictionary validates is spliced in.
+
+frequencies = [
+	{ term = "口約束", reading = "くちやくそく", rank = 500 },
+	{ term = "口", reading = "くち", rank = 400 },
+	{ term = "約束", reading = "やくそく", rank = 600 },
+	{ term = "丘", reading = "おか", rank = 2000 },
+	{ term = "あったかい", reading = "あったかい", rank = 7000, kana = true },
+	{ term = "つける", reading = "つける", rank = 900, kana = true },
+	{ term = "母さん", reading = "かあさん", rank = 800 },
+	{ term = "犬", reading = "いぬ", rank = 300 },
+	{ term = "値する", reading = "あたいする", rank = 9000 },
+	{ term = "値", reading = "あたい", rank = 9000 },
+	{ term = "待つ", reading = "まつ", rank = 500 },
+]
+
+[[case]]
+name = "口約束 not split as 口約+束"
+text = "口約束はいけませんな"
+terms = [
+	{ surface = "約束", reading = "やくそく" },
+	{ surface = "口約束", reading = "くちやくそく", pos = "NounExpression" },
+]
+absent = ["口約"]
+
+[[case]]
+name = "phantom verb 丘だつ is rescued to 丘"
+text = "さっきまで辺り一面丘だったのに"
+terms = [{ surface = "丘", reading = "おか" }]
+absent = ["丘だつ"]
+
+[[case]]
+name = "kana word stranded by an interjection is rescued"
+text = "わあったかい"
+terms = [{ surface = "あったかい", lemma = "あったかい" }]
+absent = ["たかい"]
+
+# The parenthetical flips the 1-best into つけた|けれ(蹴る)|ば; both fragments
+# are dictionary-backed, so the ungrammatical た+仮定形 seam is the trigger.
+[[case]]
+name = "たければ conditional is re-fused across the た seam"
+text = "上級者が英語力（特に読解力）をつけたければ、語彙を増やすのが王道ですね。"
+terms = [{ surface = "つけたければ", lemma = "つける", reading = "つける" }]
+absent = ["ける"]
+
+[[case]]
+name = "母さん reads かあさん, not ばあさん"
+text = "お前らなんてすぐに母さんが殺すから"
+terms = [{ surface = "母さん", reading = "かあさん" }]
+
+[[case]]
+name = "犬 reads いぬ, not the suffix ケン"
+text = "犬なの？"
+terms = [{ surface = "犬", reading = "いぬ" }]
+
+[[case]]
+name = "値する keeps its reading"
+text = "万死に値する"
+terms = [{ surface = "値する", reading = "あたい" }]
+
+[[case]]
+name = "imperative 待て deinflects to 待つ"
+text = "ここで吉報を待て"
+terms = [{ surface = "待て", lemma = "待つ", reading = "まつ" }]
+absent = ["待るて"]

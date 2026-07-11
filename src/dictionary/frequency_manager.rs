@@ -33,6 +33,17 @@ use crate::{
     persistence::get_app_data_dir,
 };
 
+/// カ→か etc.; everything else untouched (ケガ人 → けが人). Unlike wana_kana's
+/// `to_hiragana`, never transliterates romaji.
+fn fold_katakana(s: &str) -> String {
+    s.chars()
+        .map(|c| match c as u32 {
+            0x30A1..=0x30F6 => char::from_u32(c as u32 - 0x60).unwrap(),
+            _ => c,
+        })
+        .collect()
+}
+
 pub fn get_frequency_dict_dir() -> std::path::PathBuf {
     get_app_data_dir().join("dictionaries").join("frequency")
 }
@@ -91,8 +102,25 @@ impl FrequencyManager {
         lemma_reading: &str,
         is_kana: bool,
     ) -> HashMap<String, u32> {
-        let mut freq_map: HashMap<String, u32> = self
-            .dictionaries
+        let mut freq_map = self.freq_map_for(lemma_form, lemma_reading, is_kana);
+        if freq_map.is_empty() {
+            let folded = fold_katakana(lemma_form);
+            if folded != lemma_form {
+                freq_map = self.freq_map_for(&folded, lemma_reading, is_kana);
+            }
+        }
+
+        freq_map.insert("HARMONIC".to_string(), self.get_weighted_harmonic(&freq_map));
+        freq_map
+    }
+
+    fn freq_map_for(
+        &self,
+        lemma_form: &str,
+        lemma_reading: &str,
+        is_kana: bool,
+    ) -> HashMap<String, u32> {
+        self.dictionaries
             .iter()
             .filter_map(|(_, dict)| {
                 let freq = dict.get_frequency(&lemma_form, &lemma_reading, is_kana);
@@ -102,10 +130,7 @@ impl FrequencyManager {
                     None
                 }
             })
-            .collect();
-
-        freq_map.insert("HARMONIC".to_string(), self.get_weighted_harmonic(&freq_map));
-        freq_map
+            .collect()
     }
 
     //Return a boolean so we know whether to update the UI or not.
@@ -199,7 +224,20 @@ impl FrequencyManager {
     }
 
     //Used for deinflection sorting, not affected by weighting or toggling dictionaries.
+    //Katakana spellings of hiragana-keyed entries fall back to the folded form
+    //(ケガ人 → けが人).
     pub fn get_harmonic_frequency_for_pair(&self, word: &str, reading: &str) -> Option<u32> {
+        self.harmonic_for_exact_pair(word, reading).or_else(|| {
+            let folded = fold_katakana(word);
+            if folded != word {
+                self.harmonic_for_exact_pair(&folded, reading)
+            } else {
+                None
+            }
+        })
+    }
+
+    fn harmonic_for_exact_pair(&self, word: &str, reading: &str) -> Option<u32> {
         let is_kana = word.is_kana();
 
         // Helper closure to get frequency for exact word/reading pair from a dictionary
