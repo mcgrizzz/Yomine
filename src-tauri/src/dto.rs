@@ -49,6 +49,19 @@ pub struct YomitanStatusDto {
     pub version: Option<String>,
 }
 
+/// One Yomitan dictionary entry for the definition popover (issue #113).
+/// The `*_html` fields are Yomitan-rendered markers, sanitized frontend-side.
+#[derive(Serialize, Clone)]
+pub struct DefinitionEntryDto {
+    pub expression: String,
+    pub reading: String,
+    /// `{furigana}` — the expression as `<ruby>` markup for the header.
+    pub furigana_html: String,
+    /// `{frequencies}` — `<ul><li>Dict: rank</li>…</ul>`, restyled into chips.
+    pub frequencies_html: String,
+    pub glossary_html: String,
+}
+
 /// One `<ruby>` span. `surface` is pre-sliced and `reading` pre-converted to
 /// hiragana so the UI never slices by UTF-8 byte offsets in JS; `start`/`end`
 /// remain for the in-sentence term-highlight overlap test.

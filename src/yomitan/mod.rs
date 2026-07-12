@@ -40,7 +40,7 @@ pub struct MediaItem {
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RenderedFields {
-    /// One map of marker → rendered value per dictionary entry (we request one).
+    /// One map of marker → rendered value per dictionary entry.
     #[serde(default)]
     pub fields: Vec<HashMap<String, String>>,
     #[serde(default)]
@@ -88,6 +88,7 @@ pub async fn render_fields(
     base_url: &str,
     text: &str,
     markers: &[String],
+    max_entries: u32,
     include_media: bool,
 ) -> Result<RenderedFields, YomineError> {
     post(
@@ -97,7 +98,7 @@ pub async fn render_fields(
             "text": text,
             "type": "term",
             "markers": markers,
-            "maxEntries": 1,
+            "maxEntries": max_entries,
             "includeMedia": include_media,
         }),
     )

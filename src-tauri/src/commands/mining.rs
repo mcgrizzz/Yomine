@@ -21,6 +21,7 @@ use yomine::{
 
 use crate::{
     dto::{
+        DefinitionEntryDto,
         MineResultDto,
         MinedStateDto,
         YomitanStatusDto,
@@ -54,7 +55,7 @@ pub async fn mine_term(
     let _ = progress.send(LoadingMessage::new(format!("Rendering 「{}」 with Yomitan…", term)));
     let format = yomitan::get_term_card_format(&yomitan_url).await.map_err(|e| e.to_string())?;
     let markers = yomitan::collect_markers(&format);
-    let rendered = yomitan::render_fields(&yomitan_url, &term, &markers, true)
+    let rendered = yomitan::render_fields(&yomitan_url, &term, &markers, 1, true)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -270,6 +271,43 @@ pub async fn get_mined_state(state: State<'_, Mutex<AppState>>) -> Result<MinedS
     let mut mined_sentences = mined::mined_sentences_pruned().await;
     mined_sentences.extend(added_sentences);
     Ok(MinedStateDto { added_terms, mined_sentences })
+}
+
+const DEFINITION_MAX_ENTRIES: u32 = 8;
+
+/// Rendered dictionary entries for the definition popover (issue #113).
+/// Empty result = Yomitan has no entry (not an error).
+#[tauri::command]
+pub async fn render_definition(
+    state: State<'_, Mutex<AppState>>,
+    term: String,
+) -> Result<Vec<DefinitionEntryDto>, String> {
+    let yomitan_url = { state.lock().unwrap().settings.yomitan_url.clone() };
+    let markers: Vec<String> = ["expression", "reading", "furigana", "frequencies", "glossary"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    let rendered =
+        yomitan::render_fields(&yomitan_url, &term, &markers, DEFINITION_MAX_ENTRIES, false)
+            .await
+            .map_err(|e| e.to_string())?;
+    Ok(rendered
+        .fields
+        .into_iter()
+        .filter_map(|mut entry| {
+            let glossary_html = entry.remove("glossary").unwrap_or_default();
+            if glossary_html.trim().is_empty() {
+                return None;
+            }
+            Some(DefinitionEntryDto {
+                expression: entry.remove("expression").unwrap_or_default(),
+                reading: entry.remove("reading").unwrap_or_default(),
+                furigana_html: entry.remove("furigana").unwrap_or_default(),
+                frequencies_html: entry.remove("frequencies").unwrap_or_default(),
+                glossary_html,
+            })
+        })
+        .collect())
 }
 
 /// Reachability probe; `url` lets the modal test a staged (unsaved) value.
