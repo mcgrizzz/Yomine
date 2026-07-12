@@ -223,6 +223,8 @@ export interface SettingsData {
 	asbplayer_poll_secs: number;
 	/** Whole-UI scale factor (1.0 = 100%), applied as CSS zoom on the root. */
 	font_scale: number;
+	/** Definition popover scale factor (issue #113), independent of font_scale. */
+	definition_scale: number;
 	/** yomitan-api base URL (one-click mining, issue #105). */
 	yomitan_url: string;
 	/** How sentence segments are colored in the term table (issue #94). */
@@ -550,6 +552,23 @@ export function getMinedState(): Promise<MinedState> {
 /** Reachability probe; `url` tests a staged value (omitted = saved setting). */
 export function getYomitanStatus(url?: string): Promise<YomitanStatus> {
 	return invoke('get_yomitan_status', { url: url ?? null });
+}
+
+/** One Yomitan dictionary entry for the definition popover (issue #113).
+ * The `*_html` fields are Yomitan-rendered markers; sanitize before {@html}. */
+export interface DefinitionEntry {
+	expression: string;
+	reading: string;
+	/** The expression as `<ruby>` markup for the header. */
+	furigana_html: string;
+	/** `<ul><li>Dict: rank</li>…</ul>`, restyled into chips. */
+	frequencies_html: string;
+	glossary_html: string;
+}
+
+/** Rendered definitions for a term; empty = Yomitan has no entry. */
+export function renderDefinition(term: string): Promise<DefinitionEntry[]> {
+	return invoke('render_definition', { term });
 }
 
 /** Persist the WebSocket server port and restart a running server on it. */

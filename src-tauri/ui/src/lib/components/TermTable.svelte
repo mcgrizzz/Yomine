@@ -31,6 +31,7 @@
 		type QueueItem
 	} from '$lib/stores';
 	import { posColor } from '$lib/pos';
+	import DefinitionPopover from './DefinitionPopover.svelte';
 	import Furigana from './Furigana.svelte';
 	import SentenceConflictModal, { type BatchEntry } from './SentenceConflictModal.svelte';
 	import SentenceView, { type Occurrence } from './SentenceView.svelte';
@@ -81,6 +82,21 @@
 		menu = { x: e.clientX, y: e.clientY, lemma: term.lemma_form };
 	}
 
+	let defPopover = $state<{ term: Term; anchor: DOMRect } | null>(null);
+	let hovered: { term: Term; el: HTMLElement } | null = null;
+
+	// Shift+Hover definition popover (issue #113). Pressing Shift while already
+	// hovering is handled in trackMods — mouseenter won't re-fire for it.
+	function openDefinition(h: { term: Term; el: HTMLElement }) {
+		if (!$yomitanReachable) return;
+		defPopover = { term: h.term, anchor: h.el.getBoundingClientRect() };
+	}
+
+	function termEnter(e: MouseEvent, term: Term) {
+		hovered = { term, el: e.currentTarget as HTMLElement };
+		if (e.shiftKey) openDefinition(hovered);
+	}
+
 	// Ctrl (Win/Linux) or Cmd (macOS) + click toggles ignore; a plain click is left
 	// alone so text selection still works. (On macOS Ctrl+Click opens the menu instead.)
 	function termClick(e: MouseEvent, term: Term) {
@@ -93,6 +109,7 @@
 	let ctrlHeld = $state(false);
 	function trackMods(e: KeyboardEvent) {
 		ctrlHeld = e.ctrlKey || e.metaKey;
+		if (e.key === 'Shift' && e.shiftKey && !e.repeat && hovered) openDefinition(hovered);
 	}
 
 	function toggleFromMenu() {
@@ -336,11 +353,14 @@
 						lang="ja"
 						role="button"
 						tabindex="-1"
-						title={$ignoredLemmas.has(term.lemma_form)
-							? 'Ctrl+Click to UNDO ignore'
-							: 'Ctrl+Click to ignore'}
+						title={($yomitanReachable ? 'Shift+Hover for definition · ' : '') +
+							($ignoredLemmas.has(term.lemma_form)
+								? 'Ctrl+Click to UNDO ignore'
+								: 'Ctrl+Click to ignore')}
 						onclick={(e) => termClick(e, term)}
 						oncontextmenu={(e) => openMenu(e, term)}
+						onmouseenter={(e) => termEnter(e, term)}
+						onmouseleave={() => (hovered = null)}
 						><Furigana surface={term.lemma_form} reading={term.lemma_reading} /></span
 					>
 				{#if isMined(term)}
@@ -405,6 +425,19 @@
 			{$ignoredLemmas.has(menu.lemma) ? 'Remove from ignore list' : 'Add to ignore list'}
 		</button>
 	</div>
+{/if}
+
+{#if defPopover}
+	{@const popTerm = defPopover.term}
+	<DefinitionPopover
+		term={popTerm}
+		anchor={defPopover.anchor}
+		scale={$settings?.definition_scale ?? 1}
+		showMine={canMine && !isMined(popTerm)}
+		mineDisabled={$miningTerm !== null || $playerBusy}
+		onmine={() => mine(popTerm, occurrencesOf(popTerm))}
+		onclose={() => (defPopover = null)}
+	/>
 {/if}
 
 <svelte:window

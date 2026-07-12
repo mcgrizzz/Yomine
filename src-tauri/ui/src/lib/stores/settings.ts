@@ -33,6 +33,9 @@ export async function toggleSerifFont(): Promise<void> {
 export const setFontScale = (scale: number) =>
 	patchSettings({ font_scale: Math.min(1.5, Math.max(0.75, scale)) });
 
+export const setDefinitionScale = (scale: number) =>
+	patchSettings({ definition_scale: Math.min(1.5, Math.max(0.5, scale)) });
+
 export const setSentenceColoring = (mode: ipc.SentenceColoring) =>
 	patchSettings({ sentence_coloring: mode });
 

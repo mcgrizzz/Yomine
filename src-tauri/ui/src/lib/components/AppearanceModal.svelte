@@ -6,6 +6,7 @@
 	import {
 		settings,
 		appearanceModalOpen,
+		setDefinitionScale,
 		setFontScale,
 		setSentenceColoring,
 		setSentenceUnderlines,
@@ -17,9 +18,13 @@
 	const MIN_PCT = 75;
 	const MAX_PCT = 150;
 	const STEP = 5;
+	const DEF_MIN_PCT = 50;
 
 	let tempPct = $state(DEFAULT_PCT);
 	let originalPct = $state(DEFAULT_PCT);
+
+	let tempDefPct = $state(DEFAULT_PCT);
+	let originalDefPct = $state(DEFAULT_PCT);
 
 	const DEFAULT_COLORING: SentenceColoring = 'knowledge';
 	let tempColoring = $state<SentenceColoring>(DEFAULT_COLORING);
@@ -55,6 +60,9 @@
 		const pct = Math.round(($settings?.font_scale ?? 1) * 100);
 		tempPct = pct;
 		originalPct = pct;
+		const defPct = Math.round(($settings?.definition_scale ?? 1) * 100);
+		tempDefPct = defPct;
+		originalDefPct = defPct;
 		const coloring = $settings?.sentence_coloring ?? DEFAULT_COLORING;
 		tempColoring = coloring;
 		originalColoring = coloring;
@@ -77,6 +85,7 @@
 	const togglesDirty = $derived(STATES.some((s) => tempToggles[s] !== originalToggles[s]));
 	const dirty = $derived(
 		tempPct !== originalPct ||
+			tempDefPct !== originalDefPct ||
 			tempColoring !== originalColoring ||
 			togglesDirty ||
 			tempJlptTags !== originalJlptTags
@@ -86,12 +95,18 @@
 		tempPct = Math.min(MAX_PCT, Math.max(MIN_PCT, tempPct + delta));
 	}
 
+	function stepDef(delta: number) {
+		tempDefPct = Math.min(MAX_PCT, Math.max(DEF_MIN_PCT, tempDefPct + delta));
+	}
+
 	async function save() {
 		if (tempPct !== originalPct) await setFontScale(tempPct / 100);
+		if (tempDefPct !== originalDefPct) await setDefinitionScale(tempDefPct / 100);
 		if (tempColoring !== originalColoring) await setSentenceColoring(tempColoring);
 		if (togglesDirty) await setSentenceUnderlines(tempToggles);
 		if (tempJlptTags !== originalJlptTags) await setShowJlptTags(tempJlptTags);
 		originalPct = tempPct;
+		originalDefPct = tempDefPct;
 		originalColoring = tempColoring;
 		originalToggles = { ...tempToggles };
 		originalJlptTags = tempJlptTags;
@@ -100,6 +115,7 @@
 
 	function cancel() {
 		tempPct = originalPct;
+		tempDefPct = originalDefPct;
 		tempColoring = originalColoring;
 		tempToggles = { ...originalToggles };
 		tempJlptTags = originalJlptTags;
@@ -113,6 +129,7 @@
 
 	function restoreDefault() {
 		tempPct = DEFAULT_PCT;
+		tempDefPct = DEFAULT_PCT;
 		tempColoring = DEFAULT_COLORING;
 		tempToggles = { ...DEFAULT_TOGGLES };
 		tempJlptTags = true;
@@ -160,6 +177,26 @@
 				<span class="value">{tempPct}%</span>
 			</div>
 			<p class="hint">Scales the whole interface — text, controls, and spacing.</p>
+
+			<div class="scale-row">
+				<label for="definition-scale">Definition scale:</label>
+				<button class="step" aria-label="Decrease definition scale" onclick={() => stepDef(-STEP)}
+					>−</button
+				>
+				<input
+					id="definition-scale"
+					type="range"
+					min={DEF_MIN_PCT}
+					max={MAX_PCT}
+					step={STEP}
+					bind:value={tempDefPct}
+				/>
+				<button class="step" aria-label="Increase definition scale" onclick={() => stepDef(STEP)}
+					>+</button
+				>
+				<span class="value">{tempDefPct}%</span>
+			</div>
+			<p class="hint">Scales the Shift+Hover definition popover, on top of the UI scale.</p>
 
 			<div class="coloring-row">
 				<label for="sentence-coloring">Sentence marking:</label>
