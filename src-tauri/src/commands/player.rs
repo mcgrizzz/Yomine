@@ -56,3 +56,41 @@ pub async fn get_asbplayer_media(
 ) -> Result<Vec<crate::dto::BoundMediaDto>, String> {
     Ok(player.get_bound_media().await?.into_iter().map(Into::into).collect())
 }
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MpvLaunchOutcome {
+    Launched,
+    /// `settings.mpv_path` doesn't resolve — the UI offers "Locate mpv…".
+    NotFound,
+}
+
+/// Launch mpv on the IPC endpoint `MpvManager` polls (issue #89); detection
+/// flips the mode to "mpv" within ~1s. Refuses while an mpv is already
+/// connected — a second instance would fight over the socket.
+#[tauri::command]
+pub async fn launch_mpv(
+    state: State<'_, Mutex<AppState>>,
+    player: State<'_, PlayerHandle>,
+    video_path: String,
+) -> Result<MpvLaunchOutcome, String> {
+    if player.status().await?.mpv_connected {
+        return Err("MPV is already connected".to_string());
+    }
+    let mpv_path = { state.lock().unwrap().settings.mpv_path.clone() };
+    match std::process::Command::new(&mpv_path)
+        .arg(format!("--input-ipc-server={}", yomine::mpv::default_mpv_endpoint()))
+        .arg(&video_path)
+        .spawn()
+    {
+        Ok(mut child) => {
+            // Reap in the background so an exited mpv never lingers as a zombie.
+            tauri::async_runtime::spawn_blocking(move || {
+                let _ = child.wait();
+            });
+            Ok(MpvLaunchOutcome::Launched)
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(MpvLaunchOutcome::NotFound),
+        Err(e) => Err(format!("Failed to launch mpv ({}): {}", mpv_path, e)),
+    }
+}

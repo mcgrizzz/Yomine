@@ -148,6 +148,11 @@ fn kanji_mapping(word: &str, reading: &str) -> (String, String) {
 
 pub fn pairwise_deinflection(word: &str, reading: &str) -> Vec<(String, String)> {
     let mut results = vec![(word.to_string(), reading.to_string())];
+    // jp-deinflector's suffix scan steps byte indices by 3 and panics on any
+    // char that isn't 3 UTF-8 bytes (ASCII "-", 4-byte kanji, emoji).
+    if !word.chars().all(|c| c.len_utf8() == 3) {
+        return results;
+    }
     let deinflections = deinflect(word);
 
     // Early return if no further deinflection is needed
@@ -202,6 +207,16 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_pairwise_deinflection_non_japanese_bytes() {
+        // Subtitle debris (ASCII dash + full-width paren) and 4-byte kanji used
+        // to panic inside jp-deinflector's byte-stepping suffix scan.
+        for (word, reading) in [("-（御", "-（ご"), ("𠮟った", "しかった")] {
+            let result = pairwise_deinflection(word, reading);
+            assert_eq!(result, vec![(word.to_string(), reading.to_string())]);
+        }
+    }
 
     #[test]
     fn test_pairwise_deinflection_comprehensive() {

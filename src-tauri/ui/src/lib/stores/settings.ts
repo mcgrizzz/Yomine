@@ -36,6 +36,8 @@ export const setFontScale = (scale: number) =>
 export const setDefinitionScale = (scale: number) =>
 	patchSettings({ definition_scale: Math.min(1.5, Math.max(0.5, scale)) });
 
+export const setMpvPath = (path: string) => patchSettings({ mpv_path: path });
+
 export const setSentenceColoring = (mode: ipc.SentenceColoring) =>
 	patchSettings({ sentence_coloring: mode });
 

@@ -57,6 +57,10 @@ That's it! Yomine will segment the text, rank terms by frequency, and show you v
 - **Sorting and searching** - Sort by frequency, chronological order, sentence count, or comprehension level; search for specific terms
 - **Multiple subtitle formats** - Supports SRT, ASS, and SSA subtitle files
 - **One-click mining** - Create Anki cards straight from the table, rendered with your own Yomitan templates
+- **Batch mining** - Multi-select rows and mine a whole queue at once, resolving shared-sentence conflicts along the way
+- **JLPT tags and filtering** - Terms are tagged by JLPT level, with quick level filters in the table
+- **Knowledge underlines** - Colors sentence words by your Anki knowledge state, with per-state toggles
+- **Yomitan definitions** - Shift+Hover a term for a Yomitan definition popover you can also mine from
 - **Frequency Analyzer Tool** - Generate your own frequency dictionaries.
     - Here's one I generated from around 5000 files: [Anilist Top 500](https://github.com/user-attachments/files/23733337/Anilist.Top.500.zip)
 
@@ -81,9 +85,9 @@ That's it! Yomine will segment the text, rank terms by frequency, and show you v
 Yomine uses frequency dictionaries to rank vocabulary by importance and improve text segmentation. It will automatically download **[JPDB v2.2 Frequency Kana](https://github.com/Kuuuube/yomitan-dictionaries/?tab=readme-ov-file#jpdb-v22-frequency-kana-recommended)**. Though you can add as many as you like, toggle and weigh them however you like. 
 
 **Adding Dictionaries:**
-1. In Yomine, go to **File → Load New Frequency Dictionaries**
-2. Select zip files containing Yomitan-compatible frequency dictionaries
-3. Restart when prompted
+1. In Yomine, go to **Mining → Frequency Dictionaries**
+2. Install a recommended dictionary, or use **Import from file…** to add zip files containing Yomitan-compatible frequency dictionaries
+3. Enable, weight, update, or remove dictionaries from the same dialog
 
 **Recommended Dictionaries:**
 - **[JPDB v2.2 Frequency Kana](https://github.com/Kuuuube/yomitan-dictionaries/?tab=readme-ov-file#jpdb-v22-frequency-kana-recommended)**: **★ Automagically downloaded and installed ★**
@@ -108,7 +112,7 @@ Yomine connects to Anki to filter out terms you already know.
    - Restart Anki
 
 **Configuration:**
-1. In Yomine: Settings → Anki Settings
+1. In Yomine: Settings → Anki
 2. Wait for connection to establish
 3. For each note type:
    - Select from dropdown
@@ -130,7 +134,7 @@ Yomine uses WebSocket to communicate with ASBPlayer for timestamp navigation.
 
 **Changing the Port:**
 
-1. In Yomine: Settings → WebSocket Settings
+1. In Yomine: Settings → WebSocket Server
 2. Change the port to something else (8767, 8768, 1111, 5353, etc)
 3. Click "Save and Restart Server"
 4. In ASBPlayer: `MISC` → `WebSocket Server URL` → enter `ws://localhost:YOUR_PORT`
@@ -162,6 +166,12 @@ Click the ⛏ button next to any term to create an Anki card from the displayed 
 
 Terms that already have a recently-added Anki card show a green ⛏ mined chip instead of the button — including cards you mine directly with Yomitan while watching. Sentences Yomine itself mined are remembered and flagged with "✓ sentence mined" when you see them again. To also flag sentences from cards created outside Yomine, map an optional **Sentence field** in Settings → Anki.
 
+**Quick definition:** hold **Shift** while hovering a term to open a Yomitan definition popover (reading, frequency, and definition), which also has a **+ Mine** button. Scale it under **Settings → Appearance**.
+
+### **Batch Mining**
+
+To mine several terms at once, select rows with their checkboxes (or the header checkbox to select all), then click **Mine N** in the selection bar. Yomine mines the queue one card at a time in timestamp order; you can cancel between cards, and failures are collected without stopping the run. When selected terms share a sentence, a conflict dialog asks you to pick the winning term for that sentence first. Selection and batch mining require both Anki and Yomitan to be connected.
+
 ### **Managing Your Ignore List**
 
 The ignore list lets you hide terms you don't want to see from your mining results.
@@ -172,9 +182,9 @@ The ignore list lets you hide terms you don't want to see from your mining resul
 3. The term will be hidden from future mining sessions
 
 **Managing the Ignore List:**
-1. Go to Settings → Ignore List Settings
+1. Go to Mining → Ignore List
 2. View all ignored terms in the list
-3. Remove terms by clicking the red "x"
+3. Remove terms by clicking the red "x"; you can also import or export the list here
 
 ## **Roadmap**
 
@@ -184,11 +194,13 @@ The ignore list lets you hide terms you don't want to see from your mining resul
 - [x] **Multi-Sentence Browsing** - View multiple example sentences per term
 - [x] **Ignore List** - Hide unwanted terms from mining results
 - [x] **Comprehensibility Scoring** - Sentence difficulty estimation based on Anki intervals
-- [x] **Advanced Filtering** - Filter by part-of-speech and frequency ranges
+- [x] **Advanced Filtering** - Filter by part-of-speech, frequency ranges, and JLPT level
 - [x] **Custom Frequency Lists**: Generate dictionaries from your own content
+- [x] **One-Click & Batch Mining** - Mine single terms or multi-select queues with your Yomitan templates
+- [x] **Knowledge Underlines** - Color sentence words by Anki knowledge state
+- [x] **Improved Segmentation** - Tokenizer overhaul for better parsing and matching
 
 ### Planned
-- [ ] **Improved Segmentation**: Better text parsing and part-of-speech tagging
 - [ ] **More File Types**: Support for eBooks, web pages, etc.
 
 

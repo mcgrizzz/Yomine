@@ -227,6 +227,8 @@ export interface SettingsData {
 	definition_scale: number;
 	/** yomitan-api base URL (one-click mining, issue #105). */
 	yomitan_url: string;
+	/** Path or command name of the mpv executable (issue #89). */
+	mpv_path: string;
 	/** How sentence segments are colored in the term table (issue #94). */
 	sentence_coloring: SentenceColoring;
 	/** Which underline states are shown in knowledge mode. */
@@ -327,6 +329,16 @@ export function saveSettings(settings: SettingsData): Promise<void> {
 /** Native open dialog; resolves to the chosen path or `null`. */
 export function openFileDialog(): Promise<string | null> {
 	return invoke('open_file_dialog');
+}
+
+/** Video picker for the MPV launcher (issue #89). */
+export function openVideoDialog(): Promise<string | null> {
+	return invoke('open_video_dialog');
+}
+
+/** Executable picker for the "Locate mpv…" flow (issue #89). */
+export function openExecutableDialog(): Promise<string | null> {
+	return invoke('open_executable_dialog');
 }
 
 /** Parse + segment + filter a file; streams progress; returns the minable terms. */
@@ -433,6 +445,14 @@ export function seekTimestamp(seconds: number, label: string): Promise<void> {
 	return invoke('seek_timestamp', { seconds, label });
 }
 
+/** `not_found` = the mpv executable is missing; drives "Locate mpv…" (issue #89). */
+export type MpvLaunchOutcome = 'launched' | 'not_found';
+
+/** Launch mpv on the IPC endpoint the app polls; detection connects within ~1s. */
+export function launchMpv(videoPath: string): Promise<MpvLaunchOutcome> {
+	return invoke('launch_mpv', { videoPath });
+}
+
 /** One subtitle track loaded for a bound media (issue #105). */
 export interface SubtitleTrack {
 	track_number: number;
@@ -505,11 +525,15 @@ export interface YomitanStatus {
 export function mineTerm(
 	args: {
 		term: string;
+		/** The occurrence as tokenized from the text — cloze/bold highlighting. */
+		surface: string;
 		sentence: string;
 		timestampSecs: number | null;
 		timestampEndSecs: number | null;
 		timestampLabel: string | null;
 		via: 'asbplayer' | 'direct';
+		/** Yomitan entry to build the card from (default first). */
+		entryIndex: number | null;
 	},
 	onProgress: (msg: LoadingMessage) => void
 ): Promise<MineResult> {
@@ -557,6 +581,8 @@ export function getYomitanStatus(url?: string): Promise<YomitanStatus> {
 /** One Yomitan dictionary entry for the definition popover (issue #113).
  * The `*_html` fields are Yomitan-rendered markers; sanitize before {@html}. */
 export interface DefinitionEntry {
+	/** Position in Yomitan's entry list (pre-filter) — mine_term's entryIndex. */
+	index: number;
 	expression: string;
 	reading: string;
 	/** The expression as `<ruby>` markup for the header. */

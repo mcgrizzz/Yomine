@@ -106,6 +106,9 @@ pub struct SettingsData {
     /// yomitan-api base URL (one-click mining, issue #105).
     #[serde(default = "default_yomitan_url")]
     pub yomitan_url: String,
+    /// Path or command name of the mpv executable (issue #89).
+    #[serde(default = "default_mpv_path")]
+    pub mpv_path: String,
     #[serde(default)]
     pub sentence_coloring: SentenceColoring,
     #[serde(default)]
@@ -121,6 +124,10 @@ const fn default_font_scale() -> f32 {
 
 fn default_yomitan_url() -> String {
     "http://127.0.0.1:19633".to_string()
+}
+
+fn default_mpv_path() -> String {
+    "mpv".to_string()
 }
 
 const fn default_asbplayer_poll_secs() -> u32 {
@@ -151,6 +158,7 @@ impl Default for SettingsData {
             font_scale: default_font_scale(),
             definition_scale: default_font_scale(),
             yomitan_url: default_yomitan_url(),
+            mpv_path: default_mpv_path(),
             sentence_coloring: SentenceColoring::default(),
             sentence_underlines: UnderlineToggles::default(),
             show_jlpt_tags: true,

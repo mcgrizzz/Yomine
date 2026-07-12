@@ -60,18 +60,22 @@ export async function refreshMinedState(force = false): Promise<void> {
  * the callers. Resolves once the backend has verified the mine end-to-end. */
 async function mineOne(
 	term: ipc.Term,
+	surface: string,
 	sentence: string,
 	timestamp: ipc.TimeStampDto | null,
-	via: 'asbplayer' | 'direct'
+	via: 'asbplayer' | 'direct',
+	entryIndex?: number
 ): Promise<ipc.MineResult> {
 	const result = await ipc.mineTerm(
 		{
 			term: term.lemma_form,
+			surface,
 			sentence,
 			timestampSecs: timestamp?.start_secs ?? null,
 			timestampEndSecs: timestamp?.end_secs ?? null,
 			timestampLabel: timestamp?.start_label ?? null,
-			via
+			via,
+			entryIndex: entryIndex ?? null
 		},
 		(msg) => {
 			if (msg.message) showNotice(msg.message);
@@ -90,18 +94,21 @@ async function mineOne(
 	return result;
 }
 
-/** Mine one term from its displayed sentence; the caller decides `via`. */
+/** Mine one term from its displayed sentence; the caller decides `via`.
+ * `surface` is the occurrence text the table highlighted (cloze/bold). */
 export async function mineTerm(
 	term: ipc.Term,
 	sentence: string,
 	timestamp: ipc.TimeStampDto | null,
-	via: 'asbplayer' | 'direct'
+	via: 'asbplayer' | 'direct',
+	surface: string = term.surface_form,
+	entryIndex?: number
 ): Promise<void> {
 	if (get(miningTerm) !== null || get(playerBusy)) return;
 	miningTerm.set(term.lemma_form);
 	playerBusy.set(true);
 	try {
-		const result = await mineOne(term, sentence, timestamp, via);
+		const result = await mineOne(term, surface, sentence, timestamp, via, entryIndex);
 		showNotice(
 			result.warning ??
 				(result.status === 'duplicate'
@@ -120,8 +127,12 @@ export async function mineTerm(
 /** One selected row, with the occurrence the table displayed at queue time. */
 export interface QueueItem {
 	term: ipc.Term;
+	/** The occurrence text the table highlighted (cloze/bold). */
+	surface: string;
 	sentence: string;
 	timestamp: ipc.TimeStampDto | null;
+	/** Yomitan entry chosen via the popover's Queue (default first). */
+	entryIndex?: number;
 }
 
 /** Batch-mine progress (`null` = no queue running). */
@@ -165,7 +176,14 @@ export async function mineQueue(items: QueueItem[]): Promise<void> {
 					? 'asbplayer'
 					: 'direct';
 			try {
-				const result = await mineOne(item.term, item.sentence, item.timestamp, via);
+				const result = await mineOne(
+					item.term,
+					item.surface,
+					item.sentence,
+					item.timestamp,
+					via,
+					item.entryIndex
+				);
 				if (result.status === 'duplicate') duplicates++;
 				else created++;
 				if (result.note_id !== null) noteIds.push(result.note_id);

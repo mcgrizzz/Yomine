@@ -6,14 +6,20 @@
 		idx: number;
 		sentence: string;
 		timestamp: TimeStampDto | null;
+		/** The occurrence text the table highlighted (cloze/bold). */
+		surface: string;
 	}
 
 	/** One queued term with what's needed to resolve sentence conflicts. */
 	export interface BatchEntry {
 		term: Term;
 		key: string;
+		/** The occurrence text the table highlighted (cloze/bold). */
+		surface: string;
 		sentence: string;
 		timestamp: TimeStampDto | null;
+		/** Yomitan entry chosen via the popover's Queue (default first). */
+		entryIndex?: number;
 		/** The user explicitly navigated to this occurrence. */
 		explicit: boolean;
 		/** Occurrences with a different sentence than the chosen one. */
@@ -126,6 +132,7 @@
 	function reassign(e: BatchEntry, alt: OccurrenceAlt) {
 		e.sentence = alt.sentence;
 		e.timestamp = alt.timestamp;
+		e.surface = alt.surface;
 		patch[e.key] = alt.idx;
 	}
 
@@ -134,7 +141,13 @@
 		ondone(
 			work
 				.filter((e) => !skipped.has(e.key))
-				.map(({ term, sentence, timestamp }) => ({ term, sentence, timestamp })),
+				.map(({ term, surface, sentence, timestamp, entryIndex }) => ({
+					term,
+					surface,
+					sentence,
+					timestamp,
+					entryIndex
+				})),
 			patch
 		);
 	}

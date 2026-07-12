@@ -27,10 +27,13 @@
 		refreshTerms,
 		setAsbplayerFollowNewMedia,
 		setAsbplayerFollowActiveTab,
+		launchMpvVideo,
+		locateMpvAndRetry,
+		mpvLocatePrompt,
 		yomitanReachable
 	} from '$lib/stores';
 
-	type MenuName = 'file' | 'mining' | 'settings' | 'asb';
+	type MenuName = 'file' | 'mining' | 'settings' | 'asb' | 'mpv';
 	let openMenu = $state<MenuName | null>(null);
 
 	const toolsReady = $derived($languageToolsStatus === 'ready');
@@ -58,7 +61,10 @@
 	const asbplayer = $derived.by(() => {
 		const s = $playerStatus;
 		if (s.server_state === 'running' && s.ws_clients > 0)
-			return { color: GREEN, tip: 'Connected to asbplayer' };
+			return {
+				color: GREEN,
+				tip: 'asbplayer mode — seeking and card media capture while mining'
+			};
 		if (s.server_state === 'running')
 			return { color: YELLOW, tip: 'WebSocket server running - waiting for asbplayer' };
 		if (s.server_state === 'error')
@@ -69,7 +75,10 @@
 
 	const mpv = $derived(
 		$playerStatus.mpv_connected
-			? { color: GREEN, tip: 'MPV detected - using MPV mode' }
+			? {
+					color: GREEN,
+					tip: 'MPV mode — seeking works, but mined cards get no audio/screenshot (media capture needs asbplayer)'
+				}
 			: { color: GREY, tip: 'MPV not detected' }
 	);
 
@@ -183,7 +192,12 @@
 	<div class="status">
 		<!-- The asbplayer indicator doubles as the follow-mode menu (issue #105). -->
 		<div class="menu" class:open={openMenu === 'asb'}>
-			<button class="indicator asb-trigger" title={asbplayer.tip} onclick={(e) => toggleMenu('asb', e)}>
+			<button
+				class="indicator status-trigger"
+				class:active-mode={$playerStatus.mode === 'asbplayer' && $playerStatus.ws_clients > 0}
+				title={asbplayer.tip}
+				onclick={(e) => toggleMenu('asb', e)}
+			>
 				<small>asbplayer</small>
 				<span class="dot" style:color={asbplayer.color}>●</span>
 			</button>
@@ -227,10 +241,48 @@
 				</div>
 			{/if}
 		</div>
-		<span class="indicator" title={mpv.tip}>
-			<small>mpv</small>
-			<span class="dot" style:color={mpv.color}>●</span>
-		</span>
+		<!-- The mpv indicator doubles as the launcher menu (issue #89). -->
+		<div class="menu" class:open={openMenu === 'mpv'}>
+			<button
+				class="indicator status-trigger"
+				class:active-mode={$playerStatus.mpv_connected}
+				title={mpv.tip}
+				onclick={(e) => toggleMenu('mpv', e)}
+			>
+				<small>mpv</small>
+				<span class="dot" style:color={mpv.color}>●</span>
+			</button>
+			{#if openMenu === 'mpv'}
+				<div
+					class="menu-panel right"
+					role="menu"
+					tabindex="-1"
+					onclick={(e) => e.stopPropagation()}
+					onkeydown={(e) => e.key === 'Escape' && (openMenu = null)}
+				>
+					<span class="menu-note">{mpv.tip}</span>
+					<!-- Not run(): the panel must stay open so the not-found row can appear. -->
+					<button
+						onclick={async () => {
+							if (await launchMpvVideo()) openMenu = null;
+						}}
+						disabled={$playerStatus.mpv_connected}
+						title={$playerStatus.mpv_connected
+							? 'MPV is already connected — seeking uses the running instance'
+							: 'Pick a video file and open it in MPV, ready for seeking'}
+						>Launch video in MPV…</button
+					>
+					{#if $mpvLocatePrompt}
+						<span class="menu-note warn">mpv not found (tried “{$settings?.mpv_path}”)</span>
+						<button
+							onclick={async () => {
+								if (await locateMpvAndRetry()) openMenu = null;
+							}}>Locate mpv…</button
+						>
+					{/if}
+				</div>
+			{/if}
+		</div>
 		<span class="indicator" title={ankiTip}>
 			<small>Anki</small>
 			{#if $ankiStatus.fetching}
@@ -357,8 +409,8 @@
 		align-items: center;
 		gap: 0.2rem;
 	}
-	/* The asbplayer indicator is a real button (it opens the follow menu). */
-	.asb-trigger {
+	/* Status indicators that are real buttons (they open a menu panel). */
+	.status-trigger {
 		padding: 0.15rem 0.35rem;
 		background: transparent;
 		border: none;
@@ -367,9 +419,25 @@
 		font: inherit;
 		cursor: pointer;
 	}
-	.asb-trigger:hover,
-	.menu.open .asb-trigger {
+	.status-trigger:hover,
+	.menu.open .status-trigger {
 		background: var(--bg-light);
+	}
+	.menu-note {
+		padding: 0.4rem 0.6rem;
+		font-size: 0.8rem;
+		color: var(--comment);
+		white-space: nowrap;
+	}
+	.menu-note.warn {
+		color: var(--yellow);
+	}
+	/* The player currently driving seek/mining — a soft pill marks the mode. */
+	.status-trigger.active-mode {
+		background: color-mix(in srgb, var(--cyan) 13%, transparent);
+	}
+	.status-trigger.active-mode small {
+		color: var(--cyan);
 	}
 	/* Right-anchored panel so it doesn't overflow the window edge. */
 	.menu-panel.right {

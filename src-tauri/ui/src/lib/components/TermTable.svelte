@@ -19,7 +19,9 @@
 		playerBusy,
 		playerStatus,
 		posCatalog,
+		queueWithEntry,
 		retryMedia,
+		selectedEntryIndex,
 		selectedTerms,
 		setSelected,
 		settings,
@@ -34,7 +36,7 @@
 	import DefinitionPopover from './DefinitionPopover.svelte';
 	import Furigana from './Furigana.svelte';
 	import SentenceConflictModal, { type BatchEntry } from './SentenceConflictModal.svelte';
-	import SentenceView, { type Occurrence } from './SentenceView.svelte';
+	import SentenceView, { termHighlightText, type Occurrence } from './SentenceView.svelte';
 
 	let { terms, sentences }: { terms: Term[]; sentences: SentenceDto[] } = $props();
 
@@ -154,7 +156,7 @@
 		$addedTerms.has(t.lemma_form) ||
 		$addedTerms.has(t.surface_form);
 
-	function mine(term: Term, occs: Occurrence[]) {
+	function mine(term: Term, occs: Occurrence[], entryIndex?: number) {
 		const occ = occs[Math.min(occIdx[termKey(term)] ?? 0, occs.length - 1)];
 		const ts = occ?.sentence.timestamp ?? null;
 		// asbplayer enrichment needs asbplayer active (same rule as seeking) + a cue.
@@ -162,7 +164,8 @@
 			$playerStatus.mode === 'asbplayer' && $playerStatus.ws_clients > 0 && ts !== null
 				? 'asbplayer'
 				: 'direct';
-		void mineTerm(term, occ?.sentence.text ?? '', ts, via);
+		const surface = occ ? termHighlightText(term, occ) : term.surface_form;
+		void mineTerm(term, occ?.sentence.text ?? '', ts, via, surface, entryIndex);
 	}
 
 	function retry(term: Term, occs: Occurrence[]) {
@@ -174,7 +177,14 @@
 		($settings?.show_jlpt_tags ?? true) && terms.some((t) => t.jlpt_level !== null)
 	);
 
+	// Mining needs Yomitan (renders the card) + AnkiConnect (stores it).
 	const canMine = $derived($yomitanReachable && $ankiStatus.connected);
+	// Only asbplayer can record audio/screenshots onto the mined card.
+	const mediaNote = $derived(
+		$playerStatus.mode === 'asbplayer' && $playerStatus.ws_clients > 0
+			? ''
+			: ' — no audio/screenshot without asbplayer'
+	);
 	const selectableKeys = $derived(terms.filter((t) => !isMined(t)).map(termKey));
 	const allSelected = $derived(
 		selectableKeys.length > 0 && selectableKeys.every((k) => $selectedTerms.has(k))
@@ -182,6 +192,9 @@
 	const someSelected = $derived(selectableKeys.some((k) => $selectedTerms.has(k)));
 
 	function rowClick(e: MouseEvent, term: Term) {
+		// Rows see the popover-dismissing click before the popover's own
+		// window listener closes it — that click must not toggle selection.
+		if (defPopover) return;
 		if (!canMine || isMined(term)) return;
 		if (e.ctrlKey || e.metaKey) return;
 		if ((e.target as HTMLElement).closest('button, input, a')) return;
@@ -203,20 +216,37 @@
 					const k = normalizeSentence(o.sentence.text);
 					if (seen.has(k)) return [];
 					seen.add(k);
-					return [{ idx, sentence: o.sentence.text, timestamp: o.sentence.timestamp }];
+					return [
+						{
+							idx,
+							sentence: o.sentence.text,
+							timestamp: o.sentence.timestamp,
+							surface: termHighlightText(t, o)
+						}
+					];
 				});
 				return {
 					term: t,
 					key,
+					surface: occ ? termHighlightText(t, occ) : t.surface_form,
 					sentence: occ?.sentence.text ?? '',
 					timestamp: occ?.sentence.timestamp ?? null,
+					entryIndex: $selectedEntryIndex[key],
 					explicit: occIdx[key] !== undefined,
 					alternatives
 				};
 			});
 		const keys = entries.map((e) => normalizeSentence(e.sentence)).filter((s) => s !== '');
 		if (new Set(keys).size === keys.length) {
-			void mineQueue(entries.map(({ term, sentence, timestamp }) => ({ term, sentence, timestamp })));
+			void mineQueue(
+				entries.map(({ term, surface, sentence, timestamp, entryIndex }) => ({
+					term,
+					surface,
+					sentence,
+					timestamp,
+					entryIndex
+				}))
+			);
 			return;
 		}
 		batchEntries = entries;
@@ -245,17 +275,15 @@
 		</span>
 		<button class="bulk-btn" onclick={cancelQueue}>Cancel</button>
 	</div>
-{:else if $selectedTerms.size > 0}
+{:else if canMine && $selectedTerms.size > 0}
 	<div class="bulk-bar">
 		<span class="bulk-info">{$selectedTerms.size} selected</span>
-		{#if canMine}
-			<button
-				class="bulk-btn primary"
-				disabled={$miningTerm !== null || $playerBusy}
-				title="Mine the selected terms one by one, in timestamp order"
-				onclick={startBatch}>Mine {$selectedTerms.size}</button
-			>
-		{/if}
+		<button
+			class="bulk-btn primary"
+			disabled={$miningTerm !== null || $playerBusy}
+			title={'Mine the selected terms one by one, in timestamp order' + mediaNote}
+			onclick={startBatch}>Mine {$selectedTerms.size}</button
+		>
 		<button class="bulk-btn" onclick={clearSelection}>Clear</button>
 	</div>
 {/if}
@@ -329,7 +357,7 @@
 		     row click mirrors the row's checkbox, which stays keyboard-accessible. -->
 		<div
 			class="row"
-			class:selected={$selectedTerms.has(key)}
+			class:selected={canMine && $selectedTerms.has(key)}
 			onclick={(e) => rowClick(e, term)}
 		>
 			<span class="sel">
@@ -383,14 +411,13 @@
 					{:else}
 						<span class="chip mined" title="This term already has a recent Anki card">✓</span>
 					{/if}
-				{:else if $yomitanReachable && $ankiStatus.connected}
-					<!-- Mining needs BOTH: Yomitan renders the card, AnkiConnect stores it. -->
+				{:else if canMine}
 					<button
 						class="chip mine"
 						disabled={$miningTerm !== null || $playerBusy}
 						title={$playerBusy && $miningTerm === null
 							? 'Waiting for asbplayer to finish recording the mined line…'
-							: 'Create an Anki card from the displayed sentence'}
+							: 'Create an Anki card from the displayed sentence' + mediaNote}
 						onclick={() => mine(term, occs)}
 					>
 						{$miningTerm === term.lemma_form ? '…' : '+'}
@@ -435,7 +462,9 @@
 		scale={$settings?.definition_scale ?? 1}
 		showMine={canMine && !isMined(popTerm)}
 		mineDisabled={$miningTerm !== null || $playerBusy}
-		onmine={() => mine(popTerm, occurrencesOf(popTerm))}
+		mineTitle={'Create an Anki card from the displayed sentence' + mediaNote}
+		onmine={(entryIndex) => mine(popTerm, occurrencesOf(popTerm), entryIndex)}
+		onqueue={(entryIndex) => queueWithEntry(termKey(popTerm), entryIndex)}
 		onclose={() => (defPopover = null)}
 	/>
 {/if}
