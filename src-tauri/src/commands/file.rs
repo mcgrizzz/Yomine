@@ -97,18 +97,45 @@ fn source_file_from_path(path: &str) -> SourceFile {
     }
 }
 
+async fn pick_path(
+    dialog: tauri_plugin_dialog::FileDialogBuilder<tauri::Wry>,
+) -> Result<Option<String>, String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    dialog.pick_file(move |path| {
+        let _ = tx.send(path);
+    });
+    let chosen = rx.await.map_err(|_| "file dialog closed unexpectedly".to_string())?;
+    Ok(chosen.and_then(|p| p.into_path().ok()).map(|p| p.display().to_string()))
+}
+
 /// Native open dialog (FR: file selection). Returns the chosen path or `null`.
 #[tauri::command]
 pub async fn open_file_dialog(app: AppHandle) -> Result<Option<String>, String> {
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    app.dialog()
-        .file()
-        .add_filter("Subtitles & text", SourceFileType::supported_extensions())
-        .pick_file(move |path| {
-            let _ = tx.send(path);
-        });
-    let chosen = rx.await.map_err(|_| "file dialog closed unexpectedly".to_string())?;
-    Ok(chosen.and_then(|p| p.into_path().ok()).map(|p| p.display().to_string()))
+    pick_path(
+        app.dialog().file().add_filter("Subtitles & text", SourceFileType::supported_extensions()),
+    )
+    .await
+}
+
+/// Video picker for the MPV launcher (issue #89).
+#[tauri::command]
+pub async fn open_video_dialog(app: AppHandle) -> Result<Option<String>, String> {
+    pick_path(
+        app.dialog()
+            .file()
+            .add_filter("Video", &["mkv", "mp4", "avi", "webm", "mov", "m4v", "ts"])
+            .add_filter("All files", &["*"]),
+    )
+    .await
+}
+
+/// Executable picker for the MPV launcher's "Locate mpv…" flow (issue #89).
+#[tauri::command]
+pub async fn open_executable_dialog(app: AppHandle) -> Result<Option<String>, String> {
+    let dialog = app.dialog().file();
+    #[cfg(windows)]
+    let dialog = dialog.add_filter("Executable", &["exe"]);
+    pick_path(dialog).await
 }
 
 /// Parse + segment + filter a source file (cached Anki snapshot, offline-safe) and

@@ -43,29 +43,40 @@ pub async fn mine_term(
     state: State<'_, Mutex<AppState>>,
     player: State<'_, PlayerHandle>,
     term: String,
+    surface: String,
     sentence: String,
     timestamp_secs: Option<f32>,
     timestamp_end_secs: Option<f32>,
     timestamp_label: Option<String>,
     via: String,
+    entry_index: Option<usize>,
     progress: Channel<LoadingMessage>,
 ) -> Result<MineResultDto, String> {
     let yomitan_url = { state.lock().unwrap().settings.yomitan_url.clone() };
+    let entry_index = entry_index.unwrap_or(0);
 
     let _ = progress.send(LoadingMessage::new(format!("Rendering 「{}」 with Yomitan…", term)));
     let format = yomitan::get_term_card_format(&yomitan_url).await.map_err(|e| e.to_string())?;
     let markers = yomitan::collect_markers(&format);
-    let rendered = yomitan::render_fields(&yomitan_url, &term, &markers, 1, true)
-        .await
-        .map_err(|e| e.to_string())?;
+    let rendered =
+        yomitan::render_fields(&yomitan_url, &term, &markers, entry_index as u32 + 1, true)
+            .await
+            .map_err(|e| e.to_string())?;
 
     let empty = std::collections::HashMap::new();
-    let marker_values = rendered.fields.first().unwrap_or(&empty);
+    let marker_values = rendered.fields.get(entry_index).unwrap_or(&empty);
     if marker_values.values().all(|v| v.trim().is_empty()) {
         return Err(format!("Yomitan has no dictionary entry for 「{}」", term));
     }
 
-    let ctx = yomitan::SentenceContext { sentence: &sentence, term: &term };
+    // Cloze highlighting must match the text as it appears in the sentence: an
+    // inflected occurrence (沈めて) never contains the lemma (沈める).
+    let cloze_term = if !surface.is_empty() && sentence.contains(&surface) {
+        surface.as_str()
+    } else {
+        term.as_str()
+    };
+    let ctx = yomitan::SentenceContext { sentence: &sentence, term: cloze_term };
     let fields = yomitan::assemble_fields(&format, marker_values, Some(ctx));
     if fields.is_empty() {
         return Err(format!("Yomitan rendered no card content for 「{}」", term));
@@ -294,12 +305,14 @@ pub async fn render_definition(
     Ok(rendered
         .fields
         .into_iter()
-        .filter_map(|mut entry| {
+        .enumerate()
+        .filter_map(|(index, mut entry)| {
             let glossary_html = entry.remove("glossary").unwrap_or_default();
             if glossary_html.trim().is_empty() {
                 return None;
             }
             Some(DefinitionEntryDto {
+                index,
                 expression: entry.remove("expression").unwrap_or_default(),
                 reading: entry.remove("reading").unwrap_or_default(),
                 furigana_html: entry.remove("furigana").unwrap_or_default(),

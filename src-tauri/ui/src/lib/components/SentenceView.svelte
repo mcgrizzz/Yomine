@@ -7,6 +7,18 @@
 	const encoder = new TextEncoder();
 	const byteLen = (s: string): number => encoder.encode(s).length;
 
+	/** The text the table highlights for an occurrence: whole segments overlapping
+	 * the term's span (must match `isTermSeg` below). Mined cards bold the same. */
+	export function termHighlightText(term: Term, occ: Occurrence): string {
+		const isExpression =
+			term.part_of_speech === 'Expression' || term.part_of_speech === 'NounExpression';
+		const end = occ.start + byteLen(isExpression ? term.full_segment : term.surface_form);
+		return occ.sentence.segments
+			.filter((seg) => seg.start < end && seg.end > occ.start)
+			.map((seg) => seg.surface)
+			.join('');
+	}
+
 	// Filled bars = ceil(pct / 20).
 	const BAR_HEIGHTS = [2.5, 4, 6.5, 10.5, 14.5];
 </script>

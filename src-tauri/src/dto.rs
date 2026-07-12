@@ -53,6 +53,8 @@ pub struct YomitanStatusDto {
 /// The `*_html` fields are Yomitan-rendered markers, sanitized frontend-side.
 #[derive(Serialize, Clone)]
 pub struct DefinitionEntryDto {
+    /// Position in Yomitan's entry list (pre-filter) — `mine_term`'s `entry_index`.
+    pub index: usize,
     pub expression: String,
     pub reading: String,
     /// `{furigana}` — the expression as `<ruby>` markup for the header.

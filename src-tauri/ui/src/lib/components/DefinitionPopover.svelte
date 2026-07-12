@@ -82,7 +82,9 @@
 		scale = 1,
 		showMine,
 		mineDisabled,
+		mineTitle = 'Create an Anki card from the displayed sentence',
 		onmine,
+		onqueue,
 		onclose
 	}: {
 		term: Term;
@@ -90,7 +92,11 @@
 		scale?: number;
 		showMine: boolean;
 		mineDisabled: boolean;
-		onmine: () => void;
+		mineTitle?: string;
+		/** Mine from a specific Yomitan entry (`DefinitionEntry.index`). */
+		onmine: (entryIndex: number) => void;
+		/** Add to the batch-mine selection with a specific Yomitan entry. */
+		onqueue: (entryIndex: number) => void;
 		onclose: () => void;
 	} = $props();
 
@@ -200,6 +206,27 @@
 								<span class="reading">【{entry.reading}】</span>
 							{/if}
 						{/if}
+						{#if showMine}
+							<span class="actions">
+								<button
+									class="mine-btn"
+									disabled={mineDisabled}
+									title={mineTitle}
+									onclick={() => {
+										onmine(entry.index);
+										onclose();
+									}}>+ Mine</button
+								>
+								<button
+									class="mine-btn"
+									title="Select for batch mining using this definition"
+									onclick={() => {
+										onqueue(entry.index);
+										onclose();
+									}}>Queue</button
+								>
+							</span>
+						{/if}
 					</div>
 					{#if entry.frequencies_html.trim()}
 						{@const chips = freqChips(entry.frequencies_html)}
@@ -222,19 +249,6 @@
 			{/each}
 		{/if}
 	</div>
-	{#if showMine}
-		<div class="footer">
-			<button
-				class="mine-btn"
-				disabled={mineDisabled}
-				title="Create an Anki card from the displayed sentence"
-				onclick={() => {
-					onmine();
-					onclose();
-				}}>+ Mine</button
-			>
-		</div>
-	{/if}
 </div>
 
 <svelte:window
@@ -263,8 +277,7 @@
 	}
 	/* Scale the content, not .popover itself: the position math and remembered
 	 * size (script above) work in unscaled px. */
-	.body,
-	.footer {
+	.body {
 		zoom: var(--def-scale, 1);
 	}
 	.body {
@@ -287,6 +300,9 @@
 		border-top: 1px solid var(--border);
 	}
 	.head {
+		display: flex;
+		align-items: baseline;
+		gap: 0.35rem;
 		margin-bottom: 0.25rem;
 	}
 	.expression {
@@ -366,20 +382,20 @@
 		white-space: pre-wrap;
 		color: var(--comment);
 	}
-	.footer {
-		display: flex;
-		justify-content: flex-end;
-		padding: 0.45rem 0.75rem;
-		border-top: 1px solid var(--border);
+	.actions {
+		display: inline-flex;
+		gap: 0.3rem;
+		margin-left: auto;
 	}
 	.mine-btn {
 		cursor: pointer;
-		padding: 0.25rem 0.6rem;
+		padding: 0.1rem 0.45rem;
 		background: var(--bg-light);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		color: var(--cyan);
-		font-size: 0.85rem;
+		font-size: 0.75rem;
+		white-space: nowrap;
 	}
 	.mine-btn:hover:not(:disabled) {
 		background: var(--bg-lighter);

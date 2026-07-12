@@ -28,6 +28,40 @@ export async function seekTimestamp(seconds: number, label: string): Promise<voi
 	}
 }
 
+/** Video path awaiting an mpv executable — drives the panel's "Locate mpv…" row. */
+export const mpvLocatePrompt = writable<string | null>(null);
+
+async function tryLaunchMpv(video: string): Promise<boolean> {
+	try {
+		const outcome = await ipc.launchMpv(video);
+		mpvLocatePrompt.set(outcome === 'not_found' ? video : null);
+		return outcome === 'launched';
+	} catch (err) {
+		lastError.set({ title: 'MPV', message: 'Failed to launch mpv', detail: String(err) });
+		return false;
+	}
+}
+
+/** Pick a video and launch mpv on it; returns true when mpv launched. */
+export async function launchMpvVideo(): Promise<boolean> {
+	const video = await ipc.openVideoDialog();
+	if (!video) return false;
+	return tryLaunchMpv(video);
+}
+
+/** Persist a user-located mpv executable, then retry the pending launch. */
+export async function locateMpvAndRetry(): Promise<boolean> {
+	const exe = await ipc.openExecutableDialog();
+	if (!exe) return false;
+	// Dynamic: a static './settings' import closes a module cycle that hits
+	// controls.ts's top-level fileResult.subscribe before file.ts initializes.
+	const { setMpvPath } = await import('./settings');
+	await setMpvPath(exe);
+	const video = get(mpvLocatePrompt);
+	if (!video) return false;
+	return tryLaunchMpv(video);
+}
+
 /** Returns success so the picker can close. Cue timestamps come through, so
  * seek/👁 work immediately on the loaded table. */
 export async function loadFromAsbplayer(
