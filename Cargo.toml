@@ -11,7 +11,7 @@ resolver = "2"
 # THE version: both crates inherit it, and tauri.conf.json (no `version` field)
 # falls back to src-tauri/Cargo.toml — bump this one line to cut a release.
 [workspace.package]
-version = "0.6.4"
+version = "0.6.5"
 
 [dependencies]
 zip = { version = "4.3.0", features = ["xz"]}
