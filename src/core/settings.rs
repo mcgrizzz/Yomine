@@ -72,6 +72,12 @@ impl Default for UnderlineToggles {
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct TableColumn {
+    pub id: String,
+    pub visible: bool,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct SettingsData {
     pub anki_model_mappings: HashMap<String, FieldMapping>,
     #[serde(default = "default_interval")]
@@ -86,12 +92,10 @@ pub struct SettingsData {
     pub use_serif_font: bool,
     #[serde(default = "default_true")]
     pub dark_mode: bool,
-    /// Follow mode (issue #105): after a load from asbplayer, automatically load
-    /// NEW videos asbplayer binds (with subtitles). Opt-in, persisted.
+    /// Follow mode (issue #105): auto-load NEW subtitled videos asbplayer binds.
     #[serde(default)]
     pub asbplayer_follow_new_media: bool,
-    /// Follow mode (issue #105): after a load from asbplayer, switch to the
-    /// active tab's video when it isn't the loaded one. Opt-in, persisted.
+    /// Follow mode (issue #105): switch to asbplayer's active subtitled tab.
     #[serde(default)]
     pub asbplayer_follow_active_tab: bool,
     /// How often follow mode polls asbplayer's bound-media list, in seconds.
@@ -116,6 +120,9 @@ pub struct SettingsData {
     /// JLPT level tags in the term table (issue #112); filtering is unaffected.
     #[serde(default = "default_true")]
     pub show_jlpt_tags: bool,
+    /// Term-table column order/visibility (issue #122); empty = built-in layout.
+    #[serde(default)]
+    pub table_columns: Vec<TableColumn>,
 }
 
 const fn default_font_scale() -> f32 {
@@ -162,6 +169,7 @@ impl Default for SettingsData {
             sentence_coloring: SentenceColoring::default(),
             sentence_underlines: UnderlineToggles::default(),
             show_jlpt_tags: true,
+            table_columns: Vec::new(),
         }
     }
 }

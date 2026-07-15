@@ -1,11 +1,32 @@
 <script lang="ts" module>
-	import type { SentenceDto, Term } from '$lib/ipc';
+	import type { SegmentDto, SentenceDto, Term } from '$lib/ipc';
 
 	/** One appearance of a term: the sentence + the term's UTF-8 byte offset in it. */
 	export type Occurrence = { sentence: SentenceDto; start: number };
 
+	export interface SegmentLookup {
+		/** Scan text for Yomitan: the sentence from the segment onward, capped. */
+		text: string;
+		label: string;
+		anchor: DOMRect;
+		sentence: SentenceDto;
+		seg: SegmentDto;
+	}
+
 	const encoder = new TextEncoder();
 	const byteLen = (s: string): number => encoder.encode(s).length;
+
+	/** Same span rule as `termHighlightText`/`isTermSeg`. */
+	export function termCoversSegment(
+		term: Term,
+		start: number,
+		seg: { start: number; end: number }
+	): boolean {
+		const isExpression =
+			term.part_of_speech === 'Expression' || term.part_of_speech === 'NounExpression';
+		const end = start + byteLen(isExpression ? term.full_segment : term.surface_form);
+		return seg.start < end && seg.end > start;
+	}
 
 	/** The text the table highlights for an occurrence: whole segments overlapping
 	 * the term's span (must match `isTermSeg` below). Mined cards bold the same. */
@@ -24,7 +45,7 @@
 </script>
 
 <script lang="ts">
-	import type { SegmentDto, SegmentKnowledge } from '$lib/ipc';
+	import type { SegmentKnowledge } from '$lib/ipc';
 	import { comprehensionColor } from '$lib/comprehension';
 	import {
 		ankiFilterActive,
@@ -44,8 +65,17 @@
 	let {
 		occurrences,
 		term,
-		currentIndex = $bindable()
-	}: { occurrences: Occurrence[]; term: Term; currentIndex?: number } = $props();
+		currentIndex = $bindable(),
+		onlookup,
+		onhover
+	}: {
+		occurrences: Occurrence[];
+		term: Term;
+		currentIndex?: number;
+		onlookup: (req: SegmentLookup) => void;
+		/** What to open if Shift is pressed while hovering; null = left. */
+		onhover: (open: (() => void) | null) => void;
+	} = $props();
 
 	// Clamped in case a refresh shrinks the occurrence list.
 	const count = $derived(occurrences.length);
@@ -91,6 +121,33 @@
 		const key = normalizeSentence(occ.sentence.text);
 		return $minedSentences.has(key) || $sessionMinedSentences.has(key);
 	});
+
+	// Yomitan scans from the string start, so the remainder of the sentence lets
+	// it do its own longest-match + deinflection (e.g. 気 hovers as 気になる).
+	function scanText(seg: SegmentDto): string {
+		let text = '';
+		for (const s of occ.sentence.segments) {
+			if (s.start < seg.start) continue;
+			text += s.surface;
+			if (text.length >= 16) break;
+		}
+		return text.slice(0, 16);
+	}
+
+	function segEnter(e: MouseEvent, seg: SegmentDto) {
+		const el = e.currentTarget as HTMLElement;
+		const sentence = occ.sentence;
+		const open = () =>
+			onlookup({
+				text: scanText(seg),
+				label: seg.surface,
+				anchor: el.getBoundingClientRect(),
+				sentence,
+				seg
+			});
+		onhover(open);
+		if (e.shiftKey) open();
+	}
 </script>
 
 <!-- Each word is an atomic inline-block and Svelte strips inter-tag whitespace,
@@ -99,13 +156,16 @@
 	{#each occ.sentence.segments as seg, i (i)}
 		{@const isTerm = isTermSeg(seg)}
 		{@const know = mark(seg)}
-		{#if i > 0}<wbr />{/if}<span
+		{#if i > 0}<wbr />{/if}<!-- svelte-ignore a11y_no_static_element_interactions -- Shift+Hover
+			lookup is a mouse-only affordance; keyboard browsing is issue #91. --><span
 			class:term={isTerm}
 			class:know-unknown={know === 'unknown'}
 			class:know-new={know === 'new'}
 			class:know-young={know === 'young'}
 			class:know-mature={know === 'mature'}
 			style="color: {isTerm ? 'var(--red)' : 'inherit'}"
+			onmouseenter={(e) => segEnter(e, seg)}
+			onmouseleave={() => onhover(null)}
 			><Furigana surface={seg.surface} reading={seg.reading} /></span
 		>
 	{/each}

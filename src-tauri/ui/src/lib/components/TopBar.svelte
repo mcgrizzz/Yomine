@@ -5,6 +5,7 @@
 	import {
 		settings,
 		ankiStatus,
+		asbContext,
 		playerStatus,
 		languageToolsStatus,
 		updateInfo,
@@ -60,11 +61,17 @@
 
 	const asbplayer = $derived.by(() => {
 		const s = $playerStatus;
-		if (s.server_state === 'running' && s.ws_clients > 0)
+		if (s.server_state === 'running' && s.ws_clients > 0) {
+			if ($asbContext.loaded_from_asbplayer && !$asbContext.loaded_is_active)
+				return {
+					color: YELLOW,
+					tip: "asbplayer's active tab is not the loaded video — mined media would come from the wrong one"
+				};
 			return {
 				color: GREEN,
 				tip: 'asbplayer mode — seeking and card media capture while mining'
 			};
+		}
 		if (s.server_state === 'running')
 			return { color: YELLOW, tip: 'WebSocket server running - waiting for asbplayer' };
 		if (s.server_state === 'error')
@@ -72,6 +79,14 @@
 		if (s.server_state === 'starting') return { color: BLUE, tip: 'WebSocket server starting...' };
 		return { color: GREY, tip: 'WebSocket server stopped' };
 	});
+
+	// Bound-media polling only runs for follow mode or an asbplayer session, so
+	// the panel's active-tab note is stale outside those.
+	const asbPolled = $derived(
+		($settings?.asbplayer_follow_new_media ?? false) ||
+			($settings?.asbplayer_follow_active_tab ?? false) ||
+			$asbContext.loaded_from_asbplayer
+	);
 
 	const mpv = $derived(
 		$playerStatus.mpv_connected
@@ -211,6 +226,16 @@
 					onclick={(e) => e.stopPropagation()}
 					onkeydown={(e) => e.key === 'Escape' && (openMenu = null)}
 				>
+					{#if $playerStatus.ws_clients > 0 && asbPolled}
+						<span class="menu-note">
+							{$asbContext.active_title
+								? `Active tab: ${$asbContext.active_title}${$asbContext.active_has_subtitles ? '' : ' — no subtitles'}`
+								: 'No active tab in asbplayer'}
+						</span>
+						{#if $asbContext.loaded_from_asbplayer && !$asbContext.loaded_is_active}
+							<span class="menu-note warn">Loaded video is not the active tab</span>
+						{/if}
+					{/if}
 					<button
 						onclick={() => run(openAsbplayerModal)}
 						disabled={!toolsReady || $playerStatus.ws_clients === 0}

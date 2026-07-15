@@ -21,6 +21,7 @@ use yomine::{
 
 use crate::{
     dto::{
+        CardFormatDto,
         DefinitionEntryDto,
         MineResultDto,
         MinedStateDto,
@@ -50,14 +51,22 @@ pub async fn mine_term(
     timestamp_label: Option<String>,
     via: String,
     entry_index: Option<usize>,
+    format_name: Option<String>,
     progress: Channel<LoadingMessage>,
 ) -> Result<MineResultDto, String> {
     let yomitan_url = { state.lock().unwrap().settings.yomitan_url.clone() };
     let entry_index = entry_index.unwrap_or(0);
 
     let _ = progress.send(LoadingMessage::new(format!("Rendering 「{}」 with Yomitan…", term)));
-    let format = yomitan::get_term_card_format(&yomitan_url).await.map_err(|e| e.to_string())?;
-    let markers = yomitan::collect_markers(&format);
+    let formats = yomitan::get_term_card_formats(&yomitan_url).await.map_err(|e| e.to_string())?;
+    let format = match &format_name {
+        Some(name) => formats
+            .iter()
+            .find(|f| &f.name == name)
+            .ok_or_else(|| format!("Yomitan card format \"{}\" no longer exists", name))?,
+        None => &formats[0],
+    };
+    let markers = yomitan::collect_markers(format);
     let rendered =
         yomitan::render_fields(&yomitan_url, &term, &markers, entry_index as u32 + 1, true)
             .await
@@ -77,7 +86,7 @@ pub async fn mine_term(
         term.as_str()
     };
     let ctx = yomitan::SentenceContext { sentence: &sentence, term: cloze_term };
-    let fields = yomitan::assemble_fields(&format, marker_values, Some(ctx));
+    let fields = yomitan::assemble_fields(format, marker_values, Some(ctx));
     if fields.is_empty() {
         return Err(format!("Yomitan rendered no card content for 「{}」", term));
     }
@@ -282,6 +291,20 @@ pub async fn get_mined_state(state: State<'_, Mutex<AppState>>) -> Result<MinedS
     let mut mined_sentences = mined::mined_sentences_pruned().await;
     mined_sentences.extend(added_sentences);
     Ok(MinedStateDto { added_terms, mined_sentences })
+}
+
+/// The user's Yomitan term card formats, for the popover's per-format buttons.
+#[tauri::command]
+pub async fn get_card_formats(
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Vec<CardFormatDto>, String> {
+    let yomitan_url = { state.lock().unwrap().settings.yomitan_url.clone() };
+    Ok(yomitan::get_term_card_formats(&yomitan_url)
+        .await
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .map(|f| CardFormatDto { name: f.name, deck: f.deck, model: f.model })
+        .collect())
 }
 
 const DEFINITION_MAX_ENTRIES: u32 = 8;

@@ -44,6 +44,8 @@ pub struct FileData {
     /// `None` for regular files. Arms follow mode and tells the active-tab
     /// follow what is currently showing.
     pub asbplayer_media_id: Option<String>,
+    /// Loaded track's file name — dedupes re-loads of the same subtitles.
+    pub asbplayer_subtitle_file: Option<String>,
 }
 
 pub struct AppState {

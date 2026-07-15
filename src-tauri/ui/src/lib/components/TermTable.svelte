@@ -1,11 +1,22 @@
 <script lang="ts">
 	import type { SentenceDto, Term } from '$lib/ipc';
-	import { defaultDir, harmonic, termKey, textMatches, type SortField } from '$lib/table';
+	import {
+		defaultDir,
+		harmonic,
+		normalizeColumns,
+		termKey,
+		textMatches,
+		type ColumnId,
+		type SortField
+	} from '$lib/table';
 	import {
 		addedTerms,
 		ankiStatus,
+		asbContext,
 		cancelQueue,
+		cardFormats,
 		clearSelection,
+		fileResult,
 		ignoredLemmas,
 		mediaMissing,
 		mineQueue,
@@ -19,11 +30,12 @@
 		playerBusy,
 		playerStatus,
 		posCatalog,
+		queuedMineOptions,
 		queueWithEntry,
 		retryMedia,
-		selectedEntryIndex,
 		selectedTerms,
 		setSelected,
+		setTableColumns,
 		settings,
 		tableSearch,
 		tableSort,
@@ -36,7 +48,12 @@
 	import DefinitionPopover from './DefinitionPopover.svelte';
 	import Furigana from './Furigana.svelte';
 	import SentenceConflictModal, { type BatchEntry } from './SentenceConflictModal.svelte';
-	import SentenceView, { termHighlightText, type Occurrence } from './SentenceView.svelte';
+	import SentenceView, {
+		termCoversSegment,
+		termHighlightText,
+		type Occurrence,
+		type SegmentLookup
+	} from './SentenceView.svelte';
 
 	let { terms, sentences }: { terms: Term[]; sentences: SentenceDto[] } = $props();
 
@@ -77,26 +94,56 @@
 	// refresh, so the toggle is undoable in place (egui parity).
 	let menu = $state<{ x: number; y: number; lemma: string } | null>(null);
 
+	// Client coords are visual px but fixed-position left/top are zoomed px
+	// under the Appearance root zoom (+layout.svelte).
+	function menuPoint(e: MouseEvent): { x: number; y: number } {
+		const zoom = Number(getComputedStyle(document.documentElement).zoom) || 1;
+		return { x: e.clientX / zoom, y: e.clientY / zoom };
+	}
+
 	function openMenu(e: MouseEvent, term: Term) {
 		e.preventDefault();
 		// Don't let the window `contextmenu` handler (which closes the menu) see this.
 		e.stopPropagation();
-		menu = { x: e.clientX, y: e.clientY, lemma: term.lemma_form };
+		menu = { ...menuPoint(e), lemma: term.lemma_form };
 	}
 
-	let defPopover = $state<{ term: Term; anchor: DOMRect } | null>(null);
-	let hovered: { term: Term; el: HTMLElement } | null = null;
+	let defPopover = $state<{
+		text: string;
+		label: string;
+		anchor: DOMRect;
+		mineable: { term: Term; occs: Occurrence[] } | null;
+	} | null>(null);
+	let hovered: (() => void) | null = null;
 
 	// Shift+Hover definition popover (issue #113). Pressing Shift while already
 	// hovering is handled in trackMods — mouseenter won't re-fire for it.
-	function openDefinition(h: { term: Term; el: HTMLElement }) {
-		if (!$yomitanReachable) return;
-		defPopover = { term: h.term, anchor: h.el.getBoundingClientRect() };
+	function termEnter(e: MouseEvent, term: Term) {
+		const el = e.currentTarget as HTMLElement;
+		const open = () => {
+			if (!$yomitanReachable) return;
+			defPopover = {
+				text: term.lemma_form,
+				label: term.lemma_form,
+				anchor: el.getBoundingClientRect(),
+				mineable: { term, occs: occurrencesOf(term) }
+			};
+		};
+		hovered = open;
+		if (e.shiftKey) open();
 	}
 
-	function termEnter(e: MouseEvent, term: Term) {
-		hovered = { term, el: e.currentTarget as HTMLElement };
-		if (e.shiftKey) openDefinition(hovered);
+	function segmentLookup(req: SegmentLookup) {
+		if (!$yomitanReachable) return;
+		let mineable: { term: Term; occs: Occurrence[] } | null = null;
+		outer: for (const t of $fileResult?.terms ?? terms) {
+			for (const [sid, start] of t.sentence_references) {
+				if (sid !== req.sentence.id || !termCoversSegment(t, start, req.seg)) continue;
+				mineable = { term: t, occs: [{ sentence: req.sentence, start }] };
+				break outer;
+			}
+		}
+		defPopover = { text: req.text, label: req.label, anchor: req.anchor, mineable };
 	}
 
 	// Ctrl (Win/Linux) or Cmd (macOS) + click toggles ignore; a plain click is left
@@ -111,7 +158,8 @@
 	let ctrlHeld = $state(false);
 	function trackMods(e: KeyboardEvent) {
 		ctrlHeld = e.ctrlKey || e.metaKey;
-		if (e.key === 'Shift' && e.shiftKey && !e.repeat && hovered) openDefinition(hovered);
+		if (e.key === 'Shift' && e.shiftKey && !e.repeat && hovered) hovered();
+		if (e.key === 'Escape') editColumns = false;
 	}
 
 	function toggleFromMenu() {
@@ -156,7 +204,7 @@
 		$addedTerms.has(t.lemma_form) ||
 		$addedTerms.has(t.surface_form);
 
-	function mine(term: Term, occs: Occurrence[], entryIndex?: number) {
+	function mine(term: Term, occs: Occurrence[], entryIndex?: number, formatName?: string) {
 		const occ = occs[Math.min(occIdx[termKey(term)] ?? 0, occs.length - 1)];
 		const ts = occ?.sentence.timestamp ?? null;
 		// asbplayer enrichment needs asbplayer active (same rule as seeking) + a cue.
@@ -165,7 +213,7 @@
 				? 'asbplayer'
 				: 'direct';
 		const surface = occ ? termHighlightText(term, occ) : term.surface_form;
-		void mineTerm(term, occ?.sentence.text ?? '', ts, via, surface, entryIndex);
+		void mineTerm(term, occ?.sentence.text ?? '', ts, via, surface, entryIndex, formatName);
 	}
 
 	function retry(term: Term, occs: Occurrence[]) {
@@ -173,18 +221,90 @@
 		void retryMedia(term, occ?.sentence.timestamp ?? null);
 	}
 
-	const showJlpt = $derived(
-		($settings?.show_jlpt_tags ?? true) && terms.some((t) => t.jlpt_level !== null)
+	const COLUMN_TRACKS: Record<ColumnId, string> = {
+		term: 'minmax(7rem, max-content)',
+		jlpt: '3rem',
+		sentence: '1fr',
+		frequency: '6rem',
+		pos: '8rem'
+	};
+	const COLUMN_LABELS: Record<ColumnId, string> = {
+		term: 'Term',
+		jlpt: 'JLPT',
+		sentence: 'Sentence',
+		frequency: 'Frequency',
+		pos: 'POS'
+	};
+	const columns = $derived(
+		normalizeColumns($settings?.table_columns, $settings?.show_jlpt_tags ?? true)
+	);
+	const hasJlpt = $derived(terms.some((t) => t.jlpt_level !== null));
+	const visibleCols = $derived(
+		columns.filter((c) => c.visible && (c.id !== 'jlpt' || hasJlpt)).map((c) => c.id)
+	);
+
+	let headerMenu = $state<{ x: number; y: number } | null>(null);
+	let editColumns = $state(false);
+	let editCols = $state<{ id: ColumnId; visible: boolean }[]>([]);
+	let dragId = $state<ColumnId | null>(null);
+
+	function openHeaderMenu(e: MouseEvent) {
+		e.preventDefault();
+		e.stopPropagation();
+		headerMenu = menuPoint(e);
+	}
+
+	function startEditColumns() {
+		editCols = columns.map((c) => ({ ...c }));
+		editColumns = true;
+		headerMenu = null;
+	}
+
+	// Pointer-based drag (HTML5 DnD aborts when the dragged node is reordered
+	// mid-drag in WebView2): capture on the pill, retarget via elementFromPoint.
+	function pillDown(e: PointerEvent, id: ColumnId) {
+		if ((e.target as HTMLElement).closest('input')) return;
+		dragId = id;
+		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+	}
+
+	function pillMove(e: PointerEvent) {
+		if (dragId === null) return;
+		const over = document
+			.elementFromPoint(e.clientX, e.clientY)
+			?.closest('[data-col]')
+			?.getAttribute('data-col') as ColumnId | null;
+		if (!over || over === dragId) return;
+		const from = editCols.findIndex((c) => c.id === dragId);
+		const to = editCols.findIndex((c) => c.id === over);
+		const [moved] = editCols.splice(from, 1);
+		editCols.splice(to, 0, moved);
+	}
+
+	function pillUp() {
+		if (dragId === null) return;
+		dragId = null;
+		commitColumns();
+	}
+
+	const commitColumns = () => void setTableColumns(editCols);
+
+	const renderCols = $derived(editColumns ? editCols.map((c) => c.id) : visibleCols);
+	const gridTemplate = $derived(
+		['1.5rem', ...renderCols.map((id) => COLUMN_TRACKS[id])].join(' ')
 	);
 
 	// Mining needs Yomitan (renders the card) + AnkiConnect (stores it).
 	const canMine = $derived($yomitanReachable && $ankiStatus.connected);
-	// Only asbplayer can record audio/screenshots onto the mined card.
-	const mediaNote = $derived(
-		$playerStatus.mode === 'asbplayer' && $playerStatus.ws_clients > 0
-			? ''
-			: ' — no audio/screenshot without asbplayer'
-	);
+	// Only asbplayer can record audio/screenshots onto the mined card, and it
+	// records from its ACTIVE tab.
+	const mediaNote = $derived.by(() => {
+		if ($playerStatus.mode !== 'asbplayer' || $playerStatus.ws_clients === 0)
+			return ' — no audio/screenshot without asbplayer';
+		if ($asbContext.loaded_from_asbplayer && !$asbContext.loaded_is_active)
+			return " — ⚠ asbplayer's active tab is not the loaded video";
+		return '';
+	});
 	const selectableKeys = $derived(terms.filter((t) => !isMined(t)).map(termKey));
 	const allSelected = $derived(
 		selectableKeys.length > 0 && selectableKeys.every((k) => $selectedTerms.has(k))
@@ -204,8 +324,14 @@
 
 	let batchEntries = $state<BatchEntry[] | null>(null);
 
+	// Selections survive filter changes, so the batch must draw from ALL terms —
+	// `terms` is only the filtered view and would silently drop hidden picks.
+	const hiddenSelected = $derived(
+		$selectedTerms.size - terms.filter((t) => $selectedTerms.has(termKey(t))).length
+	);
+
 	function startBatch() {
-		const entries: BatchEntry[] = terms
+		const entries: BatchEntry[] = ($fileResult?.terms ?? terms)
 			.filter((t) => $selectedTerms.has(termKey(t)) && !isMined(t))
 			.map((t) => {
 				const key = termKey(t);
@@ -231,7 +357,8 @@
 					surface: occ ? termHighlightText(t, occ) : t.surface_form,
 					sentence: occ?.sentence.text ?? '',
 					timestamp: occ?.sentence.timestamp ?? null,
-					entryIndex: $selectedEntryIndex[key],
+					entryIndex: $queuedMineOptions[key]?.entryIndex,
+					formatName: $queuedMineOptions[key]?.formatName,
 					explicit: occIdx[key] !== undefined,
 					alternatives
 				};
@@ -239,12 +366,13 @@
 		const keys = entries.map((e) => normalizeSentence(e.sentence)).filter((s) => s !== '');
 		if (new Set(keys).size === keys.length) {
 			void mineQueue(
-				entries.map(({ term, surface, sentence, timestamp, entryIndex }) => ({
+				entries.map(({ term, surface, sentence, timestamp, entryIndex, formatName }) => ({
 					term,
 					surface,
 					sentence,
 					timestamp,
-					entryIndex
+					entryIndex,
+					formatName
 				}))
 			);
 			return;
@@ -277,19 +405,56 @@
 	</div>
 {:else if canMine && $selectedTerms.size > 0}
 	<div class="bulk-bar">
-		<span class="bulk-info">{$selectedTerms.size} selected</span>
-		<button
-			class="bulk-btn primary"
-			disabled={$miningTerm !== null || $playerBusy}
-			title={'Mine the selected terms one by one, in timestamp order' + mediaNote}
-			onclick={startBatch}>Mine {$selectedTerms.size}</button
-		>
+		<span class="bulk-info">
+			{$selectedTerms.size} selected{hiddenSelected > 0
+				? ` · ${hiddenSelected} hidden by filters`
+				: ''}
+		</span>
+		{#if canMine}
+			<button
+				class="bulk-btn primary"
+				disabled={$miningTerm !== null || $playerBusy}
+				title="Mine the selected terms one by one, in timestamp order"
+				onclick={startBatch}>Mine {$selectedTerms.size}</button
+			>
+		{/if}
 		<button class="bulk-btn" onclick={clearSelection}>Clear</button>
 	</div>
 {/if}
 
-<div class="table" class:no-jlpt={!showJlpt}>
-	<div class="row head">
+{#if editColumns}
+	<div class="col-edit-bar">
+		{#each editCols as col (col.id)}
+			<!-- svelte-ignore a11y_no_static_element_interactions -- pointer drag;
+			     the checkbox stays keyboard-accessible. -->
+			<span
+				class="col-edit"
+				class:col-hidden={!col.visible}
+				class:dragging={dragId === col.id}
+				data-col={col.id}
+				onpointerdown={(e) => pillDown(e, col.id)}
+				onpointermove={pillMove}
+				onpointerup={pillUp}
+			>
+				<input
+					type="checkbox"
+					bind:checked={col.visible}
+					disabled={col.id === 'term'}
+					onchange={commitColumns}
+					aria-label={`Show ${COLUMN_LABELS[col.id]} column`}
+				/>
+				{COLUMN_LABELS[col.id]}
+			</span>
+		{/each}
+		<span class="col-edit-hint">drag to reorder · untick to hide · saves as you go</span>
+		<button class="bulk-btn" onclick={() => (editColumns = false)}>Done</button>
+	</div>
+{/if}
+
+<div class="table" style="grid-template-columns: {gridTemplate}">
+	<!-- svelte-ignore a11y_no_static_element_interactions -- right-click column
+	     editing is a mouse affordance; keyboard browsing is issue #91. -->
+	<div class="row head" oncontextmenu={openHeaderMenu}>
 		<span class="sel">
 			{#if canMine && selectableKeys.length > 0}
 				<input
@@ -302,50 +467,56 @@
 				/>
 			{/if}
 		</span>
-		<span>Term</span>
-		{#if showJlpt}
-			<span class="jlpt-cell">JLPT</span>
-		{/if}
-		<span class="head-cell">
-			<button
-				class="head-btn"
-				class:active={sentenceActive}
-				title={sentenceActive ? sortedTip(sentenceMode!.name) : 'Sort by Sentence'}
-				onclick={clickSentence}
-			>
-				Sentence
-				{#if sentenceActive}
-					<span class="arrow active">{dirArrow($tableSort.dir)}</span>
-				{:else}
-					<span class="arrow hint">⇅</span>
-					<span class="arrow preview">{dirArrow(defaultDir('chronological'))}</span>
-				{/if}
-			</button>
-			{#if sentenceActive}
-				<button
-					class="mode"
-					title="Cycle between Chronological, Sentence Count, and Comprehension"
-					onclick={cycleSentence}>{sentenceMode!.label}</button
-				>
+		{#each renderCols as id (id)}
+			{#if id === 'term'}
+				<span>Term</span>
+			{:else if id === 'jlpt'}
+				<span class="jlpt-cell">JLPT</span>
+			{:else if id === 'sentence'}
+				<span class="head-cell">
+					<button
+						class="head-btn"
+						class:active={sentenceActive}
+						title={sentenceActive ? sortedTip(sentenceMode!.name) : 'Sort by Sentence'}
+						onclick={clickSentence}
+					>
+						Sentence
+						{#if sentenceActive}
+							<span class="arrow active">{dirArrow($tableSort.dir)}</span>
+						{:else}
+							<span class="arrow hint">⇅</span>
+							<span class="arrow preview">{dirArrow(defaultDir('chronological'))}</span>
+						{/if}
+					</button>
+					{#if sentenceActive}
+						<button
+							class="mode"
+							title="Cycle between Chronological, Sentence Count, and Comprehension"
+							onclick={cycleSentence}>{sentenceMode!.label}</button
+						>
+					{/if}
+				</span>
+			{:else if id === 'frequency'}
+				<span class="num head-cell">
+					<button
+						class="head-btn"
+						class:active={freqActive}
+						title={freqActive ? sortedTip('Frequency') : 'Sort by Frequency'}
+						onclick={clickFrequency}
+					>
+						Frequency
+						{#if freqActive}
+							<span class="arrow active">{dirArrow($tableSort.dir)}</span>
+						{:else}
+							<span class="arrow hint">⇅</span>
+							<span class="arrow preview">{dirArrow(defaultDir('frequency'))}</span>
+						{/if}
+					</button>
+				</span>
+			{:else if id === 'pos'}
+				<span>POS</span>
 			{/if}
-		</span>
-		<span class="num head-cell">
-			<button
-				class="head-btn"
-				class:active={freqActive}
-				title={freqActive ? sortedTip('Frequency') : 'Sort by Frequency'}
-				onclick={clickFrequency}
-			>
-				Frequency
-				{#if freqActive}
-					<span class="arrow active">{dirArrow($tableSort.dir)}</span>
-				{:else}
-					<span class="arrow hint">⇅</span>
-					<span class="arrow preview">{dirArrow(defaultDir('frequency'))}</span>
-				{/if}
-			</button>
-		</span>
-		<span>POS</span>
+		{/each}
 	</div>
 	{#if terms.length === 0}
 		<p class="no-match">No terms match the current filters.</p>
@@ -370,78 +541,90 @@
 					/>
 				{/if}
 			</span>
-			<span class="term-cell">
-				<!-- svelte-ignore a11y_click_events_have_key_events -- Ctrl/Cmd+Click is a
-				     mouse-modifier ignore toggle (egui parity); no keyboard equivalent. -->
-				<span
-						class="term"
-						class:mined-term={isMined(term)}
-						class:ignored={$ignoredLemmas.has(term.lemma_form)}
-						class:ignorable={ctrlHeld}
-						lang="ja"
-						role="button"
-						tabindex="-1"
-						title={($yomitanReachable ? 'Shift+Hover for definition · ' : '') +
-							($ignoredLemmas.has(term.lemma_form)
-								? 'Ctrl+Click to UNDO ignore'
-								: 'Ctrl+Click to ignore')}
-						onclick={(e) => termClick(e, term)}
-						oncontextmenu={(e) => openMenu(e, term)}
-						onmouseenter={(e) => termEnter(e, term)}
-						onmouseleave={() => (hovered = null)}
-						><Furigana surface={term.lemma_form} reading={term.lemma_reading} /></span
-					>
-				{#if isMined(term)}
-					{@const noteId = $minedNoteIds[term.lemma_form]}
-					{#if noteId !== undefined && $mediaMissing.has(term.lemma_form)}
-						<button
-							class="chip warn"
-							disabled={$miningTerm !== null || $playerBusy}
-							title="Card is in Anki, but asbplayer never added the audio/screenshot — click to retry"
-							onclick={() => retry(term, occs)}
+			{#each renderCols as id (id)}
+				{#if id === 'term'}
+					<span class="term-cell">
+						<!-- svelte-ignore a11y_click_events_have_key_events -- Ctrl/Cmd+Click is a
+						     mouse-modifier ignore toggle (egui parity); no keyboard equivalent. -->
+						<span
+							class="term"
+							class:mined-term={isMined(term)}
+							class:ignored={$ignoredLemmas.has(term.lemma_form)}
+							class:ignorable={ctrlHeld}
+							lang="ja"
+							role="button"
+							tabindex="-1"
+							title={($yomitanReachable ? 'Shift+Hover for definition · ' : '') +
+								($ignoredLemmas.has(term.lemma_form)
+									? 'Ctrl+Click to UNDO ignore'
+									: 'Ctrl+Click to ignore')}
+							onclick={(e) => termClick(e, term)}
+							oncontextmenu={(e) => openMenu(e, term)}
+							onmouseenter={(e) => termEnter(e, term)}
+							onmouseleave={() => (hovered = null)}
+							><Furigana surface={term.lemma_form} reading={term.lemma_reading} /></span
 						>
-							{$miningTerm === term.lemma_form ? '…' : '⚠'}
-						</button>
-					{:else if noteId !== undefined}
-						<button
-							class="chip mined openable"
-							title="In Anki — click to open the card"
-							onclick={() => openInAnki(noteId)}>✓</button
-						>
-					{:else}
-						<span class="chip mined" title="This term already has a recent Anki card">✓</span>
-					{/if}
-				{:else if canMine}
-					<button
-						class="chip mine"
-						disabled={$miningTerm !== null || $playerBusy}
-						title={$playerBusy && $miningTerm === null
-							? 'Waiting for asbplayer to finish recording the mined line…'
-							: 'Create an Anki card from the displayed sentence' + mediaNote}
-						onclick={() => mine(term, occs)}
-					>
-						{$miningTerm === term.lemma_form ? '…' : '+'}
-					</button>
+						{#if isMined(term)}
+							{@const noteId = $minedNoteIds[term.lemma_form]}
+							{#if noteId !== undefined && $mediaMissing.has(term.lemma_form)}
+								<button
+									class="chip warn"
+									disabled={$miningTerm !== null || $playerBusy}
+									title="Card is in Anki, but asbplayer never added the audio/screenshot — click to retry"
+									onclick={() => retry(term, occs)}
+								>
+									{$miningTerm === term.lemma_form ? '…' : '⚠'}
+								</button>
+							{:else if noteId !== undefined}
+								<button
+									class="chip mined openable"
+									title="In Anki — click to open the card"
+									onclick={() => openInAnki(noteId)}>✓</button
+								>
+							{:else}
+								<span class="chip mined" title="This term already has a recent Anki card">✓</span>
+							{/if}
+						{:else if canMine}
+							<button
+								class="chip mine"
+								disabled={$miningTerm !== null || $playerBusy}
+								title={$playerBusy && $miningTerm === null
+									? 'Waiting for asbplayer to finish recording the mined line…'
+									: 'Create an Anki card from the displayed sentence' + mediaNote}
+								onclick={() => mine(term, occs)}
+							>
+								{$miningTerm === term.lemma_form ? '…' : '+'}
+							</button>
+						{/if}
+					</span>
+				{:else if id === 'jlpt'}
+					<span class="jlpt-cell">
+						{#if term.jlpt_level}
+							<span class="jlpt-chip">{term.jlpt_level}</span>
+						{/if}
+					</span>
+				{:else if id === 'sentence'}
+					<div class="sentence">
+						{#if occs.length > 0}
+							<SentenceView
+								occurrences={occs}
+								{term}
+								bind:currentIndex={occIdx[key]}
+								onlookup={segmentLookup}
+								onhover={(fn) => (hovered = fn)}
+							/>
+						{:else}
+							<span class="empty">—</span>
+						{/if}
+					</div>
+				{:else if id === 'frequency'}
+					<span class="num">{freqLabel(term)}</span>
+				{:else if id === 'pos'}
+					<span class="pos" style="color: {posColor(term.part_of_speech)}">
+						{posLabels[term.part_of_speech] ?? term.part_of_speech}
+					</span>
 				{/if}
-			</span>
-			{#if showJlpt}
-				<span class="jlpt-cell">
-					{#if term.jlpt_level}
-						<span class="jlpt-chip">{term.jlpt_level}</span>
-					{/if}
-				</span>
-			{/if}
-			<div class="sentence">
-				{#if occs.length > 0}
-					<SentenceView occurrences={occs} {term} bind:currentIndex={occIdx[key]} />
-				{:else}
-					<span class="empty">—</span>
-				{/if}
-			</div>
-			<span class="num">{freqLabel(term)}</span>
-			<span class="pos" style="color: {posColor(term.part_of_speech)}">
-				{posLabels[term.part_of_speech] ?? term.part_of_speech}
-			</span>
+			{/each}
 		</div>
 	{/each}
 </div>
@@ -454,25 +637,46 @@
 	</div>
 {/if}
 
+{#if headerMenu}
+	<div class="ctx-menu" style="left: {headerMenu.x}px; top: {headerMenu.y}px;">
+		<button type="button" onclick={startEditColumns}>Edit columns…</button>
+	</div>
+{/if}
+
 {#if defPopover}
-	{@const popTerm = defPopover.term}
+	{@const mineable = defPopover.mineable}
 	<DefinitionPopover
-		term={popTerm}
+		text={defPopover.text}
+		label={defPopover.label}
 		anchor={defPopover.anchor}
 		scale={$settings?.definition_scale ?? 1}
-		showMine={canMine && !isMined(popTerm)}
-		mineDisabled={$miningTerm !== null || $playerBusy}
-		mineTitle={'Create an Anki card from the displayed sentence' + mediaNote}
-		onmine={(entryIndex) => mine(popTerm, occurrencesOf(popTerm), entryIndex)}
-		onqueue={(entryIndex) => queueWithEntry(termKey(popTerm), entryIndex)}
+		showMine={canMine && mineable !== null && !isMined(mineable.term)}
+		mineDisabled={$miningTerm !== null || $playerBusy || $selectedTerms.size > 0}
+		mineTitle={$selectedTerms.size > 0
+			? 'A batch selection is active — Queue this term instead, or clear the selection'
+			: 'Create an Anki card from the displayed sentence' + mediaNote}
+		formats={$cardFormats}
+		onmine={(entryIndex, formatName) =>
+			mineable && mine(mineable.term, mineable.occs, entryIndex, formatName)}
+		onqueue={(entryIndex, formatName) =>
+			mineable && queueWithEntry(termKey(mineable.term), entryIndex, formatName)}
 		onclose={() => (defPopover = null)}
 	/>
 {/if}
 
 <svelte:window
-	onclick={() => (menu = null)}
-	onscrollcapture={() => (menu = null)}
-	oncontextmenu={() => (menu = null)}
+	onclick={() => {
+		menu = null;
+		headerMenu = null;
+	}}
+	onscrollcapture={() => {
+		menu = null;
+		headerMenu = null;
+	}}
+	oncontextmenu={() => {
+		menu = null;
+		headerMenu = null;
+	}}
 	onkeydown={trackMods}
 	onkeyup={trackMods}
 	onblur={() => (ctrlHeld = false)}
@@ -480,16 +684,13 @@
 
 <style>
 	/* One shared track list (rows subgrid it) so the max-content term column is
-	   sized globally — per-row grids each size their own and misalign. */
+	   sized globally — per-row grids each size their own and misalign. The
+	   template itself is inline (built from the column config, issue #122). */
 	.table {
 		display: grid;
-		grid-template-columns: 1.5rem minmax(7rem, max-content) 3rem 1fr 6rem 8rem;
 		/* Subgrid rows inherit this; a gap on .row would be ignored. */
 		column-gap: 0.75rem;
 		font-variant-numeric: tabular-nums;
-	}
-	.table.no-jlpt {
-		grid-template-columns: 1.5rem minmax(7rem, max-content) 1fr 6rem 8rem;
 	}
 	.row {
 		grid-column: 1 / -1;
@@ -728,6 +929,47 @@
 		padding: 1.5rem 0.5rem;
 		color: var(--comment);
 		text-align: center;
+	}
+	.col-edit-bar {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.4rem;
+		margin-bottom: 0.35rem;
+		padding: 0.35rem 0.6rem;
+		background: var(--bg-light);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+	}
+	.col-edit {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		padding: 0.15rem 0.5rem;
+		font-size: 0.8rem;
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+		color: var(--fg);
+		background: var(--bg-dark);
+		border: 1px dashed var(--border);
+		border-radius: var(--radius);
+		cursor: grab;
+		white-space: nowrap;
+		user-select: none;
+		touch-action: none;
+	}
+	.col-edit.dragging {
+		cursor: grabbing;
+		border-style: solid;
+		border-color: var(--cyan);
+	}
+	.col-edit.col-hidden {
+		opacity: 0.45;
+	}
+	.col-edit-hint {
+		margin-left: auto;
+		font-size: 0.8rem;
+		color: var(--comment);
 	}
 	.ctx-menu {
 		position: fixed;

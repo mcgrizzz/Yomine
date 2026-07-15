@@ -136,14 +136,12 @@ async fn poll_knowledge(app: AppHandle) {
     }
 }
 
-/// Follow mode, armed only while the current content came from asbplayer.
-/// New-media rule: arming seeds the seen-set with everything currently bound,
-/// so only genuinely-new ids (with subtitles) trigger — tab switching doesn't.
-/// Active-tab rule: switch when the active tab's subtitled video isn't what's
-/// loaded (a loaded-∈-actives no-op keeps two active windows from flapping).
+/// asbplayer follow mode + the `asbplayer-context` awareness event.
 async fn poll_asbplayer_follow(app: AppHandle) {
     // `None` = disarmed; `Some(ids)` = armed with the media ids already seen.
     let mut seen: Option<HashSet<String>> = None;
+    let mut prev_actives: Option<HashSet<String>> = None;
+    let mut last_ctx: Option<crate::events::AsbplayerContext> = None;
 
     loop {
         let (armed, follow_new, follow_active, poll_secs, current_media_id) = {
@@ -151,9 +149,7 @@ async fn poll_asbplayer_follow(app: AppHandle) {
             let guard = state.lock().unwrap();
             let follow_new = guard.settings.asbplayer_follow_new_media;
             let follow_active = guard.settings.asbplayer_follow_active_tab;
-            let armed = (follow_new || follow_active)
-                && guard.language_tools.is_some()
-                && guard.file.asbplayer_media_id.is_some();
+            let armed = (follow_new || follow_active) && guard.language_tools.is_some();
             (
                 armed,
                 follow_new,
@@ -163,20 +159,66 @@ async fn poll_asbplayer_follow(app: AppHandle) {
             )
         };
         tokio::time::sleep(Duration::from_secs(poll_secs as u64)).await;
+
+        let player = app.state::<PlayerHandle>();
+        // Only ask asbplayer when someone consumes the answer (follow or an
+        // asbplayer session) and a client is actually connected.
+        let relevant = follow_new || follow_active || current_media_id.is_some();
+        let clients = player.status().await.map(|s| s.ws_clients).unwrap_or(0);
+        if !relevant || clients == 0 {
+            seen = None;
+            prev_actives = None;
+            if last_ctx.take().is_some() {
+                let _ =
+                    app.emit(names::ASBPLAYER_CONTEXT, crate::events::AsbplayerContext::default());
+            }
+            continue;
+        }
+        // Extension too old for get-bound-media → clear stale context, keep waiting.
+        let Ok(media) = player.get_bound_media().await else {
+            seen = None;
+            prev_actives = None;
+            if last_ctx.take().is_some() {
+                let _ =
+                    app.emit(names::ASBPLAYER_CONTEXT, crate::events::AsbplayerContext::default());
+            }
+            continue;
+        };
+
+        let actives_now: HashSet<String> = media
+            .iter()
+            .filter(|m| m.active && !m.loaded_subtitles.is_empty())
+            .map(|m| m.id.clone())
+            .collect();
+
+        let active = media.iter().find(|m| m.active);
+        let ctx = crate::events::AsbplayerContext {
+            has_active_tab: active.is_some(),
+            active_title: active.and_then(|m| m.title.clone()),
+            active_has_subtitles: active.is_some_and(|m| !m.loaded_subtitles.is_empty()),
+            loaded_is_active: current_media_id.as_ref().is_some_and(|id| actives_now.contains(id)),
+            loaded_from_asbplayer: current_media_id.is_some(),
+        };
+        if last_ctx.as_ref() != Some(&ctx) {
+            let _ = app.emit(names::ASBPLAYER_CONTEXT, ctx.clone());
+            last_ctx = Some(ctx);
+        }
+
         if !armed {
             seen = None;
+            prev_actives = None;
             continue;
         }
 
-        let player = app.state::<PlayerHandle>();
-        // Not connected / extension too old → just keep waiting.
-        let Ok(media) = player.get_bound_media().await else { continue };
-
-        let Some(seen_ids) = &mut seen else {
+        let actives_changed = prev_actives.as_ref().is_some_and(|p| p != &actives_now);
+        let just_armed = seen.is_none();
+        prev_actives = Some(actives_now.clone());
+        if just_armed {
             // Just armed: everything currently bound is old news.
             seen = Some(media.iter().map(|m| m.id.clone()).collect());
             continue;
-        };
+        }
+        let seen_ids = seen.as_mut().expect("seeded above");
 
         // 1) New media (once its subtitles are loaded — they often land a poll
         //    or two after the video appears). Prefer the active tab.
@@ -193,12 +235,16 @@ async fn poll_asbplayer_follow(app: AppHandle) {
         // 2) Active-tab follow: the loaded video is no longer (one of) the
         //    active-with-subtitles tabs → switch to the first one that is.
         if target.is_none() && follow_active {
-            let actives: Vec<_> =
-                media.iter().filter(|m| m.active && !m.loaded_subtitles.is_empty()).collect();
             let current_is_active =
-                current_media_id.as_ref().is_some_and(|id| actives.iter().any(|m| &m.id == id));
-            if !current_is_active {
-                target = actives.first().copied();
+                current_media_id.as_ref().is_some_and(|id| actives_now.contains(id));
+            let should_switch = if current_media_id.is_some() {
+                !current_is_active
+            } else {
+                // File-sourced session: only a fresh activation switches away.
+                actives_changed
+            };
+            if should_switch {
+                target = media.iter().find(|m| m.active && !m.loaded_subtitles.is_empty());
             }
         }
 
@@ -206,6 +252,16 @@ async fn poll_asbplayer_follow(app: AppHandle) {
         seen_ids.insert(next.id.clone());
         let title = next.title.clone().unwrap_or_else(|| "asbplayer video".to_string());
         let file_name = next.loaded_subtitles.first().map(|t| t.file_name.clone());
+        // Same subtitle file already loaded (e.g. the same episode in another
+        // tab) → adopt the new media id instead of re-downloading.
+        {
+            let state = app.state::<Mutex<AppState>>();
+            let mut guard = state.lock().unwrap();
+            if file_name.is_some() && guard.file.asbplayer_subtitle_file == file_name {
+                guard.file.asbplayer_media_id = Some(next.id.clone());
+                continue;
+            }
+        }
         match load_asbplayer_into_state(
             &app,
             &player,

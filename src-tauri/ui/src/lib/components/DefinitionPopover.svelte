@@ -6,6 +6,15 @@
 	const cache = new Map<string, DefinitionEntry[]>();
 
 	const SIZE_KEY = 'yomine:definition-popover-size';
+	const FORMAT_KEY = 'yomine:mine-format';
+
+	function loadFormat(): string | null {
+		try {
+			return localStorage.getItem(FORMAT_KEY);
+		} catch {
+			return null;
+		}
+	}
 
 	function loadSize(): { w: number; h: number } | null {
 		try {
@@ -74,31 +83,50 @@
 </script>
 
 <script lang="ts">
-	import { renderDefinition, type DefinitionEntry, type Term } from '$lib/ipc';
+	import { renderDefinition, type CardFormat, type DefinitionEntry } from '$lib/ipc';
 
 	let {
-		term,
+		text,
+		label = text,
 		anchor,
 		scale = 1,
 		showMine,
 		mineDisabled,
 		mineTitle = 'Create an Anki card from the displayed sentence',
+		formats = [],
 		onmine,
 		onqueue,
 		onclose
 	}: {
-		term: Term;
+		/** What Yomitan scans (a lemma, or a sentence remainder to longest-match). */
+		text: string;
+		label?: string;
 		anchor: DOMRect;
 		scale?: number;
 		showMine: boolean;
 		mineDisabled: boolean;
 		mineTitle?: string;
-		/** Mine from a specific Yomitan entry (`DefinitionEntry.index`). */
-		onmine: (entryIndex: number) => void;
-		/** Add to the batch-mine selection with a specific Yomitan entry. */
-		onqueue: (entryIndex: number) => void;
+		/** Yomitan term card formats; >1 renders per-format buttons. */
+		formats?: CardFormat[];
+		onmine: (entryIndex: number, formatName?: string) => void;
+		onqueue: (entryIndex: number, formatName?: string) => void;
 		onclose: () => void;
 	} = $props();
+
+	const multiFormat = $derived(formats.length > 1);
+	let chosenFormat = $state(loadFormat());
+	const activeFormat = $derived(
+		formats.find((f) => f.name === chosenFormat)?.name ?? formats[0]?.name
+	);
+
+	function setFormat(name: string) {
+		chosenFormat = name;
+		try {
+			localStorage.setItem(FORMAT_KEY, name);
+		} catch {
+			// Best-effort: losing the remembered format is fine.
+		}
+	}
 
 	let root = $state<HTMLElement | null>(null);
 	let entries = $state<DefinitionEntry[] | null>(null);
@@ -106,21 +134,21 @@
 	let size = $state(loadSize());
 
 	$effect(() => {
-		const lemma = term.lemma_form;
+		const lookup = text;
 		error = null;
-		const hit = cache.get(lemma);
+		const hit = cache.get(lookup);
 		if (hit) {
 			entries = hit;
 			return;
 		}
 		entries = null;
-		renderDefinition(lemma).then(
+		renderDefinition(lookup).then(
 			(result) => {
-				cache.set(lemma, result);
-				if (lemma === term.lemma_form) entries = result;
+				cache.set(lookup, result);
+				if (lookup === text) entries = result;
 			},
 			(e) => {
-				if (lemma === term.lemma_form) error = String(e);
+				if (lookup === text) error = String(e);
 			}
 		);
 	});
@@ -179,7 +207,7 @@
 	class:sized={pos.height !== null}
 	role="dialog"
 	tabindex="-1"
-	aria-label={`Definition of ${term.lemma_form}`}
+	aria-label={`Definition of ${label}`}
 	bind:this={root}
 	style={`left: ${pos.left}px; width: ${pos.width}px; --def-scale: ${scale}; ` +
 		(pos.height !== null ? `height: ${pos.height}px; ` : '') +
@@ -187,13 +215,27 @@
 	onclick={(e) => e.stopPropagation()}
 	oncontextmenu={(e) => e.stopPropagation()}
 >
+	{#if showMine && multiFormat}
+		<div class="format-row">
+			<label for="popover-format">Card format</label>
+			<select
+				id="popover-format"
+				value={activeFormat}
+				onchange={(e) => setFormat(e.currentTarget.value)}
+			>
+				{#each formats as f (f.name)}
+					<option value={f.name}>{f.name} — {f.deck} · {f.model}</option>
+				{/each}
+			</select>
+		</div>
+	{/if}
 	<div class="body">
 		{#if error !== null}
 			<p class="status">Yomitan lookup failed: {error}</p>
 		{:else if entries === null}
-			<p class="status">Looking up 「{term.lemma_form}」…</p>
+			<p class="status">Looking up 「{label}」…</p>
 		{:else if entries.length === 0}
-			<p class="status">No dictionary entry for 「{term.lemma_form}」</p>
+			<p class="status">No dictionary entry for 「{label}」</p>
 		{:else}
 			{#each entries as entry}
 				<div class="entry">
@@ -201,7 +243,7 @@
 						{#if entry.furigana_html.trim()}
 							<span class="expression">{@html sanitize(entry.furigana_html)}</span>
 						{:else}
-							<span class="expression">{entry.expression || term.lemma_form}</span>
+							<span class="expression">{entry.expression || label}</span>
 							{#if entry.reading && entry.reading !== entry.expression}
 								<span class="reading">【{entry.reading}】</span>
 							{/if}
@@ -211,17 +253,18 @@
 								<button
 									class="mine-btn"
 									disabled={mineDisabled}
-									title={mineTitle}
+									title={multiFormat ? `${mineTitle} — format: ${activeFormat}` : mineTitle}
 									onclick={() => {
-										onmine(entry.index);
+										onmine(entry.index, multiFormat ? activeFormat : undefined);
 										onclose();
 									}}>+ Mine</button
 								>
 								<button
 									class="mine-btn"
-									title="Select for batch mining using this definition"
+									title={'Select for batch mining using this definition' +
+										(multiFormat ? ` — format: ${activeFormat}` : '')}
 									onclick={() => {
-										onqueue(entry.index);
+										onqueue(entry.index, multiFormat ? activeFormat : undefined);
 										onclose();
 									}}>Queue</button
 								>
@@ -277,8 +320,23 @@
 	}
 	/* Scale the content, not .popover itself: the position math and remembered
 	 * size (script above) work in unscaled px. */
-	.body {
+	.body,
+	.format-row {
 		zoom: var(--def-scale, 1);
+	}
+	.format-row {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.4rem 0.75rem;
+		font-size: 0.8rem;
+		color: var(--comment);
+		border-bottom: 1px solid var(--border);
+	}
+	.format-row select {
+		flex: 1;
+		min-width: 0;
+		font-size: 0.8rem;
 	}
 	.body {
 		flex: 1 1 auto;
@@ -384,6 +442,8 @@
 	}
 	.actions {
 		display: inline-flex;
+		flex-wrap: wrap;
+		justify-content: flex-end;
 		gap: 0.3rem;
 		margin-left: auto;
 	}

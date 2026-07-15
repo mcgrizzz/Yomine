@@ -8,6 +8,7 @@
 		openAndProcessFile,
 		openRecentFile,
 		openAsbplayerModal,
+		asbContext,
 		playerStatus,
 		languageToolsStatus,
 		overlay,
@@ -19,7 +20,8 @@
 		notice,
 		ankiFilterActive,
 		refreshTerms,
-		refreshMinedState
+		refreshMinedState,
+		settings
 	} from '$lib/stores';
 	import TopBar from '$lib/components/TopBar.svelte';
 	import TermTable from '$lib/components/TermTable.svelte';
@@ -61,6 +63,10 @@
 	}
 
 	const toolsReady = $derived($languageToolsStatus === 'ready');
+	const followOn = $derived(
+		($settings?.asbplayer_follow_new_media ?? false) ||
+			($settings?.asbplayer_follow_active_tab ?? false)
+	);
 	const toolsError = $derived(
 		typeof $languageToolsStatus === 'object' ? $languageToolsStatus.error : null
 	);
@@ -90,7 +96,30 @@
 			{@const known = total - $fileResult.terms.length}
 			<div class="header-row">
 				<div class="header-left">
-					<h2 class="title">{$fileResult.source_file.title}</h2>
+					<div class="title-row">
+						<h2 class="title">{$fileResult.source_file.title}</h2>
+						{#if followOn}
+							{#if $asbContext.has_active_tab && !$asbContext.active_has_subtitles}
+								<span
+									class="tab-chip warn"
+									title="Follow can't switch until subtitles are loaded on the active video in asbplayer"
+									>● no subtitles on active video</span
+								>
+							{:else if $asbContext.loaded_from_asbplayer && $asbContext.loaded_is_active}
+								<span
+									class="tab-chip ok"
+									title="This is asbplayer's active tab — mining captures media from it"
+									>● active tab</span
+								>
+							{:else if $asbContext.loaded_from_asbplayer && $asbContext.has_active_tab}
+								<span
+									class="tab-chip warn"
+									title="asbplayer's active tab is a different video — mined media would come from the wrong one"
+									>● not the active tab</span
+								>
+							{/if}
+						{/if}
+					</div>
 			{#if $ankiFilterActive && $fileResult.sentences.length > 0}
 				<p
 					class="comprehension"
@@ -216,8 +245,30 @@
 	.header-left {
 		min-width: 0;
 	}
+	.title-row {
+		display: flex;
+		align-items: baseline;
+		gap: 0.5rem;
+	}
 	.title {
 		margin: 0 0 0.25rem;
+	}
+	.tab-chip {
+		padding: 0.05rem 0.4rem;
+		font-size: 0.72rem;
+		border-radius: var(--radius);
+		white-space: nowrap;
+		cursor: help;
+	}
+	.tab-chip.ok {
+		color: var(--green);
+		background: color-mix(in srgb, var(--green) 10%, transparent);
+		border: 1px solid color-mix(in srgb, var(--green) 35%, transparent);
+	}
+	.tab-chip.warn {
+		color: var(--yellow);
+		background: color-mix(in srgb, var(--yellow) 10%, transparent);
+		border: 1px solid color-mix(in srgb, var(--yellow) 35%, transparent);
 	}
 	.comprehension {
 		margin: 0 0 0.15rem;

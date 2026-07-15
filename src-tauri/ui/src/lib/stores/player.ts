@@ -20,6 +20,15 @@ export const playerConnected = derived(
 	($p) => $p.mpv_connected || $p.ws_clients > 0
 );
 
+/** Ambient asbplayer active-tab awareness (asbplayer-context event). */
+export const asbContext = writable<ipc.AsbplayerContext>({
+	has_active_tab: false,
+	active_title: null,
+	active_has_subtitles: false,
+	loaded_is_active: false,
+	loaded_from_asbplayer: false
+});
+
 export async function seekTimestamp(seconds: number, label: string): Promise<void> {
 	try {
 		await ipc.seekTimestamp(seconds, label);

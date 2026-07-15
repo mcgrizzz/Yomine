@@ -5,7 +5,7 @@ import { get, writable } from 'svelte/store';
 import * as ipc from '$lib/ipc';
 import { termKey } from '$lib/table';
 import { playerStatus } from './player';
-import { clearSelection, selectedTerms } from './selection';
+import { selectedTerms } from './selection';
 import { lastError, showNotice } from './ui';
 
 /** Lemmas mined this session (optimistic, until the next refresh). */
@@ -24,6 +24,8 @@ export const minedNoteIds = writable<Record<string, number>>({});
 export const mediaMissing = writable<Set<string>>(new Set());
 /** Gates the mine button — no yomitan-api, no card content. */
 export const yomitanReachable = writable(false);
+/** Yomitan term card formats; >1 turns on per-format mine/queue buttons. */
+export const cardFormats = writable<ipc.CardFormat[]>([]);
 /** Seek/mine lock while asbplayer records the mined line. */
 export const playerBusy = writable(false);
 
@@ -40,8 +42,18 @@ export async function refreshMinedState(force = false): Promise<void> {
 	if (!force && now - lastRefresh < REFRESH_DEBOUNCE_MS) return;
 	lastRefresh = now;
 	ipc.getYomitanStatus().then(
-		(s) => yomitanReachable.set(s.reachable),
-		() => yomitanReachable.set(false)
+		(s) => {
+			yomitanReachable.set(s.reachable);
+			if (s.reachable) {
+				ipc.getCardFormats().then(cardFormats.set, () => cardFormats.set([]));
+			} else {
+				cardFormats.set([]);
+			}
+		},
+		() => {
+			yomitanReachable.set(false);
+			cardFormats.set([]);
+		}
 	);
 	try {
 		const state = await ipc.getMinedState();
@@ -64,7 +76,8 @@ async function mineOne(
 	sentence: string,
 	timestamp: ipc.TimeStampDto | null,
 	via: 'asbplayer' | 'direct',
-	entryIndex?: number
+	entryIndex?: number,
+	formatName?: string
 ): Promise<ipc.MineResult> {
 	const result = await ipc.mineTerm(
 		{
@@ -75,7 +88,8 @@ async function mineOne(
 			timestampEndSecs: timestamp?.end_secs ?? null,
 			timestampLabel: timestamp?.start_label ?? null,
 			via,
-			entryIndex: entryIndex ?? null
+			entryIndex: entryIndex ?? null,
+			formatName: formatName ?? null
 		},
 		(msg) => {
 			if (msg.message) showNotice(msg.message);
@@ -102,13 +116,14 @@ export async function mineTerm(
 	timestamp: ipc.TimeStampDto | null,
 	via: 'asbplayer' | 'direct',
 	surface: string = term.surface_form,
-	entryIndex?: number
+	entryIndex?: number,
+	formatName?: string
 ): Promise<void> {
 	if (get(miningTerm) !== null || get(playerBusy)) return;
 	miningTerm.set(term.lemma_form);
 	playerBusy.set(true);
 	try {
-		const result = await mineOne(term, surface, sentence, timestamp, via, entryIndex);
+		const result = await mineOne(term, surface, sentence, timestamp, via, entryIndex, formatName);
 		showNotice(
 			result.warning ??
 				(result.status === 'duplicate'
@@ -133,6 +148,8 @@ export interface QueueItem {
 	timestamp: ipc.TimeStampDto | null;
 	/** Yomitan entry chosen via the popover's Queue (default first). */
 	entryIndex?: number;
+	/** Yomitan card format chosen via the popover's Queue (default first). */
+	formatName?: string;
 }
 
 /** Batch-mine progress (`null` = no queue running). */
@@ -182,7 +199,8 @@ export async function mineQueue(items: QueueItem[]): Promise<void> {
 					item.sentence,
 					item.timestamp,
 					via,
-					item.entryIndex
+					item.entryIndex,
+					item.formatName
 				);
 				if (result.status === 'duplicate') duplicates++;
 				else created++;
@@ -202,7 +220,8 @@ export async function mineQueue(items: QueueItem[]): Promise<void> {
 		miningTerm.set(null);
 		playerBusy.set(false);
 		mineQueueState.set(null);
-		clearSelection();
+		// Mined items were already deselected one by one; cancelled/failed
+		// terms stay selected so the batch can be resumed.
 		void refreshMinedState(true);
 		const parts = [`Mined ${created}`];
 		if (duplicates > 0) parts.push(`${duplicates} duplicate${duplicates === 1 ? '' : 's'}`);

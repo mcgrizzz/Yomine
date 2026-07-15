@@ -20,6 +20,8 @@
 		timestamp: TimeStampDto | null;
 		/** Yomitan entry chosen via the popover's Queue (default first). */
 		entryIndex?: number;
+		/** Yomitan card format chosen via the popover's Queue (default first). */
+		formatName?: string;
 		/** The user explicitly navigated to this occurrence. */
 		explicit: boolean;
 		/** Occurrences with a different sentence than the chosen one. */
@@ -141,12 +143,13 @@
 		ondone(
 			work
 				.filter((e) => !skipped.has(e.key))
-				.map(({ term, surface, sentence, timestamp, entryIndex }) => ({
+				.map(({ term, surface, sentence, timestamp, entryIndex, formatName }) => ({
 					term,
 					surface,
 					sentence,
 					timestamp,
-					entryIndex
+					entryIndex,
+					formatName
 				})),
 			patch
 		);

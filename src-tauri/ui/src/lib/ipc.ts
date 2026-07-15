@@ -213,11 +213,9 @@ export interface SettingsData {
 	pos_filters: Record<string, boolean>;
 	use_serif_font: boolean;
 	dark_mode: boolean;
-	/** Follow mode (issue #105): after a load from asbplayer, NEW bound videos
-	 * with subtitles load automatically. Opt-in. */
+	/** Follow mode (issue #105): auto-load NEW subtitled videos asbplayer binds. */
 	asbplayer_follow_new_media: boolean;
-	/** Follow mode (issue #105): switch to the active tab's video when it isn't
-	 * the loaded one. Opt-in. */
+	/** Follow mode (issue #105): switch to asbplayer's active subtitled tab. */
 	asbplayer_follow_active_tab: boolean;
 	/** Follow-mode poll cadence in seconds (≥1). */
 	asbplayer_poll_secs: number;
@@ -235,6 +233,8 @@ export interface SettingsData {
 	sentence_underlines: UnderlineToggles;
 	/** JLPT level tags in the term table (issue #112); filtering is unaffected. */
 	show_jlpt_tags: boolean;
+	/** Term-table column order/visibility (issue #122); empty = built-in layout. */
+	table_columns: { id: string; visible: boolean }[];
 }
 
 /** Aggregated setup readiness for the checklist/banner (`get_setup_status`).
@@ -534,6 +534,8 @@ export function mineTerm(
 		via: 'asbplayer' | 'direct';
 		/** Yomitan entry to build the card from (default first). */
 		entryIndex: number | null;
+		/** Yomitan card format to render with (default first term format). */
+		formatName: string | null;
 	},
 	onProgress: (msg: LoadingMessage) => void
 ): Promise<MineResult> {
@@ -576,6 +578,17 @@ export function getMinedState(): Promise<MinedState> {
 /** Reachability probe; `url` tests a staged value (omitted = saved setting). */
 export function getYomitanStatus(url?: string): Promise<YomitanStatus> {
 	return invoke('get_yomitan_status', { url: url ?? null });
+}
+
+export interface CardFormat {
+	name: string;
+	deck: string;
+	model: string;
+}
+
+/** The user's Yomitan term card formats, in Yomitan's order (first = default). */
+export function getCardFormats(): Promise<CardFormat[]> {
+	return invoke('get_card_formats');
 }
 
 /** One Yomitan dictionary entry for the definition popover (issue #113).
@@ -788,6 +801,17 @@ export const onDictionariesChanged = (cb: () => void) =>
  * freshly loaded file. */
 export const onAsbplayerMediaLoaded = (cb: (r: FileLoadResult) => void) =>
 	listenTo('asbplayer-media-loaded', cb);
+
+/** asbplayer active-tab awareness — mining/seek target the active tab. */
+export interface AsbplayerContext {
+	has_active_tab: boolean;
+	active_title: string | null;
+	active_has_subtitles: boolean;
+	loaded_is_active: boolean;
+	loaded_from_asbplayer: boolean;
+}
+export const onAsbplayerContext = (cb: (c: AsbplayerContext) => void) =>
+	listenTo('asbplayer-context', cb);
 export const onError = (cb: (e: ErrorPayload) => void) => listenTo('error', cb);
 
 // The analyzer commands already resolve with their result; the modal must NOT

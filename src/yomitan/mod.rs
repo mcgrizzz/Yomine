@@ -71,16 +71,18 @@ pub async fn get_version(base_url: &str) -> Result<String, YomineError> {
     Ok(v.version)
 }
 
-/// The user's Yomitan Anki card formats; mining uses the first `term` format.
-pub async fn get_term_card_format(base_url: &str) -> Result<CardFormat, YomineError> {
+/// The user's Yomitan `term` card formats, in Yomitan's order (first = default).
+pub async fn get_term_card_formats(base_url: &str) -> Result<Vec<CardFormat>, YomineError> {
     let formats: Vec<CardFormat> = post(base_url, "ankiCardFormats", serde_json::json!({})).await?;
-    formats.into_iter().find(|f| f.kind == "term").ok_or_else(|| {
-        YomineError::Custom(
+    let term_formats: Vec<CardFormat> = formats.into_iter().filter(|f| f.kind == "term").collect();
+    if term_formats.is_empty() {
+        return Err(YomineError::Custom(
             "Yomitan has no term card format configured — set one up under \
              Yomitan Settings → Anki"
                 .to_string(),
-        )
-    })
+        ));
+    }
+    Ok(term_formats)
 }
 
 /// Render `markers` for `text`; `include_media` adds base64 audio/images.

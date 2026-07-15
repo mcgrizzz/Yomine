@@ -181,6 +181,7 @@ pub async fn process_file(
         sentences,
         file_comprehension,
         asbplayer_media_id: None,
+        asbplayer_subtitle_file: None,
     };
     let payload = load_result(&guard.file).expect("file just stored has a source_file");
     drop(guard);
@@ -252,6 +253,19 @@ pub(crate) async fn load_asbplayer_into_state(
         .clone()
         .ok_or_else(|| "Language tools are still loading".to_string())?;
 
+    let file_name = subtitle_file_name.filter(|n| !n.trim().is_empty());
+    {
+        let guard = state.lock().unwrap();
+        if guard.file.asbplayer_media_id.as_deref() == Some(media_id.as_str())
+            && file_name.is_some()
+            && guard.file.asbplayer_subtitle_file == file_name
+        {
+            if let Some(payload) = load_result(&guard.file) {
+                return Ok(payload);
+            }
+        }
+    }
+
     let send = |msg: &str| {
         if let Some(p) = progress {
             let _ = p.send(LoadingMessage::new(msg));
@@ -268,7 +282,6 @@ pub(crate) async fn load_asbplayer_into_state(
     // Save the cues as a real .srt (best-effort): the session then lands in
     // recents and reopens without asbplayer.
     let title = if title.trim().is_empty() { "asbplayer video".to_string() } else { title };
-    let file_name = subtitle_file_name.filter(|n| !n.trim().is_empty());
     let (stem, display_title, creator) = match &file_name {
         Some(name) => {
             let stem = std::path::Path::new(name)
@@ -331,6 +344,7 @@ pub(crate) async fn load_asbplayer_into_state(
         sentences,
         file_comprehension,
         asbplayer_media_id: Some(media_id),
+        asbplayer_subtitle_file: file_name,
     };
     let payload = load_result(&guard.file).expect("file just stored has a source_file");
     drop(guard);

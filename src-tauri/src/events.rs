@@ -16,6 +16,7 @@ pub mod names {
     pub const DICTIONARIES_CHANGED: &str = "dictionaries-changed";
     pub const KNOWLEDGE_SUMMARY: &str = "knowledge-summary";
     pub const ASBPLAYER_MEDIA_LOADED: &str = "asbplayer-media-loaded";
+    pub const ASBPLAYER_CONTEXT: &str = "asbplayer-context";
     pub const ANALYSIS_COMPLETE: &str = "analysis-complete";
     pub const ANALYSIS_CANCELLED: &str = "analysis-cancelled";
     pub const EXPORT_COMPLETE: &str = "export-complete";
@@ -70,6 +71,16 @@ pub struct PlayerStatus {
     /// Stable insertion order, so `PartialEq` change-detection fires exactly on
     /// new confirmations.
     pub confirmed_timestamps: Vec<f32>,
+}
+
+/// asbplayer active-tab awareness — mining/seek target the active tab.
+#[derive(Serialize, Deserialize, Clone, Default, PartialEq)]
+pub struct AsbplayerContext {
+    pub has_active_tab: bool,
+    pub active_title: Option<String>,
+    pub active_has_subtitles: bool,
+    pub loaded_is_active: bool,
+    pub loaded_from_asbplayer: bool,
 }
 
 /// `export-complete` payload.

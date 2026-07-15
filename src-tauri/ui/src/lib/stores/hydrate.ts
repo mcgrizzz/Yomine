@@ -4,7 +4,7 @@ import { termKey } from '$lib/table';
 import { dragHovering, lastError, overlay, showNotice } from './ui';
 import { ankiStatus, knowledge, languageToolsStatus } from './status';
 import { checkForUpdate } from './update';
-import { playerStatus } from './player';
+import { asbContext, playerStatus } from './player';
 import { fileResult, isSupportedPath, loadAndStore, recentFiles } from './file';
 import { posCatalog, posEnabled } from './controls';
 import { settings } from './settings';
@@ -50,6 +50,7 @@ export async function hydrate(): Promise<void> {
 		fileResult.set(r);
 		showNotice(`Loaded from asbplayer: ${r.source_file.title}`);
 	});
+	ipc.onAsbplayerContext((c) => asbContext.set(c));
 	ipc.onDictionariesChanged(async () => {
 		const current = await ipc.getTerms();
 		if (current) fileResult.set(current);

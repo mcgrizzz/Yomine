@@ -43,6 +43,12 @@ unknown values — e.g. the removed `"pos"` — deserialize to the default; Appe
 per-state visibility checkboxes shown when knowledge mode is selected — filtering is
 frontend-only, the DTO always carries the state).
 
+`SettingsData.table_columns: array<{ id, visible }>` (issue #122): term-table column order and
+visibility, edited via header right-click → "Edit columns…" (drag to reorder, untick to hide;
+each change persists immediately); empty = built-in layout. The known id set lives
+frontend-side (`normalizeColumns` in `table.ts`) — unknown ids drop, new columns append, Term is
+always visible. Supersedes `show_jlpt_tags`, which now only seeds the jlpt default.
+
 ## Ignore list
 
 | Command | Args | Returns | Maps to | Notes |
@@ -83,9 +89,10 @@ frontend-only, the DTO always carries the state).
 
 | Command | Args | Returns | Maps to | Notes |
 |---------|------|---------|---------|-------|
-| `mine_term` | `term: string`, `surface: string` (the occurrence as tokenized — cloze/bold falls back to `term` when it isn't in the sentence), `sentence: string`, `timestamp_secs: f32 \| null`, `timestamp_label: string \| null`, `via: "asbplayer" \| "direct"`, `entry_index: usize \| null` (Yomitan entry to build the card from — the popover's per-definition mine; default first) | `MineResultDto { status: "created" \| "duplicate", via, warning }` | `commands/mining.rs` + `src/yomitan` | Card content from the user's Yomitan config (yomitan-api `/ankiCardFormats` + `/ankiFields`). The note is ALWAYS created by Yomine: `storeMediaFile` per returned media, then AnkiConnect `addNote` (tag `yomine`); duplicates return `status: "duplicate"` instead of erroring (and skip enrichment). `via: "asbplayer"` (frontend rule: player mode is asbplayer + client connected + row has a cue — same rule as seeking, NOT tied to how the file was loaded) then confirmed-seeks and sends WS `mine-subtitle` postMineAction 2 (update last card) so asbplayer attaches audio/screenshot to the fresh note; enrichment failure sets `warning` rather than failing the mine. |
+| `mine_term` | `term: string`, `surface: string` (the occurrence as tokenized — cloze/bold falls back to `term` when it isn't in the sentence), `sentence: string`, `timestamp_secs: f32 \| null`, `timestamp_label: string \| null`, `via: "asbplayer" \| "direct"`, `entry_index: usize \| null` (Yomitan entry to build the card from — the popover's per-definition mine; default first), `format_name: string \| null` (Yomitan term card format to render with; default first) | `MineResultDto { status: "created" \| "duplicate", via, warning }` | `commands/mining.rs` + `src/yomitan` | Card content from the user's Yomitan config (yomitan-api `/ankiCardFormats` + `/ankiFields`). The note is ALWAYS created by Yomine: `storeMediaFile` per returned media, then AnkiConnect `addNote` (tag `yomine`); duplicates return `status: "duplicate"` instead of erroring (and skip enrichment). `via: "asbplayer"` (frontend rule: player mode is asbplayer + client connected + row has a cue — same rule as seeking, NOT tied to how the file was loaded) then confirmed-seeks and sends WS `mine-subtitle` postMineAction 2 (update last card) so asbplayer attaches audio/screenshot to the fresh note; enrichment failure sets `warning` rather than failing the mine. |
 | `get_mined_state` | — | `MinedStateDto { added_terms, mined_sentences }` | `anki::mined` | `added:1` note terms via the field mappings + the normalized sentence set (cache written during the `get_total_vocab` note pass, merged with fresh `added:1` sentences). Best-effort: Anki offline still returns cached sentences. |
 | `get_yomitan_status` | `url: string \| null` | `YomitanStatusDto { reachable, version }` | `yomitan::get_version` | `url` overrides the saved setting so the modal can probe a staged value. |
+| `get_card_formats` | — | `array<CardFormatDto { name, deck, model }>` | `yomitan::get_term_card_formats` | The user's Yomitan term card formats, Yomitan's order (first = default) — drives the popover's per-format mine/queue buttons. |
 | `open_in_anki` | `note_id: u64` | `()` | `anki_api::gui_browse` | Opens Anki's card browser on `nid:<id>` — the mined ✓ chip's click action (session mines only; the note id comes from `mine_term`). |
 
 `mine_term` also takes `progress: Channel<LoadingMessage>` and streams stage updates ("Rendering … with Yomitan…", "Creating Anki note…", "Adding audio & screenshot via asbplayer…") which the frontend surfaces as an updating toast. `get_anki_sample_note` gained `guessed_sentence` (engine `guess_sentence_field`: literal "Sentence" name → sentence-ish name that isn't audio/translation → first sample field whose content looks like a Japanese sentence).

@@ -6,12 +6,14 @@ import { writable } from 'svelte/store';
 
 export const selectedTerms = writable<Set<string>>(new Set());
 
-/** Yomitan entry chosen via the popover's Queue button, keyed by termKey.
- * Missing key = default (first) entry. */
-export const selectedEntryIndex = writable<Record<string, number>>({});
+/** Entry/format chosen via the popover's Queue button, keyed by termKey.
+ * Missing key = defaults (first entry, first format). */
+export const queuedMineOptions = writable<
+	Record<string, { entryIndex: number; formatName?: string }>
+>({});
 
-function dropEntryIndex(keys: string[]): void {
-	selectedEntryIndex.update((m) => {
+function dropMineOptions(keys: string[]): void {
+	queuedMineOptions.update((m) => {
 		const next = { ...m };
 		for (const key of keys) delete next[key];
 		return next;
@@ -23,7 +25,7 @@ export function toggleSelected(key: string): void {
 		const next = new Set(s);
 		if (next.has(key)) {
 			next.delete(key);
-			dropEntryIndex([key]);
+			dropMineOptions([key]);
 		} else {
 			next.add(key);
 		}
@@ -32,7 +34,7 @@ export function toggleSelected(key: string): void {
 }
 
 export function setSelected(keys: string[], on: boolean): void {
-	if (!on) dropEntryIndex(keys);
+	if (!on) dropMineOptions(keys);
 	selectedTerms.update((s) => {
 		const next = new Set(s);
 		for (const key of keys) {
@@ -43,13 +45,13 @@ export function setSelected(keys: string[], on: boolean): void {
 	});
 }
 
-/** Select a term for batch mining with a specific Yomitan entry. */
-export function queueWithEntry(key: string, entryIndex: number): void {
+/** Select a term for batch mining with a specific Yomitan entry/format. */
+export function queueWithEntry(key: string, entryIndex: number, formatName?: string): void {
 	selectedTerms.update((s) => new Set(s).add(key));
-	selectedEntryIndex.update((m) => ({ ...m, [key]: entryIndex }));
+	queuedMineOptions.update((m) => ({ ...m, [key]: { entryIndex, formatName } }));
 }
 
 export function clearSelection(): void {
 	selectedTerms.set(new Set());
-	selectedEntryIndex.set({});
+	queuedMineOptions.set({});
 }

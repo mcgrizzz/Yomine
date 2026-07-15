@@ -9,8 +9,7 @@
 		setDefinitionScale,
 		setFontScale,
 		setSentenceColoring,
-		setSentenceUnderlines,
-		setShowJlptTags
+		setSentenceUnderlines
 	} from '$lib/stores';
 
 	/** `default_font_scale()` (core/settings.rs), as a percentage. */
@@ -47,9 +46,6 @@
 	let tempToggles = $state<UnderlineToggles>({ ...DEFAULT_TOGGLES });
 	let originalToggles = $state<UnderlineToggles>({ ...DEFAULT_TOGGLES });
 
-	let tempJlptTags = $state(true);
-	let originalJlptTags = $state(true);
-
 	// Hydrate from the settings mirror each time the modal opens; untrack so
 	// settings changes while open don't clobber the staged value.
 	$effect(() => {
@@ -69,9 +65,6 @@
 		const toggles = { ...DEFAULT_TOGGLES, ...$settings?.sentence_underlines };
 		tempToggles = { ...toggles };
 		originalToggles = { ...toggles };
-		const jlptTags = $settings?.show_jlpt_tags ?? true;
-		tempJlptTags = jlptTags;
-		originalJlptTags = jlptTags;
 	}
 
 	// Live preview: mirror what the root layout does with the saved setting.
@@ -87,8 +80,7 @@
 		tempPct !== originalPct ||
 			tempDefPct !== originalDefPct ||
 			tempColoring !== originalColoring ||
-			togglesDirty ||
-			tempJlptTags !== originalJlptTags
+			togglesDirty
 	);
 
 	function step(delta: number) {
@@ -104,12 +96,10 @@
 		if (tempDefPct !== originalDefPct) await setDefinitionScale(tempDefPct / 100);
 		if (tempColoring !== originalColoring) await setSentenceColoring(tempColoring);
 		if (togglesDirty) await setSentenceUnderlines(tempToggles);
-		if (tempJlptTags !== originalJlptTags) await setShowJlptTags(tempJlptTags);
 		originalPct = tempPct;
 		originalDefPct = tempDefPct;
 		originalColoring = tempColoring;
 		originalToggles = { ...tempToggles };
-		originalJlptTags = tempJlptTags;
 		appearanceModalOpen.set(false);
 	}
 
@@ -118,7 +108,6 @@
 		tempDefPct = originalDefPct;
 		tempColoring = originalColoring;
 		tempToggles = { ...originalToggles };
-		tempJlptTags = originalJlptTags;
 	}
 
 	// Closing without saving discards the preview.
@@ -132,7 +121,6 @@
 		tempDefPct = DEFAULT_PCT;
 		tempColoring = DEFAULT_COLORING;
 		tempToggles = { ...DEFAULT_TOGGLES };
-		tempJlptTags = true;
 	}
 </script>
 
@@ -217,11 +205,7 @@
 				<p class="hint">Underlines words by Anki state; untick a state to hide it.</p>
 			{/if}
 
-			<label class="jlpt-row">
-				<input type="checkbox" bind:checked={tempJlptTags} />
-				Show JLPT tags in the term table
-			</label>
-			<p class="hint">Level filtering stays available either way.</p>
+			<p class="hint">Table columns: right-click the term-table header to reorder or hide.</p>
 
 			<hr />
 
@@ -312,13 +296,6 @@
 	}
 	.state-toggle span {
 		padding-bottom: 1px;
-	}
-	.jlpt-row {
-		display: flex;
-		align-items: center;
-		gap: 0.4rem;
-		padding: 0 1rem;
-		cursor: pointer;
 	}
 	.value {
 		min-width: 3.2rem;

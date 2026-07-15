@@ -19,6 +19,33 @@ export function harmonic(term: Term): number {
 	return v === undefined || v === NO_FREQ ? Infinity : v;
 }
 
+export type ColumnId = 'term' | 'jlpt' | 'sentence' | 'frequency' | 'pos';
+export interface TableColumnSetting {
+	id: string;
+	visible: boolean;
+}
+export const DEFAULT_COLUMNS: ColumnId[] = ['term', 'jlpt', 'sentence', 'frequency', 'pos'];
+
+/** Reconcile saved column prefs (issue #122); `jlptDefault` = legacy `show_jlpt_tags`. */
+export function normalizeColumns(
+	saved: TableColumnSetting[] | undefined,
+	jlptDefault: boolean
+): { id: ColumnId; visible: boolean }[] {
+	const out: { id: ColumnId; visible: boolean }[] = [];
+	for (const c of saved ?? []) {
+		if ((DEFAULT_COLUMNS as string[]).includes(c.id) && !out.some((o) => o.id === c.id)) {
+			out.push({ id: c.id as ColumnId, visible: c.visible });
+		}
+	}
+	for (const id of DEFAULT_COLUMNS) {
+		if (!out.some((o) => o.id === id)) {
+			out.push({ id, visible: id === 'jlpt' ? jlptDefault : true });
+		}
+	}
+	for (const col of out) if (col.id === 'term') col.visible = true;
+	return out;
+}
+
 export type SortField = 'frequency' | 'chronological' | 'sentenceCount' | 'comprehension';
 export type SortDir = 'asc' | 'desc';
 
