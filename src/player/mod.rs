@@ -42,11 +42,16 @@ impl PlayerManager {
         }
     }
 
-    pub fn seek_timestamp(&self, seconds: f32, timestamp_str: &str) -> Result<(), YomineError> {
+    pub fn seek_timestamp(
+        &self,
+        seconds: f32,
+        timestamp_str: &str,
+        media_id: Option<&str>,
+    ) -> Result<(), YomineError> {
         if self.mpv.is_connected() {
             self.mpv.seek_timestamp(seconds, timestamp_str)
         } else if let Some(server) = &self.ws.server {
-            server.seek_timestamp(seconds, timestamp_str)
+            server.seek_timestamp(seconds, timestamp_str, media_id)
         } else {
             Err(YomineError::Custom(
                 "No player available (MPV disconnected and WebSocket server unavailable)".into(),

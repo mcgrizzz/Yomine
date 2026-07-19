@@ -114,8 +114,8 @@
 							{:else if $asbContext.loaded_from_asbplayer && $asbContext.has_active_tab}
 								<span
 									class="tab-chip warn"
-									title="asbplayer's active tab is a different video — mined media would come from the wrong one"
-									>● not the active tab</span
+									title="Mining targets the bound media, but its tab isn't active in asbplayer — recording may behave unexpectedly"
+									>● bound media not active</span
 								>
 							{/if}
 						{/if}

@@ -371,15 +371,27 @@ impl WebSocketServer {
     }
 
     /// asbplayer `mine-subtitle`. `post_mine_action`: 0 none, 1 Anki dialog,
-    /// 2 update last card, 3 export.
+    /// 2 update the `note_id` note (last-added when `None`), 3 export.
+    /// `media_id` targets a `get-bound-media` entry (active tab when `None`).
     pub fn mine_subtitle(
         &self,
         fields: &HashMap<String, String>,
         post_mine_action: u8,
+        media_id: Option<&str>,
+        note_id: Option<u64>,
     ) -> Result<(), YomineError> {
+        let mut body = serde_json::Map::new();
+        body.insert("postMineAction".to_string(), post_mine_action.into());
+        body.insert("fields".to_string(), serde_json::json!(fields));
+        if let Some(id) = media_id {
+            body.insert("mediaId".to_string(), id.into());
+        }
+        if let Some(id) = note_id {
+            body.insert("noteId".to_string(), id.into());
+        }
         let body = self.request_blocking(
             "mine-subtitle",
-            serde_json::json!({ "postMineAction": post_mine_action, "fields": fields }),
+            serde_json::Value::Object(body),
             Duration::from_secs(15),
         )?;
         match body.get("published").and_then(|v| v.as_bool()) {
@@ -390,7 +402,12 @@ impl WebSocketServer {
         }
     }
 
-    pub fn seek_timestamp(&self, timestamp: f32, timestamp_str: &str) -> Result<(), YomineError> {
+    pub fn seek_timestamp(
+        &self,
+        timestamp: f32,
+        timestamp_str: &str,
+        media_id: Option<&str>,
+    ) -> Result<(), YomineError> {
         println!(
             "[WS] Sending seek command for timestamp: {} seconds, str: {}",
             timestamp, timestamp_str
@@ -402,7 +419,7 @@ impl WebSocketServer {
         let command = SeekCommand {
             command: "seek-timestamp".to_string(),
             message_id: message_id.clone(),
-            body: SeekBody { timestamp },
+            body: SeekBody { timestamp, media_id: media_id.map(str::to_string) },
         };
 
         {

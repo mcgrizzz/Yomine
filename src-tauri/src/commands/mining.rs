@@ -1,6 +1,7 @@
 //! One-click mining (issue #105) + mined-state tracking (issue #3). The note
 //! is always created via AnkiConnect from Yomitan-rendered fields; the
-//! asbplayer path then enriches it (audio/screenshot) via "update last card".
+//! asbplayer path then enriches it (audio/screenshot) via a note-targeted
+//! `mine-subtitle` update.
 
 use std::{
     sync::Mutex,
@@ -54,7 +55,10 @@ pub async fn mine_term(
     format_name: Option<String>,
     progress: Channel<LoadingMessage>,
 ) -> Result<MineResultDto, String> {
-    let yomitan_url = { state.lock().unwrap().settings.yomitan_url.clone() };
+    let (yomitan_url, media_id) = {
+        let guard = state.lock().unwrap();
+        (guard.settings.yomitan_url.clone(), guard.file.asbplayer_media_id.clone())
+    };
     let entry_index = entry_index.unwrap_or(0);
 
     let _ = progress.send(LoadingMessage::new(format!("Rendering 「{}」 with Yomitan…", term)));
@@ -111,7 +115,7 @@ pub async fn mine_term(
     let note_id = match response.error {
         None => response.result,
         Some(err) if err.contains("duplicate") => {
-            // No enrichment: "update last card" would hit an unrelated note.
+            // No enrichment: a duplicate returns no note id to target.
             return Ok(MineResultDto {
                 status: "duplicate".to_string(),
                 via,
@@ -135,6 +139,7 @@ pub async fn mine_term(
             if let Err(e) = enrich_and_verify(
                 &player,
                 id,
+                media_id,
                 timestamp_secs,
                 timestamp_label,
                 record_secs,
@@ -151,11 +156,10 @@ pub async fn mine_term(
     Ok(MineResultDto { status: "created".to_string(), via, warning, note_id, media_missing })
 }
 
-/// Re-run asbplayer enrichment on a note whose media never landed. Only safe
-/// while the note is still Anki's newest — "update last card" has no way to
-/// target a specific note.
+/// Re-run asbplayer enrichment on a note whose media never landed.
 #[tauri::command]
 pub async fn retry_mine_media(
+    state: State<'_, Mutex<AppState>>,
     player: State<'_, PlayerHandle>,
     note_id: u64,
     timestamp_secs: Option<f32>,
@@ -163,22 +167,18 @@ pub async fn retry_mine_media(
     timestamp_label: Option<String>,
     progress: Channel<LoadingMessage>,
 ) -> Result<(), String> {
-    let recent = anki_api::get_note_ids("added:7")
-        .await
-        .map_err(|e| format!("AnkiConnect is unreachable: {}", e))?;
-    match recent.iter().max() {
-        Some(&max) if max == note_id => {}
-        Some(&max) if max > note_id => {
-            return Err("A newer note was added since — asbplayer can only update the most \
-                        recent note. Add the media in Anki instead."
-                .to_string());
-        }
-        _ => return Err("Couldn't confirm the card is still Anki's most recent note.".to_string()),
-    }
-
+    let media_id = { state.lock().unwrap().file.asbplayer_media_id.clone() };
     let record_secs = cue_duration_secs(timestamp_secs, timestamp_end_secs);
-    enrich_and_verify(&player, note_id, timestamp_secs, timestamp_label, record_secs, &progress)
-        .await
+    enrich_and_verify(
+        &player,
+        note_id,
+        media_id,
+        timestamp_secs,
+        timestamp_label,
+        record_secs,
+        &progress,
+    )
+    .await
 }
 
 fn cue_duration_secs(start: Option<f32>, end: Option<f32>) -> f32 {
@@ -197,10 +197,12 @@ async fn snapshot_fields(note_id: u64) -> Option<std::collections::HashMap<Strin
 
 /// Seek, mine, then verify the enrichment actually changed the note: asbplayer's
 /// `published: true` only means the command was broadcast — recording and the
-/// "update last card" write happen asynchronously afterwards.
+/// note update happen asynchronously afterwards. Verification also catches a
+/// pre-v1.20 extension ignoring `noteId` and updating the last-added note.
 async fn enrich_and_verify(
     player: &PlayerHandle,
     note_id: u64,
+    media_id: Option<String>,
     timestamp_secs: Option<f32>,
     timestamp_label: Option<String>,
     record_secs: f32,
@@ -210,10 +212,10 @@ async fn enrich_and_verify(
     let baseline = snapshot_fields(note_id).await;
 
     if let Some(secs) = timestamp_secs {
-        player.seek(secs, timestamp_label.unwrap_or_default()).await?;
+        player.seek(secs, timestamp_label.unwrap_or_default(), media_id.clone()).await?;
         wait_for_seek_confirmation(player, secs).await;
     }
-    player.mine_subtitle(std::collections::HashMap::new(), 2).await?;
+    player.mine_subtitle(std::collections::HashMap::new(), 2, media_id, Some(note_id)).await?;
 
     // AnkiConnect hiccup on the baseline read: enrichment ran, verification can't.
     let Some(baseline) = baseline else { return Ok(()) };
