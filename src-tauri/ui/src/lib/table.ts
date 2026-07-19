@@ -46,12 +46,18 @@ export function normalizeColumns(
 	return out;
 }
 
-export type SortField = 'frequency' | 'chronological' | 'sentenceCount' | 'comprehension';
+export type SortField = 'frequency' | 'chronological' | 'sentenceCount' | 'comprehension' | 'jlpt';
 export type SortDir = 'asc' | 'desc';
 
 /** egui `SortState::default_direction`: frequency/chronological ascending; count/comprehension descending. */
 export function defaultDir(field: SortField): SortDir {
 	return field === 'frequency' || field === 'chronological' ? 'asc' : 'desc';
+}
+
+/** Numeric JLPT key: N5 (easiest) → 5 … N1 → 1, non-JLPT → 0 (sorts last desc). */
+function jlptLevel(term: Term): number {
+	const n = Number(term.jlpt_level?.slice(1));
+	return Number.isFinite(n) ? n : 0;
 }
 
 /** Earliest sentence index the term appears in; none → +Infinity. */
@@ -197,6 +203,8 @@ export function applyControls(
 				return t.sentence_references.length;
 			case 'comprehension':
 				return comprehensionOf(t, sentences);
+			case 'jlpt':
+				return jlptLevel(t);
 		}
 	};
 	out.sort((a, b) => {

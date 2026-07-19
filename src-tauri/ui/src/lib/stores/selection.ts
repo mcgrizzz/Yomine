@@ -9,7 +9,7 @@ export const selectedTerms = writable<Set<string>>(new Set());
 /** Entry/format chosen via the popover's Queue button, keyed by termKey.
  * Missing key = defaults (first entry, first format). */
 export const queuedMineOptions = writable<
-	Record<string, { entryIndex: number; formatName?: string }>
+	Record<string, { entryIndex?: number; formatName?: string }>
 >({});
 
 function dropMineOptions(keys: string[]): void {
@@ -49,6 +49,11 @@ export function setSelected(keys: string[], on: boolean): void {
 export function queueWithEntry(key: string, entryIndex: number, formatName?: string): void {
 	selectedTerms.update((s) => new Set(s).add(key));
 	queuedMineOptions.update((m) => ({ ...m, [key]: { entryIndex, formatName } }));
+}
+
+/** Change the card format of a queued term (the Details panel's selector). */
+export function setQueuedFormat(key: string, formatName: string): void {
+	queuedMineOptions.update((m) => ({ ...m, [key]: { ...m[key], formatName } }));
 }
 
 export function clearSelection(): void {

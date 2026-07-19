@@ -257,7 +257,19 @@
 									onclick={() => {
 										onmine(entry.index, multiFormat ? activeFormat : undefined);
 										onclose();
-									}}>+ Mine</button
+									}}
+									><svg
+											class="pick-icon"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2.4"
+											stroke-linecap="round"
+											aria-hidden="true"
+										>
+											<path d="M3 21 L13.5 10.5" />
+											<path d="M10 4 Q 17.8 6.2 20 14" />
+										</svg> Mine</button
 								>
 								<button
 									class="mine-btn"
@@ -464,5 +476,10 @@
 	.mine-btn:disabled {
 		opacity: 0.5;
 		cursor: default;
+	}
+	.pick-icon {
+		width: 1em;
+		height: 1em;
+		vertical-align: -0.125em;
 	}
 </style>

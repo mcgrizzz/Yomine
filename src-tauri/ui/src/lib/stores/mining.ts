@@ -153,9 +153,12 @@ export interface QueueItem {
 }
 
 /** Batch-mine progress (`null` = no queue running). */
-export const mineQueueState = writable<{ total: number; done: number; current: string } | null>(
-	null
-);
+export const mineQueueState = writable<{
+	total: number;
+	done: number;
+	current: string;
+	key: string;
+} | null>(null);
 
 let queueCancelled = false;
 
@@ -185,7 +188,12 @@ export async function mineQueue(items: QueueItem[]): Promise<void> {
 		for (const item of sorted) {
 			if (queueCancelled) break;
 			miningTerm.set(item.term.lemma_form);
-			mineQueueState.set({ total: sorted.length, done, current: item.term.lemma_form });
+			mineQueueState.set({
+				total: sorted.length,
+				done,
+				current: item.term.lemma_form,
+				key: termKey(item.term)
+			});
 			// Must match the `via` rule in TermTable's mine().
 			const status = get(playerStatus);
 			const via =

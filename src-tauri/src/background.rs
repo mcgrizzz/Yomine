@@ -248,6 +248,14 @@ async fn poll_asbplayer_follow(app: AppHandle) {
             }
         }
 
+        // 3) The loaded video swapped its subtitle track → reload it (the
+        //    same-file guard below filters out the unchanged case).
+        if target.is_none() {
+            target = media.iter().find(|m| {
+                current_media_id.as_deref() == Some(m.id.as_str()) && !m.loaded_subtitles.is_empty()
+            });
+        }
+
         let Some(next) = target else { continue };
         seen_ids.insert(next.id.clone());
         let title = next.title.clone().unwrap_or_else(|| "asbplayer video".to_string());

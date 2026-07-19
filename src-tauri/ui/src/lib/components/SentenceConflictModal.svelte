@@ -36,11 +36,15 @@
 	let {
 		entries,
 		ondone,
-		oncancel
+		oncancel,
+		onlookup,
+		onhover
 	}: {
 		entries: BatchEntry[];
 		ondone: (items: QueueItem[], occIdxPatch: Record<string, number>) => void;
 		oncancel: () => void;
+		onlookup?: (req: { text: string; label: string; anchor: DOMRect }) => void;
+		onhover?: (fn: (() => void) | null) => void;
 	} = $props();
 
 	const skey = (s: string) => normalizeSentence(s);
@@ -112,24 +116,38 @@
 	const parts = $derived.by(() => {
 		if (!group) return [];
 		const text = group[0].sentence;
-		const spans: { start: number; end: number; color: string }[] = [];
+		const spans: { start: number; end: number; color: string; entry: BatchEntry }[] = [];
 		ordered.forEach((e, i) => {
 			const m = matchIn(text, e);
 			if (m && !spans.some((s) => m.start < s.end && m.end > s.start)) {
-				spans.push({ ...m, color: colorOf(i) });
+				spans.push({ ...m, color: colorOf(i), entry: e });
 			}
 		});
 		spans.sort((a, b) => a.start - b.start);
-		const out: { text: string; color: string | null }[] = [];
+		const out: { text: string; color: string | null; entry: BatchEntry | null }[] = [];
 		let pos = 0;
 		for (const s of spans) {
-			if (s.start > pos) out.push({ text: text.slice(pos, s.start), color: null });
-			out.push({ text: text.slice(s.start, s.end), color: s.color });
+			if (s.start > pos) out.push({ text: text.slice(pos, s.start), color: null, entry: null });
+			out.push({ text: text.slice(s.start, s.end), color: s.color, entry: s.entry });
 			pos = s.end;
 		}
-		if (pos < text.length) out.push({ text: text.slice(pos), color: null });
+		if (pos < text.length) out.push({ text: text.slice(pos), color: null, entry: null });
 		return out;
 	});
+
+	// Shift+Hover definition lookup, mirroring SentenceView's segment hovers.
+	function hoverTerm(e: MouseEvent, entry: BatchEntry) {
+		if (!onlookup) return;
+		const el = e.currentTarget as HTMLElement;
+		const open = () =>
+			onlookup({
+				text: entry.term.lemma_form,
+				label: entry.term.lemma_form,
+				anchor: el.getBoundingClientRect()
+			});
+		onhover?.(open);
+		if (e.shiftKey) open();
+	}
 
 	function reassign(e: BatchEntry, alt: OccurrenceAlt) {
 		e.sentence = alt.sentence;
@@ -178,18 +196,9 @@
 	}
 
 	function pickTerm(chosen: BatchEntry) {
-		const g = [...group];
-		const usedNow = new Set(used);
 		const next = new Set(skipped);
-		for (const e of g) {
-			if (e === chosen) continue;
-			const alt = freeAltOf(e, usedNow);
-			if (alt) {
-				reassign(e, alt);
-				usedNow.add(skey(alt.sentence));
-			} else {
-				next.add(e.key);
-			}
+		for (const e of group) {
+			if (e !== chosen) next.add(e.key);
 		}
 		skipped = next;
 		maybeFinish();
@@ -198,36 +207,37 @@
 
 <svelte:window onkeydown={(e) => e.key === 'Escape' && oncancel()} />
 
+<!-- Only direct backdrop clicks cancel; clicks inside the dialog must still
+     bubble to window so the definition popover's close-on-click works. -->
 <div
 	class="backdrop"
 	role="button"
 	tabindex="-1"
-	onclick={oncancel}
+	onclick={(e) => e.target === e.currentTarget && oncancel()}
 	onkeydown={(e) => e.key === 'Escape' && oncancel()}
 >
-	<!-- Stop backdrop clicks inside the dialog from closing it. -->
-	<div
-		class="dialog"
-		role="dialog"
-		aria-modal="true"
-		aria-label="Sentence conflicts"
-		tabindex="-1"
-		onclick={(e) => e.stopPropagation()}
-	>
+	<div class="dialog" role="dialog" aria-modal="true" aria-label="Sentence conflicts" tabindex="-1">
 		<header>
 			<h2>Sentence conflicts</h2>
 			<button class="close" aria-label="Close" onclick={oncancel}>✕</button>
 		</header>
 
-		{#if intro && autoResolvable > 0}
+		{#if intro && group}
 			<p class="body">
 				{groups.length} sentence{groups.length === 1 ? ' is' : 's are'} shared by more than one
-				selected term. {autoResolvable} term{autoResolvable === 1 ? '' : 's'} can switch to an
-				unused sentence automatically; your own sentence picks are never changed.
+				selected term.
+				{#if autoResolvable > 0}
+					{autoResolvable} term{autoResolvable === 1 ? '' : 's'} can switch to an unused sentence
+					automatically; your own sentence picks are never changed.
+				{:else}
+					None of them have an unused sentence to switch to, so each conflict needs a pick.
+				{/if}
 			</p>
 			<footer>
-				<button onclick={autoResolve}>Auto-resolve</button>
-				<button onclick={() => (intro = false)}>Resolve one by one</button>
+				{#if autoResolvable > 0}
+					<button onclick={autoResolve}>Auto-swap sentences</button>
+				{/if}
+				<button onclick={() => (intro = false)}>Pick manually</button>
 				<button class="right" onclick={oncancel}>Cancel</button>
 			</footer>
 		{:else if group}
@@ -236,8 +246,15 @@
 				sentence should mine:
 			</p>
 			<blockquote class="sentence" lang="ja">
+				<!-- svelte-ignore a11y_no_static_element_interactions -- Shift+Hover
+				     lookup is a mouse affordance; the pick buttons stay keyboard-usable. -->
 				{#each parts as p, i (i)}
-					{#if p.color}<span class="hl" style:color={p.color}>{p.text}</span>{:else}{p.text}{/if}
+					{#if p.color && p.entry}<span
+							class="hl"
+							style:color={p.color}
+							onmouseenter={(e) => hoverTerm(e, p.entry!)}
+							onmouseleave={() => onhover?.(null)}>{p.text}</span
+						>{:else}{p.text}{/if}
 				{/each}
 			</blockquote>
 			<div class="choices">
@@ -249,15 +266,15 @@
 						lang="ja"
 						title={`Mine 「${e.term.lemma_form}」 from this sentence`}
 						onclick={() => pickTerm(e)}
+						onmouseenter={(ev) => hoverTerm(ev, e)}
+						onmouseleave={() => onhover?.(null)}
 					>
 						{e.term.lemma_form}
 						<span class="freq">{freqOf(e)}</span>
 					</button>
 				{/each}
 			</div>
-			<p class="hint">
-				Unpicked terms move to another sentence when one exists, otherwise they're skipped.
-			</p>
+			<p class="hint">Unpicked terms are skipped for this batch.</p>
 			<footer>
 				<button onclick={mineAll}>{group.length === 2 ? 'Mine both' : `Mine all ${group.length}`}</button>
 				<button class="right" onclick={oncancel}>Cancel batch</button>
