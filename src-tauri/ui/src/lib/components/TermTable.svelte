@@ -34,6 +34,7 @@
 		queueWithEntry,
 		retryMedia,
 		selectedTerms,
+		setQueuedFormat,
 		setSelected,
 		setTableColumns,
 		settings,
@@ -67,6 +68,7 @@
 	const sentenceMode = $derived(SENTENCE_MODES.find((m) => m.field === $tableSort.field));
 	const sentenceActive = $derived(sentenceMode !== undefined);
 	const freqActive = $derived($tableSort.field === 'frequency');
+	const jlptActive = $derived($tableSort.field === 'jlpt');
 
 	const dirArrow = (d: 'asc' | 'desc') => (d === 'asc' ? '⬆' : '⬇');
 	const dirWord = (d: 'asc' | 'desc') => (d === 'asc' ? 'ascending' : 'descending');
@@ -82,6 +84,10 @@
 	function clickFrequency() {
 		if (freqActive) flipDir();
 		else tableSort.set({ field: 'frequency', dir: defaultDir('frequency') });
+	}
+	function clickJlpt() {
+		if (jlptActive) flipDir();
+		else tableSort.set({ field: 'jlpt', dir: defaultDir('jlpt') });
 	}
 	function cycleSentence(e: MouseEvent) {
 		e.stopPropagation();
@@ -159,7 +165,10 @@
 	function trackMods(e: KeyboardEvent) {
 		ctrlHeld = e.ctrlKey || e.metaKey;
 		if (e.key === 'Shift' && e.shiftKey && !e.repeat && hovered) hovered();
-		if (e.key === 'Escape') editColumns = false;
+		if (e.key === 'Escape') {
+			editColumns = false;
+			confirmMine = null;
+		}
 	}
 
 	function toggleFromMenu() {
@@ -204,6 +213,20 @@
 		$addedTerms.has(t.lemma_form) ||
 		$addedTerms.has(t.surface_form);
 
+	let confirmMine = $state<{ term: Term; occs: Occurrence[] } | null>(null);
+
+	function mineClicked(term: Term, occs: Occurrence[]) {
+		if ($selectedTerms.size > 0) confirmMine = { term, occs };
+		else mine(term, occs);
+	}
+
+	function confirmedMine() {
+		if (!confirmMine) return;
+		const { term, occs } = confirmMine;
+		confirmMine = null;
+		mine(term, occs);
+	}
+
 	function mine(term: Term, occs: Occurrence[], entryIndex?: number, formatName?: string) {
 		const occ = occs[Math.min(occIdx[termKey(term)] ?? 0, occs.length - 1)];
 		const ts = occ?.sentence.timestamp ?? null;
@@ -223,7 +246,7 @@
 
 	const COLUMN_TRACKS: Record<ColumnId, string> = {
 		term: 'minmax(7rem, max-content)',
-		jlpt: '3rem',
+		jlpt: 'minmax(3rem, max-content)',
 		sentence: '1fr',
 		frequency: '6rem',
 		pos: '8rem'
@@ -330,6 +353,34 @@
 		$selectedTerms.size - terms.filter((t) => $selectedTerms.has(termKey(t))).length
 	);
 
+	let showQueueDetails = $state(false);
+	const queueDetails = $derived.by(() => {
+		const visible = new Set(terms.map(termKey));
+		return ($fileResult?.terms ?? terms)
+			.filter((t) => $selectedTerms.has(termKey(t)))
+			.map((t) => {
+				const key = termKey(t);
+				const opt = $queuedMineOptions[key];
+				return {
+					key,
+					lemma: t.lemma_form,
+					hidden: !visible.has(key),
+					formatName: opt?.formatName,
+					entryIndex: opt?.entryIndex
+				};
+			});
+	});
+	$effect(() => {
+		if ($selectedTerms.size === 0 || $mineQueueState !== null) showQueueDetails = false;
+	});
+
+	$effect(() => {
+		if ($mineQueueState?.key === undefined) return;
+		requestAnimationFrame(() => {
+			document.querySelector('.row.mining')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+		});
+	});
+
 	function startBatch() {
 		const entries: BatchEntry[] = ($fileResult?.terms ?? terms)
 			.filter((t) => $selectedTerms.has(termKey(t)) && !isMined(t))
@@ -392,8 +443,41 @@
 	<SentenceConflictModal
 		entries={batchEntries}
 		ondone={conflictsResolved}
-		oncancel={() => (batchEntries = null)}
+		oncancel={() => {
+			// Layered dismissal: Escape/backdrop peels the popover first.
+			if (defPopover) {
+				defPopover = null;
+				return;
+			}
+			batchEntries = null;
+		}}
+		onlookup={(req) => $yomitanReachable && (defPopover = { ...req, mineable: null })}
+		onhover={(fn) => (hovered = fn)}
 	/>
+{/if}
+
+{#if confirmMine}
+	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions --
+	     Escape closes it via the window handler below. -->
+	<div class="backdrop" onclick={() => (confirmMine = null)}>
+		<div
+			class="dialog"
+			role="dialog"
+			aria-modal="true"
+			aria-label="Mine individually"
+			tabindex="-1"
+			onclick={(e) => e.stopPropagation()}
+		>
+			<p class="dialog-body">
+				You have {$selectedTerms.size} term{$selectedTerms.size === 1 ? '' : 's'} selected for batch
+				mining. Mine 「<span lang="ja">{confirmMine.term.lemma_form}</span>」 individually now?
+			</p>
+			<footer class="dialog-footer">
+				<button class="bulk-btn primary" onclick={confirmedMine}>Mine individually</button>
+				<button class="bulk-btn" onclick={() => (confirmMine = null)}>Cancel</button>
+			</footer>
+		</div>
+	</div>
 {/if}
 
 {#if $mineQueueState}
@@ -404,12 +488,51 @@
 		<button class="bulk-btn" onclick={cancelQueue}>Cancel</button>
 	</div>
 {:else if canMine && $selectedTerms.size > 0}
+	{#if showQueueDetails}
+		<div class="bulk-details">
+			<div class="detail-row detail-head">
+				<span>Term</span>
+				<span>Card format</span>
+			</div>
+			{#each queueDetails as d (d.key)}
+				<div class="detail-row">
+					<span lang="ja">
+						{d.lemma}{#if d.hidden}<span class="detail-dim"> (hidden)</span>{/if}
+					</span>
+					<span>
+						{#if $cardFormats.length > 1}
+							<select
+								class="detail-select"
+								value={d.formatName ?? $cardFormats[0].name}
+								aria-label={`Card format for ${d.lemma}`}
+								onchange={(e) => setQueuedFormat(d.key, e.currentTarget.value)}
+							>
+								{#each $cardFormats as f (f.name)}
+									<option value={f.name}>{f.name}</option>
+								{/each}
+							</select>
+						{:else}
+							{$cardFormats[0]?.name ?? '—'}
+						{/if}
+						{#if d.entryIndex !== undefined}<span class="detail-dim">· def #{d.entryIndex + 1}</span
+							>{/if}
+					</span>
+				</div>
+			{/each}
+		</div>
+	{/if}
 	<div class="bulk-bar">
 		<span class="bulk-info">
 			{$selectedTerms.size} selected{hiddenSelected > 0
 				? ` · ${hiddenSelected} hidden by filters`
 				: ''}
 		</span>
+		<button
+			class="bulk-btn"
+			title="Show the queued terms and the card format each will use"
+			onclick={() => (showQueueDetails = !showQueueDetails)}
+			>Details {showQueueDetails ? '▾' : '▸'}</button
+		>
 		{#if canMine}
 			<button
 				class="bulk-btn primary"
@@ -471,7 +594,22 @@
 			{#if id === 'term'}
 				<span>Term</span>
 			{:else if id === 'jlpt'}
-				<span class="jlpt-cell">JLPT</span>
+				<span class="jlpt-cell head-cell">
+					<button
+						class="head-btn"
+						class:active={jlptActive}
+						title={jlptActive ? sortedTip('JLPT') : 'Sort by JLPT'}
+						onclick={clickJlpt}
+					>
+						JLPT
+						{#if jlptActive}
+							<span class="arrow active">{dirArrow($tableSort.dir)}</span>
+						{:else}
+							<span class="arrow hint">⇅</span>
+							<span class="arrow preview">{dirArrow(defaultDir('jlpt'))}</span>
+						{/if}
+					</button>
+				</span>
 			{:else if id === 'sentence'}
 				<span class="head-cell">
 					<button
@@ -529,6 +667,7 @@
 		<div
 			class="row"
 			class:selected={canMine && $selectedTerms.has(key)}
+			class:mining={$mineQueueState?.key === key}
 			onclick={(e) => rowClick(e, term)}
 		>
 			<span class="sel">
@@ -591,9 +730,23 @@
 								title={$playerBusy && $miningTerm === null
 									? 'Waiting for asbplayer to finish recording the mined line…'
 									: 'Create an Anki card from the displayed sentence' + mediaNote}
-								onclick={() => mine(term, occs)}
+								onclick={() => mineClicked(term, occs)}
 							>
-								{$miningTerm === term.lemma_form ? '…' : '+'}
+								{#if $miningTerm === term.lemma_form}…{:else}
+									<svg
+										viewBox="0 0 24 24"
+										width="1em"
+										height="1em"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2.4"
+										stroke-linecap="round"
+										aria-hidden="true"
+									>
+										<path d="M3 21 L13.5 10.5" />
+										<path d="M10 4 Q 17.8 6.2 20 14" />
+									</svg>
+								{/if}
 							</button>
 						{/if}
 					</span>
@@ -717,6 +870,11 @@
 	.row.selected:hover {
 		background: color-mix(in srgb, var(--cyan) 12%, transparent);
 	}
+	/* The row the batch queue is currently mining. */
+	.row.mining {
+		outline: 2px solid var(--cyan);
+		outline-offset: -2px;
+	}
 	.row.head {
 		position: sticky;
 		top: 0;
@@ -805,6 +963,12 @@
 		font-size: 1.5rem;
 		color: var(--red);
 		line-height: 1.1;
+	}
+	/* The furigana annotation only adds height ABOVE the base text; pad the same
+	   amount below (rt is 0.5em at line-height 1) so row-centering keeps the base
+	   text centered instead of pushing it down. */
+	.term :global(.word:has(rt)) {
+		padding-bottom: 0.5em;
 	}
 	/* Kept above .ignored so an ignored term still greys out. */
 	.term.mined-term {
@@ -919,6 +1083,76 @@
 	.bulk-btn:disabled {
 		opacity: 0.5;
 		cursor: default;
+	}
+	/* Queue-details panel, stacked just above the fixed bulk-bar. */
+	.bulk-details {
+		position: fixed;
+		bottom: 4rem;
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 40;
+		min-width: 18rem;
+		max-width: 90vw;
+		max-height: 40vh;
+		overflow-y: auto;
+		padding: 0.45rem 0.9rem;
+		background: var(--bg-dark);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+		font-size: 0.85rem;
+	}
+	.detail-row {
+		display: grid;
+		grid-template-columns: minmax(6rem, auto) 1fr;
+		gap: 1rem;
+		padding: 0.15rem 0;
+	}
+	.detail-head {
+		color: var(--comment);
+		font-size: 0.75rem;
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+		border-bottom: 1px solid var(--border);
+		padding-bottom: 0.3rem;
+		margin-bottom: 0.2rem;
+	}
+	.detail-dim {
+		color: var(--comment);
+		font-size: 0.8em;
+	}
+	.detail-select {
+		max-width: 100%;
+		font-size: 0.8rem;
+	}
+	.backdrop {
+		position: fixed;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: color-mix(in srgb, var(--bg-darker) 70%, transparent);
+		z-index: 50;
+	}
+	.dialog {
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+		width: min(420px, 92%);
+		padding: 1rem;
+		background: var(--bg-dark);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+	}
+	.dialog-body {
+		margin: 0;
+		font-size: 0.9rem;
+	}
+	.dialog-footer {
+		display: flex;
+		gap: 0.5rem;
+		justify-content: flex-end;
 	}
 	.empty {
 		color: var(--comment);
