@@ -228,6 +228,10 @@
 		font-size: 1.4rem;
 		line-height: 2;
 	}
+	/* Copyable text — only the paragraph's empty tail row-selects (TermTable). */
+	.sentence > span {
+		cursor: text;
+	}
 	.sentence .term {
 		font-weight: 700;
 	}

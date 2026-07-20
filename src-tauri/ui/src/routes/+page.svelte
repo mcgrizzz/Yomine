@@ -37,6 +37,7 @@
 	import SetupChecklistModal from '$lib/components/SetupChecklistModal.svelte';
 	import FrequencyAnalyzerModal from '$lib/components/FrequencyAnalyzerModal.svelte';
 	import AsbplayerModal from '$lib/components/AsbplayerModal.svelte';
+	import TextFiltersModal from '$lib/components/TextFiltersModal.svelte';
 	import KnowledgeSummary from '$lib/components/KnowledgeSummary.svelte';
 
 	onMount(hydrate);
@@ -208,6 +209,7 @@
 	<AnkiSettingsModal />
 	<FrequencyWeightsModal />
 	<PosFiltersModal />
+	<TextFiltersModal />
 	<SetupChecklistModal />
 	<FrequencyAnalyzerModal />
 

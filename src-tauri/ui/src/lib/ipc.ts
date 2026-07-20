@@ -235,6 +235,22 @@ export interface SettingsData {
 	show_jlpt_tags: boolean;
 	/** Term-table column order/visibility (issue #122); empty = built-in layout. */
 	table_columns: { id: string; visible: boolean }[];
+	/** Custom regex text filters (issue #92), applied in order. */
+	text_filters: TextFilterSetting[];
+	/** Preset id → enabled; missing = off. */
+	text_filter_presets: Record<string, boolean>;
+}
+
+export interface TextFilterSetting {
+	pattern: string;
+	replacement: string;
+	enabled: boolean;
+}
+
+export interface FilterPreset {
+	id: string;
+	label: string;
+	description: string;
 }
 
 /** Aggregated setup readiness for the checklist/banner (`get_setup_status`).
@@ -360,6 +376,26 @@ export function getTerms(): Promise<FileLoadResult | null> {
  * file arrives via the `terms-refreshed` event; no-op when nothing is loaded. */
 export function refreshTerms(): Promise<void> {
 	return invoke('refresh_terms');
+}
+
+export async function reloadCurrentFile(
+	onProgress: (msg: LoadingMessage) => void
+): Promise<FileLoadResult> {
+	const channel = new Channel<LoadingMessage>();
+	channel.onmessage = onProgress;
+	return invoke('reload_current_file', { progress: channel });
+}
+
+export function getTextFilterPresets(): Promise<FilterPreset[]> {
+	return invoke('get_text_filter_presets');
+}
+
+export function testTextFilters(
+	presets: Record<string, boolean>,
+	filters: TextFilterSetting[],
+	sample: string
+): Promise<string> {
+	return invoke('test_text_filters', { presets, filters, sample });
 }
 
 /** Recently-opened files (existing paths only), most-recent first. */

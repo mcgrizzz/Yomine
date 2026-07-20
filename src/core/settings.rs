@@ -78,6 +78,14 @@ pub struct TableColumn {
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct TextFilterSetting {
+    pub pattern: String,
+    pub replacement: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct SettingsData {
     pub anki_model_mappings: HashMap<String, FieldMapping>,
     #[serde(default = "default_interval")]
@@ -123,6 +131,12 @@ pub struct SettingsData {
     /// Term-table column order/visibility (issue #122); empty = built-in layout.
     #[serde(default)]
     pub table_columns: Vec<TableColumn>,
+    /// Custom regex text filters (issue #92), applied in order.
+    #[serde(default)]
+    pub text_filters: Vec<TextFilterSetting>,
+    /// Preset id → enabled (`text_filter::presets`); missing = off.
+    #[serde(default)]
+    pub text_filter_presets: HashMap<String, bool>,
 }
 
 const fn default_font_scale() -> f32 {
@@ -170,6 +184,8 @@ impl Default for SettingsData {
             sentence_underlines: UnderlineToggles::default(),
             show_jlpt_tags: true,
             table_columns: Vec::new(),
+            text_filters: Vec::new(),
+            text_filter_presets: HashMap::new(),
         }
     }
 }
