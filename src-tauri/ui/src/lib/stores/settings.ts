@@ -96,6 +96,12 @@ export async function saveAnkiSettings(
 	}
 }
 
+export const saveTextFilters = (presets: Record<string, boolean>, filters: ipc.TextFilterSetting[]) =>
+	patchSettings({
+		text_filter_presets: { ...presets },
+		text_filters: filters.map((f) => ({ ...f }))
+	});
+
 /** Saving both persists the defaults and applies them to the live table. */
 export async function savePosFilters(filters: Record<string, boolean>): Promise<boolean> {
 	try {

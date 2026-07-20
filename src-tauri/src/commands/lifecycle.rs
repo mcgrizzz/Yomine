@@ -135,6 +135,40 @@ pub fn get_settings(state: State<'_, Mutex<AppState>>) -> SettingsData {
     state.lock().unwrap().settings.clone()
 }
 
+#[tauri::command]
+pub fn get_text_filter_presets() -> Vec<crate::dto::FilterPresetDto> {
+    yomine::core::text_filter::presets()
+        .iter()
+        .map(|p| crate::dto::FilterPresetDto {
+            id: p.id.to_string(),
+            label: p.label.to_string(),
+            description: p.description.to_string(),
+        })
+        .collect()
+}
+
+#[tauri::command]
+pub fn test_text_filters(
+    presets: std::collections::HashMap<String, bool>,
+    filters: Vec<yomine::core::settings::TextFilterSetting>,
+    sample: String,
+) -> Result<String, String> {
+    use yomine::core::text_filter::{
+        self,
+        CompiledFilter,
+    };
+
+    for rule in filters.iter().filter(|r| r.enabled) {
+        if let Err(e) = CompiledFilter::new(&rule.pattern, &rule.replacement) {
+            return Err(format!("Invalid pattern \"{}\": {}", rule.pattern, e));
+        }
+    }
+    let staged =
+        SettingsData { text_filters: filters, text_filter_presets: presets, ..Default::default() };
+    let compiled = text_filter::compile_filters(&staged);
+    Ok(text_filter::apply_to_text(&compiled, &sample))
+}
+
 /// Persist + replace the in-memory copy, propagating the bits that affect the
 /// live tools (known-interval, frequency weights).
 #[tauri::command]

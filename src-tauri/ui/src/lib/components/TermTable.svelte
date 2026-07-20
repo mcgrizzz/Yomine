@@ -340,7 +340,14 @@
 		if (defPopover) return;
 		if (!canMine || isMined(term)) return;
 		if (e.ctrlKey || e.metaKey) return;
-		if ((e.target as HTMLElement).closest('button, input, a')) return;
+		// Only empty row space toggles — not cell content (copyable text, buttons).
+		// `.sentence`/`.meta` also match SentenceView's full-width blocks.
+		const target = e.target as HTMLElement;
+		if (
+			target !== e.currentTarget &&
+			!target.matches('.sel, .term-cell, .jlpt-cell, .sentence, .meta')
+		)
+			return;
 		if (window.getSelection()?.toString()) return;
 		toggleSelected(termKey(term));
 	}
@@ -666,6 +673,7 @@
 		     row click mirrors the row's checkbox, which stays keyboard-accessible. -->
 		<div
 			class="row"
+			class:selectable={canMine && !isMined(term)}
 			class:selected={canMine && $selectedTerms.has(key)}
 			class:mining={$mineQueueState?.key === key}
 			onclick={(e) => rowClick(e, term)}
@@ -832,6 +840,7 @@
 	}}
 	onkeydown={trackMods}
 	onkeyup={trackMods}
+	onmousemove={(e) => (ctrlHeld = e.ctrlKey || e.metaKey)}
 	onblur={() => (ctrlHeld = false)}
 />
 
@@ -869,6 +878,9 @@
 	}
 	.row.selected:hover {
 		background: color-mix(in srgb, var(--cyan) 12%, transparent);
+	}
+	.row.selectable {
+		cursor: pointer;
 	}
 	/* The row the batch queue is currently mining. */
 	.row.mining {
@@ -963,6 +975,7 @@
 		font-size: 1.5rem;
 		color: var(--red);
 		line-height: 1.1;
+		cursor: text;
 	}
 	/* The furigana annotation only adds height ABOVE the base text; pad the same
 	   amount below (rt is 0.5em at line-height 1) so row-centering keeps the base

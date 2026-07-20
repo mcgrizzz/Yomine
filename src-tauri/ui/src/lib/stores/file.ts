@@ -51,6 +51,18 @@ export function openRecentFile(path: string): Promise<void> {
 	return loadAndStore(path);
 }
 
+export async function reloadCurrentFile(): Promise<void> {
+	if (!get(fileResult)) return;
+	try {
+		overlay.set('Reprocessing file…');
+		const result = await ipc.reloadCurrentFile((msg) => overlay.set(msg.message));
+		fileResult.set(result);
+		void refreshMinedState(true);
+	} finally {
+		overlay.set(null);
+	}
+}
+
 /** The refreshed file lands via the `terms-refreshed` event, not the command result. */
 export async function refreshTerms(): Promise<void> {
 	if (get(languageToolsStatus) !== 'ready' || !get(fileResult)) return;

@@ -16,6 +16,7 @@
 		openAndProcessFile,
 		openAnkiModal,
 		openIgnoreModal,
+		openTextFiltersModal,
 		openWebsocketModal,
 		openAppearanceModal,
 		openAsbplayerModal,
@@ -155,6 +156,7 @@
 			<div class="menu-panel">
 				<button onclick={() => run(openIgnoreModal)} disabled={!toolsReady}>Ignore List</button>
 				<button onclick={() => run(openPosModal)}>Part of Speech Filters</button>
+				<button onclick={() => run(openTextFiltersModal)}>Text Filters</button>
 				<button onclick={() => run(openFrequencyModal)}>Frequency Dictionaries</button>
 				<div class="menu-sep"></div>
 				<button onclick={() => run(openAnalyzerModal)} disabled={!toolsReady}

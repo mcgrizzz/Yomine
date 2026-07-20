@@ -31,6 +31,7 @@ use yomine::{
             RecentFileEntry,
             RecentFiles,
         },
+        text_filter,
     },
     persistence::{
         load_json_or_default,
@@ -147,12 +148,14 @@ pub async fn process_file(
     path: String,
     progress: Channel<LoadingMessage>,
 ) -> Result<FileLoadResult, String> {
-    let tools = state
-        .lock()
-        .unwrap()
-        .language_tools
-        .clone()
-        .ok_or_else(|| "Language tools are still loading".to_string())?;
+    let (tools, filters) = {
+        let guard = state.lock().unwrap();
+        let tools = guard
+            .language_tools
+            .clone()
+            .ok_or_else(|| "Language tools are still loading".to_string())?;
+        (tools, text_filter::compile_filters(&guard.settings))
+    };
 
     let _ = progress.send(LoadingMessage::new("Processing file..."));
     let source_file = source_file_from_path(&path);
@@ -160,7 +163,7 @@ pub async fn process_file(
     // Segmentation blocks the async runtime briefly, but the UI is a separate
     // webview process — nothing user-visible freezes.
     let (base_terms, filter_result, sentences, file_comprehension) =
-        process_source_file(&source_file, &tools).await.map_err(|e| e.to_string())?;
+        process_source_file(&source_file, &tools, &filters).await.map_err(|e| e.to_string())?;
 
     // Record the file in the shared `recent_files.json` (same store as egui) so it
     // appears on the landing state, mirroring egui's `add_recent_file`.
@@ -246,12 +249,14 @@ pub(crate) async fn load_asbplayer_into_state(
     progress: Option<&Channel<LoadingMessage>>,
 ) -> Result<FileLoadResult, String> {
     let state = app.state::<Mutex<AppState>>();
-    let tools = state
-        .lock()
-        .unwrap()
-        .language_tools
-        .clone()
-        .ok_or_else(|| "Language tools are still loading".to_string())?;
+    let (tools, filters) = {
+        let guard = state.lock().unwrap();
+        let tools = guard
+            .language_tools
+            .clone()
+            .ok_or_else(|| "Language tools are still loading".to_string())?;
+        (tools, text_filter::compile_filters(&guard.settings))
+    };
 
     let file_name = subtitle_file_name.filter(|n| !n.trim().is_empty());
     {
@@ -324,7 +329,7 @@ pub(crate) async fn load_asbplayer_into_state(
 
     send("Processing subtitles...");
     let (base_terms, filter_result, sentences, file_comprehension) =
-        process_sentences(sentences, &tools).await.map_err(|e| e.to_string())?;
+        process_sentences(sentences, &tools, &filters).await.map_err(|e| e.to_string())?;
 
     // Only a real on-disk file belongs in recent files (reopening goes through
     // the normal parser; text cleaning matches what we just processed).
@@ -450,6 +455,76 @@ pub async fn refresh_terms(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub fn get_terms(state: State<'_, Mutex<AppState>>) -> Option<FileLoadResult> {
     load_result(&state.lock().unwrap().file)
+}
+
+/// Re-run the full pipeline on the loaded file from its on-disk source
+#[tauri::command]
+pub async fn reload_current_file(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    progress: Channel<LoadingMessage>,
+) -> Result<FileLoadResult, String> {
+    let (tools, filters, source_file, media_id, subtitle_file) = {
+        let guard = state.lock().unwrap();
+        let tools = guard
+            .language_tools
+            .clone()
+            .ok_or_else(|| "Language tools are still loading".to_string())?;
+        let source_file =
+            guard.file.source_file.clone().ok_or_else(|| "No file is loaded".to_string())?;
+        (
+            tools,
+            text_filter::compile_filters(&guard.settings),
+            source_file,
+            guard.file.asbplayer_media_id.clone(),
+            guard.file.asbplayer_subtitle_file.clone(),
+        )
+    };
+    if !std::path::Path::new(&source_file.original_file).exists() {
+        return Err(
+            "The loaded file no longer exists on disk — reload it from its source".to_string()
+        );
+    }
+
+    let _ = progress.send(LoadingMessage::new("Reprocessing file..."));
+    let (base_terms, filter_result, sentences, file_comprehension) =
+        process_source_file(&source_file, &tools, &filters).await.map_err(|e| e.to_string())?;
+
+    let anki_known_lemmas =
+        filter_result.anki_filtered.iter().map(|t| t.lemma_form.clone()).collect();
+    let mut guard = state.lock().unwrap();
+    guard.file = FileData {
+        source_file: Some(source_file),
+        terms: filter_result.terms,
+        base_terms,
+        anki_known_lemmas,
+        ignored_count: filter_result.ignore_filtered.len(),
+        sentences,
+        file_comprehension,
+        asbplayer_media_id: media_id,
+        asbplayer_subtitle_file: subtitle_file,
+    };
+    let payload = load_result(&guard.file).expect("file just stored has a source_file");
+    drop(guard);
+
+    let app_handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        if yomine::anki::api::get_version().await.is_ok() {
+            if let Err(e) = live_refresh(&app_handle).await {
+                let _ = app_handle.emit(
+                    names::ERROR,
+                    ErrorPayload {
+                        title: "Refresh Error".into(),
+                        message: "Unable to refresh terms".into(),
+                        detail: Some(e),
+                    },
+                );
+            }
+        }
+    });
+
+    let _ = progress.send(LoadingMessage::clear());
+    Ok(payload)
 }
 
 /// Add (or refresh) a file in the shared recent-files store. Failures are logged,

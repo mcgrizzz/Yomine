@@ -56,6 +56,13 @@ pub struct CardFormatDto {
     pub model: String,
 }
 
+#[derive(Serialize, Clone)]
+pub struct FilterPresetDto {
+    pub id: String,
+    pub label: String,
+    pub description: String,
+}
+
 /// One Yomitan dictionary entry for the definition popover (issue #113).
 /// The `*_html` fields are Yomitan-rendered markers, sanitized frontend-side.
 #[derive(Serialize, Clone)]

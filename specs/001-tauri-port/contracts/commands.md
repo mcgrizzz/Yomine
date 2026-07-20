@@ -16,6 +16,8 @@ events (see [events.md](./events.md)). Engine handles come from `tauri::State<Ap
 | `get_pos_catalog` | — | `array<PosInfo>` | `POS` static | Static POS key/label list for filters. |
 | `get_settings` | — | `SettingsData` | `load_json` | From `AppState` (loaded at start). |
 | `save_settings` | `settings: SettingsData` | `()` | `save_settings` | Persists via `persistence::save_json`; updates `AppState`; may trigger recompute (e.g. known-interval). |
+| `get_text_filter_presets` | — | `array<FilterPresetDto>` | `text_filter::presets` (issue #92) | Built-in preset ids/labels for the filters modal; regexes stay backend-side. |
+| `test_text_filters` | `presets: Record<string, bool>`, `filters: array<TextFilterSetting>`, `sample: string` | `string` | `text_filter` (issue #92) | Applies a staged filter set to a sample line (live preview); `Err` names the first invalid pattern; `""` = line would be dropped. |
 
 ## File / mining
 
@@ -27,6 +29,7 @@ events (see [events.md](./events.md)). Engine handles come from `tauri::State<Ap
 | `process_file` | `path: string`, `progress: Channel<LoadingMessage>` | `FileLoadResult` | `TaskManager::process_file` → `pipeline::process_source_file` | Parses, segments, filters (cached Anki), returns enriched terms + sentence DTOs + file comprehension. If Anki reachable, triggers background `refresh_terms` and emits `terms-refreshed`. |
 | `get_terms` | — | `FileLoadResult \| null` | current `FileData` | Re-fetch current loaded state (e.g. on UI reload). |
 | `refresh_terms` | — | `()` | `TaskManager::refresh_terms` | Live Anki re-filter + recompute comprehension; emits `terms-refreshed`. |
+| `reload_current_file` | `progress: Channel<LoadingMessage>` | `FileLoadResult` | issue #92 | Full re-parse + re-tokenize of the loaded file from `original_file` (text-filter changes); preserves the asbplayer media link. |
 | `get_recent_files` | — | `array<RecentFile>` | `gui/recent_files.rs` | Reuse existing store/format (O3). |
 
 `FileLoadResult = { source_file: SourceFile, terms: array<Term>, sentences: array<SentenceDto>,
