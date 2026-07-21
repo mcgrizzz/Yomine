@@ -492,6 +492,16 @@ export function openThemesWindow(): Promise<void> {
 	return invoke('open_themes_window');
 }
 
+/** Save-dialog + write a theme JSON export; false = user cancelled. */
+export function exportThemeFile(name: string, json: string): Promise<boolean> {
+	return invoke('export_theme_file', { name, json });
+}
+
+/** Open-dialog + read a theme JSON file; null = user cancelled. */
+export function importThemeFile(): Promise<string | null> {
+	return invoke('import_theme_file');
+}
+
 /** Seek the connected player (mpv or asbplayer) to a sentence timestamp. */
 export function seekTimestamp(seconds: number, label: string): Promise<void> {
 	return invoke('seek_timestamp', { seconds, label });

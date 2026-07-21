@@ -68,13 +68,17 @@ const loaded = Object.values(
 const defaultColors = (dark: boolean): ThemeColors =>
 	loaded.find((t) => t.id === (dark ? 'dracula' : 'paper'))!.colors as ThemeColors;
 
-/** Tokens missing from a theme file or saved user theme (added after it was
- * written) fall back to the matching default theme. */
+export function mergeColors(dark: boolean, colors: Record<string, string>): ThemeColors {
+	const merged = { ...defaultColors(dark) };
+	for (const token of TOKENS) if (colors[token] !== undefined) merged[token] = colors[token];
+	return merged;
+}
+
 const completeTheme = (t: ThemeFile): Theme => ({
 	id: t.id,
 	label: t.label,
 	dark: t.dark,
-	colors: { ...defaultColors(t.dark), ...t.colors } as ThemeColors
+	colors: mergeColors(t.dark, t.colors)
 });
 
 // Dark themes first, then light; the defaults lead their group.

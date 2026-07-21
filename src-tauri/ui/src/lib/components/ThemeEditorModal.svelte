@@ -3,15 +3,17 @@
 	// modal is open and revert to the saved theme on close.
 	import { untrack } from 'svelte';
 	import { emit } from '@tauri-apps/api/event';
-	import type { UserTheme } from '$lib/ipc';
+	import { exportThemeFile, importThemeFile, type UserTheme } from '$lib/ipc';
 	import { saveUserThemes, settings } from '$lib/stores';
 	import {
 		allThemes,
 		applyTheme,
 		BUILTIN_THEMES,
+		mergeColors,
 		resolveTheme,
 		themeFromUser,
 		TOKEN_GROUPS,
+		TOKENS,
 		userThemeId,
 		type ThemeColors
 	} from '$lib/themes';
@@ -31,6 +33,7 @@
 	let originalName = $state<string | null>(null);
 	let seedId = $state('dracula');
 	let deleteArmed = $state(false);
+	let fileError = $state<string | null>(null);
 
 	$effect(() => {
 		if (open) untrack(hydrate);
@@ -38,6 +41,7 @@
 
 	function hydrate() {
 		deleteArmed = false;
+		fileError = null;
 		const existing = initial
 			? ($settings?.user_themes ?? []).find((t) => t.name === initial)
 			: undefined;
@@ -67,6 +71,53 @@
 		applyTheme(preview);
 		void emit('theme-preview', preview);
 	});
+
+	const themeJson = () => JSON.stringify({ name: name.trim(), dark, colors }, null, '\t') + '\n';
+
+	async function saveToFile() {
+		fileError = null;
+		try {
+			await exportThemeFile(trimmed || 'theme', themeJson());
+		} catch (e) {
+			fileError = String(e);
+		}
+	}
+
+	async function loadFromFile() {
+		fileError = null;
+		try {
+			const text = await importThemeFile();
+			if (text !== null) applyThemeJson(text);
+		} catch (e) {
+			fileError = String(e);
+		}
+	}
+
+	function applyThemeJson(text: string) {
+		try {
+			const parsed = JSON.parse(text);
+			const parsedName = parsed.name ?? parsed.label;
+			if (parsedName !== undefined && typeof parsedName !== 'string')
+				throw new Error('"name" must be a string');
+			if (parsed.dark !== undefined && typeof parsed.dark !== 'boolean')
+				throw new Error('"dark" must be true or false');
+			if (typeof parsed.colors !== 'object' || parsed.colors === null)
+				throw new Error('missing "colors" object');
+			const clean: Record<string, string> = {};
+			for (const [token, value] of Object.entries(parsed.colors)) {
+				if (!(TOKENS as readonly string[]).includes(token)) continue;
+				if (typeof value !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(value))
+					throw new Error(`"${token}" must be a #rrggbb hex color`);
+				clean[token] = value.toLowerCase();
+			}
+			if (parsedName) name = parsedName;
+			if (parsed.dark !== undefined) dark = parsed.dark;
+			colors = mergeColors(dark, clean);
+		} catch (e) {
+			fileError =
+				e instanceof SyntaxError ? 'Not a valid JSON file' : String((e as Error).message ?? e);
+		}
+	}
 
 	const trimmed = $derived(name.trim());
 	const taken = $derived(
@@ -175,6 +226,14 @@
 				Dark theme (sets native control styling and which toggle slot it can fill)
 			</label>
 
+			<div class="row file-row">
+				<button onclick={saveToFile}>Save to File…</button>
+				<button onclick={loadFromFile}>Load from File…</button>
+			</div>
+			{#if fileError}
+				<p class="error">{fileError}</p>
+			{/if}
+
 			<div class="groups">
 				{#each TOKEN_GROUPS as group (group.label)}
 					<div class="group">
@@ -256,6 +315,10 @@
 		cursor: pointer;
 		font-size: 0.85rem;
 		color: var(--text-muted);
+	}
+	.file-row button {
+		padding: 0.2rem 0.6rem;
+		font-size: 0.8rem;
 	}
 	.error {
 		margin: 0;

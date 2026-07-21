@@ -123,6 +123,44 @@ pub fn open_data_folder(app: AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// Save-dialog + write for theme export; `Ok(false)` = user cancelled.
+#[tauri::command]
+pub async fn export_theme_file(app: AppHandle, name: String, json: String) -> Result<bool, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .set_file_name(format!("{name}.json"))
+        .add_filter("Theme JSON", &["json"])
+        .save_file(move |path| {
+            let _ = tx.send(path);
+        });
+    let chosen = rx.await.map_err(|_| "file dialog closed unexpectedly".to_string())?;
+    match chosen.and_then(|p| p.into_path().ok()) {
+        Some(path) => {
+            std::fs::write(&path, json).map_err(|e| e.to_string())?;
+            Ok(true)
+        }
+        None => Ok(false),
+    }
+}
+
+/// Open-dialog + read for theme import; `Ok(None)` = user cancelled. The
+/// frontend validates the JSON (lib/themes.ts token contract).
+#[tauri::command]
+pub async fn import_theme_file(app: AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog().file().add_filter("Theme JSON", &["json"]).pick_file(move |path| {
+        let _ = tx.send(path);
+    });
+    let chosen = rx.await.map_err(|_| "file dialog closed unexpectedly".to_string())?;
+    match chosen.and_then(|p| p.into_path().ok()) {
+        Some(path) => Ok(Some(std::fs::read_to_string(&path).map_err(|e| e.to_string())?)),
+        None => Ok(None),
+    }
+}
+
 /// Async because building a window from a sync command deadlocks on Windows.
 #[tauri::command]
 pub async fn open_themes_window(app: AppHandle) -> Result<(), String> {

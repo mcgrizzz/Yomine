@@ -130,9 +130,7 @@
 	.card-name {
 		font-size: 0.85rem;
 		font-weight: 700;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
+		overflow-wrap: anywhere;
 	}
 	.chips {
 		display: flex;
