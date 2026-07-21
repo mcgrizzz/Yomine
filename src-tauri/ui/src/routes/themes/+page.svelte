@@ -16,8 +16,37 @@
 	const activeThemeId = $derived(resolveTheme($settings).id);
 	const preferredDark = $derived($settings?.theme_dark ?? 'dracula');
 	const preferredLight = $derived($settings?.theme_light ?? 'paper');
-	const SURFACES: TokenName[] = ['bg-deep', 'bg-panel', 'bg', 'bg-raised', 'bg-hover'];
-	const SWATCHES: TokenName[] = ['accent', 'danger', 'success', 'info'];
+	const SURFACES: TokenName[] = [
+		'bg-deep',
+		'bg-panel',
+		'bg',
+		'bg-raised',
+		'bg-hover',
+	];
+	const SWATCHES: TokenName[] = [
+		'term',
+		'know-unknown',
+		'know-new',
+		'know-young',
+		'know-mature',
+	];
+
+	const PROVERBS = [
+		'塵も積もれば山となる',
+		'継続は力なり',
+		'千里の道も一歩から',
+		'七転び八起き',
+		'習うより慣れろ',
+		'石の上にも三年',
+		'好きこそ物の上手なれ',
+		'初心忘るべからず',
+		'ローマは一日にして成らず',
+		'案ずるより産むが易し'
+	];
+	
+	const STREAM = [...PROVERBS.join('')];
+	const chipChar = (card: number, chip: number) =>
+		STREAM[(card * SWATCHES.length + chip) % STREAM.length];
 
 	const pick = (t: Theme) => void setPreferredTheme(t.dark ? 'dark' : 'light', t.id);
 
@@ -31,7 +60,7 @@
 
 <div class="page">
 	<div class="theme-grid">
-		{#each themes as theme (theme.id)}
+		{#each themes as theme, i (theme.id)}
 			<!-- svelte-ignore a11y_no_static_element_interactions -- role/tabindex/keydown
 			     are present; a real <button> can't nest the edit button. -->
 			<div
@@ -58,10 +87,10 @@
 				{/if}
 				<span class="card-main">
 					<span class="card-name" style="color: {theme.colors.accent}">{theme.label}</span>
-					<span class="chips">
-						{#each SWATCHES as c (c)}
+					<span class="chips" lang="ja">
+						{#each SWATCHES as c, ci (c)}
 							<span class="chip" style="background: {theme.colors[c]}; color: {theme.colors.bg}"
-								>あ</span
+								>{chipChar(i, ci)}</span
 							>
 						{/each}
 					</span>
@@ -126,6 +155,7 @@
 		gap: 0.3rem;
 		padding: 0.45rem 0.5rem 0.5rem 0;
 		min-width: 0;
+		flex: 1;
 	}
 	.card-name {
 		font-size: 0.85rem;
@@ -140,10 +170,10 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 1.3rem;
-		height: 1.3rem;
+		width: 1.2rem;
+		height: 1.2rem;
 		border-radius: 4px;
-		font-size: 0.75rem;
+		font-size: 0.7rem;
 		line-height: 1;
 	}
 	.slot-badge {
@@ -158,7 +188,7 @@
 	}
 	.theme-card .edit {
 		position: absolute;
-		bottom: 0.25rem;
+		top: 0.25rem;
 		right: 0.25rem;
 		padding: 0 0.3rem;
 		font-size: 0.75rem;

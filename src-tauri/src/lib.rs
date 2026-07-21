@@ -84,6 +84,14 @@ pub fn run() {
             commands::update::check_for_update,
             commands::knowledge::get_knowledge_summary,
         ])
+
+        .on_window_event(|window, event| {
+            if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
+                if let Some(themes) = window.app_handle().get_webview_window("themes") {
+                    let _ = themes.close();
+                }
+            }
+        })
         .setup(move |app| {
             // The player runs in its own task that solely owns `PlayerManager`;
             // commands reach it through this handle (no shared lock).
