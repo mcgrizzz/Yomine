@@ -45,8 +45,10 @@
 </script>
 
 <script lang="ts">
+	import { Menu } from '@tauri-apps/api/menu';
 	import type { SegmentKnowledge } from '$lib/ipc';
 	import { comprehensionColor } from '$lib/comprehension';
+	import { furiganaText } from '$lib/furigana';
 	import {
 		ankiFilterActive,
 		minedSentences,
@@ -134,6 +136,51 @@
 		return text.slice(0, 16);
 	}
 
+	// The rt nodes stay inside the selection range even though user-select:none
+	// hides them from toString(), so walking it recovers base(reading) pairs.
+	function selectionFuriganaText(): string | null {
+		const sel = window.getSelection();
+		if (!sel || sel.isCollapsed || sel.rangeCount === 0) return null;
+		let out = '';
+		const walk = (node: Node, inRt: boolean) => {
+			if (node.nodeType === Node.TEXT_NODE) {
+				const text = node.textContent ?? '';
+				out += inRt && text ? `(${text})` : text;
+			} else {
+				const rt = inRt || (node as Element).tagName === 'RT';
+				node.childNodes.forEach((child) => walk(child, rt));
+			}
+		};
+		for (let i = 0; i < sel.rangeCount; i++) walk(sel.getRangeAt(i).cloneContents(), false);
+		return out;
+	}
+
+	// Replaces the webview's context menu (which can't be extended) with a native
+	// popup; "Copy" re-provides the affordance the suppression removes.
+	async function copyMenu(e: MouseEvent) {
+		e.preventDefault();
+		const sentence = occ.sentence;
+		const plain = window.getSelection()?.toString() || sentence.text;
+		const ruby =
+			selectionFuriganaText() ??
+			sentence.segments.map((s) => furiganaText(s.surface, s.reading)).join('');
+		const menu = await Menu.new({
+			items: [
+				{
+					id: 'copy',
+					text: 'Copy',
+					action: () => void navigator.clipboard.writeText(plain)
+				},
+				{
+					id: 'copy-furigana',
+					text: 'Copy with furigana',
+					action: () => void navigator.clipboard.writeText(ruby)
+				}
+			]
+		});
+		await menu.popup();
+	}
+
 	function segEnter(e: MouseEvent, seg: SegmentDto) {
 		const el = e.currentTarget as HTMLElement;
 		const sentence = occ.sentence;
@@ -152,7 +199,9 @@
 
 <!-- Each word is an atomic inline-block and Svelte strips inter-tag whitespace,
      so without the <wbr> the sentence would render as one unbreakable line. -->
-<p class="sentence" lang="ja">
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -- right-click copy
+     menu is a mouse affordance; keyboard browsing is issue #91. -->
+<p class="sentence" lang="ja" oncontextmenu={copyMenu}>
 	{#each occ.sentence.segments as seg, i (i)}
 		{@const isTerm = isTermSeg(seg)}
 		{@const know = mark(seg)}

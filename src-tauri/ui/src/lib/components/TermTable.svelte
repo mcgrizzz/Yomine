@@ -45,6 +45,8 @@
 		yomitanReachable,
 		type QueueItem
 	} from '$lib/stores';
+	import { Menu } from '@tauri-apps/api/menu';
+	import { furiganaText } from '$lib/furigana';
 	import { posColor } from '$lib/pos';
 	import DefinitionPopover from './DefinitionPopover.svelte';
 	import Furigana from './Furigana.svelte';
@@ -98,20 +100,31 @@
 
 	// Ignored terms stay visible but greyed; the row only disappears on the next
 	// refresh, so the toggle is undoable in place (egui parity).
-	let menu = $state<{ x: number; y: number; lemma: string } | null>(null);
-
-	// Client coords are visual px but fixed-position left/top are zoomed px
-	// under the Appearance root zoom (+layout.svelte).
-	function menuPoint(e: MouseEvent): { x: number; y: number } {
-		const zoom = Number(getComputedStyle(document.documentElement).zoom) || 1;
-		return { x: e.clientX / zoom, y: e.clientY / zoom };
-	}
-
-	function openMenu(e: MouseEvent, term: Term) {
+	async function openMenu(e: MouseEvent, term: Term) {
 		e.preventDefault();
-		// Don't let the window `contextmenu` handler (which closes the menu) see this.
-		e.stopPropagation();
-		menu = { ...menuPoint(e), lemma: term.lemma_form };
+		const lemma = term.lemma_form;
+		const menu = await Menu.new({
+			items: [
+				{
+					id: 'copy',
+					text: 'Copy',
+					action: () => void navigator.clipboard.writeText(lemma)
+				},
+				{
+					id: 'copy-furigana',
+					text: 'Copy with furigana',
+					action: () =>
+						void navigator.clipboard.writeText(furiganaText(lemma, term.lemma_reading))
+				},
+				{ item: 'Separator' },
+				{
+					id: 'ignore',
+					text: $ignoredLemmas.has(lemma) ? 'Remove from ignore list' : 'Add to ignore list',
+					action: () => toggleIgnore(lemma)
+				}
+			]
+		});
+		await menu.popup();
 	}
 
 	let defPopover = $state<{
@@ -169,11 +182,6 @@
 			editColumns = false;
 			confirmMine = null;
 		}
-	}
-
-	function toggleFromMenu() {
-		if (menu) toggleIgnore(menu.lemma);
-		menu = null;
 	}
 
 	// key → display label ("Postposition" → "Particle"), from get_pos_catalog.
@@ -266,21 +274,21 @@
 		columns.filter((c) => c.visible && (c.id !== 'jlpt' || hasJlpt)).map((c) => c.id)
 	);
 
-	let headerMenu = $state<{ x: number; y: number } | null>(null);
 	let editColumns = $state(false);
 	let editCols = $state<{ id: ColumnId; visible: boolean }[]>([]);
 	let dragId = $state<ColumnId | null>(null);
 
-	function openHeaderMenu(e: MouseEvent) {
+	async function openHeaderMenu(e: MouseEvent) {
 		e.preventDefault();
-		e.stopPropagation();
-		headerMenu = menuPoint(e);
+		const menu = await Menu.new({
+			items: [{ id: 'edit-columns', text: 'Edit columns…', action: startEditColumns }]
+		});
+		await menu.popup();
 	}
 
 	function startEditColumns() {
 		editCols = columns.map((c) => ({ ...c }));
 		editColumns = true;
-		headerMenu = null;
 	}
 
 	// Pointer-based drag (HTML5 DnD aborts when the dragged node is reordered
@@ -790,20 +798,6 @@
 	{/each}
 </div>
 
-{#if menu}
-	<div class="ctx-menu" style="left: {menu.x}px; top: {menu.y}px;">
-		<button type="button" onclick={toggleFromMenu}>
-			{$ignoredLemmas.has(menu.lemma) ? 'Remove from ignore list' : 'Add to ignore list'}
-		</button>
-	</div>
-{/if}
-
-{#if headerMenu}
-	<div class="ctx-menu" style="left: {headerMenu.x}px; top: {headerMenu.y}px;">
-		<button type="button" onclick={startEditColumns}>Edit columns…</button>
-	</div>
-{/if}
-
 {#if defPopover}
 	{@const mineable = defPopover.mineable}
 	<DefinitionPopover
@@ -826,18 +820,6 @@
 {/if}
 
 <svelte:window
-	onclick={() => {
-		menu = null;
-		headerMenu = null;
-	}}
-	onscrollcapture={() => {
-		menu = null;
-		headerMenu = null;
-	}}
-	oncontextmenu={() => {
-		menu = null;
-		headerMenu = null;
-	}}
 	onkeydown={trackMods}
 	onkeyup={trackMods}
 	onmousemove={(e) => (ctrlHeld = e.ctrlKey || e.metaKey)}
@@ -1217,29 +1199,5 @@
 		margin-left: auto;
 		font-size: 0.8rem;
 		color: var(--comment);
-	}
-	.ctx-menu {
-		position: fixed;
-		z-index: 100;
-		background: var(--bg-dark);
-		border: 1px solid var(--border);
-		border-radius: 4px;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-		padding: 0.25rem;
-	}
-	.ctx-menu button {
-		display: block;
-		width: 100%;
-		padding: 0.4rem 0.75rem;
-		background: none;
-		border: none;
-		color: var(--fg);
-		text-align: left;
-		cursor: pointer;
-		border-radius: 3px;
-		font-size: 0.9rem;
-	}
-	.ctx-menu button:hover {
-		background: var(--bg-light);
 	}
 </style>

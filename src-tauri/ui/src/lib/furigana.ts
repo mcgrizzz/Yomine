@@ -59,3 +59,9 @@ export function furiganaParts(surface: string, reading: string): FuriganaPart[] 
 	}
 	return r === reading.length ? parts : whole;
 }
+
+export function furiganaText(surface: string, reading: string): string {
+	return furiganaParts(surface, reading)
+		.map((p) => (p.rt ? `${p.text}(${p.rt})` : p.text))
+		.join('');
+}
