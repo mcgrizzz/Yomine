@@ -152,7 +152,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: color-mix(in srgb, var(--bg-darker) 70%, transparent);
+		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
 		z-index: 50;
 	}
 	.dialog {
@@ -161,7 +161,7 @@
 		gap: 0.6rem;
 		width: min(560px, 92%);
 		padding-bottom: 0.75rem;
-		background: var(--bg-dark);
+		background: var(--bg-panel);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
@@ -176,7 +176,7 @@
 	header h2 {
 		margin: 0;
 		font-size: 1.05rem;
-		color: var(--cyan);
+		color: var(--accent);
 	}
 	.close {
 		padding: 0.1rem 0.4rem;
@@ -197,8 +197,8 @@
 		padding: 0.25rem 0.7rem;
 		text-align: left;
 		font-size: 0.85rem;
-		background: var(--bg-light);
-		color: var(--fg);
+		background: var(--bg-raised);
+		color: var(--text);
 		border: 1px solid var(--border);
 		border-radius: 18px;
 		break-inside: avoid;
@@ -207,17 +207,17 @@
 		font-weight: 700;
 	}
 	.chip.on {
-		background: color-mix(in srgb, var(--cyan) 22%, var(--bg-light));
-		border-color: var(--cyan);
-		color: var(--cyan);
+		background: color-mix(in srgb, var(--accent) 22%, var(--bg-raised));
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 	.chip:hover:not(:disabled) {
-		outline: 1px solid color-mix(in srgb, var(--fg) 40%, transparent);
+		outline: 1px solid color-mix(in srgb, var(--text) 40%, transparent);
 		outline-offset: 2px;
 	}
 	.chip:disabled {
 		opacity: 0.55;
-		color: var(--comment);
+		color: var(--text-muted);
 		cursor: default;
 	}
 	hr {
@@ -229,7 +229,7 @@
 		min-height: 1.2rem;
 		padding: 0 1rem;
 		font-size: 0.85rem;
-		color: var(--yellow);
+		color: var(--warning);
 	}
 	footer {
 		display: flex;

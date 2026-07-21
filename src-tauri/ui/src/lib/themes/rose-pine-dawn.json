@@ -1,0 +1,32 @@
+{
+	"id": "rose-pine-dawn",
+	"label": "Rosé Pine Dawn",
+	"dark": false,
+	"colors": {
+		"bg-deep": "#dfdad9",
+		"bg-panel": "#f2e9e1",
+		"bg": "#faf4ed",
+		"bg-raised": "#fffaf3",
+		"bg-hover": "#f2e9e1",
+		"text": "#575279",
+		"text-muted": "#696580",
+		"selection": "#dfdad9",
+		"border": "#cecacd",
+		"accent": "#a75956",
+		"term": "#a75956",
+		"link": "#467881",
+		"info": "#467881",
+		"success": "#416f49",
+		"warning": "#946018",
+		"danger": "#a45a6f",
+		"status-ok": "#58855f",
+		"status-warn": "#ea9d34",
+		"status-error": "#b4637a",
+		"status-busy": "#56949f",
+		"status-off": "#9893a5",
+		"know-unknown": "#a45a6f",
+		"know-new": "#467881",
+		"know-young": "#a35c20",
+		"know-mature": "#416f49"
+	}
+}

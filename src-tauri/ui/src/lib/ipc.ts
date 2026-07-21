@@ -212,7 +212,11 @@ export interface SettingsData {
 	frequency_weights: Record<string, FrequencyDictionarySetting>;
 	pos_filters: Record<string, boolean>;
 	use_serif_font: boolean;
+	/** Which preferred theme slot is active (`theme_dark` vs `theme_light`). */
 	dark_mode: boolean;
+	theme_dark: string;
+	theme_light: string;
+	user_themes: UserTheme[];
 	/** Follow mode (issue #105): auto-load NEW subtitled videos asbplayer binds. */
 	asbplayer_follow_new_media: boolean;
 	/** Follow mode (issue #105): switch to asbplayer's active subtitled tab. */
@@ -245,6 +249,13 @@ export interface TextFilterSetting {
 	pattern: string;
 	replacement: string;
 	enabled: boolean;
+}
+
+/** Mirrors `UserTheme` (core/settings.rs); colors keyed by `TOKENS` (lib/themes.ts). */
+export interface UserTheme {
+	name: string;
+	dark: boolean;
+	colors: Record<string, string>;
 }
 
 export interface FilterPreset {
@@ -474,6 +485,21 @@ export function exportIgnoreList(terms: string[]): Promise<string | null> {
 /** Open the app data directory in the OS file explorer (File → Open Data Folder). */
 export function openDataFolder(): Promise<void> {
 	return invoke('open_data_folder');
+}
+
+/** Open (or focus) the floating Themes window. */
+export function openThemesWindow(): Promise<void> {
+	return invoke('open_themes_window');
+}
+
+/** Save-dialog + write a theme JSON export; false = user cancelled. */
+export function exportThemeFile(name: string, json: string): Promise<boolean> {
+	return invoke('export_theme_file', { name, json });
+}
+
+/** Open-dialog + read a theme JSON file; null = user cancelled. */
+export function importThemeFile(): Promise<string | null> {
+	return invoke('import_theme_file');
 }
 
 /** Seek the connected player (mpv or asbplayer) to a sentence timestamp. */

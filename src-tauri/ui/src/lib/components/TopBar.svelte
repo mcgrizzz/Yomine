@@ -34,8 +34,9 @@
 		mpvLocatePrompt,
 		yomitanReachable
 	} from '$lib/stores';
+	import { openThemesWindow } from '$lib/ipc';
 
-	type MenuName = 'file' | 'mining' | 'settings' | 'asb' | 'mpv';
+	type MenuName = 'file' | 'mining' | 'appearance' | 'settings' | 'asb' | 'mpv';
 	let openMenu = $state<MenuName | null>(null);
 
 	const toolsReady = $derived($languageToolsStatus === 'ready');
@@ -53,12 +54,12 @@
 		openMenu = null;
 	}
 
-	const GREEN = '#00c800';
-	const YELLOW = '#c8c800';
-	const BLUE = '#6464c8';
-	const RED = '#c80000';
-	const GREY = '#646464';
-	const ANKI_RED = '#c85050';
+	const GREEN = 'var(--status-ok)';
+	const YELLOW = 'var(--status-warn)';
+	const BLUE = 'var(--status-busy)';
+	const RED = 'var(--status-error)';
+	const GREY = 'var(--status-off)';
+	const ANKI_RED = 'var(--status-error)';
 
 	const asbplayer = $derived.by(() => {
 		const s = $playerStatus;
@@ -119,8 +120,36 @@
 	<button
 		class="icon-btn"
 		title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-		onclick={toggleDarkMode}>{isDark ? '☀' : '🌙'}</button
+		onclick={toggleDarkMode}
 	>
+		{#if isDark}
+			<svg
+				class="mode-icon"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+			>
+				<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+			</svg>
+		{:else}
+			<svg
+				class="mode-icon"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2"
+				stroke-linecap="round"
+			>
+				<circle cx="12" cy="12" r="4" />
+				<path
+					d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"
+				/>
+			</svg>
+		{/if}
+	</button>
 	<button
 		class="icon-btn"
 		title={isSerif ? 'Switch to Sans' : 'Switch to Serif'}
@@ -166,14 +195,23 @@
 		{/if}
 	</div>
 
-	<!-- True configuration: integrations + UI, plus the onboarding checklist. -->
+	<div class="menu" class:open={openMenu === 'appearance'}>
+		<button class="menu-trigger" onclick={(e) => toggleMenu('appearance', e)}>Appearance</button>
+		{#if openMenu === 'appearance'}
+			<div class="menu-panel">
+				<button onclick={() => run(() => void openThemesWindow())}>Themes</button>
+				<button onclick={() => run(openAppearanceModal)}>General</button>
+			</div>
+		{/if}
+	</div>
+
+	<!-- True configuration: integrations, plus the onboarding checklist. -->
 	<div class="menu" class:open={openMenu === 'settings'}>
 		<button class="menu-trigger" onclick={(e) => toggleMenu('settings', e)}>Settings</button>
 		{#if openMenu === 'settings'}
 			<div class="menu-panel">
 				<button onclick={() => run(openAnkiModal)}>Anki</button>
 				<button onclick={() => run(openWebsocketModal)}>WebSocket Server</button>
-				<button onclick={() => run(openAppearanceModal)}>Appearance</button>
 				<div class="menu-sep"></div>
 				<button onclick={() => run(openSetupModal)}>Setup Checklist</button>
 			</div>
@@ -337,7 +375,7 @@
 		align-items: center;
 		gap: 0.4rem;
 		padding: 0.35rem 1rem;
-		background: var(--bg-dark);
+		background: var(--bg-panel);
 		border-bottom: 1px solid var(--border);
 	}
 	.brand {
@@ -353,8 +391,13 @@
 		line-height: 1;
 		border-radius: var(--radius);
 	}
+	.mode-icon {
+		display: block;
+		width: 15px;
+		height: 15px;
+	}
 	.icon-btn:hover {
-		background: var(--bg-light);
+		background: var(--bg-raised);
 	}
 	.sep {
 		width: 1px;
@@ -373,7 +416,7 @@
 	}
 	.menu-trigger:hover,
 	.menu.open .menu-trigger {
-		background: var(--bg-light);
+		background: var(--bg-raised);
 	}
 	.menu-panel {
 		position: absolute;
@@ -385,7 +428,7 @@
 		display: flex;
 		flex-direction: column;
 		padding: 0.25rem;
-		background: var(--bg-light);
+		background: var(--bg-raised);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
@@ -399,10 +442,10 @@
 		white-space: nowrap;
 	}
 	.menu-panel button:hover:not(:disabled) {
-		background: var(--bg-lighter);
+		background: var(--bg-hover);
 	}
 	.menu-panel button:disabled {
-		color: var(--comment);
+		color: var(--text-muted);
 		cursor: default;
 	}
 	.menu-sep {
@@ -417,14 +460,14 @@
 		margin-right: 0.4rem;
 		padding: 0.15rem 0.55rem;
 		font-size: 0.78rem;
-		color: var(--green);
+		color: var(--success);
 		background: transparent;
-		border: 1px solid var(--green);
+		border: 1px solid var(--success);
 		border-radius: 999px;
 		white-space: nowrap;
 	}
 	.update-pill:hover {
-		background: color-mix(in srgb, var(--green) 15%, transparent);
+		background: color-mix(in srgb, var(--success) 15%, transparent);
 	}
 	.status {
 		display: flex;
@@ -448,23 +491,23 @@
 	}
 	.status-trigger:hover,
 	.menu.open .status-trigger {
-		background: var(--bg-light);
+		background: var(--bg-raised);
 	}
 	.menu-note {
 		padding: 0.4rem 0.6rem;
 		font-size: 0.8rem;
-		color: var(--comment);
+		color: var(--text-muted);
 		white-space: nowrap;
 	}
 	.menu-note.warn {
-		color: var(--yellow);
+		color: var(--warning);
 	}
 	/* The player currently driving seek/mining — a soft pill marks the mode. */
 	.status-trigger.active-mode {
-		background: color-mix(in srgb, var(--cyan) 13%, transparent);
+		background: color-mix(in srgb, var(--accent) 13%, transparent);
 	}
 	.status-trigger.active-mode small {
-		color: var(--cyan);
+		color: var(--accent);
 	}
 	/* Right-anchored panel so it doesn't overflow the window edge. */
 	.menu-panel.right {
@@ -482,11 +525,11 @@
 		border-radius: var(--radius);
 	}
 	.menu-check:hover {
-		background: var(--bg-lighter);
+		background: var(--bg-hover);
 	}
 	.indicator small {
 		font-size: 0.7rem;
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	.dot {
 		font-size: 0.7rem;
@@ -495,8 +538,8 @@
 	.spinner {
 		width: 10px;
 		height: 10px;
-		border: 2px solid var(--comment);
-		border-top-color: var(--cyan);
+		border: 2px solid var(--text-muted);
+		border-top-color: var(--accent);
 		border-radius: 50%;
 		animation: spin 0.7s linear infinite;
 	}

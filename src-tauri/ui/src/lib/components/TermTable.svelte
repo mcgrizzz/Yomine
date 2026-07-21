@@ -47,7 +47,6 @@
 	} from '$lib/stores';
 	import { Menu } from '@tauri-apps/api/menu';
 	import { furiganaText } from '$lib/furigana';
-	import { posColor } from '$lib/pos';
 	import DefinitionPopover from './DefinitionPopover.svelte';
 	import Furigana from './Furigana.svelte';
 	import SentenceConflictModal, { type BatchEntry } from './SentenceConflictModal.svelte';
@@ -789,7 +788,7 @@
 				{:else if id === 'frequency'}
 					<span class="num">{freqLabel(term)}</span>
 				{:else if id === 'pos'}
-					<span class="pos" style="color: {posColor(term.part_of_speech)}">
+					<span class="pos">
 						{posLabels[term.part_of_speech] ?? term.part_of_speech}
 					</span>
 				{/if}
@@ -853,27 +852,27 @@
 		cursor: pointer;
 	}
 	.row:not(.head):hover {
-		background: var(--bg-light);
+		background: var(--bg-raised);
 	}
 	.row.selected {
-		background: color-mix(in srgb, var(--cyan) 7%, transparent);
+		background: color-mix(in srgb, var(--accent) 7%, transparent);
 	}
 	.row.selected:hover {
-		background: color-mix(in srgb, var(--cyan) 12%, transparent);
+		background: color-mix(in srgb, var(--accent) 12%, transparent);
 	}
 	.row.selectable {
 		cursor: pointer;
 	}
 	/* The row the batch queue is currently mining. */
 	.row.mining {
-		outline: 2px solid var(--cyan);
+		outline: 2px solid var(--accent);
 		outline-offset: -2px;
 	}
 	.row.head {
 		position: sticky;
 		top: 0;
-		background: var(--bg-dark);
-		color: var(--comment);
+		background: var(--bg-panel);
+		color: var(--text-muted);
 		font-size: 0.8rem;
 		text-transform: uppercase;
 		letter-spacing: 0.03em;
@@ -903,15 +902,15 @@
 	}
 	/* Active-column highlight. */
 	.head-btn.active {
-		background: color-mix(in srgb, var(--cyan) 10%, transparent);
-		color: var(--fg);
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
+		color: var(--text);
 	}
 	.head-btn:hover {
-		background: var(--bg-light);
-		color: var(--fg);
+		background: var(--bg-raised);
+		color: var(--text);
 	}
 	.arrow.active {
-		color: var(--cyan);
+		color: var(--accent);
 	}
 	/* Sortable-column affordance: a dim ⇅ that swaps to the default-direction
 	   preview arrow on hover. */
@@ -932,7 +931,7 @@
 		padding: 0.05rem 0.3rem;
 		background: transparent;
 		border: none;
-		color: var(--comment);
+		color: var(--text-muted);
 		font-size: 0.7rem;
 		text-transform: none;
 		letter-spacing: normal;
@@ -940,7 +939,7 @@
 		white-space: nowrap;
 	}
 	.mode:hover {
-		color: var(--fg);
+		color: var(--text);
 	}
 	.num {
 		text-align: right;
@@ -955,7 +954,7 @@
 	}
 	.term {
 		font-size: 1.5rem;
-		color: var(--red);
+		color: var(--term);
 		line-height: 1.1;
 		cursor: text;
 	}
@@ -967,7 +966,7 @@
 	}
 	/* Kept above .ignored so an ignored term still greys out. */
 	.term.mined-term {
-		color: var(--green);
+		color: var(--success);
 	}
 	/* Mine (+) and mined (✓) share one footprint so the swap doesn't shift layout. */
 	.chip {
@@ -982,40 +981,40 @@
 		border-radius: var(--radius);
 	}
 	.mine {
-		color: var(--cyan);
-		background: var(--bg-light);
+		color: var(--accent);
+		background: var(--bg-raised);
 		border: 1px solid var(--border);
 		cursor: pointer;
 	}
 	.mine:hover:not(:disabled) {
-		background: var(--bg-lighter);
-		border-color: var(--cyan);
+		background: var(--bg-hover);
+		border-color: var(--accent);
 	}
 	.mine:disabled {
 		opacity: 0.5;
 		cursor: default;
 	}
 	.mined {
-		color: var(--green);
-		background: color-mix(in srgb, var(--green) 12%, transparent);
-		border: 1px solid color-mix(in srgb, var(--green) 35%, transparent);
+		color: var(--success);
+		background: color-mix(in srgb, var(--success) 12%, transparent);
+		border: 1px solid color-mix(in srgb, var(--success) 35%, transparent);
 		cursor: help;
 	}
 	.mined.openable {
 		cursor: pointer;
 	}
 	.mined.openable:hover {
-		background: color-mix(in srgb, var(--green) 25%, transparent);
+		background: color-mix(in srgb, var(--success) 25%, transparent);
 	}
 	/* Note exists but asbplayer media never landed — click retries the enrichment. */
 	.warn {
-		color: var(--yellow);
-		background: color-mix(in srgb, var(--yellow) 12%, transparent);
-		border: 1px solid color-mix(in srgb, var(--yellow) 35%, transparent);
+		color: var(--warning);
+		background: color-mix(in srgb, var(--warning) 12%, transparent);
+		border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
 		cursor: pointer;
 	}
 	.warn:hover:not(:disabled) {
-		background: color-mix(in srgb, var(--yellow) 25%, transparent);
+		background: color-mix(in srgb, var(--warning) 25%, transparent);
 	}
 	.warn:disabled {
 		opacity: 0.5;
@@ -1023,7 +1022,7 @@
 	}
 	/* Ignored-in-place: greyed until the next refresh drops the row. */
 	.term.ignored {
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	/* Pointing-hand while Ctrl/Cmd is held (the click-to-ignore affordance). */
 	.term.ignorable {
@@ -1031,13 +1030,14 @@
 	}
 	.pos {
 		font-size: 0.9rem;
+		color: var(--text-muted);
 	}
 	.jlpt-chip {
 		padding: 0.05rem 0.3rem;
 		font-size: 0.7rem;
-		color: var(--cyan);
-		background: color-mix(in srgb, var(--cyan) 10%, transparent);
-		border: 1px solid color-mix(in srgb, var(--cyan) 35%, transparent);
+		color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
+		border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
 		border-radius: var(--radius);
 		white-space: nowrap;
 	}
@@ -1054,26 +1054,26 @@
 		gap: 0.6rem;
 		max-width: 90vw;
 		padding: 0.45rem 0.9rem;
-		background: var(--bg-dark);
+		background: var(--bg-panel);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 		font-size: 0.85rem;
 	}
 	.bulk-info {
-		color: var(--fg);
+		color: var(--text);
 	}
 	.bulk-btn {
 		cursor: pointer;
 		padding: 0.25rem 0.6rem;
-		background: var(--bg-dark);
+		background: var(--bg-panel);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
-		color: var(--fg);
+		color: var(--text);
 	}
 	.bulk-btn.primary {
-		color: var(--cyan);
-		border-color: color-mix(in srgb, var(--cyan) 35%, transparent);
+		color: var(--accent);
+		border-color: color-mix(in srgb, var(--accent) 35%, transparent);
 	}
 	.bulk-btn:disabled {
 		opacity: 0.5;
@@ -1091,7 +1091,7 @@
 		max-height: 40vh;
 		overflow-y: auto;
 		padding: 0.45rem 0.9rem;
-		background: var(--bg-dark);
+		background: var(--bg-panel);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
@@ -1104,7 +1104,7 @@
 		padding: 0.15rem 0;
 	}
 	.detail-head {
-		color: var(--comment);
+		color: var(--text-muted);
 		font-size: 0.75rem;
 		text-transform: uppercase;
 		letter-spacing: 0.03em;
@@ -1113,7 +1113,7 @@
 		margin-bottom: 0.2rem;
 	}
 	.detail-dim {
-		color: var(--comment);
+		color: var(--text-muted);
 		font-size: 0.8em;
 	}
 	.detail-select {
@@ -1126,7 +1126,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: color-mix(in srgb, var(--bg-darker) 70%, transparent);
+		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
 		z-index: 50;
 	}
 	.dialog {
@@ -1135,7 +1135,7 @@
 		gap: 0.6rem;
 		width: min(420px, 92%);
 		padding: 1rem;
-		background: var(--bg-dark);
+		background: var(--bg-panel);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
@@ -1150,13 +1150,13 @@
 		justify-content: flex-end;
 	}
 	.empty {
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	.no-match {
 		grid-column: 1 / -1;
 		margin: 0;
 		padding: 1.5rem 0.5rem;
-		color: var(--comment);
+		color: var(--text-muted);
 		text-align: center;
 	}
 	.col-edit-bar {
@@ -1166,7 +1166,7 @@
 		gap: 0.4rem;
 		margin-bottom: 0.35rem;
 		padding: 0.35rem 0.6rem;
-		background: var(--bg-light);
+		background: var(--bg-raised);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 	}
@@ -1178,8 +1178,8 @@
 		font-size: 0.8rem;
 		text-transform: uppercase;
 		letter-spacing: 0.03em;
-		color: var(--fg);
-		background: var(--bg-dark);
+		color: var(--text);
+		background: var(--bg-panel);
 		border: 1px dashed var(--border);
 		border-radius: var(--radius);
 		cursor: grab;
@@ -1190,7 +1190,7 @@
 	.col-edit.dragging {
 		cursor: grabbing;
 		border-style: solid;
-		border-color: var(--cyan);
+		border-color: var(--accent);
 	}
 	.col-edit.col-hidden {
 		opacity: 0.45;
@@ -1198,6 +1198,6 @@
 	.col-edit-hint {
 		margin-left: auto;
 		font-size: 0.8rem;
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 </style>

@@ -33,6 +33,9 @@ pub fn run() {
             commands::lifecycle::get_text_filter_presets,
             commands::lifecycle::test_text_filters,
             commands::lifecycle::open_data_folder,
+            commands::lifecycle::open_themes_window,
+            commands::lifecycle::export_theme_file,
+            commands::lifecycle::import_theme_file,
             commands::file::open_file_dialog,
             commands::file::open_video_dialog,
             commands::file::open_executable_dialog,
@@ -81,6 +84,13 @@ pub fn run() {
             commands::update::check_for_update,
             commands::knowledge::get_knowledge_summary,
         ])
+        .on_window_event(|window, event| {
+            if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
+                if let Some(themes) = window.app_handle().get_webview_window("themes") {
+                    let _ = themes.close();
+                }
+            }
+        })
         .setup(move |app| {
             // The player runs in its own task that solely owns `PlayerManager`;
             // commands reach it through this handle (no shared lock).

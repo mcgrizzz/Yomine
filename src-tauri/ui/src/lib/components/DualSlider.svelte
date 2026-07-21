@@ -130,7 +130,7 @@
 		right: 7px;
 		height: 4px;
 		transform: translateY(-50%);
-		background: var(--bg-lighter);
+		background: var(--bg-hover);
 		border-radius: 2px;
 	}
 	.fill {
@@ -138,7 +138,7 @@
 		top: 50%;
 		height: 4px;
 		transform: translateY(-50%);
-		background: var(--cyan);
+		background: var(--accent);
 		border-radius: 2px;
 	}
 	.thumb {
@@ -147,12 +147,12 @@
 		width: 12px;
 		height: 12px;
 		transform: translate(-50%, -50%);
-		background: var(--fg);
-		border: 2px solid var(--cyan);
+		background: var(--text);
+		border: 2px solid var(--accent);
 		border-radius: 50%;
 	}
 	.thumb:focus-visible {
-		outline: 2px solid var(--cyan);
+		outline: 2px solid var(--accent);
 		outline-offset: 1px;
 	}
 </style>

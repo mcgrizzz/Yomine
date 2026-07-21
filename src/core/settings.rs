@@ -78,6 +78,13 @@ pub struct TableColumn {
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct UserTheme {
+    pub name: String,
+    pub dark: bool,
+    pub colors: HashMap<String, String>,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct TextFilterSetting {
     pub pattern: String,
     pub replacement: String,
@@ -98,8 +105,15 @@ pub struct SettingsData {
     pub pos_filters: HashMap<String, bool>,
     #[serde(default)]
     pub use_serif_font: bool,
+    /// Which preferred theme slot is active (`theme_dark` vs `theme_light`).
     #[serde(default = "default_true")]
     pub dark_mode: bool,
+    #[serde(default = "default_theme_dark")]
+    pub theme_dark: String,
+    #[serde(default = "default_theme_light")]
+    pub theme_light: String,
+    #[serde(default)]
+    pub user_themes: Vec<UserTheme>,
     /// Follow mode (issue #105): auto-load NEW subtitled videos asbplayer binds.
     #[serde(default)]
     pub asbplayer_follow_new_media: bool,
@@ -163,6 +177,14 @@ const fn default_true() -> bool {
     true
 }
 
+fn default_theme_dark() -> String {
+    "dracula".to_string()
+}
+
+fn default_theme_light() -> String {
+    "paper".to_string()
+}
+
 impl Default for SettingsData {
     fn default() -> Self {
         Self {
@@ -173,6 +195,9 @@ impl Default for SettingsData {
             pos_filters: HashMap::new(),
             use_serif_font: false,
             dark_mode: true,
+            theme_dark: default_theme_dark(),
+            theme_light: default_theme_light(),
+            user_themes: Vec::new(),
             asbplayer_follow_new_media: false,
             asbplayer_follow_active_tab: false,
             asbplayer_poll_secs: default_asbplayer_poll_secs(),

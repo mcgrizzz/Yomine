@@ -123,6 +123,64 @@ pub fn open_data_folder(app: AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// Save-dialog + write for theme export; `Ok(false)` = user cancelled.
+#[tauri::command]
+pub async fn export_theme_file(app: AppHandle, name: String, json: String) -> Result<bool, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .set_file_name(format!("{name}.json"))
+        .add_filter("Theme JSON", &["json"])
+        .save_file(move |path| {
+            let _ = tx.send(path);
+        });
+    let chosen = rx.await.map_err(|_| "file dialog closed unexpectedly".to_string())?;
+    match chosen.and_then(|p| p.into_path().ok()) {
+        Some(path) => {
+            std::fs::write(&path, json).map_err(|e| e.to_string())?;
+            Ok(true)
+        }
+        None => Ok(false),
+    }
+}
+
+/// Open-dialog + read for theme import; `Ok(None)` = user cancelled. The
+/// frontend validates the JSON (lib/themes.ts token contract).
+#[tauri::command]
+pub async fn import_theme_file(app: AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog().file().add_filter("Theme JSON", &["json"]).pick_file(move |path| {
+        let _ = tx.send(path);
+    });
+    let chosen = rx.await.map_err(|_| "file dialog closed unexpectedly".to_string())?;
+    match chosen.and_then(|p| p.into_path().ok()) {
+        Some(path) => Ok(Some(std::fs::read_to_string(&path).map_err(|e| e.to_string())?)),
+        None => Ok(None),
+    }
+}
+
+/// Async because building a window from a sync command deadlocks on Windows.
+#[tauri::command]
+pub async fn open_themes_window(app: AppHandle) -> Result<(), String> {
+    use tauri::{
+        Manager,
+        WebviewUrl,
+        WebviewWindowBuilder,
+    };
+    if let Some(win) = app.get_webview_window("themes") {
+        return win.set_focus().map_err(|e| e.to_string());
+    }
+    WebviewWindowBuilder::new(&app, "themes", WebviewUrl::App("/themes".into()))
+        .title("Themes")
+        .inner_size(800.0, 500.0)
+        .min_inner_size(380.0, 320.0)
+        .build()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Static POS key/label list for filter UIs (keys match `settings.pos_filters`).
 #[tauri::command]
 pub fn get_pos_catalog() -> Vec<PosInfo> {
@@ -170,13 +228,16 @@ pub fn test_text_filters(
 }
 
 /// Persist + replace the in-memory copy, propagating the bits that affect the
-/// live tools (known-interval, frequency weights).
+/// live tools (known-interval, frequency weights). Emits `settings-changed` so
+/// every window (main + themes) sees the update.
 #[tauri::command]
 pub fn save_settings(
+    app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     settings: SettingsData,
 ) -> Result<(), String> {
     persistence::save_json(&settings, "settings.json").map_err(|e| e.to_string())?;
+    let _ = app.emit(names::SETTINGS_CHANGED, settings.clone());
 
     let mut guard = state.lock().unwrap();
     guard.settings = settings;

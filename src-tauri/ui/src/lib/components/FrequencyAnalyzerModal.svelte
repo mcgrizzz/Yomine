@@ -396,7 +396,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: color-mix(in srgb, var(--bg-darker) 70%, transparent);
+		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
 		z-index: 50;
 	}
 	.dialog {
@@ -404,7 +404,7 @@
 		flex-direction: column;
 		width: min(760px, 94%);
 		max-height: 88%;
-		background: var(--bg-dark);
+		background: var(--bg-panel);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
@@ -419,7 +419,7 @@
 	header h2 {
 		margin: 0;
 		font-size: 1.05rem;
-		color: var(--cyan);
+		color: var(--accent);
 	}
 	.close {
 		padding: 0.1rem 0.4rem;
@@ -434,12 +434,12 @@
 	h3 {
 		margin: 0;
 		font-size: 1rem;
-		color: var(--fg);
+		color: var(--text);
 	}
 	h4 {
 		margin: 0 0 0.3rem;
 		font-size: 0.9rem;
-		color: var(--fg);
+		color: var(--text);
 	}
 	.row {
 		display: flex;
@@ -450,17 +450,17 @@
 	.count {
 		margin-left: auto;
 		font-size: 0.85rem;
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	.hint {
 		margin: 0;
 		font-size: 0.85rem;
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	.message {
 		margin: 0;
 		font-size: 0.9rem;
-		color: var(--fg);
+		color: var(--text);
 	}
 	.tree {
 		max-height: 220px;
@@ -468,7 +468,7 @@
 		border: 1px solid var(--border);
 		border-radius: 3px;
 		padding: 0.35rem;
-		background: var(--bg-darker);
+		background: var(--bg-deep);
 	}
 	.tree-row {
 		display: flex;
@@ -481,7 +481,7 @@
 		font-size: 0.7rem;
 		background: none;
 		border: none;
-		color: var(--comment);
+		color: var(--text-muted);
 		cursor: pointer;
 	}
 	.cb {
@@ -492,22 +492,22 @@
 		cursor: pointer;
 	}
 	.dir {
-		color: var(--yellow);
+		color: var(--warning);
 	}
 	.leaf {
-		color: var(--fg);
+		color: var(--text);
 	}
 	.progress-bar {
 		position: relative;
 		height: 1.4rem;
 		border: 1px solid var(--border);
 		border-radius: 3px;
-		background: var(--bg-darker);
+		background: var(--bg-deep);
 		overflow: hidden;
 	}
 	.progress-fill {
 		height: 100%;
-		background: var(--cyan);
+		background: var(--accent);
 		transition: width 0.2s ease;
 	}
 	.progress-text {
@@ -517,7 +517,7 @@
 		align-items: center;
 		justify-content: center;
 		font-size: 0.8rem;
-		color: var(--fg);
+		color: var(--text);
 	}
 	.results-head {
 		display: flex;
@@ -541,7 +541,7 @@
 		align-items: center;
 		gap: 0.6rem;
 		font-size: 0.85rem;
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	.results-table-wrap {
 		max-height: 340px;
@@ -563,13 +563,13 @@
 	.results-table thead th {
 		position: sticky;
 		top: 0;
-		background: var(--bg-light);
-		color: var(--comment);
+		background: var(--bg-raised);
+		color: var(--text-muted);
 		z-index: 1;
 	}
 	.results-table .rank {
 		width: 2.5rem;
-		color: var(--comment);
+		color: var(--text-muted);
 		text-align: right;
 	}
 	.results-table .num {
@@ -580,7 +580,7 @@
 		font-size: 0.95rem;
 	}
 	.results-table .reading {
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	.export-form {
 		display: flex;
@@ -592,13 +592,13 @@
 		flex-direction: column;
 		gap: 0.15rem;
 		font-size: 0.8rem;
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	.export-form input,
 	.export-form textarea {
 		padding: 0.3rem 0.4rem;
-		background: var(--bg-light);
-		color: var(--fg);
+		background: var(--bg-raised);
+		color: var(--text);
 		border: 1px solid var(--border);
 		border-radius: 3px;
 		font: inherit;
@@ -610,16 +610,16 @@
 		margin: 0.3rem 0;
 	}
 	.export-form .checks .cb {
-		color: var(--fg);
+		color: var(--text);
 	}
 	.success {
 		margin: 0;
-		color: var(--green);
+		color: var(--success);
 		font-size: 0.95rem;
 	}
 	.error {
 		margin: 0;
-		color: var(--red);
+		color: var(--danger);
 		font-size: 0.95rem;
 	}
 	footer {
@@ -634,9 +634,9 @@
 		border-top: 1px solid var(--border);
 	}
 	.primary {
-		background: var(--cyan);
-		color: var(--bg-darker);
-		border-color: var(--cyan);
+		background: var(--accent);
+		color: var(--bg-deep);
+		border-color: var(--accent);
 	}
 	.ghost {
 		background: none;

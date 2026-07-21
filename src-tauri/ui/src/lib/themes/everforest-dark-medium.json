@@ -1,0 +1,32 @@
+{
+	"id": "everforest-dark-medium",
+	"label": "Everforest Dark Medium",
+	"dark": true,
+	"colors": {
+		"bg-deep": "#232a2e",
+		"bg-panel": "#283036",
+		"bg": "#2d353b",
+		"bg-raised": "#343f44",
+		"bg-hover": "#3d484d",
+		"text": "#d3c6aa",
+		"text-muted": "#9da9a0",
+		"selection": "#543a48",
+		"border": "#4f585e",
+		"accent": "#e69875",
+		"term": "#d699b6",
+		"link": "#7fbbb3",
+		"info": "#7fbbb3",
+		"success": "#a7c080",
+		"warning": "#dbbc7f",
+		"danger": "#e67e80",
+		"status-ok": "#a7c080",
+		"status-warn": "#dbbc7f",
+		"status-error": "#e67e80",
+		"status-busy": "#7fbbb3",
+		"status-off": "#7a8478",
+		"know-unknown": "#e67e80",
+		"know-new": "#7fbbb3",
+		"know-young": "#e69875",
+		"know-mature": "#a7c080"
+	}
+}

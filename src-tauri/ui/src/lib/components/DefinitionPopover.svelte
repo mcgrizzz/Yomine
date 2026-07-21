@@ -318,7 +318,7 @@
 		z-index: 100;
 		display: flex;
 		flex-direction: column;
-		background: var(--bg-dark);
+		background: var(--bg-panel);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
@@ -341,7 +341,7 @@
 		gap: 0.4rem;
 		padding: 0.4rem 0.75rem;
 		font-size: 0.8rem;
-		color: var(--comment);
+		color: var(--text-muted);
 		border-bottom: 1px solid var(--border);
 	}
 	.format-row select {
@@ -360,7 +360,7 @@
 	}
 	.status {
 		margin: 0;
-		color: var(--comment);
+		color: var(--text-muted);
 		font-size: 0.9rem;
 	}
 	.entry + .entry {
@@ -376,19 +376,19 @@
 	}
 	.expression {
 		font-size: 1.3rem;
-		color: var(--red);
+		color: var(--term);
 	}
 	.expression :global(ruby) {
 		line-height: 1.9;
 	}
 	.expression :global(rt) {
 		font-size: 0.55em;
-		color: var(--comment);
+		color: var(--text-muted);
 		user-select: none;
 		-webkit-user-select: none;
 	}
 	.reading {
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	.freqs {
 		display: flex;
@@ -400,19 +400,19 @@
 		display: inline-flex;
 		align-items: stretch;
 		font-size: 0.75rem;
-		border: 1px solid color-mix(in srgb, var(--green) 45%, transparent);
+		border: 1px solid color-mix(in srgb, var(--success) 45%, transparent);
 		border-radius: var(--radius);
 		overflow: hidden;
 		white-space: nowrap;
 	}
 	.freq-name {
 		padding: 0.05rem 0.4rem;
-		background: color-mix(in srgb, var(--green) 30%, transparent);
+		background: color-mix(in srgb, var(--success) 30%, transparent);
 		font-weight: 600;
 	}
 	.freq-vals {
 		padding: 0.05rem 0.4rem;
-		background: var(--bg-light);
+		background: var(--bg-raised);
 	}
 	.glossary {
 		font-size: 0.95rem;
@@ -428,7 +428,7 @@
 	/* The <i>(tags, Dictionary)</i> annotation Yomitan prefixes each sense with. */
 	.glossary :global(.yomitan-glossary > i),
 	.glossary :global(.yomitan-glossary ol > li > i) {
-		color: var(--comment);
+		color: var(--text-muted);
 		font-size: 0.85em;
 	}
 	/* Mirrors the compact-glossary rules in Yomitan's structured-content.css:
@@ -451,7 +451,7 @@
 	.glossary :global(.yomitan-glossary > ol > li > ul > li:not(:first-child))::before {
 		content: ' | ';
 		white-space: pre-wrap;
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	.actions {
 		display: inline-flex;
@@ -463,16 +463,16 @@
 	.mine-btn {
 		cursor: pointer;
 		padding: 0.1rem 0.45rem;
-		background: var(--bg-light);
+		background: var(--bg-raised);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
-		color: var(--cyan);
+		color: var(--accent);
 		font-size: 0.75rem;
 		white-space: nowrap;
 	}
 	.mine-btn:hover:not(:disabled) {
-		background: var(--bg-lighter);
-		border-color: var(--cyan);
+		background: var(--bg-hover);
+		border-color: var(--accent);
 	}
 	.mine-btn:disabled {
 		opacity: 0.5;

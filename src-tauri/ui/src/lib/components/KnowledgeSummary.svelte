@@ -87,7 +87,7 @@
 		flex-direction: column;
 		gap: 2px;
 		padding: 8px;
-		background: var(--bg-light);
+		background: var(--bg-raised);
 		border: 1px solid var(--border);
 		border-radius: 4px;
 		align-self: flex-start;
@@ -103,7 +103,7 @@
 		border: none;
 		font-size: 14px;
 		font-weight: 700;
-		color: var(--fg);
+		color: var(--text);
 		cursor: pointer;
 	}
 	.swap {
@@ -112,7 +112,7 @@
 		border: none;
 		font-size: 13px;
 		line-height: 1;
-		color: var(--comment);
+		color: var(--text-muted);
 		cursor: pointer;
 	}
 	.band-row {
@@ -128,7 +128,7 @@
 		position: relative;
 		flex: none;
 		height: 9px;
-		background: var(--bg-darker);
+		background: var(--bg-deep);
 		border-radius: 2px;
 		overflow: hidden;
 	}
@@ -139,6 +139,6 @@
 	.band-label {
 		font-family: ui-monospace, monospace;
 		font-size: 11px;
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 </style>
