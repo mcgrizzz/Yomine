@@ -1,10 +1,25 @@
 <script lang="ts">
 	// Until settings hydrate, the :root defaults (dracula / sans) apply — no flash.
 	import '../app.css';
+	import { onMount } from 'svelte';
+	import { get } from 'svelte/store';
+	import { listen } from '@tauri-apps/api/event';
+	import type { SettingsData } from '$lib/ipc';
 	import { settings } from '$lib/stores';
-	import { applyTheme, resolveTheme } from '$lib/themes';
+	import { applyTheme, resolveTheme, type Theme } from '$lib/themes';
 
 	let { children } = $props();
+
+
+	onMount(() => {
+		const unlisteners = [
+			listen<SettingsData>('settings-changed', (e) => settings.set(e.payload)),
+			listen<Theme | null>('theme-preview', (e) =>
+				applyTheme(e.payload ?? resolveTheme(get(settings)))
+			)
+		];
+		return () => unlisteners.forEach((p) => p.then((un) => un()));
+	});
 
 	$effect(() => {
 		const s = $settings;

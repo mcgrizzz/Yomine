@@ -123,6 +123,26 @@ pub fn open_data_folder(app: AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// Async because building a window from a sync command deadlocks on Windows.
+#[tauri::command]
+pub async fn open_themes_window(app: AppHandle) -> Result<(), String> {
+    use tauri::{
+        Manager,
+        WebviewUrl,
+        WebviewWindowBuilder,
+    };
+    if let Some(win) = app.get_webview_window("themes") {
+        return win.set_focus().map_err(|e| e.to_string());
+    }
+    WebviewWindowBuilder::new(&app, "themes", WebviewUrl::App("/themes".into()))
+        .title("Themes")
+        .inner_size(600.0, 560.0)
+        .min_inner_size(380.0, 320.0)
+        .build()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Static POS key/label list for filter UIs (keys match `settings.pos_filters`).
 #[tauri::command]
 pub fn get_pos_catalog() -> Vec<PosInfo> {
@@ -170,13 +190,16 @@ pub fn test_text_filters(
 }
 
 /// Persist + replace the in-memory copy, propagating the bits that affect the
-/// live tools (known-interval, frequency weights).
+/// live tools (known-interval, frequency weights). Emits `settings-changed` so
+/// every window (main + themes) sees the update.
 #[tauri::command]
 pub fn save_settings(
+    app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     settings: SettingsData,
 ) -> Result<(), String> {
     persistence::save_json(&settings, "settings.json").map_err(|e| e.to_string())?;
+    let _ = app.emit(names::SETTINGS_CHANGED, settings.clone());
 
     let mut guard = state.lock().unwrap();
     guard.settings = settings;

@@ -33,6 +33,7 @@ pub fn run() {
             commands::lifecycle::get_text_filter_presets,
             commands::lifecycle::test_text_filters,
             commands::lifecycle::open_data_folder,
+            commands::lifecycle::open_themes_window,
             commands::file::open_file_dialog,
             commands::file::open_video_dialog,
             commands::file::open_executable_dialog,

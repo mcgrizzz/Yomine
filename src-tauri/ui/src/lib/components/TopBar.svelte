@@ -19,7 +19,6 @@
 		openTextFiltersModal,
 		openWebsocketModal,
 		openAppearanceModal,
-		openThemesModal,
 		openAsbplayerModal,
 		openFrequencyModal,
 		openPosModal,
@@ -35,6 +34,7 @@
 		mpvLocatePrompt,
 		yomitanReachable
 	} from '$lib/stores';
+	import { openThemesWindow } from '$lib/ipc';
 
 	type MenuName = 'file' | 'mining' | 'appearance' | 'settings' | 'asb' | 'mpv';
 	let openMenu = $state<MenuName | null>(null);
@@ -171,7 +171,7 @@
 		<button class="menu-trigger" onclick={(e) => toggleMenu('appearance', e)}>Appearance</button>
 		{#if openMenu === 'appearance'}
 			<div class="menu-panel">
-				<button onclick={() => run(openThemesModal)}>Themes</button>
+				<button onclick={() => run(() => void openThemesWindow())}>Themes</button>
 				<button onclick={() => run(openAppearanceModal)}>General</button>
 			</div>
 		{/if}

@@ -2,6 +2,7 @@
 	// Create/edit user themes with live preview: edits apply to :root while the
 	// modal is open and revert to the saved theme on close.
 	import { untrack } from 'svelte';
+	import { emit } from '@tauri-apps/api/event';
 	import type { UserTheme } from '$lib/ipc';
 	import { saveUserThemes, settings } from '$lib/stores';
 	import {
@@ -59,8 +60,12 @@
 		colors = { ...from.colors };
 	}
 
+	// Preview locally AND broadcast so the main window shows the edit too.
 	$effect(() => {
-		if (open) applyTheme({ id: 'preview', label: name, dark, colors });
+		if (!open) return;
+		const preview = { id: 'preview', label: name, dark, colors: { ...colors } };
+		applyTheme(preview);
+		void emit('theme-preview', preview);
 	});
 
 	const trimmed = $derived(name.trim());
@@ -75,6 +80,7 @@
 	function close() {
 		open = false;
 		applyTheme(resolveTheme($settings));
+		void emit('theme-preview', null);
 	}
 
 	async function save() {
@@ -115,7 +121,10 @@
 	}
 </script>
 
-<svelte:window onkeydown={(e) => open && e.key === 'Escape' && close()} />
+<svelte:window
+	onkeydown={(e) => open && e.key === 'Escape' && close()}
+	onbeforeunload={() => open && void emit('theme-preview', null)}
+/>
 
 {#if open}
 	<div

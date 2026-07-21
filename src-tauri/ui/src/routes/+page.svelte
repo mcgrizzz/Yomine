@@ -29,7 +29,6 @@
 	import IgnoreListModal from '$lib/components/IgnoreListModal.svelte';
 	import WebsocketSettingsModal from '$lib/components/WebsocketSettingsModal.svelte';
 	import AppearanceModal from '$lib/components/AppearanceModal.svelte';
-	import ThemesModal from '$lib/components/ThemesModal.svelte';
 	import AboutModal from '$lib/components/AboutModal.svelte';
 	import AnkiSettingsModal from '$lib/components/AnkiSettingsModal.svelte';
 	import FrequencyWeightsModal from '$lib/components/FrequencyWeightsModal.svelte';
@@ -206,7 +205,6 @@
 	<AsbplayerModal />
 	<WebsocketSettingsModal />
 	<AppearanceModal />
-	<ThemesModal />
 	<AboutModal />
 	<AnkiSettingsModal />
 	<FrequencyWeightsModal />

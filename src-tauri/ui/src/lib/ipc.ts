@@ -487,6 +487,11 @@ export function openDataFolder(): Promise<void> {
 	return invoke('open_data_folder');
 }
 
+/** Open (or focus) the floating Themes window. */
+export function openThemesWindow(): Promise<void> {
+	return invoke('open_themes_window');
+}
+
 /** Seek the connected player (mpv or asbplayer) to a sentence timestamp. */
 export function seekTimestamp(seconds: number, label: string): Promise<void> {
 	return invoke('seek_timestamp', { seconds, label });

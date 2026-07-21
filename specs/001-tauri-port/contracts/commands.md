@@ -15,7 +15,8 @@ events (see [events.md](./events.md)). Engine handles come from `tauri::State<Ap
 | `load_language_tools` | `progress: Channel<LoadingMessage>` | `()` | `TaskManager::load_language_tools` | Loads tokenizer + freq dicts + ignore list into `AppState`; streams progress; emits `language-tools-status` ready/error. Call on app start. |
 | `get_pos_catalog` | — | `array<PosInfo>` | `POS` static | Static POS key/label list for filters. |
 | `get_settings` | — | `SettingsData` | `load_json` | From `AppState` (loaded at start). |
-| `save_settings` | `settings: SettingsData` | `()` | `save_settings` | Persists via `persistence::save_json`; updates `AppState`; may trigger recompute (e.g. known-interval). |
+| `save_settings` | `settings: SettingsData` | `()` | `save_settings` | Persists via `persistence::save_json`; updates `AppState`; may trigger recompute (e.g. known-interval); emits `settings-changed` to all windows. |
+| `open_themes_window` | — | `()` | — (new in Tauri) | Opens (or focuses) the floating `themes` window at `/themes` — undimmed, natively draggable, for live theme previewing. |
 | `get_text_filter_presets` | — | `array<FilterPresetDto>` | `text_filter::presets` (issue #92) | Built-in preset ids/labels for the filters modal; regexes stay backend-side. |
 | `test_text_filters` | `presets: Record<string, bool>`, `filters: array<TextFilterSetting>`, `sample: string` | `string` | `text_filter` (issue #92) | Applies a staged filter set to a sample line (live preview); `Err` names the first invalid pattern; `""` = line would be dropped. |
 
