@@ -1,13 +1,14 @@
 <script lang="ts">
-	// Until settings hydrate, the :root defaults (dark / sans) apply — no flash.
+	// Until settings hydrate, the :root defaults (dracula / sans) apply — no flash.
 	import '../app.css';
 	import { settings } from '$lib/stores';
+	import { applyTheme, resolveTheme } from '$lib/themes';
 
 	let { children } = $props();
 
 	$effect(() => {
 		const s = $settings;
-		document.documentElement.dataset.theme = s && !s.dark_mode ? 'light' : 'dark';
+		applyTheme(resolveTheme(s));
 		document.body.classList.toggle('font-serif', s?.use_serif_font ?? false);
 		// CSS zoom (not root font-size) so px-based sizes scale too; the
 		// Appearance modal live-previews by setting this same property.

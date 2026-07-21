@@ -1,6 +1,7 @@
-/* Global theme + shell. Dracula-based palette; dark is the default and
- * `:root[data-theme='light']` swaps the layered backgrounds + accents. The
- * active theme is driven by `settings.dark_mode` in +layout.svelte. */
+/* Global shell + the semantic token fallback. The values below are the
+ * `dracula` theme; +layout.svelte overwrites every token inline from the
+ * active theme (lib/themes.ts) once settings hydrate — keep this block in
+ * sync with the dracula palette there. */
 
 /* Bundled Japanese faces (assets/fonts/Noto{Sans,Serif}JP-Regular.ttf, copied
  * to static/fonts so adapter-static serves them at /fonts/*). The `body` /
@@ -22,66 +23,42 @@
 }
 
 :root {
-	/* layered surfaces (darkest → lightest) */
-	--bg-darker: #191a21;
-	--bg-dark: #212335;
+	/* layered surfaces (lowest → highest elevation) */
+	--bg-deep: #191a21;
+	--bg-panel: #212335;
 	--bg: #282a36;
-	--bg-light: #343642;
-	--bg-lighter: #424550;
+	--bg-raised: #343642;
+	--bg-hover: #424550;
 
-	--fg: #f8f8f2;
+	--text: #f8f8f2;
+	--text-muted: #6272a4;
 	--selection: #44475a;
-	--comment: #6272a4;
+	--border: #424550;
 
-	/* accents */
-	--red: #ff5555;
-	--orange: #ffb86c;
-	--yellow: #f1fa8c;
-	--green: #50fa7b;
-	--blue: #62a0ea;
-	--purple: #bd93f9;
-	--cyan: #8be9fd;
-	--pink: #ff79c6;
+	--accent: #8be9fd;
+	--link: #62a0ea;
+	--info: #62a0ea;
+	--success: #50fa7b;
+	--warning: #f1fa8c;
+	--danger: #ff5555;
 
-	/* POS label colors (egui Theme::pos_color groups) */
-	--pos-verb: var(--blue);
-	--pos-noun: var(--green);
-	--pos-adjective: var(--orange);
-	--pos-adverb: var(--purple);
-	--pos-particle: var(--comment);
-	--pos-other: var(--fg);
+	/* Anki knowledge states (sentence underlines, state colors) */
+	--know-unknown: #ff5555;
+	--know-new: #62a0ea;
+	--know-young: #ffb86c;
+	--know-mature: #50fa7b;
 
-	--border: var(--bg-lighter);
+	/* POS label colors */
+	--pos-verb: #62a0ea;
+	--pos-noun: #50fa7b;
+	--pos-adjective: #ffb86c;
+	--pos-adverb: #bd93f9;
+	--pos-particle: #6272a4;
+	--pos-other: #f8f8f2;
+
 	--radius: 6px;
 
 	color-scheme: dark;
-}
-
-/* Soft warm paper, well below pure white — the near-white palette read as
- * blinding next to the dark default. Same darkest → lightest layering. */
-:root[data-theme='light'] {
-	--bg-darker: #d9d7cc;
-	--bg-dark: #e7e5da;
-	--bg: #efede2;
-	--bg-light: #f5f3e8;
-	--bg-lighter: #faf8ee;
-
-	--fg: #282a36;
-	--selection: #c8c8dc;
-	--comment: #6e7f95;
-
-	--red: #c85050;
-	--orange: #d8863c;
-	--yellow: #b0a030;
-	--green: #3caa64;
-	--blue: #4682b4;
-	--purple: #9678dc;
-	--cyan: #2896c8;
-	--pink: #e682c8;
-
-	--border: #c6c4b6;
-
-	color-scheme: light;
 }
 
 * {
@@ -99,7 +76,7 @@ body {
 
 body {
 	background: var(--bg);
-	color: var(--fg);
+	color: var(--text);
 	font-family: 'Noto Sans JP', system-ui, sans-serif;
 	font-size: 14px;
 	line-height: 1.5;
@@ -113,8 +90,8 @@ body.font-serif {
 
 button {
 	font: inherit;
-	color: var(--fg);
-	background: var(--bg-light);
+	color: var(--text);
+	background: var(--bg-raised);
 	border: 1px solid var(--border);
 	border-radius: var(--radius);
 	padding: 0.4rem 0.8rem;
@@ -122,7 +99,7 @@ button {
 }
 
 button:hover:not(:disabled) {
-	background: var(--bg-lighter);
+	background: var(--bg-hover);
 }
 
 button:disabled {
@@ -136,8 +113,8 @@ input:not([type='checkbox']):not([type='radio']):not([type='range']),
 select,
 textarea {
 	font: inherit;
-	color: var(--fg);
-	background: var(--bg-light);
+	color: var(--text);
+	background: var(--bg-raised);
 	border: 1px solid var(--border);
 	border-radius: 3px;
 	padding: 0.3rem 0.5rem;
@@ -145,12 +122,12 @@ textarea {
 
 /* Keyboard-focus affordance (mouse clicks don't trigger :focus-visible). */
 :focus-visible {
-	outline: 2px solid var(--cyan);
+	outline: 2px solid var(--accent);
 	outline-offset: 1px;
 }
 
 a {
-	color: var(--blue);
+	color: var(--link);
 }
 
 ::selection {
@@ -162,11 +139,11 @@ a {
 	height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-	background: var(--bg-lighter);
+	background: var(--bg-hover);
 	border-radius: 5px;
 }
 ::-webkit-scrollbar-track {
-	background: var(--bg-dark);
+	background: var(--bg-panel);
 }
 
 /* App shell: fixed top bar over the main region. 100% (not 100vh): vh ignores

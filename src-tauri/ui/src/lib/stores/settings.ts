@@ -24,6 +24,17 @@ export async function toggleDarkMode(): Promise<void> {
 	await patchSettings({ dark_mode: !s.dark_mode });
 }
 
+/** Assigns a theme to its preferred slot and switches to it. */
+export const setPreferredTheme = (slot: 'dark' | 'light', id: string) =>
+	patchSettings(
+		slot === 'dark' ? { theme_dark: id, dark_mode: true } : { theme_light: id, dark_mode: false }
+	);
+
+export const saveUserThemes = (
+	themes: ipc.UserTheme[],
+	slots?: { theme_dark?: string; theme_light?: string }
+) => patchSettings({ user_themes: themes.map((t) => ({ ...t, colors: { ...t.colors } })), ...slots });
+
 export async function toggleSerifFont(): Promise<void> {
 	const s = get(settings);
 	if (!s) return;

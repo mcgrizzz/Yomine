@@ -345,7 +345,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: color-mix(in srgb, var(--bg-darker) 70%, transparent);
+		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
 		z-index: 50;
 	}
 	.dialog {
@@ -354,7 +354,7 @@
 		gap: 0.6rem;
 		width: min(620px, 92%);
 		padding-bottom: 0.75rem;
-		background: var(--bg-dark);
+		background: var(--bg-panel);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
@@ -369,7 +369,7 @@
 	header h2 {
 		margin: 0;
 		font-size: 1.05rem;
-		color: var(--cyan);
+		color: var(--accent);
 	}
 	.close {
 		padding: 0.1rem 0.4rem;
@@ -377,7 +377,7 @@
 	.empty {
 		margin: 0;
 		padding: 0 1rem;
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	/* Recommended section. */
 	.recommended {
@@ -400,7 +400,7 @@
 		font-size: 0.85rem;
 		text-transform: uppercase;
 		letter-spacing: 0.03em;
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	.rec-row {
 		display: flex;
@@ -419,11 +419,11 @@
 	.rev {
 		font-weight: 400;
 		font-size: 0.8rem;
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	.rec-desc {
 		font-size: 0.8rem;
-		color: var(--comment);
+		color: var(--text-muted);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -436,26 +436,26 @@
 		white-space: nowrap;
 	}
 	.badge.up-to-date {
-		color: var(--green);
-		border-color: var(--green);
+		color: var(--success);
+		border-color: var(--success);
 	}
 	.badge.update-available {
-		color: var(--yellow);
-		border-color: var(--yellow);
+		color: var(--warning);
+		border-color: var(--warning);
 	}
 	.badge.not-installed,
 	.badge.installed {
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	.hint {
 		margin: 0;
 		font-size: 0.8rem;
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	.op-error {
 		margin: 0;
 		font-size: 0.8rem;
-		color: var(--red);
+		color: var(--danger);
 	}
 	/* Per-row remove (two-step confirm). */
 	.del {
@@ -476,7 +476,7 @@
 		padding: 0.15rem 0.4rem;
 		font-size: 0.75rem;
 		color: #fff;
-		background: var(--red);
+		background: var(--danger);
 		border: none;
 		border-radius: 3px;
 	}
@@ -502,7 +502,7 @@
 		border-bottom: 1px solid var(--border);
 	}
 	.row:nth-child(even) {
-		background: color-mix(in srgb, var(--bg-light) 45%, transparent);
+		background: color-mix(in srgb, var(--bg-raised) 45%, transparent);
 	}
 	.name {
 		white-space: nowrap;
@@ -510,7 +510,7 @@
 		text-overflow: ellipsis;
 	}
 	.name.off {
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	.row input[type='range'] {
 		width: 100%;
@@ -524,8 +524,8 @@
 	.value input {
 		width: 4.4rem;
 		padding: 0.2rem 0.35rem;
-		background: var(--bg-light);
-		color: var(--fg);
+		background: var(--bg-raised);
+		color: var(--text);
 		border: 1px solid var(--border);
 		border-radius: 3px;
 	}
@@ -541,7 +541,7 @@
 		min-height: 1.2rem;
 		padding: 0 1rem;
 		font-size: 0.85rem;
-		color: var(--yellow);
+		color: var(--warning);
 	}
 	footer {
 		display: flex;

@@ -163,7 +163,7 @@
 		gap: 0.4rem;
 	}
 	.lbl {
-		color: var(--comment);
+		color: var(--text-muted);
 		text-transform: uppercase;
 		font-size: 0.7rem;
 		letter-spacing: 0.03em;
@@ -171,24 +171,24 @@
 	.pos {
 		cursor: pointer;
 		padding: 0.3rem 0.6rem;
-		background: var(--bg-light);
+		background: var(--bg-raised);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
-		color: var(--fg);
+		color: var(--text);
 	}
 	.jlpt {
 		cursor: pointer;
 		padding: 0.2rem 0.45rem;
-		background: color-mix(in srgb, var(--cyan) 10%, transparent);
-		border: 1px solid color-mix(in srgb, var(--cyan) 35%, transparent);
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
+		border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
 		border-radius: var(--radius);
-		color: var(--fg);
+		color: var(--text);
 		font-size: 0.75rem;
 	}
 	.jlpt.off {
-		background: var(--bg-light);
+		background: var(--bg-raised);
 		border-color: var(--border);
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	/* Min/Max numeric bounds beside the slider (egui's DragValues). */
 	.bound {
@@ -197,23 +197,23 @@
 		font-variant-numeric: tabular-nums;
 	}
 	.dash {
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	.unknown {
 		display: flex;
 		align-items: center;
 		gap: 0.2rem;
-		color: var(--comment);
+		color: var(--text-muted);
 		cursor: pointer;
 	}
 	.no-freq {
-		color: var(--red);
+		color: var(--danger);
 	}
 	.spacer {
 		flex: 1;
 	}
 	.count {
-		color: var(--comment);
+		color: var(--text-muted);
 		font-variant-numeric: tabular-nums;
 		white-space: nowrap;
 	}

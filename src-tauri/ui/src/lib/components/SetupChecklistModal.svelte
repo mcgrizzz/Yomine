@@ -187,7 +187,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: color-mix(in srgb, var(--bg-darker) 70%, transparent);
+		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
 		z-index: 50;
 	}
 	.dialog {
@@ -195,7 +195,7 @@
 		flex-direction: column;
 		width: min(600px, 92%);
 		max-height: 85%;
-		background: var(--bg-dark);
+		background: var(--bg-panel);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
@@ -210,7 +210,7 @@
 	header h2 {
 		margin: 0;
 		font-size: 1.05rem;
-		color: var(--cyan);
+		color: var(--accent);
 	}
 	.close {
 		padding: 0.1rem 0.4rem;
@@ -248,18 +248,16 @@
 	}
 	.desc {
 		font-size: 0.8rem;
-		color: var(--comment);
+		color: var(--text-muted);
 	}
-	/* Status colors mirror egui: green complete, red incomplete-required,
-	   grey incomplete-optional. */
 	.complete {
-		color: #00c800;
+		color: var(--success);
 	}
 	.required {
-		color: #c85050;
+		color: var(--danger);
 	}
 	.optional {
-		color: #969696;
+		color: var(--text-muted);
 	}
 	.actions {
 		display: flex;

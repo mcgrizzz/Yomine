@@ -88,7 +88,7 @@
 		}, 0)
 	);
 
-	const COLORS = ['var(--cyan)', 'var(--orange)', 'var(--green)', 'var(--yellow)'];
+	const COLORS = ['var(--accent)', 'var(--know-young)', 'var(--success)', 'var(--warning)'];
 	const colorOf = (i: number) => COLORS[i % COLORS.length];
 
 	// Must match `freqLabel` in TermTable.svelte.
@@ -290,7 +290,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: color-mix(in srgb, var(--bg-darker) 70%, transparent);
+		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
 		z-index: 50;
 	}
 	.dialog {
@@ -299,7 +299,7 @@
 		gap: 0.6rem;
 		width: min(460px, 92%);
 		padding-bottom: 0.75rem;
-		background: var(--bg-dark);
+		background: var(--bg-panel);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
@@ -314,7 +314,7 @@
 	header h2 {
 		margin: 0;
 		font-size: 1.05rem;
-		color: var(--cyan);
+		color: var(--accent);
 	}
 	.close {
 		padding: 0.1rem 0.4rem;
@@ -326,13 +326,13 @@
 		font-size: 0.9rem;
 	}
 	.count {
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	.sentence {
 		margin: 0 1rem;
 		padding: 0.5rem 0.75rem;
-		background: var(--bg-light);
-		border-left: 3px solid var(--cyan);
+		background: var(--bg-raised);
+		border-left: 3px solid var(--accent);
 		border-radius: var(--radius);
 		font-size: 1.05rem;
 	}
@@ -349,24 +349,24 @@
 		cursor: pointer;
 		padding: 0.3rem 0.8rem;
 		font-size: 1.15rem;
-		background: var(--bg-light);
+		background: var(--bg-raised);
 		border: 1px solid;
 		border-radius: var(--radius);
 	}
 	.pick:hover {
-		background: var(--bg-lighter);
+		background: var(--bg-hover);
 	}
 	.pick .freq {
 		margin-left: 0.35rem;
 		font-size: 0.75rem;
-		color: var(--comment);
+		color: var(--text-muted);
 		font-variant-numeric: tabular-nums;
 	}
 	.hint {
 		margin: 0;
 		padding: 0 1rem;
 		font-size: 0.8rem;
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	footer {
 		display: flex;
