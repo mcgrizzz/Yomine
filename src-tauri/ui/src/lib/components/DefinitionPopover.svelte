@@ -376,7 +376,7 @@
 	}
 	.expression {
 		font-size: 1.3rem;
-		color: var(--danger);
+		color: var(--term);
 	}
 	.expression :global(ruby) {
 		line-height: 1.9;

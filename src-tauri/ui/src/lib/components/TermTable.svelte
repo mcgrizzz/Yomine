@@ -47,7 +47,6 @@
 	} from '$lib/stores';
 	import { Menu } from '@tauri-apps/api/menu';
 	import { furiganaText } from '$lib/furigana';
-	import { posColor } from '$lib/pos';
 	import DefinitionPopover from './DefinitionPopover.svelte';
 	import Furigana from './Furigana.svelte';
 	import SentenceConflictModal, { type BatchEntry } from './SentenceConflictModal.svelte';
@@ -789,7 +788,7 @@
 				{:else if id === 'frequency'}
 					<span class="num">{freqLabel(term)}</span>
 				{:else if id === 'pos'}
-					<span class="pos" style="color: {posColor(term.part_of_speech)}">
+					<span class="pos">
 						{posLabels[term.part_of_speech] ?? term.part_of_speech}
 					</span>
 				{/if}
@@ -955,7 +954,7 @@
 	}
 	.term {
 		font-size: 1.5rem;
-		color: var(--danger);
+		color: var(--term);
 		line-height: 1.1;
 		cursor: text;
 	}
@@ -1031,6 +1030,7 @@
 	}
 	.pos {
 		font-size: 0.9rem;
+		color: var(--text-muted);
 	}
 	.jlpt-chip {
 		padding: 0.05rem 0.3rem;

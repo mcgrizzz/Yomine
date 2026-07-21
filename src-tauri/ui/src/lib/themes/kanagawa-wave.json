@@ -1,0 +1,32 @@
+{
+	"id": "kanagawa-wave",
+	"label": "Kanagawa Wave",
+	"dark": true,
+	"colors": {
+		"bg-deep": "#131317",
+		"bg-panel": "#16161d",
+		"bg": "#1f1f28",
+		"bg-raised": "#2a2a37",
+		"bg-hover": "#363646",
+		"text": "#dcd7ba",
+		"text-muted": "#94938a",
+		"selection": "#2d4f67",
+		"border": "#54546d",
+		"accent": "#7e9cd8",
+		"term": "#ff5d62",
+		"link": "#7fb4ca",
+		"info": "#7fb4ca",
+		"success": "#98bb6c",
+		"warning": "#e6c384",
+		"danger": "#ff5d62",
+		"status-ok": "#98bb6c",
+		"status-warn": "#e6c384",
+		"status-error": "#ff5d62",
+		"status-busy": "#7fb4ca",
+		"status-off": "#727169",
+		"know-unknown": "#ff5d62",
+		"know-new": "#7fb4ca",
+		"know-young": "#ffa066",
+		"know-mature": "#98bb6c"
+	}
+}

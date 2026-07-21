@@ -54,12 +54,12 @@
 		openMenu = null;
 	}
 
-	const GREEN = 'var(--success)';
-	const YELLOW = 'var(--warning)';
-	const BLUE = 'var(--info)';
-	const RED = 'var(--danger)';
-	const GREY = 'var(--text-muted)';
-	const ANKI_RED = 'var(--danger)';
+	const GREEN = 'var(--status-ok)';
+	const YELLOW = 'var(--status-warn)';
+	const BLUE = 'var(--status-busy)';
+	const RED = 'var(--status-error)';
+	const GREY = 'var(--status-off)';
+	const ANKI_RED = 'var(--status-error)';
 
 	const asbplayer = $derived.by(() => {
 		const s = $playerStatus;

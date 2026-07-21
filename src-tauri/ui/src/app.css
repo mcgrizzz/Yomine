@@ -1,7 +1,7 @@
 /* Global shell + the semantic token fallback. The values below are the
  * `dracula` theme; +layout.svelte overwrites every token inline from the
  * active theme (lib/themes.ts) once settings hydrate — keep this block in
- * sync with the dracula palette there. */
+ * sync with lib/themes/dracula.json. */
 
 /* Bundled Japanese faces (assets/fonts/Noto{Sans,Serif}JP-Regular.ttf, copied
  * to static/fonts so adapter-static serves them at /fonts/*). The `body` /
@@ -36,25 +36,26 @@
 	--border: #424550;
 
 	--accent: #8be9fd;
+	--term: #ff5555;
 	--link: #62a0ea;
 	--info: #62a0ea;
 	--success: #50fa7b;
 	--warning: #f1fa8c;
 	--danger: #ff5555;
 
+	/* Connection status dots — must read as green/yellow/red/blue/grey at dot
+	 * size even when a theme's semantic accents drift (e.g. chartreuse greens) */
+	--status-ok: #50fa7b;
+	--status-warn: #f1fa8c;
+	--status-error: #ff5555;
+	--status-busy: #62a0ea;
+	--status-off: #6272a4;
+
 	/* Anki knowledge states (sentence underlines, state colors) */
 	--know-unknown: #ff5555;
 	--know-new: #62a0ea;
 	--know-young: #ffb86c;
 	--know-mature: #50fa7b;
-
-	/* POS label colors */
-	--pos-verb: #62a0ea;
-	--pos-noun: #50fa7b;
-	--pos-adjective: #ffb86c;
-	--pos-adverb: #bd93f9;
-	--pos-particle: #6272a4;
-	--pos-other: #f8f8f2;
 
 	--radius: 6px;
 

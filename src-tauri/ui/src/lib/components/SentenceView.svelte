@@ -212,7 +212,7 @@
 			class:know-new={know === 'new'}
 			class:know-young={know === 'young'}
 			class:know-mature={know === 'mature'}
-			style="color: {isTerm ? 'var(--danger)' : 'inherit'}"
+			style="color: {isTerm ? 'var(--term)' : 'inherit'}"
 			onmouseenter={(e) => segEnter(e, seg)}
 			onmouseleave={() => onhover(null)}
 			><Furigana surface={seg.surface} reading={seg.reading} /></span

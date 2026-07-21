@@ -1,0 +1,32 @@
+{
+	"id": "noctis-lux",
+	"label": "Noctis Lux",
+	"dark": false,
+	"colors": {
+		"bg-deep": "#efe4cb",
+		"bg-panel": "#f6eeda",
+		"bg": "#fef8ec",
+		"bg-raised": "#fffcf4",
+		"bg-hover": "#e8f0eb",
+		"text": "#005661",
+		"text-muted": "#4d7275",
+		"selection": "#cbe5e6",
+		"border": "#dccfb2",
+		"accent": "#0077c1",
+		"term": "#e34e1c",
+		"link": "#0077c1",
+		"info": "#0077c1",
+		"success": "#00844d",
+		"warning": "#a26419",
+		"danger": "#c83f3f",
+		"status-ok": "#00b368",
+		"status-warn": "#e0940a",
+		"status-error": "#d64545",
+		"status-busy": "#0094f0",
+		"status-off": "#8ca6a6",
+		"know-unknown": "#c83f3f",
+		"know-new": "#0077c1",
+		"know-young": "#ac5f00",
+		"know-mature": "#00844d"
+	}
+}
