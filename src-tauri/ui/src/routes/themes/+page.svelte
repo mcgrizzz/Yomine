@@ -48,12 +48,16 @@
 				<span class="strip">
 					{#each SURFACES as s (s)}<span style="background: {theme.colors[s]}"></span>{/each}
 				</span>
+				{#if theme.id === preferredDark || theme.id === preferredLight}
+					<span
+						class="slot-badge"
+						title={theme.dark ? 'Your dark theme' : 'Your light theme'}
+						style="background: {theme.colors.accent}; color: {theme.colors.bg}"
+						>{theme.dark ? 'DARK' : 'LIGHT'}</span
+					>
+				{/if}
 				<span class="card-main">
-					<span class="card-name" style="color: {theme.colors.accent}">
-						{theme.label}
-						{#if theme.id === preferredDark}<span title="Your dark theme">🌙</span>{/if}
-						{#if theme.id === preferredLight}<span title="Your light theme">☀️</span>{/if}
-					</span>
+					<span class="card-name" style="color: {theme.colors.accent}">{theme.label}</span>
 					<span class="chips">
 						{#each SWATCHES as c (c)}
 							<span class="chip" style="background: {theme.colors[c]}; color: {theme.colors.bg}"
@@ -76,10 +80,6 @@
 		{/each}
 		<button class="theme-card new" onclick={() => openEditor(null)}>＋ New theme</button>
 	</div>
-	<p class="hint">
-		Clicking a dark theme sets your dark pick, a light theme your light pick — the main window's
-		light/dark toggle switches between the two.
-	</p>
 </div>
 
 <ThemeEditorModal bind:open={editorOpen} initial={editorInitial} />
@@ -146,9 +146,19 @@
 		font-size: 0.75rem;
 		line-height: 1;
 	}
+	.slot-badge {
+		position: absolute;
+		bottom: 0.3rem;
+		right: 0.3rem;
+		padding: 0.1rem 0.4rem;
+		border-radius: 999px;
+		font-size: 0.6rem;
+		font-weight: 700;
+		letter-spacing: 0.05em;
+	}
 	.theme-card .edit {
 		position: absolute;
-		top: 0.25rem;
+		bottom: 0.25rem;
 		right: 0.25rem;
 		padding: 0 0.3rem;
 		font-size: 0.75rem;

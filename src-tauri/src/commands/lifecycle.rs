@@ -174,7 +174,7 @@ pub async fn open_themes_window(app: AppHandle) -> Result<(), String> {
     }
     WebviewWindowBuilder::new(&app, "themes", WebviewUrl::App("/themes".into()))
         .title("Themes")
-        .inner_size(600.0, 560.0)
+        .inner_size(800.0, 500.0)
         .min_inner_size(380.0, 320.0)
         .build()
         .map_err(|e| e.to_string())?;
