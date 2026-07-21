@@ -213,7 +213,6 @@
 		(pos.height !== null ? `height: ${pos.height}px; ` : '') +
 		pos.anchored}
 	onclick={(e) => e.stopPropagation()}
-	oncontextmenu={(e) => e.stopPropagation()}
 >
 	{#if showMine && multiFormat}
 		<div class="format-row">
@@ -385,6 +384,8 @@
 	.expression :global(rt) {
 		font-size: 0.55em;
 		color: var(--comment);
+		user-select: none;
+		-webkit-user-select: none;
 	}
 	.reading {
 		color: var(--comment);

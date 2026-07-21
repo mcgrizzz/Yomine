@@ -33,5 +33,7 @@
 		line-height: 1;
 		font-weight: 400;
 		color: var(--comment);
+		user-select: none;
+		-webkit-user-select: none;
 	}
 </style>
