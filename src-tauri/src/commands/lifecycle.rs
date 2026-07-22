@@ -103,6 +103,11 @@ pub async fn load_language_tools(
             drop(guard);
             let _ = progress.send(LoadingMessage::clear());
             let _ = app.emit(names::LANGUAGE_TOOLS_STATUS, LanguageToolsStatus::Ready);
+
+            let app_handle = app.clone();
+            tauri::async_runtime::spawn(async move {
+                crate::background::refresh_knowledge_summary(&app_handle).await;
+            });
             Ok(())
         }
         Err(e) => {
@@ -240,13 +245,17 @@ pub fn save_settings(
     let _ = app.emit(names::SETTINGS_CHANGED, settings.clone());
 
     let mut guard = state.lock().unwrap();
+
+    let summary_inputs_changed = guard.settings.anki_interval != settings.anki_interval
+        || guard.settings.frequency_weights != settings.frequency_weights;
     guard.settings = settings;
     let anki_interval = guard.settings.anki_interval;
     if let Some(tools) = guard.language_tools.as_mut() {
         tools.known_interval = anki_interval;
     }
-    // Known-interval / frequency weights feed the knowledge summary; recompute it.
-    guard.knowledge_dirty.store(true, Ordering::Relaxed);
+    if summary_inputs_changed {
+        guard.knowledge_dirty.store(true, Ordering::Relaxed);
+    }
     // `frequency_manager` is behind an `Arc` with interior mutability, so clone the
     // handle to drop the borrow on `guard` before reapplying weights.
     let manager = guard.language_tools.as_ref().map(|t| Arc::clone(&t.frequency_manager));

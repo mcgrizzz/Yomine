@@ -3,7 +3,7 @@
 import { get, writable } from 'svelte/store';
 import * as ipc from '$lib/ipc';
 import { lastError } from './ui';
-import { posEnabled } from './controls';
+import { type FreqFilterState, posEnabled } from './controls';
 import { refreshMinedState } from './mining';
 
 export const settings = writable<ipc.SettingsData | null>(null);
@@ -106,6 +106,16 @@ export async function saveAnkiSettings(
 		return false;
 	}
 }
+
+export const saveJlptFilters = (filters: Record<string, boolean>) =>
+	patchSettings({ jlpt_filters: { ...filters } });
+
+export const saveFreqFilter = (f: FreqFilterState) =>
+	patchSettings({
+		freq_filter_min: f.min > f.lo ? Math.round(f.min) : null,
+		freq_filter_max: f.max < f.hi ? Math.round(f.max) : null,
+		freq_include_unknown: f.includeUnknown
+	});
 
 export const saveTextFilters = (presets: Record<string, boolean>, filters: ipc.TextFilterSetting[]) =>
 	patchSettings({

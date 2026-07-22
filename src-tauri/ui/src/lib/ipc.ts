@@ -211,6 +211,12 @@ export interface SettingsData {
 	websocket_settings: { port: number };
 	frequency_weights: Record<string, FrequencyDictionarySetting>;
 	pos_filters: Record<string, boolean>;
+	/** JLPT chip key (N5..N1, 'none') → enabled; missing = enabled. */
+	jlpt_filters: Record<string, boolean>;
+	/** Absolute harmonic ranks; null = not narrowed (full range). */
+	freq_filter_min: number | null;
+	freq_filter_max: number | null;
+	freq_include_unknown: boolean;
 	use_serif_font: boolean;
 	/** Which preferred theme slot is active (`theme_dark` vs `theme_light`). */
 	dark_mode: boolean;

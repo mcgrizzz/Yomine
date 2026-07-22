@@ -6,7 +6,8 @@
 		hi,
 		min,
 		max,
-		onchange
+		onchange,
+		oncommit
 	}: {
 		/** Data bounds (slider extent). `lo` is ≥1 (freqBounds floors it), so the
 		 * log mapping is always defined. */
@@ -16,6 +17,7 @@
 		min: number;
 		max: number;
 		onchange: (min: number, max: number) => void;
+		oncommit?: () => void;
 	} = $props();
 
 	const clamp = (v: number, a: number, b: number) => Math.min(Math.max(v, a), b);
@@ -61,7 +63,9 @@
 		if (dragging) apply(dragging, fracAt(e));
 	}
 	function up() {
+		if (!dragging) return;
 		dragging = null;
+		oncommit?.();
 	}
 
 	function key(which: 'min' | 'max', e: KeyboardEvent) {
@@ -69,6 +73,7 @@
 		if (step === 0) return;
 		e.preventDefault();
 		apply(which, clamp((which === 'min' ? minFrac : maxFrac) + step, 0, 1));
+		oncommit?.();
 	}
 </script>
 

@@ -40,6 +40,7 @@
 	let openMenu = $state<MenuName | null>(null);
 
 	const toolsReady = $derived($languageToolsStatus === 'ready');
+	const toolsError = $derived(typeof $languageToolsStatus === 'object');
 	const isDark = $derived($settings?.dark_mode ?? true);
 	const isSerif = $derived($settings?.use_serif_font ?? false);
 
@@ -162,12 +163,12 @@
 		<button class="menu-trigger" onclick={(e) => toggleMenu('file', e)}>File</button>
 		{#if openMenu === 'file'}
 			<div class="menu-panel">
-				<button onclick={() => run(openAndProcessFile)} disabled={!toolsReady}
+				<button onclick={() => run(openAndProcessFile)} disabled={toolsError}
 					>Open New File</button
 				>
 				<button
 					onclick={() => run(openAsbplayerModal)}
-					disabled={!toolsReady || $playerStatus.ws_clients === 0}
+					disabled={toolsError || $playerStatus.ws_clients === 0}
 					title={$playerStatus.ws_clients === 0 ? 'asbplayer is not connected' : undefined}
 					>Load from asbplayer…</button
 				>
@@ -278,7 +279,7 @@
 					{/if}
 					<button
 						onclick={() => run(openAsbplayerModal)}
-						disabled={!toolsReady || $playerStatus.ws_clients === 0}
+						disabled={toolsError || $playerStatus.ws_clients === 0}
 						>Load from asbplayer…</button
 					>
 					<label

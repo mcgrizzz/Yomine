@@ -26,6 +26,8 @@ use yomine::{
 
 use crate::dto::KnowledgeSummaryDto;
 
+pub const KNOWLEDGE_SUMMARY_CACHE: &str = "knowledge_summary_cache.json";
+
 #[derive(Default)]
 pub struct FileData {
     pub source_file: Option<SourceFile>,
@@ -77,7 +79,11 @@ impl AppState {
             analysis_cancel: Arc::new(AtomicBool::new(false)),
             last_analysis: None,
             knowledge_dirty: Arc::new(AtomicBool::new(true)),
-            knowledge_summary: None,
+            knowledge_summary: {
+                let cached: KnowledgeSummaryDto =
+                    yomine::persistence::load_json_or_default(KNOWLEDGE_SUMMARY_CACHE);
+                (!cached.jlpt.is_empty() || !cached.frequency.is_empty()).then_some(cached)
+            },
             recommended_catalog: Vec::new(),
         }
     }
