@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Sorting lives in the table's column headers; POS gets a single modal here
 	// (deliberate deviation from egui's per-header popovers).
+	import { get } from 'svelte/store';
 	import {
 		tableSearch,
 		posEnabled,
@@ -9,7 +10,9 @@
 		jlptEnabled,
 		visibleTerms,
 		fileResult,
-		openPosModal
+		openPosModal,
+		saveJlptFilters,
+		saveFreqFilter
 	} from '$lib/stores';
 	import { JLPT_CHIPS, type JlptChip } from '$lib/table';
 	import DualSlider from './DualSlider.svelte';
@@ -34,6 +37,7 @@
 			const to = chips.indexOf(key);
 			const [lo, hi] = from <= to ? [from, to] : [to, from];
 			jlptEnabled.set(Object.fromEntries(chips.map((k, i) => [k, i >= lo && i <= hi])));
+			void saveJlptFilters(get(jlptEnabled));
 			return;
 		}
 		jlptAnchor = key;
@@ -43,10 +47,15 @@
 			if (isSolo) return {};
 			return Object.fromEntries(chips.map((k) => [k, k === key]));
 		});
+		void saveJlptFilters(get(jlptEnabled));
 	}
 
 	// Slider drags apply live; the numeric fields commit on change, clamped to
 	// the bounds and to each other.
+	function persistFreq() {
+		const f = get(freqFilter);
+		if (f) void saveFreqFilter(f);
+	}
 	function setRange(min: number, max: number) {
 		freqFilter.update((f) => (f ? { ...f, min, max } : f));
 	}
@@ -56,6 +65,7 @@
 			const min = Math.min(Math.max(v, f.lo), f.hi);
 			return { ...f, min, max: Math.max(f.max, min) };
 		});
+		persistFreq();
 	}
 	function commitMax(v: number) {
 		freqFilter.update((f) => {
@@ -63,9 +73,11 @@
 			const max = Math.min(Math.max(v, f.lo), f.hi);
 			return { ...f, max, min: Math.min(f.min, max) };
 		});
+		persistFreq();
 	}
 	function setUnknown(on: boolean) {
 		freqFilter.update((f) => (f ? { ...f, includeUnknown: on } : f));
+		persistFreq();
 	}
 </script>
 
@@ -106,6 +118,7 @@
 				min={$freqFilter.min}
 				max={$freqFilter.max}
 				onchange={setRange}
+				oncommit={persistFreq}
 			/>
 			<input
 				class="bound"

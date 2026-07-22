@@ -1,7 +1,7 @@
 import { derived, get, writable } from 'svelte/store';
 import * as ipc from '$lib/ipc';
 import { lastError, overlay } from './ui';
-import { languageToolsStatus } from './status';
+import { ensureToolsReady, languageToolsStatus } from './status';
 import { refreshMinedState } from './mining';
 
 /** The currently loaded file + its terms, or `null` before any file is opened. */
@@ -22,6 +22,7 @@ export const isSupportedPath = (path: string): boolean => {
 
 /** Errors surface as a banner without clobbering the currently-loaded file. */
 export async function loadAndStore(path: string): Promise<void> {
+	if (!(await ensureToolsReady())) return;
 	try {
 		overlay.set('Processing file…');
 		const result = await ipc.processFile(path, (msg) => overlay.set(msg.message));

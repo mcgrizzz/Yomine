@@ -4,6 +4,9 @@ import type * as ipc from '$lib/ipc';
 /** Loading overlay text (`null` = hidden). Blocks the UI while shown. */
 export const overlay = writable<string | null>(null);
 
+/** Language-tools init progress for the corner pill (`null` = done/hidden). */
+export const initProgress = writable<string | null>(null);
+
 /** Last surfaced error (banner); `null` once dismissed. */
 export const lastError = writable<ipc.ErrorPayload | null>(null);
 

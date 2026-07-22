@@ -12,6 +12,7 @@
 		playerStatus,
 		languageToolsStatus,
 		overlay,
+		initProgress,
 		fileResult,
 		visibleTerms,
 		recentFiles,
@@ -63,7 +64,6 @@
 		return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 	}
 
-	const toolsReady = $derived($languageToolsStatus === 'ready');
 	const followOn = $derived(
 		($settings?.asbplayer_follow_new_media ?? false) ||
 			($settings?.asbplayer_follow_active_tab ?? false)
@@ -154,16 +154,16 @@
 				<h1 class="landing-title">No File Loaded</h1>
 				<p class="landing-jp">ファイルがまだ読み込まれていません</p>
 				<p class="landing-hint">ℹ You can drag and drop a file at any time to load it.</p>
-				<!-- While the language tools load, the landing renders behind the
-				     $overlay popup (same loading surface as everywhere else). -->
 				<div class="landing-actions">
-					<button class="landing-open" disabled={!toolsReady} onclick={openAndProcessFile}
+					<button class="landing-open" disabled={toolsError !== null} onclick={openAndProcessFile}
 						>Open New File</button
 					>
 					{#if $playerStatus.ws_clients > 0}
 						<!-- Only offered while asbplayer is actually connected (issue #105). -->
-						<button class="landing-open asb" disabled={!toolsReady} onclick={openAsbplayerModal}
-							>▶ Load from asbplayer</button
+						<button
+							class="landing-open asb"
+							disabled={toolsError !== null}
+							onclick={openAsbplayerModal}>▶ Load from asbplayer</button
 						>
 					{/if}
 				</div>
@@ -234,6 +234,10 @@
 
 	{#if $overlay}
 		<div class="overlay">{$overlay}</div>
+	{/if}
+
+	{#if $initProgress && !$overlay}
+		<div class="init-pill" role="status">{$initProgress}</div>
 	{/if}
 </div>
 
@@ -443,6 +447,23 @@
 		background: color-mix(in srgb, var(--bg-deep) 75%, transparent);
 		color: var(--text);
 		font-size: 1.1rem;
+	}
+	/* Non-blocking init indicator; escalates to .overlay if a load is requested. */
+	.init-pill {
+		position: fixed;
+		right: 1rem;
+		bottom: 1rem;
+		max-width: 24rem;
+		padding: 0.35rem 0.8rem;
+		background: var(--bg-raised);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		color: var(--text-muted);
+		font-size: 0.8rem;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 	}
 	.drop-overlay {
 		position: fixed;

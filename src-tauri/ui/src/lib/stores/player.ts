@@ -1,7 +1,7 @@
 import { derived, get, writable } from 'svelte/store';
 import * as ipc from '$lib/ipc';
 import { lastError, overlay } from './ui';
-import { languageToolsStatus } from './status';
+import { ensureToolsReady } from './status';
 import { fileResult } from './file';
 import { refreshMinedState } from './mining';
 
@@ -77,7 +77,7 @@ export async function loadFromAsbplayer(
 	media: ipc.BoundMedia,
 	trackNumbers: number[] | null
 ): Promise<boolean> {
-	if (get(languageToolsStatus) !== 'ready') return false;
+	if (!(await ensureToolsReady())) return false;
 	try {
 		overlay.set('Fetching subtitles from asbplayer…');
 		const tracks = media.loaded_subtitles;
