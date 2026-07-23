@@ -332,7 +332,7 @@
 		if ($playerStatus.mode !== 'asbplayer' || $playerStatus.ws_clients === 0)
 			return ' — no audio/screenshot without asbplayer';
 		if ($asbContext.loaded_from_asbplayer && !$asbContext.loaded_is_active)
-			return " — ⚠ asbplayer's active tab is not the loaded video";
+			return ' — ⚠ the bound media is not the active tab; mining may behave unexpectedly';
 		return '';
 	});
 	const selectableKeys = $derived(terms.filter((t) => !isMined(t)).map(termKey));

@@ -50,6 +50,8 @@ pub(crate) struct SeekCommand {
 #[derive(Debug, Serialize)]
 pub(crate) struct SeekBody {
     pub timestamp: f32,
+    #[serde(rename = "mediaId", skip_serializing_if = "Option::is_none")]
+    pub media_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
