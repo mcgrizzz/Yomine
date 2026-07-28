@@ -22,16 +22,24 @@ frequencies = [
 	{ term = "丘", reading = "おか", rank = 2000 },
 	{ term = "になると", reading = "になると", rank = 4000 },
 	{ term = "手がかり", reading = "てがかり", rank = 3000 },
-	{ term = "なる", reading = "なる", rank = 100 },
+	{ term = "なる", reading = "なる", rank = 100, kana = true },
 	{ term = "複合体", reading = "ふくごうたい", rank = 78145 },
 	{ term = "複合", reading = "ふくごう", rank = 15917 },
 	{ term = "体", reading = "たい", rank = 1401 },
+	{ term = "中途半端", reading = "ちゅうとはんぱ", rank = 1000 },
+	{ term = "中途", reading = "ちゅうと", rank = 20000 },
+	{ term = "半端", reading = "はんぱ", rank = 15000 },
+	{ term = "相変わらず", reading = "あいかわらず", rank = 1000 },
+	{ term = "変わる", reading = "かわる", rank = 500 },
+	{ term = "気になる", reading = "きになる", rank = 3000 },
+	{ term = "気", reading = "き", rank = 200 },
 ]
 
 [[case]]
 name = "rendaku compound promoted with the corrected reading"
 text = "株式会社で働いています。"
 terms = [{ surface = "株式会社", reading = "かぶしきがいしゃ", pos = "NounExpression" }]
+absent = ["株式", "会社"]
 
 # 3-char compounds are promoted only when every component is a noun and the
 # surface is all kanji (min_len drops from 4 to 3 for that shape).
@@ -63,3 +71,33 @@ terms = [{ surface = "複合体", reading = "ふくごうたい", pos = "NounExp
 name = "になると is not pulled out as a phrase"
 text = "ココの存在が手がかりになると思っていたけど"
 absent = ["になると"]
+
+# Dictionaries key entries by citation form: a span ending in a conjugated
+# word (半端+な, なっ+た) matches via the trailing term's lemma.
+[[case]]
+name = "な-bound adjectival compound mines the citation-form lemma"
+text = "中途半端な動きをした"
+terms = [{ surface = "中途半端な", lemma = "中途半端", reading = "ちゅうとはんぱ", pos = "Expression" }]
+absent = ["中途半端な動き", "半端", "中途"]
+
+[[case]]
+name = "conjugated verb tail matches via citation form"
+text = "彼のことが気になった。"
+terms = [{ surface = "気になった", lemma = "気になる", pos = "Expression" }]
+
+[[case]]
+name = "相変わらず promotes and suppresses its stranded prefix"
+text = "相変わらずひどいこと言うなぁ"
+terms = [{ surface = "相変わらず", lemma = "相変わらず", reading = "あいかわらず", pos = "Expression" }]
+absent = ["相"]
+
+# Interior particles mark a free combination, not a lexical compound: the
+# phrase is added but its component words still surface.
+[[case]]
+name = "particle-containing phrase keeps its components"
+text = "彼のことが気になる。"
+terms = [
+	{ surface = "気になる", pos = "Expression" },
+	{ surface = "気", lemma = "気" },
+	{ surface = "なる", lemma = "なる" },
+]

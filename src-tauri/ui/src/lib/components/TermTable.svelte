@@ -234,7 +234,13 @@
 		mine(term, occs);
 	}
 
-	function mine(term: Term, occs: Occurrence[], entryIndex?: number, formatName?: string) {
+	function mine(
+		term: Term,
+		occs: Occurrence[],
+		entryIndex?: number,
+		formatName?: string,
+		scanText?: string
+	) {
 		const occ = occs[Math.min(occIdx[termKey(term)] ?? 0, occs.length - 1)];
 		const ts = occ?.sentence.timestamp ?? null;
 		// asbplayer enrichment needs asbplayer active (same rule as seeking) + a cue.
@@ -243,7 +249,16 @@
 				? 'asbplayer'
 				: 'direct';
 		const surface = occ ? termHighlightText(term, occ) : term.surface_form;
-		void mineTerm(term, occ?.sentence.text ?? '', ts, via, surface, entryIndex, formatName);
+		void mineTerm(
+			term,
+			occ?.sentence.text ?? '',
+			ts,
+			via,
+			surface,
+			entryIndex,
+			formatName,
+			scanText
+		);
 	}
 
 	function retry(term: Term, occs: Occurrence[]) {
@@ -424,6 +439,7 @@
 					timestamp: occ?.sentence.timestamp ?? null,
 					entryIndex: $queuedMineOptions[key]?.entryIndex,
 					formatName: $queuedMineOptions[key]?.formatName,
+					scanText: $queuedMineOptions[key]?.scanText,
 					explicit: occIdx[key] !== undefined,
 					alternatives
 				};
@@ -431,13 +447,14 @@
 		const keys = entries.map((e) => normalizeSentence(e.sentence)).filter((s) => s !== '');
 		if (new Set(keys).size === keys.length) {
 			void mineQueue(
-				entries.map(({ term, surface, sentence, timestamp, entryIndex, formatName }) => ({
+				entries.map(({ term, surface, sentence, timestamp, entryIndex, formatName, scanText }) => ({
 					term,
 					surface,
 					sentence,
 					timestamp,
 					entryIndex,
-					formatName
+					formatName,
+					scanText
 				}))
 			);
 			return;
@@ -811,9 +828,9 @@
 			: 'Create an Anki card from the displayed sentence' + mediaNote}
 		formats={$cardFormats}
 		onmine={(entryIndex, formatName) =>
-			mineable && mine(mineable.term, mineable.occs, entryIndex, formatName)}
+			mineable && mine(mineable.term, mineable.occs, entryIndex, formatName, defPopover?.text)}
 		onqueue={(entryIndex, formatName) =>
-			mineable && queueWithEntry(termKey(mineable.term), entryIndex, formatName)}
+			mineable && queueWithEntry(termKey(mineable.term), entryIndex, formatName, defPopover?.text)}
 		onclose={() => (defPopover = null)}
 	/>
 {/if}

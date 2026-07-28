@@ -11,6 +11,7 @@
 //!   cargo run --example review              # 20 new Tatoeba sentences
 //!   cargo run --example review -- 50        # 50 of them
 //!   cargo run --example review -- 30 --file path/to/subs.srt   # sample a file
+//!   cargo run --example review -- --all --file subs.srt        # every line, in order
 
 use rand::seq::SliceRandom;
 use yomine::{
@@ -28,11 +29,12 @@ use yomine::{
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let count: usize = args.first().and_then(|a| a.parse().ok()).unwrap_or(20);
+    let all = args.iter().any(|a| a == "--all");
     let file =
         args.iter().position(|a| a == "--file").and_then(|i| args.get(i + 1)).map(String::from);
 
     let texts = match &file {
-        Some(path) => sample_file(path, count),
+        Some(path) => sample_file(path, count, all),
         None => save_to_corpus(fetch_tatoeba(count)),
     };
     if texts.is_empty() {
@@ -147,7 +149,7 @@ fn save_to_corpus(fetched: Vec<String>) -> Vec<String> {
     new_texts
 }
 
-fn sample_file(path: &str, count: usize) -> Vec<String> {
+fn sample_file(path: &str, count: usize, all: bool) -> Vec<String> {
     let content = std::fs::read_to_string(path).expect("read --file");
     let mut lines: Vec<String> = content
         .lines()
@@ -163,7 +165,9 @@ fn sample_file(path: &str, count: usize) -> Vec<String> {
         .map(String::from)
         .collect();
     lines.dedup();
-    lines.shuffle(&mut rand::rng());
-    lines.truncate(count);
+    if !all {
+        lines.shuffle(&mut rand::rng());
+        lines.truncate(count);
+    }
     lines
 }

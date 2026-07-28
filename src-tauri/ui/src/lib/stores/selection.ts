@@ -9,7 +9,7 @@ export const selectedTerms = writable<Set<string>>(new Set());
 /** Entry/format chosen via the popover's Queue button, keyed by termKey.
  * Missing key = defaults (first entry, first format). */
 export const queuedMineOptions = writable<
-	Record<string, { entryIndex?: number; formatName?: string }>
+	Record<string, { entryIndex?: number; formatName?: string; scanText?: string }>
 >({});
 
 function dropMineOptions(keys: string[]): void {
@@ -46,9 +46,14 @@ export function setSelected(keys: string[], on: boolean): void {
 }
 
 /** Select a term for batch mining with a specific Yomitan entry/format. */
-export function queueWithEntry(key: string, entryIndex: number, formatName?: string): void {
+export function queueWithEntry(
+	key: string,
+	entryIndex: number,
+	formatName?: string,
+	scanText?: string
+): void {
 	selectedTerms.update((s) => new Set(s).add(key));
-	queuedMineOptions.update((m) => ({ ...m, [key]: { entryIndex, formatName } }));
+	queuedMineOptions.update((m) => ({ ...m, [key]: { entryIndex, formatName, scanText } }));
 }
 
 /** Change the card format of a queued term (the Details panel's selector). */

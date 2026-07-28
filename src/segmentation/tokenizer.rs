@@ -93,6 +93,13 @@ pub fn extract_words(
                             frequency_manager.get_harmonic_frequency_for_pair(word, reading)
                         });
 
+                        if term.part_of_speech == POS::Verb {
+                            retain_verb_final_candidates(
+                                &mut sorted_deinflections,
+                                &term.surface_form,
+                            );
+                        }
+
                         if sorted_deinflections.len() > 0 {
                             let unidic_lemma =
                                 (term.lemma_form.clone(), term.lemma_reading.clone());
@@ -135,8 +142,9 @@ pub fn extract_words(
             },
         ));
 
-        //Add phrases without filtering the terms for now
-        for start in 0..sentence_terms.len() {
+        let base_len = sentence_terms.len();
+        let mut suppressed = vec![false; base_len];
+        for start in 0..base_len {
             for end in (start + 1..sentence_terms.len()).rev() {
                 let subrange = &sentence_terms[start..=end];
                 if !phrase_endpoint_ok(&subrange[0]) || !phrase_endpoint_ok(&subrange[end - start])
@@ -164,6 +172,25 @@ pub fn extract_words(
                         phrase.full_segment_reading = candidate;
                         freq = Some(f);
                         break;
+                    }
+                }
+
+                // dto.rs highlights Expressions by full_segment, so only the lemma takes the citation form.
+                if freq.is_none() {
+                    if let Some(citation) = citation_form_subrange(subrange) {
+                        let surface: String =
+                            citation.iter().map(|t| t.full_segment.as_str()).collect();
+                        for candidate in phrase_reading_candidates(&citation) {
+                            if let Some(f) = frequency_manager.get_harmonic_frequency_for_pair(
+                                &surface.normalize_long_vowel(),
+                                &candidate.normalize_long_vowel(),
+                            ) {
+                                phrase.lemma_form = surface.clone();
+                                phrase.lemma_reading = candidate;
+                                freq = Some(f);
+                                break;
+                            }
+                        }
                     }
                 }
 
@@ -200,6 +227,7 @@ pub fn extract_words(
                             POS::Noun | POS::CompoundNoun | POS::ProperNoun
                         )
                     });
+                    let all_content_words = subrange.iter().all(phrase_endpoint_ok);
 
                     let score_threshold = 10.0;
                     let ratio_threshold = 120.0;
@@ -240,6 +268,13 @@ pub fn extract_words(
                         phrase.frequencies = freq_map;
                         sentence_terms.push(phrase);
 
+                        if all_content_words {
+                            // The inner range re-reads the vec length, so `end` can index an already-pushed phrase.
+                            for flag in suppressed[start..=end.min(base_len - 1)].iter_mut() {
+                                *flag = true;
+                            }
+                        }
+
                         // Largest phrase at this start position is accepted; move to next start.
                         // (Was previously `break 'outer`, which stopped after the first phrase
                         // in the sentence — preventing detection of e.g. 土曜日 when an earlier
@@ -249,6 +284,13 @@ pub fn extract_words(
                 }
             }
         }
+
+        let mut idx = 0;
+        sentence_terms.retain(|_| {
+            let keep = idx >= base_len || !suppressed[idx];
+            idx += 1;
+            keep
+        });
 
         for term in terms.iter_mut() {
             if let Some(sentence_term) =
@@ -349,10 +391,29 @@ pub fn extract_words_for_frequency(
                         }
                         let mut phrase: Term = Term::from_slice(subrange);
 
-                        let freq = frequency_manager.get_harmonic_frequency_for_pair(
+                        let mut freq = frequency_manager.get_harmonic_frequency_for_pair(
                             &phrase.surface_form.normalize_long_vowel(),
                             &phrase.surface_reading.normalize_long_vowel(),
                         );
+
+                        if freq.is_none() {
+                            if let Some(citation) = citation_form_subrange(subrange) {
+                                let surface: String =
+                                    citation.iter().map(|t| t.full_segment.as_str()).collect();
+                                let reading: String = citation
+                                    .iter()
+                                    .map(|t| t.full_segment_reading.as_str())
+                                    .collect();
+                                if let Some(f) = frequency_manager.get_harmonic_frequency_for_pair(
+                                    &surface.normalize_long_vowel(),
+                                    &reading.normalize_long_vowel(),
+                                ) {
+                                    phrase.lemma_form = surface;
+                                    phrase.lemma_reading = reading;
+                                    freq = Some(f);
+                                }
+                            }
+                        }
 
                         if let Some(_frequency) = freq {
                             let char_count = phrase.lemma_form.chars().count();
@@ -449,6 +510,10 @@ pub fn batch_deinflect_terms(
                         frequency_manager.get_harmonic_frequency_for_pair(word, reading)
                     });
 
+                    if *pos == POS::Verb {
+                        retain_verb_final_candidates(&mut sorted_deinflections, surface_form);
+                    }
+
                     if !sorted_deinflections.is_empty() {
                         sorted_deinflections[0].clone()
                     } else {
@@ -467,6 +532,22 @@ pub fn batch_deinflect_terms(
         .collect();
 
     deinflection_map
+}
+
+// Verb dictionary forms always end in u-row kana; the ない/surface arms keep lexicalized words (つまらない).
+fn retain_verb_final_candidates(candidates: &mut Vec<(String, String)>, surface: &str) {
+    let verbish: Vec<(String, String)> = candidates
+        .iter()
+        .filter(|(word, _)| {
+            word.chars().last().is_some_and(|c| "うくぐすつぬぶむる".contains(c))
+                || word.ends_with("ない")
+                || word == surface
+        })
+        .cloned()
+        .collect();
+    if !verbish.is_empty() {
+        *candidates = verbish;
+    }
 }
 
 fn phrase_endpoint_ok(term: &Term) -> bool {
@@ -538,6 +619,23 @@ fn rendaku_variants(c: char) -> &'static [char] {
         'ほ' => &['ぼ', 'ぽ'],
         _ => &[],
     }
+}
+
+/// Swaps the trailing conjugated word's lemma into the span — dictionaries key by citation form, never 中途半端な.
+fn citation_form_subrange(subrange: &[Term]) -> Option<Vec<Term>> {
+    let last = subrange.last()?;
+    let conjugable = matches!(
+        last.part_of_speech,
+        POS::Verb | POS::SuruVerb | POS::Adjective | POS::AdjectivalNoun
+    );
+    if !conjugable || last.lemma_form.is_empty() || last.lemma_form == last.full_segment {
+        return None;
+    }
+    let mut terms = subrange.to_vec();
+    let last = terms.last_mut().expect("non-empty subrange");
+    last.full_segment = last.lemma_form.clone();
+    last.full_segment_reading = last.lemma_reading.clone();
+    Some(terms)
 }
 
 /// Candidate readings for a compound: the plain component concat first, then —

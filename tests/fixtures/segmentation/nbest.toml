@@ -16,13 +16,12 @@ frequencies = [
 	{ term = "待つ", reading = "まつ", rank = 500 },
 ]
 
+# A bad 口約+束 split could never promote 口約束, so the phrase's presence
+# proves the rescue; its components are suppressed as an all-noun compound.
 [[case]]
 name = "口約束 not split as 口約+束"
 text = "口約束はいけませんな"
-terms = [
-	{ surface = "約束", reading = "やくそく" },
-	{ surface = "口約束", reading = "くちやくそく", pos = "NounExpression" },
-]
+terms = [{ surface = "口約束", reading = "くちやくそく", pos = "NounExpression" }]
 absent = ["口約"]
 
 [[case]]

@@ -77,11 +77,13 @@ async function mineOne(
 	timestamp: ipc.TimeStampDto | null,
 	via: 'asbplayer' | 'direct',
 	entryIndex?: number,
-	formatName?: string
+	formatName?: string,
+	scanText?: string
 ): Promise<ipc.MineResult> {
 	const result = await ipc.mineTerm(
 		{
-			term: term.lemma_form,
+			// entryIndex is a position within the scan of scanText — mine_term must rescan that same string.
+			term: scanText ?? term.lemma_form,
 			surface,
 			sentence,
 			timestampSecs: timestamp?.start_secs ?? null,
@@ -117,13 +119,23 @@ export async function mineTerm(
 	via: 'asbplayer' | 'direct',
 	surface: string = term.surface_form,
 	entryIndex?: number,
-	formatName?: string
+	formatName?: string,
+	scanText?: string
 ): Promise<void> {
 	if (get(miningTerm) !== null || get(playerBusy)) return;
 	miningTerm.set(term.lemma_form);
 	playerBusy.set(true);
 	try {
-		const result = await mineOne(term, surface, sentence, timestamp, via, entryIndex, formatName);
+		const result = await mineOne(
+			term,
+			surface,
+			sentence,
+			timestamp,
+			via,
+			entryIndex,
+			formatName,
+			scanText
+		);
 		showNotice(
 			result.warning ??
 				(result.status === 'duplicate'
@@ -150,6 +162,8 @@ export interface QueueItem {
 	entryIndex?: number;
 	/** Yomitan card format chosen via the popover's Queue (default first). */
 	formatName?: string;
+	/** The text the popover scanned — entryIndex is only valid against it. */
+	scanText?: string;
 }
 
 /** Batch-mine progress (`null` = no queue running). */
@@ -208,7 +222,8 @@ export async function mineQueue(items: QueueItem[]): Promise<void> {
 					item.timestamp,
 					via,
 					item.entryIndex,
-					item.formatName
+					item.formatName,
+					item.scanText
 				);
 				if (result.status === 'duplicate') duplicates++;
 				else created++;

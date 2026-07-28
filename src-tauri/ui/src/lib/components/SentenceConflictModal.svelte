@@ -22,6 +22,8 @@
 		entryIndex?: number;
 		/** Yomitan card format chosen via the popover's Queue (default first). */
 		formatName?: string;
+		/** The text the popover scanned — entryIndex is only valid against it. */
+		scanText?: string;
 		/** The user explicitly navigated to this occurrence. */
 		explicit: boolean;
 		/** Occurrences with a different sentence than the chosen one. */
@@ -161,13 +163,14 @@
 		ondone(
 			work
 				.filter((e) => !skipped.has(e.key))
-				.map(({ term, surface, sentence, timestamp, entryIndex, formatName }) => ({
+				.map(({ term, surface, sentence, timestamp, entryIndex, formatName, scanText }) => ({
 					term,
 					surface,
 					sentence,
 					timestamp,
 					entryIndex,
-					formatName
+					formatName,
+					scanText
 				})),
 			patch
 		);

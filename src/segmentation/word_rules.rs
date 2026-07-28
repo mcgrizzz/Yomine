@@ -68,7 +68,7 @@ pub fn create_default_rules() -> Vec<Rule> {
             name: "Jodoushi to verb binding",
             current: TokenMatcher {
                 pos1: Matcher::Any(vec![UnidicTag::Jodoushi]),
-                conjugation_type: Matcher::Not(vec![UnidicTag::JodoushiTai]),
+                conjugation_type: Matcher::Not(vec![UnidicTag::JodoushiTai, UnidicTag::JodoushiDa]),
                 surface: Matcher::Not(vec!["な".to_string()]),
                 ..Default::default()
             },
