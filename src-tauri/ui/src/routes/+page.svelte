@@ -40,8 +40,9 @@
 	import AsbplayerModal from '$lib/components/AsbplayerModal.svelte';
 	import TextFiltersModal from '$lib/components/TextFiltersModal.svelte';
 	import RecentFilesModal from '$lib/components/RecentFilesModal.svelte';
+	import EpubChapterPickerModal from '$lib/components/EpubChapterPickerModal.svelte';
 	import KnowledgeSummary from '$lib/components/KnowledgeSummary.svelte';
-	import { filename, formatTermCount, formatFileSize, formatLastOpened } from '$lib/recents';
+	import { fileIcon, filename, formatTermCount, formatFileSize, formatLastOpened } from '$lib/recents';
 
 	onMount(hydrate);
 
@@ -80,6 +81,11 @@
 				<div class="header-left">
 					<div class="title-row">
 						<h2 class="title">{$fileResult.source_file.title}</h2>
+						{#if $fileResult.source_file.epub_label}
+							<span class="selection-label" title={$fileResult.source_file.epub_label}
+								>{$fileResult.source_file.epub_label}</span
+							>
+						{/if}
 						{#if followOn}
 							{#if $asbContext.has_active_tab && !$asbContext.active_has_subtitles}
 								<span
@@ -161,8 +167,12 @@
 										onclick={() => openRecentFile(entry.file_path)}
 									>
 										<span class="recent-name"
-											>{entry.title.trim() || filename(entry.file_path)}</span
+											>{fileIcon(entry.file_path)}
+											{entry.title.trim() || filename(entry.file_path)}</span
 										>
+										{#if entry.subtitle}
+											<span class="recent-file">{entry.subtitle}</span>
+										{/if}
 										{#if entry.title.trim() && entry.title !== filename(entry.file_path)}
 											<span class="recent-file">{filename(entry.file_path)}</span>
 										{/if}
@@ -192,6 +202,7 @@
 	<PosFiltersModal />
 	<TextFiltersModal />
 	<RecentFilesModal />
+	<EpubChapterPickerModal />
 	<SetupChecklistModal />
 	<FrequencyAnalyzerModal />
 
@@ -240,6 +251,14 @@
 	}
 	.title {
 		margin: 0 0 0.25rem;
+	}
+	.selection-label {
+		font-size: 0.78rem;
+		color: var(--text-muted);
+		max-width: 28rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.tab-chip {
 		padding: 0.05rem 0.4rem;

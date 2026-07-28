@@ -12,6 +12,8 @@ use serde::{
 pub struct RecentFileEntry {
     pub file_path: String,
     pub title: String,
+    #[serde(default)]
+    pub subtitle: Option<String>, // e.g. the EPUB chapter selection last mined
     pub creator: Option<String>,
     pub last_opened: chrono::DateTime<chrono::Utc>,
     pub file_size: Option<u64>,
@@ -22,6 +24,7 @@ impl RecentFileEntry {
     pub fn new(
         file_path: String,
         title: String,
+        subtitle: Option<String>,
         creator: Option<String>,
         term_count: usize,
     ) -> Self {
@@ -30,6 +33,7 @@ impl RecentFileEntry {
         Self {
             file_path,
             title,
+            subtitle,
             creator,
             last_opened: chrono::Utc::now(),
             file_size,
@@ -110,12 +114,13 @@ impl RecentFiles {
         &mut self,
         file_path: String,
         title: String,
+        subtitle: Option<String>,
         creator: Option<String>,
         term_count: usize,
     ) {
         self.files.retain(|entry| entry.file_path != file_path);
 
-        let new_entry = RecentFileEntry::new(file_path, title, creator, term_count);
+        let new_entry = RecentFileEntry::new(file_path, title, subtitle, creator, term_count);
         self.files.push_front(new_entry);
 
         while self.files.len() > self.max_entries {
@@ -157,6 +162,7 @@ impl Default for RecentFileEntry {
         Self {
             file_path: String::new(),
             title: String::new(),
+            subtitle: None,
             creator: None,
             last_opened: chrono::Utc::now(),
             file_size: None,

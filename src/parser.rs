@@ -142,10 +142,10 @@ fn read_ssa(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
     parse_srt(srt, source_file)
 }
 
-pub fn read_txt(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
-    let raw_text = fs::read_to_string(&source_file.original_file)?;
-    let raw_text = raw_text.trim_start_matches('\u{feff}');
-
+fn sentences_from_lines<'a>(
+    lines: impl Iterator<Item = &'a str>,
+    source_file: &SourceFile,
+) -> Vec<Sentence> {
     static SENTENCE_SPLIT_REGEX: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(r"([。！？｡!?.]+)").expect("Failed to compile sentence split regex")
     });
@@ -153,7 +153,7 @@ pub fn read_txt(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> 
     let mut sentences = Vec::new();
     let mut sentence_id = 0;
 
-    for line in raw_text.lines() {
+    for line in lines {
         let line = line.trim();
         if line.is_empty() {
             continue;
@@ -187,6 +187,30 @@ pub fn read_txt(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> 
         }
     }
 
+    sentences
+}
+
+pub fn read_txt(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
+    let raw_text = fs::read_to_string(&source_file.original_file)?;
+    let raw_text = raw_text.trim_start_matches('\u{feff}');
+
+    let sentences = sentences_from_lines(raw_text.lines(), source_file);
+
+    if sentences.is_empty() {
+        return Err(YomineError::Custom("No text found in the file.".to_string()));
+    }
+
+    Ok(sentences)
+}
+
+pub fn read_epub(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
+    let lines = crate::epub::chapter_lines(
+        &source_file.original_file,
+        source_file.epub_chapters.as_deref(),
+    )?;
+
+    let sentences = sentences_from_lines(lines.iter().map(String::as_str), source_file);
+
     if sentences.is_empty() {
         return Err(YomineError::Custom("No text found in the file.".to_string()));
     }
@@ -199,13 +223,39 @@ pub fn read(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
         SourceFileType::SRT => read_srt(source_file),
         SourceFileType::SSA => read_ssa(source_file),
         SourceFileType::TXT => read_txt(source_file),
+        SourceFileType::EPUB => read_epub(source_file),
         SourceFileType::Other(ref format) => Err(YomineError::UnsupportedFileType(format.clone())),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::clean_subtitle_text;
+    use super::{
+        clean_subtitle_text,
+        read_txt,
+        sentences_from_lines,
+    };
+    use crate::core::SourceFile;
+
+    #[test]
+    fn sentences_from_lines_matches_read_txt() {
+        let content = "今日は良い天気。散歩に行く！\n次の行(つぎのぎょう)です。";
+        let path = std::env::temp_dir().join(format!("yomine_parity_{}.txt", std::process::id()));
+        std::fs::write(&path, content).unwrap();
+        let source_file =
+            SourceFile { original_file: path.display().to_string(), ..Default::default() };
+
+        let from_file = read_txt(&source_file).unwrap();
+        let from_lines = sentences_from_lines(content.lines(), &source_file);
+        let _ = std::fs::remove_file(&path);
+
+        let texts: Vec<&str> = from_lines.iter().map(|s| s.text.as_str()).collect();
+        assert_eq!(texts, vec!["今日は良い天気", "散歩に行く", "次の行です"]);
+        assert_eq!(from_file.len(), from_lines.len());
+        for (a, b) in from_file.iter().zip(&from_lines) {
+            assert_eq!((a.id, &a.text), (b.id, &b.text));
+        }
+    }
 
     #[test]
     fn strips_basic_styling_tags() {

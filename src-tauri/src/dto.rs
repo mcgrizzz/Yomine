@@ -358,6 +358,29 @@ pub struct RecommendedDictionaryDto {
     pub status: String,
 }
 
+/// One selectable chapter slice; `id` is what `process_file` takes back, `seen` = mined before.
+#[derive(Serialize, Clone)]
+pub struct EpubPartDto {
+    pub id: usize,
+    pub char_count: usize,
+    pub seen: bool,
+}
+
+/// One ToC chapter for the EPUB picker; oversized chapters carry >1 part.
+#[derive(Serialize, Clone)]
+pub struct EpubChapterDto {
+    pub title: String,
+    pub char_count: usize,
+    pub parts: Vec<EpubPartDto>,
+}
+
+/// `get_epub_chapters` payload: metadata title + pickable chapters.
+#[derive(Serialize, Clone)]
+pub struct EpubBookDto {
+    pub title: String,
+    pub chapters: Vec<EpubChapterDto>,
+}
+
 /// One subtitle track of a bound media (issue #105, snake_case for the wire).
 #[derive(Serialize, Clone)]
 pub struct SubtitleTrackDto {

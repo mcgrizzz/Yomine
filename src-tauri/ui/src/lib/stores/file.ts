@@ -3,6 +3,7 @@ import * as ipc from '$lib/ipc';
 import { lastError, overlay } from './ui';
 import { ensureToolsReady, languageToolsStatus } from './status';
 import { refreshMinedState } from './mining';
+import { epubChapterModalOpen } from './modals';
 
 /** The currently loaded file + its terms, or `null` before any file is opened. */
 export const fileResult = writable<ipc.FileLoadResult | null>(null);
@@ -14,18 +15,49 @@ export const ankiFilterActive = derived(fileResult, ($f) => $f?.anki_filter_acti
 export const recentFiles = writable<ipc.RecentFileEntry[]>([]);
 
 /** Mirrors the engine's `SourceFileType::supported_extensions`. */
-const SUPPORTED_EXTENSIONS = ['srt', 'ass', 'ssa', 'txt'];
+const SUPPORTED_EXTENSIONS = ['srt', 'ass', 'ssa', 'txt', 'epub'];
 export const isSupportedPath = (path: string): boolean => {
 	const ext = path.split('.').pop()?.toLowerCase();
 	return ext !== undefined && SUPPORTED_EXTENSIONS.includes(ext);
 };
 
-/** Errors surface as a banner without clobbering the currently-loaded file. */
-export async function loadAndStore(path: string): Promise<void> {
+/** The book behind the open chapter-picker modal, or `null`. */
+export const epubPicker = writable<{ path: string; book: ipc.EpubBook } | null>(null);
+
+async function openEpubPicker(path: string): Promise<void> {
+	try {
+		overlay.set('Reading EPUB…');
+		const book = await ipc.getEpubChapters(path);
+		epubPicker.set({ path, book });
+		epubChapterModalOpen.set(true);
+	} catch (err) {
+		console.error('[yomine] epub listing failed', err);
+		lastError.set({ title: 'Failed to open EPUB', message: String(err), detail: null });
+	} finally {
+		overlay.set(null);
+	}
+}
+
+/** Errors surface as a banner without clobbering the currently-loaded file.
+ * EPUBs detour through the chapter picker, which re-enters with a selection. */
+export async function loadAndStore(
+	path: string,
+	epubChapters: number[] | null = null,
+	epubLabel: string | null = null
+): Promise<void> {
 	if (!(await ensureToolsReady())) return;
+	if (epubChapters === null && path.toLowerCase().endsWith('.epub')) {
+		await openEpubPicker(path);
+		return;
+	}
 	try {
 		overlay.set('Processing file…');
-		const result = await ipc.processFile(path, (msg) => overlay.set(msg.message));
+		const result = await ipc.processFile(
+			path,
+			(msg) => overlay.set(msg.message),
+			epubChapters,
+			epubLabel
+		);
 		fileResult.set(result);
 		void refreshMinedState(true);
 		recentFiles.set(await ipc.getRecentFiles());

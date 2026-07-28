@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { recentFiles, recentFilesModalOpen, openRecentFile } from '$lib/stores';
-	import { filename, formatTermCount, formatFileSize, formatLastOpened } from '$lib/recents';
+	import { fileIcon, filename, formatTermCount, formatFileSize, formatLastOpened } from '$lib/recents';
 
 	function open(path: string) {
 		recentFilesModalOpen.set(false);
@@ -45,7 +45,13 @@
 					{#each $recentFiles as entry (entry.file_path)}
 						<li>
 							<button class="recent" title={entry.file_path} onclick={() => open(entry.file_path)}>
-								<span class="recent-name">{entry.title.trim() || filename(entry.file_path)}</span>
+								<span class="recent-name"
+									>{fileIcon(entry.file_path)}
+									{entry.title.trim() || filename(entry.file_path)}</span
+								>
+								{#if entry.subtitle}
+									<span class="recent-file">{entry.subtitle}</span>
+								{/if}
 								{#if entry.title.trim() && entry.title !== filename(entry.file_path)}
 									<span class="recent-file">{filename(entry.file_path)}</span>
 								{/if}

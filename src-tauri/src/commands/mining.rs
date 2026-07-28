@@ -104,10 +104,14 @@ pub async fn mine_term(
         }
     }
 
-    let response =
-        anki_api::add_note(&format.deck, &format.model, &fields, &["yomine".to_string()])
-            .await
-            .map_err(|e| format!("AnkiConnect is unreachable: {}", e))?;
+    // No timestamp = no attachable media (EPUB/TXT); tags the note for a future re-mine flow.
+    let mut tags = vec!["yomine".to_string()];
+    if timestamp_secs.is_none() {
+        tags.push("yomine::no-media".to_string());
+    }
+    let response = anki_api::add_note(&format.deck, &format.model, &fields, &tags)
+        .await
+        .map_err(|e| format!("AnkiConnect is unreachable: {}", e))?;
     let note_id = match response.error {
         None => response.result,
         Some(err) if err.contains("duplicate") => {
