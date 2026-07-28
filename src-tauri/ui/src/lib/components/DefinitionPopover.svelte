@@ -161,13 +161,16 @@
 		const vh = window.innerHeight / zoom;
 		const a = { left: anchor.left / zoom, top: anchor.top / zoom, bottom: anchor.bottom / zoom };
 		const width = Math.min(size?.w ?? 384, vw - 16);
-		const height = size ? Math.min(size.h, vh - 16) : null;
 		const left = Math.min(Math.max(a.left, 8), vw - width - 8);
 		const spaceBelow = vh - a.bottom;
-		if (spaceBelow < (height ?? 348) + 12 && a.top > spaceBelow) {
-			return { left, width, height, anchored: `bottom: ${vh - a.top + 6}px;` };
-		}
-		return { left, width, height, anchored: `top: ${a.bottom + 6}px;` };
+		const above = spaceBelow < (size?.h ?? 348) + 12 && a.top > spaceBelow;
+		// Cap height to the anchored side so a tall popover scrolls instead of leaving the viewport.
+		const space = (above ? a.top : spaceBelow) - 14;
+		const height = size ? Math.min(size.h, space) : null;
+		const anchored =
+			(above ? `bottom: ${vh - a.top + 6}px; ` : `top: ${a.bottom + 6}px; `) +
+			`max-height: ${space}px;`;
+		return { left, width, height, anchored };
 	});
 
 	// The browser writes resize-handle drags as inline width/height — anything
@@ -351,6 +354,8 @@
 	}
 	.body {
 		flex: 1 1 auto;
+		/* A flex child won't shrink below its content without this — the capped popover would clip, not scroll. */
+		min-height: 0;
 		max-height: 20rem;
 		overflow-y: auto;
 		padding: 0.6rem 0.75rem;

@@ -153,6 +153,7 @@ pub fn pairwise_deinflection(word: &str, reading: &str) -> Vec<(String, String)>
     if !word.chars().all(|c| c.len_utf8() == 3) {
         return results;
     }
+
     let deinflections = deinflect(word);
 
     // Early return if no further deinflection is needed

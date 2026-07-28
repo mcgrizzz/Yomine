@@ -28,6 +28,8 @@ frequencies = [
 	{ term = "体", reading = "たい", rank = 1401 },
 	{ term = "中途半端", reading = "ちゅうとはんぱ", rank = 1000 },
 	{ term = "中途", reading = "ちゅうと", rank = 20000 },
+	{ term = "負けじと", reading = "まけじと", rank = 30000 },
+	{ term = "負け", reading = "まけ", rank = 3000 },
 	{ term = "半端", reading = "はんぱ", rank = 15000 },
 	{ term = "相変わらず", reading = "あいかわらず", rank = 1000 },
 	{ term = "変わる", reading = "かわる", rank = 500 },
@@ -101,3 +103,11 @@ terms = [
 	{ surface = "気", lemma = "気" },
 	{ surface = "なる", lemma = "なる" },
 ]
+
+# UniDic mis-lexicalizes 負けじと as 負け+じと(副詞); じと validates in no
+# dictionary, which waives the frequency/ratio gates for the corroborated phrase.
+[[case]]
+name = "負けじと promoted over the mis-tokenized 負け+じと"
+text = "私は客の出す音に圧倒されながらも、負けじと、「いらっしゃいませ」"
+terms = [{ surface = "負けじと", lemma = "負けじと", reading = "まけじと", pos = "Expression" }]
+absent = ["負け", "じと"]

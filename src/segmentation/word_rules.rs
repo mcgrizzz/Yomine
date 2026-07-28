@@ -348,6 +348,48 @@ pub fn create_default_rules() -> Vec<Rule> {
             },
         },
         Rule {
+            name: "Na-adj-suffix after na-adjective stem",
+            current: TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Setsubiji]),
+                pos2: Matcher::Any(vec![UnidicTag::Keijoushiteki]),
+                ..Default::default()
+            },
+            next: None,
+            prev: Some(TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Keijoushi]),
+                ..Default::default()
+            }),
+            prev_word: WordMatcher::None,
+            action: RuleAction::MergeWithPrevious {
+                attach_prev: true,
+                attach_prev_lemma: true,
+                update_prev_pos: Some(POS::AdjectivalNoun),
+                main_word_policy: None,
+            },
+        },
+        // Same as the そう rule: the stem keeps its い-form lemma (楽し → 楽しい),
+        // so attaching the suffix's lemma would corrupt it; surface only.
+        Rule {
+            name: "Na-adj-suffix after adjective stem",
+            current: TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Setsubiji]),
+                pos2: Matcher::Any(vec![UnidicTag::Keijoushiteki]),
+                ..Default::default()
+            },
+            next: None,
+            prev: Some(TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Keiyoushi]),
+                ..Default::default()
+            }),
+            prev_word: WordMatcher::None,
+            action: RuleAction::MergeWithPrevious {
+                attach_prev: true,
+                attach_prev_lemma: false,
+                update_prev_pos: Some(POS::AdjectivalNoun),
+                main_word_policy: None,
+            },
+        },
+        Rule {
             name: "Join numbers",
             current: TokenMatcher {
                 pos1: Matcher::Any(vec![UnidicTag::Meishi]),

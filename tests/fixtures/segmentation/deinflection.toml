@@ -13,6 +13,8 @@ frequencies = [
 	{ term = "助ける", reading = "たすける", rank = 500 },
 	{ term = "助け", reading = "たすけ", rank = 100 },
 	{ term = "使う", reading = "つかう", rank = 150 },
+	{ term = "覚える", reading = "おぼえる", rank = 900 },
+	{ term = "覚え", reading = "おぼえ", rank = 400 },
 	{ term = "つまらない", reading = "つまらない", rank = 2455, kana = true },
 	{ term = "つまる", reading = "つまる", rank = 2806, kana = true },
 ]
@@ -71,3 +73,10 @@ absent = ["助けられるだろう", "助け"]
 name = "lexicalized negative つまらない keeps its own lemma"
 text = "この映画はつまらなかった。"
 terms = [{ surface = "つまらなかった", lemma = "つまらない", reading = "つまらない" }]
+
+# Needs the なきゃ→ない rule from the jp-deinflector fork (btrkeks/jp-deinflector#8).
+[[case]]
+name = "なきゃ contraction deinflects to the dictionary form"
+text = "覚えなきゃいけないことはたくさんあるからね"
+terms = [{ surface = "覚えなきゃ", lemma = "覚える", reading = "おぼえる", pos = "Verb" }]
+absent = ["覚え"]

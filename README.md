@@ -16,7 +16,7 @@
 ### A Japanese vocabulary mining tool for extracting the most useful words from real content.
 
 
-Yomine turns subtitle files into a ranked vocabulary list, hides words you already know with Anki, and creates cards using Yomitan and asbplayer.
+Yomine turns subtitle files into a ranked vocabulary list, hides words you already know with Anki, and streamlines making new cards.
 
 <div align="center">
 
@@ -137,7 +137,7 @@ cargo tauri dev       # or: cargo tauri build
 
 Yomine is licensed under [MIT](LICENSE-MIT) OR [Apache-2.0](LICENSE-APACHE).
 
-Built with [Vibrato](https://github.com/daac-tools/vibrato), [Tauri](https://tauri.app/), [Svelte](https://svelte.dev/), and [rsubs-lib](https://github.com/mcgrizzz/rsubs-lib). JLPT data is derived from [coolmule0/JLPT-N5-N1-Japanese-Vocabulary-Anki](https://github.com/coolmule0/JLPT-N5-N1-Japanese-Vocabulary-Anki/).
+Built with [Vibrato](https://github.com/daac-tools/vibrato), [Tauri](https://tauri.app/), [Svelte](https://svelte.dev/), [jp-deinflector](https://github.com/btrkeks/jp-deinflector), [rbook](https://github.com/DevinSterling/rbook), and [rsubs-lib](https://github.com/adracea/rsubs-lib). JLPT data is derived from [coolmule0/JLPT-N5-N1-Japanese-Vocabulary-Anki](https://github.com/coolmule0/JLPT-N5-N1-Japanese-Vocabulary-Anki/).
 
 **Author and maintainer:** [@mcgrizzz](https://github.com/mcgrizzz)
 

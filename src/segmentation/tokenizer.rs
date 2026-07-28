@@ -245,7 +245,13 @@ pub fn extract_words(
                         continue;
                     }
 
+                    // A component no dictionary knows (負け+じと's じと) means the
+                    // 1-best parse is itself suspect — the corroborated phrase wins.
+                    let has_unvalidated_component =
+                        word_frequencies.iter().any(|(_, freq)| *freq == u32::MAX as f32);
+
                     if !kanji_noun_compound
+                        && !has_unvalidated_component
                         && frequency > phrase_freq_threshold
                         && max_ratio < override_ratio_threshold
                     {

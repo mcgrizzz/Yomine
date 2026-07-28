@@ -13,7 +13,7 @@ text = "夏子おばさんを取り戻さなきゃ。"
 terms = [
 	{ surface = "夏子", pos = "ProperNoun" },
 	{ surface = "おばさん", lemma = "おばさん" },
-	{ surface = "取り戻さ", lemma = "取り戻す" },
+	{ surface = "取り戻さなきゃ", lemma = "取り戻す" },
 ]
 absent = ["夏子おばさん", "夏子おば"]
 

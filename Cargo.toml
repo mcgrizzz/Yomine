@@ -19,7 +19,8 @@ bincode = { version = "2.0.1", features = ["serde"]}
 dirs = "6.0.0"
 futures = "0.3.31"
 futures-util = "0.3.30"
-jp-deinflector = "0.2.0"
+# Fork until btrkeks/jp-deinflector#8
+jp-deinflector = { git = "https://github.com/mcgrizzz/jp-deinflector", rev = "2be18fe1bb0b292e0932ccf1532a788f6baa3fd5" }
 quick-xml = "0.38"
 rand = "0.9.2"
 rbook = "0.7"
