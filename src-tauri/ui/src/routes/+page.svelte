@@ -39,30 +39,11 @@
 	import FrequencyAnalyzerModal from '$lib/components/FrequencyAnalyzerModal.svelte';
 	import AsbplayerModal from '$lib/components/AsbplayerModal.svelte';
 	import TextFiltersModal from '$lib/components/TextFiltersModal.svelte';
+	import RecentFilesModal from '$lib/components/RecentFilesModal.svelte';
 	import KnowledgeSummary from '$lib/components/KnowledgeSummary.svelte';
+	import { filename, formatTermCount, formatFileSize, formatLastOpened } from '$lib/recents';
 
 	onMount(hydrate);
-
-	// Display helpers mirroring egui's `RecentFileEntry` formatters.
-	const filename = (path: string) => path.split(/[\\/]/).pop() ?? path;
-
-	function formatTermCount(n: number | null): string {
-		if (n === null) return 'Unknown terms';
-		return n === 1 ? '1 term' : `${n} terms`;
-	}
-
-	function formatFileSize(bytes: number | null): string {
-		if (bytes === null) return 'Unknown';
-		if (bytes < 1024) return `${bytes} B`;
-		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-		return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-	}
-
-	function formatLastOpened(iso: string): string {
-		const d = new Date(iso);
-		const p = (n: number) => String(n).padStart(2, '0');
-		return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
-	}
 
 	const followOn = $derived(
 		($settings?.asbplayer_follow_new_media ?? false) ||
@@ -156,7 +137,7 @@
 				<p class="landing-hint">ℹ You can drag and drop a file at any time to load it.</p>
 				<div class="landing-actions">
 					<button class="landing-open" disabled={toolsError !== null} onclick={openAndProcessFile}
-						>Open New File</button
+						>Open File…</button
 					>
 					{#if $playerStatus.ws_clients > 0}
 						<!-- Only offered while asbplayer is actually connected (issue #105). -->
@@ -210,6 +191,7 @@
 	<FrequencyWeightsModal />
 	<PosFiltersModal />
 	<TextFiltersModal />
+	<RecentFilesModal />
 	<SetupChecklistModal />
 	<FrequencyAnalyzerModal />
 

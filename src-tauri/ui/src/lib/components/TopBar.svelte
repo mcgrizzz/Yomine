@@ -14,6 +14,9 @@
 		toggleDarkMode,
 		toggleSerifFont,
 		openAndProcessFile,
+		openRecentFile,
+		openRecentFilesModal,
+		recentFiles,
 		openAnkiModal,
 		openIgnoreModal,
 		openTextFiltersModal,
@@ -35,9 +38,14 @@
 		yomitanReachable
 	} from '$lib/stores';
 	import { openThemesWindow } from '$lib/ipc';
+	import { filename } from '$lib/recents';
 
 	type MenuName = 'file' | 'mining' | 'appearance' | 'settings' | 'asb' | 'mpv';
 	let openMenu = $state<MenuName | null>(null);
+	let recentsOpen = $state(false);
+	$effect(() => {
+		if (openMenu !== 'file') recentsOpen = false;
+	});
 
 	const toolsReady = $derived($languageToolsStatus === 'ready');
 	const toolsError = $derived(typeof $languageToolsStatus === 'object');
@@ -164,8 +172,41 @@
 		{#if openMenu === 'file'}
 			<div class="menu-panel">
 				<button onclick={() => run(openAndProcessFile)} disabled={toolsError}
-					>Open New File</button
+					>Open File…</button
 				>
+				<!-- svelte-ignore a11y_no_static_element_interactions -- hover-expand is a
+				     mouse affordance; the row button below also toggles on click. -->
+				<div
+					class="submenu-wrap"
+					onmouseenter={() => (recentsOpen = true)}
+					onmouseleave={() => (recentsOpen = false)}
+				>
+					<button
+						class="submenu-row"
+						disabled={$recentFiles.length === 0}
+						onclick={(e) => {
+							e.stopPropagation();
+							recentsOpen = !recentsOpen;
+						}}
+					>
+						Open Recent <span class="submenu-arrow">▸</span>
+					</button>
+					{#if recentsOpen && $recentFiles.length > 0}
+						<div class="menu-panel submenu">
+							{#each $recentFiles.slice(0, 10) as entry (entry.file_path)}
+								<button
+									class="submenu-item"
+									title={entry.file_path}
+									disabled={toolsError}
+									onclick={() => run(() => openRecentFile(entry.file_path))}
+									>{entry.title.trim() || filename(entry.file_path)}</button
+								>
+							{/each}
+							<div class="menu-sep"></div>
+							<button onclick={() => run(openRecentFilesModal)}>More…</button>
+						</div>
+					{/if}
+				</div>
 				<button
 					onclick={() => run(openAsbplayerModal)}
 					disabled={toolsError || $playerStatus.ws_clients === 0}
@@ -453,6 +494,34 @@
 		height: 1px;
 		margin: 0.25rem 0.4rem;
 		background: var(--border);
+	}
+	.submenu-wrap {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+	}
+	.submenu-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+	}
+	.submenu-arrow {
+		font-size: 0.7rem;
+		color: var(--text-muted);
+	}
+	/* Flush against the row (left: 100%): any gap would fire the wrapper's mouseleave mid-hover. */
+	.menu-panel.submenu {
+		top: -0.3rem;
+		left: 100%;
+		margin-top: 0;
+		max-height: 60vh;
+		overflow-y: auto;
+	}
+	.menu-panel.submenu .submenu-item {
+		max-width: 320px;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 	.spacer {
 		flex: 1;
