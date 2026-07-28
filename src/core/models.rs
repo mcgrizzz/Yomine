@@ -12,6 +12,7 @@ pub enum SourceFileType {
     SRT,
     SSA,
     TXT,
+    EPUB,
     Other(String),
 }
 
@@ -24,6 +25,7 @@ impl SourceFileType {
                 "srt" => SourceFileType::SRT,
                 "ass" | "ssa" => SourceFileType::SSA,
                 "txt" => SourceFileType::TXT,
+                "epub" => SourceFileType::EPUB,
                 other => SourceFileType::Other(other.to_uppercase()),
             }
         } else {
@@ -32,7 +34,7 @@ impl SourceFileType {
     }
 
     pub fn supported_extensions() -> &'static [&'static str] {
-        &["srt", "ass", "ssa", "txt"]
+        &["srt", "ass", "ssa", "txt", "epub"]
     }
 
     #[inline]
@@ -49,6 +51,10 @@ pub struct SourceFile {
     pub title: String,             // File name or descriptive title
     pub creator: Option<String>,   // Optional creator information
     pub original_file: String,     // Path to the file
+    #[serde(default)]
+    pub epub_chapters: Option<Vec<usize>>, // Selected epub part ids; None = whole book
+    #[serde(default)]
+    pub epub_label: Option<String>, // Picker-built selection summary, shown beside the title
 }
 
 impl Default for SourceFile {
@@ -60,6 +66,8 @@ impl Default for SourceFile {
             title: String::new(),
             creator: None,
             original_file: String::new(),
+            epub_chapters: None,
+            epub_label: None,
         }
     }
 }

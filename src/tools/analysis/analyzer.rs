@@ -128,6 +128,8 @@ pub fn analyze_files(
             title: file_name.clone(),
             creator: None,
             original_file: file_path_str,
+            epub_chapters: None,
+            epub_label: None,
         };
 
         let mut sentences = match parser::read(&source_file) {

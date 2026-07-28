@@ -2,6 +2,19 @@
 
 export const filename = (path: string): string => path.split(/[\\/]/).pop() ?? path;
 
+export function fileIcon(path: string): string {
+	switch (path.split('.').pop()?.toLowerCase()) {
+		case 'epub':
+			return '📖';
+		case 'srt':
+		case 'ass':
+		case 'ssa':
+			return '🎬';
+		default:
+			return '📄';
+	}
+}
+
 export function formatTermCount(n: number | null): string {
 	if (n === null) return 'Unknown terms';
 	return n === 1 ? '1 term' : `${n} terms`;

@@ -67,7 +67,7 @@ export interface SentenceDto {
 	comprehension: number;
 }
 
-export type SourceFileType = 'SRT' | 'SSA' | 'TXT' | { Other: string };
+export type SourceFileType = 'SRT' | 'SSA' | 'TXT' | 'EPUB' | { Other: string };
 
 export interface SourceFile {
 	id: number;
@@ -76,6 +76,10 @@ export interface SourceFile {
 	title: string;
 	creator: string | null;
 	original_file: string;
+	/** Selected part ids from the EPUB chapter picker; `null` = whole book. */
+	epub_chapters: number[] | null;
+	/** The picker's selection summary, rendered beside the title. */
+	epub_label: string | null;
 }
 
 export interface FileLoadResult {
@@ -96,6 +100,8 @@ export interface FileLoadResult {
 export interface RecentFileEntry {
 	file_path: string;
 	title: string;
+	/** e.g. the EPUB chapter selection last mined. */
+	subtitle: string | null;
 	creator: string | null;
 	/** RFC3339 timestamp. */
 	last_opened: string;
@@ -364,6 +370,30 @@ export function openFileDialog(): Promise<string | null> {
 	return invoke('open_file_dialog');
 }
 
+/** One selectable chapter slice; `id` is what `processFile` takes back, `seen` = mined before. */
+export interface EpubPart {
+	id: number;
+	char_count: number;
+	seen: boolean;
+}
+
+/** One ToC chapter; oversized chapters carry more than one part. */
+export interface EpubChapter {
+	title: string;
+	char_count: number;
+	parts: EpubPart[];
+}
+
+export interface EpubBook {
+	title: string;
+	chapters: EpubChapter[];
+}
+
+/** Book title + chapters for the EPUB chapter-picker modal. */
+export function getEpubChapters(path: string): Promise<EpubBook> {
+	return invoke('get_epub_chapters', { path });
+}
+
 /** Video picker for the MPV launcher (issue #89). */
 export function openVideoDialog(): Promise<string | null> {
 	return invoke('open_video_dialog');
@@ -374,14 +404,18 @@ export function openExecutableDialog(): Promise<string | null> {
 	return invoke('open_executable_dialog');
 }
 
-/** Parse + segment + filter a file; streams progress; returns the minable terms. */
+/** Parse + segment + filter a file; streams progress; returns the minable terms.
+ * `epubChapters` = selected part ids for EPUBs (`null` = whole book);
+ * `epubLabel` = the picker's human-readable selection summary. */
 export async function processFile(
 	path: string,
-	onProgress: (msg: LoadingMessage) => void
+	onProgress: (msg: LoadingMessage) => void,
+	epubChapters: number[] | null = null,
+	epubLabel: string | null = null
 ): Promise<FileLoadResult> {
 	const channel = new Channel<LoadingMessage>();
 	channel.onmessage = onProgress;
-	return invoke('process_file', { path, progress: channel });
+	return invoke('process_file', { path, epubChapters, epubLabel, progress: channel });
 }
 
 /** The currently loaded file, or `null` if none. */
