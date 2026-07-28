@@ -51,7 +51,7 @@ Yomine turns subtitle files into a ranked vocabulary list, hides words you alrea
   </tr>
 </table>
 
-Supports `.srt`, `.ass`, `.ssa`, and `.txt` files. A premade frequency dictionary generated from the [AniList Top 500](https://github.com/user-attachments/files/23733337/Anilist.Top.500.zip) is also available.
+Supports `.srt`, `.ass`, `.ssa`, `.txt`, and `.epub` files. A premade frequency dictionary generated from the [AniList Top 500](https://github.com/user-attachments/files/23733337/Anilist.Top.500.zip) is also available.
 
 ## Quick start
 
