@@ -99,11 +99,11 @@
 									title="This is asbplayer's active tab — mining captures media from it"
 									>● active tab</span
 								>
-							{:else if $asbContext.loaded_from_asbplayer && $asbContext.has_active_tab}
+							{:else if $asbContext.loaded_from_asbplayer}
 								<span
-									class="tab-chip warn"
-									title="Mining targets the bound media, but its tab isn't active in asbplayer — recording may behave unexpectedly"
-									>● bound media not active</span
+									class="tab-chip info"
+									title="Mining and seeking still target this video — its tab just isn't the active one in asbplayer"
+									>● background tab</span
 								>
 							{/if}
 						{/if}
@@ -276,6 +276,11 @@
 		color: var(--warning);
 		background: color-mix(in srgb, var(--warning) 10%, transparent);
 		border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+	}
+	.tab-chip.info {
+		color: var(--text-muted);
+		background: color-mix(in srgb, var(--text-muted) 10%, transparent);
+		border: 1px solid color-mix(in srgb, var(--text-muted) 35%, transparent);
 	}
 	.comprehension {
 		margin: 0 0 0.15rem;

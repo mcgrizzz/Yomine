@@ -73,14 +73,12 @@
 	const asbplayer = $derived.by(() => {
 		const s = $playerStatus;
 		if (s.server_state === 'running' && s.ws_clients > 0) {
-			if ($asbContext.loaded_from_asbplayer && !$asbContext.loaded_is_active)
-				return {
-					color: YELLOW,
-					tip: "asbplayer's active tab is not the loaded video — mined media would come from the wrong one"
-				};
+			const background = $asbContext.loaded_from_asbplayer && !$asbContext.loaded_is_active;
 			return {
 				color: GREEN,
-				tip: 'asbplayer mode — seeking and card media capture while mining'
+				tip: background
+					? 'asbplayer mode — mining targets the loaded video even while its tab is in the background'
+					: 'asbplayer mode — seeking and card media capture while mining'
 			};
 		}
 		if (s.server_state === 'running')
