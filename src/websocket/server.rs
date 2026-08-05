@@ -402,6 +402,21 @@ impl WebSocketServer {
         }
     }
 
+    /// asbplayer `load-subtitles`: deliver base64-encoded subtitle files to the
+    /// active tab (asbplayer shows its video-select overlay there).
+    pub fn load_subtitles(&self, files: &[(String, String)]) -> Result<(), YomineError> {
+        let files: Vec<serde_json::Value> = files
+            .iter()
+            .map(|(name, base64)| serde_json::json!({ "name": name, "base64": base64 }))
+            .collect();
+        self.request_blocking(
+            "load-subtitles",
+            serde_json::json!({ "files": files }),
+            Duration::from_secs(15),
+        )?;
+        Ok(())
+    }
+
     pub fn seek_timestamp(
         &self,
         timestamp: f32,

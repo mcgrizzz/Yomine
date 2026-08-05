@@ -346,8 +346,16 @@
 	const mediaNote = $derived.by(() => {
 		if ($playerStatus.mode !== 'asbplayer' || $playerStatus.ws_clients === 0)
 			return ' — no audio/screenshot without asbplayer';
+		if ($asbContext.loaded_from_asbplayer && !$asbContext.loaded_has_subtitles)
+			return ' — target has no subtitles in asbplayer; card will get no audio/screenshot';
 		if ($asbContext.loaded_from_asbplayer && !$asbContext.loaded_is_active)
 			return ' — mining targets the loaded video in its background tab';
+		// Timestamp-less sources (EPUB/TXT) never enrich, so no target note.
+		const subtitleFile =
+			$fileResult?.source_file.file_type === 'SRT' ||
+			$fileResult?.source_file.file_type === 'SSA';
+		if (!$asbContext.loaded_from_asbplayer && subtitleFile)
+			return " — captures media from asbplayer's active tab";
 		return '';
 	});
 	const selectableKeys = $derived(terms.filter((t) => !isMined(t)).map(termKey));

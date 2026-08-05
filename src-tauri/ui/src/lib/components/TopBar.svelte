@@ -73,11 +73,19 @@
 	const asbplayer = $derived.by(() => {
 		const s = $playerStatus;
 		if (s.server_state === 'running' && s.ws_clients > 0) {
-			const background = $asbContext.loaded_from_asbplayer && !$asbContext.loaded_is_active;
+			if ($asbContext.loaded_from_asbplayer && !$asbContext.loaded_is_active)
+				return {
+					color: GREEN,
+					tip: 'asbplayer mode — mining targets the loaded video even while its tab is in the background'
+				};
+			const unboundSubs =
+				!$asbContext.loaded_from_asbplayer &&
+				($fileResult?.source_file.file_type === 'SRT' ||
+					$fileResult?.source_file.file_type === 'SSA');
 			return {
 				color: GREEN,
-				tip: background
-					? 'asbplayer mode — mining targets the loaded video even while its tab is in the background'
+				tip: unboundSubs
+					? 'asbplayer mode — mining captures from the active tab (subtitles not bound to a video)'
 					: 'asbplayer mode — seeking and card media capture while mining'
 			};
 		}
@@ -313,7 +321,7 @@
 								: 'No active tab in asbplayer'}
 						</span>
 						{#if $asbContext.loaded_from_asbplayer && !$asbContext.loaded_is_active}
-							<span class="menu-note warn">Loaded video is not the active tab</span>
+							<span class="menu-note">Loaded video is in a background tab — mining still targets it</span>
 						{/if}
 					{/if}
 					<button

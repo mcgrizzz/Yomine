@@ -64,6 +64,11 @@ pub enum PlayerCommand {
         note_id: Option<u64>,
         reply: oneshot::Sender<Result<(), String>>,
     },
+    /// asbplayer `load-subtitles`: `(name, base64)` files for the active tab.
+    LoadSubtitles {
+        files: Vec<(String, String)>,
+        reply: oneshot::Sender<Result<(), String>>,
+    },
 }
 
 /// Cheap-to-clone handle commands hold to reach the player task.
@@ -132,6 +137,14 @@ impl PlayerHandle {
                 note_id,
                 reply,
             })
+            .map_err(|_| "player task is not running".to_string())?;
+        rx.await.map_err(|_| "player task dropped the request".to_string())?
+    }
+
+    pub async fn load_subtitles(&self, files: Vec<(String, String)>) -> Result<(), String> {
+        let (reply, rx) = oneshot::channel();
+        self.0
+            .send(PlayerCommand::LoadSubtitles { files, reply })
             .map_err(|_| "player task is not running".to_string())?;
         rx.await.map_err(|_| "player task dropped the request".to_string())?
     }
@@ -232,6 +245,16 @@ async fn run(app: AppHandle, mut port: u16, mut rx: mpsc::UnboundedReceiver<Play
                             Some(s) => s
                                 .mine_subtitle(&fields, post_mine_action, media_id.as_deref(), note_id)
                                 .map_err(|e| e.to_string()),
+                            None => Err("WebSocket server is not running".to_string()),
+                        };
+                        let _ = reply.send(result);
+                    });
+                }
+                PlayerCommand::LoadSubtitles { files, reply } => {
+                    let server = player.ws.server.clone();
+                    tauri::async_runtime::spawn_blocking(move || {
+                        let result = match server {
+                            Some(s) => s.load_subtitles(&files).map_err(|e| e.to_string()),
                             None => Err("WebSocket server is not running".to_string()),
                         };
                         let _ = reply.send(result);

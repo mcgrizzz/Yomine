@@ -90,6 +90,8 @@ always visible. Supersedes `show_jlpt_tags`, which now only seeds the jlpt defau
 | `set_websocket_port` | `port: u16` | `()` | websocket settings modal | Persists + restarts server. |
 | `get_asbplayer_media` | — | `array<BoundMediaDto>` | issue #105 (T066) | asbplayer `get-bound-media` over the WS (extension v1.20+): id/type/title/favicon/tracks/active for the picker. Errors when not connected / no response (timeout hints at the version). |
 | `load_asbplayer_media` | `media_id: string`, `track_numbers: array<u32> \| null`, `title: string`, `progress: Channel<LoadingMessage>` | `FileLoadResult` | issue #105 (T066) | asbplayer `get-subtitles` → cues become `Sentence`s (SRT-grade cleanup, cue timings preserved → seek/👁 work) → `process_sentences` (the same pipeline tail as `process_file`) → stored as the loaded file. NOT recorded in recent files. `null` tracks = all loaded tracks. |
+| `set_asbplayer_target` | `media_id: string` | `()` | PR #126 | Re-points mining/seeking at another bound media, keeping the loaded subtitles. Errors without a loaded file; emits a refreshed `asbplayer-context`. |
+| `send_subtitles_to_asbplayer` | — | `()` | PR #126 | asbplayer `load-subtitles`: base64s the current session's SRT/SSA file to the active tab (asbplayer shows its video-select overlay there). |
 | `launch_mpv` | `video_path: string` | `"launched" \| "not_found"` | issue #89 | Spawns `settings.mpv_path` with `--input-ipc-server=default_mpv_endpoint()`; detection auto-connects within ~1s. `not_found` (executable missing) drives the UI's "Locate mpv…" flow; errors while an mpv is already connected. |
 
 ## One-click mining (T077, issues #105/#3)

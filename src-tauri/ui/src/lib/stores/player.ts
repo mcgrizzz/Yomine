@@ -26,7 +26,9 @@ export const asbContext = writable<ipc.AsbplayerContext>({
 	active_title: null,
 	active_has_subtitles: false,
 	loaded_is_active: false,
-	loaded_from_asbplayer: false
+	loaded_from_asbplayer: false,
+	loaded_media_id: null,
+	loaded_has_subtitles: false
 });
 
 export async function seekTimestamp(seconds: number, label: string): Promise<void> {

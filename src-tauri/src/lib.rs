@@ -72,6 +72,8 @@ pub fn run() {
             commands::player::get_player_status,
             commands::player::set_websocket_port,
             commands::player::get_asbplayer_media,
+            commands::player::set_asbplayer_target,
+            commands::player::send_subtitles_to_asbplayer,
             commands::player::launch_mpv,
             commands::mining::mine_term,
             commands::mining::retry_mine_media,

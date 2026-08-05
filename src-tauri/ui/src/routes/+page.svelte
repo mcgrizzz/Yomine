@@ -50,6 +50,13 @@
 		($settings?.asbplayer_follow_new_media ?? false) ||
 			($settings?.asbplayer_follow_active_tab ?? false)
 	);
+	// Unbound subtitle session: mining falls through to asbplayer's active tab.
+	const minesActiveTab = $derived(
+		$playerStatus.mode === 'asbplayer' &&
+			$playerStatus.ws_clients > 0 &&
+			($fileResult?.source_file.file_type === 'SRT' ||
+				$fileResult?.source_file.file_type === 'SSA')
+	);
 	const toolsError = $derived(
 		typeof $languageToolsStatus === 'object' ? $languageToolsStatus.error : null
 	);
@@ -86,26 +93,37 @@
 								>{$fileResult.source_file.epub_label}</span
 							>
 						{/if}
-						{#if followOn}
-							{#if $asbContext.has_active_tab && !$asbContext.active_has_subtitles}
-								<span
-									class="tab-chip warn"
-									title="Follow can't switch until subtitles are loaded on the active video in asbplayer"
-									>● no subtitles on active video</span
-								>
-							{:else if $asbContext.loaded_from_asbplayer && $asbContext.loaded_is_active}
-								<span
-									class="tab-chip ok"
-									title="This is asbplayer's active tab — mining captures media from it"
-									>● active tab</span
-								>
-							{:else if $asbContext.loaded_from_asbplayer}
-								<span
-									class="tab-chip info"
-									title="Mining and seeking still target this video — its tab just isn't the active one in asbplayer"
-									>● background tab</span
-								>
-							{/if}
+						{#if followOn && $asbContext.has_active_tab && !$asbContext.active_has_subtitles}
+							<span
+								class="tab-chip warn"
+								title="Follow can't switch until subtitles are loaded on the active video in asbplayer"
+								>● no subtitles on active video</span
+							>
+						{/if}
+						{#if $asbContext.loaded_from_asbplayer && !$asbContext.loaded_has_subtitles}
+							<button
+								class="tab-chip warn"
+								title="asbplayer has no subtitles loaded on this video — cards will mine without audio/screenshot. Click to open the picker."
+								onclick={openAsbplayerModal}>● no subtitles on target</button
+							>
+						{:else if $asbContext.loaded_from_asbplayer && $asbContext.loaded_is_active}
+							<button
+								class="tab-chip ok"
+								title="Mining captures media from this video — it's asbplayer's active tab. Click to change target."
+								onclick={openAsbplayerModal}>● active tab</button
+							>
+						{:else if $asbContext.loaded_from_asbplayer}
+							<button
+								class="tab-chip info"
+								title="Mining and seeking still target this video — its tab just isn't the active one in asbplayer. Click to change target."
+								onclick={openAsbplayerModal}>● background tab</button
+							>
+						{:else if minesActiveTab}
+							<button
+								class="tab-chip warn"
+								title="These subtitles aren't bound to a video — mining captures from whatever tab is active in asbplayer. Click to pick one."
+								onclick={openAsbplayerModal}>● mines active tab</button
+							>
 						{/if}
 					</div>
 			{#if $ankiFilterActive && $fileResult.sentences.length > 0}
@@ -263,9 +281,13 @@
 	.tab-chip {
 		padding: 0.05rem 0.4rem;
 		font-size: 0.72rem;
+		font-family: inherit;
 		border-radius: var(--radius);
 		white-space: nowrap;
 		cursor: help;
+	}
+	button.tab-chip {
+		cursor: pointer;
 	}
 	.tab-chip.ok {
 		color: var(--success);
