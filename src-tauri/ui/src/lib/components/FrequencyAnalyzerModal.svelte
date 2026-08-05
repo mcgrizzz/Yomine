@@ -34,7 +34,7 @@
 	async function addFiles() {
 		const picked = await openDialog({
 			multiple: true,
-			filters: [{ name: 'Subtitles/Text', extensions: ['srt', 'ass', 'ssa', 'txt'] }]
+			filters: [{ name: 'Subtitles/Text/EPUB', extensions: ['srt', 'ass', 'ssa', 'txt', 'epub'] }]
 		});
 		if (!picked) return;
 		addPaths(Array.isArray(picked) ? picked : [picked]);
@@ -215,7 +215,7 @@
 							{/each}
 						</div>
 					{:else}
-						<p class="hint">Add subtitle/text files or a folder to begin.</p>
+						<p class="hint">Add subtitle, text, or EPUB files (or a folder) to begin.</p>
 					{/if}
 
 					<footer>

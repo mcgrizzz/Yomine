@@ -6,6 +6,8 @@ use serde::{
     Serialize,
 };
 
+use crate::core::errors::YomineError;
+
 #[derive(Debug)]
 pub struct Deck {
     pub name: String,
@@ -90,10 +92,14 @@ async fn make_request<T: for<'de> Deserialize<'de>>(
 }
 
 //Will just use to check if ankiconnect is online
-pub async fn get_version() -> Result<u32, reqwest::Error> {
+pub async fn get_version() -> Result<u32, YomineError> {
     let response: ApiResponse<u32> = make_request("version", None).await?;
-
-    Ok(response.unwrap_result().unwrap_or_default())
+    match (response.result, response.error) {
+        (Some(version), None) => Ok(version),
+        (_, error) => {
+            Err(YomineError::Custom(format!("Not an AnkiConnect version response: {error:?}")))
+        }
+    }
 }
 
 pub async fn get_deck_ids() -> Result<Vec<Deck>, reqwest::Error> {

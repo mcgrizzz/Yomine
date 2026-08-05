@@ -84,8 +84,19 @@
 	const current = $derived(Math.min(currentIndex ?? 0, count - 1));
 	const occ = $derived(occurrences[current]);
 
-	const prev = () => (currentIndex = current === 0 ? count - 1 : current - 1);
-	const next = () => (currentIndex = (current + 1) % count);
+	// Holding the tallest height seen keeps the nav buttons from jumping
+	let sentenceEl: HTMLParagraphElement | undefined = $state();
+	let heldHeight = $state(0);
+	const holdHeight = () => (heldHeight = Math.max(heldHeight, sentenceEl?.offsetHeight ?? 0));
+
+	const prev = () => {
+		holdHeight();
+		currentIndex = current === 0 ? count - 1 : current - 1;
+	};
+	const next = () => {
+		holdHeight();
+		currentIndex = (current + 1) % count;
+	};
 
 	// Timestamp is null for TXT sources; 👁 once the player acknowledges the seek.
 	const ts = $derived(occ.sentence.timestamp);
@@ -201,7 +212,13 @@
      so without the <wbr> the sentence would render as one unbreakable line. -->
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -- right-click copy
      menu is a mouse affordance; keyboard browsing is issue #91. -->
-<p class="sentence" lang="ja" oncontextmenu={copyMenu}>
+<p
+	class="sentence"
+	lang="ja"
+	bind:this={sentenceEl}
+	style:min-height={heldHeight ? `${heldHeight}px` : null}
+	oncontextmenu={copyMenu}
+>
 	{#each occ.sentence.segments as seg, i (i)}
 		{@const isTerm = isTermSeg(seg)}
 		{@const know = mark(seg)}
@@ -221,7 +238,9 @@
 </p>
 
 <div class="meta">
-	<span class="nav">
+	<!-- svelte-ignore a11y_no_static_element_interactions -- mouse-only layout
+	     affordance; keyboard navigation never shifts the pointer target. -->
+	<span class="nav" onmouseleave={() => (heldHeight = 0)}>
 		<button type="button" class="nav-btn" disabled={count <= 1} title="Previous sentence" onclick={prev}
 			>⏮</button
 		>
