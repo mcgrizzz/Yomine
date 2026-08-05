@@ -48,7 +48,7 @@
 
 	const followOn = $derived(
 		($settings?.asbplayer_follow_new_media ?? false) ||
-			($settings?.asbplayer_follow_active_tab ?? false)
+			($settings?.asbplayer_follow_active_tab ?? true)
 	);
 	// Unbound subtitle session: mining falls through to asbplayer's active tab.
 	const minesActiveTab = $derived(
@@ -104,25 +104,25 @@
 							<button
 								class="tab-chip warn"
 								title="asbplayer has no subtitles loaded on this video — cards will mine without audio/screenshot. Click to open the picker."
-								onclick={openAsbplayerModal}>● no subtitles on target</button
+								onclick={openAsbplayerModal}>● no subtitles in asbplayer ⇄</button
 							>
 						{:else if $asbContext.loaded_from_asbplayer && $asbContext.loaded_is_active}
 							<button
 								class="tab-chip ok"
-								title="Mining captures media from this video — it's asbplayer's active tab. Click to change target."
-								onclick={openAsbplayerModal}>● active tab</button
+								title="Mining captures media from this video — it's asbplayer's active tab. Click to open the video picker."
+								onclick={openAsbplayerModal}>● active tab ⇄</button
 							>
 						{:else if $asbContext.loaded_from_asbplayer}
 							<button
-								class="tab-chip warn"
-								title="This video's tab isn't active — audio is captured correctly, but screenshots come from the visible tab (asbplayer limitation). Switch to its tab before mining. Click to change target."
-								onclick={openAsbplayerModal}>● background tab</button
+								class="tab-chip danger"
+								title="This video's tab isn't active — audio is captured correctly, but screenshots come from the visible tab (asbplayer limitation). Switch to its tab before mining. Click to open the video picker."
+								onclick={openAsbplayerModal}>⚠ background tab ⇄</button
 							>
 						{:else if minesActiveTab}
 							<button
 								class="tab-chip warn"
 								title="These subtitles aren't bound to a video — mining captures from whatever tab is active in asbplayer. Click to pick one."
-								onclick={openAsbplayerModal}>● mines active tab</button
+								onclick={openAsbplayerModal}>● mines active tab ⇄</button
 							>
 						{/if}
 					</div>
@@ -289,6 +289,10 @@
 	button.tab-chip {
 		cursor: pointer;
 	}
+	button.tab-chip:hover {
+		background: color-mix(in srgb, currentColor 20%, transparent);
+		border-color: currentColor;
+	}
 	.tab-chip.ok {
 		color: var(--success);
 		background: color-mix(in srgb, var(--success) 10%, transparent);
@@ -298,6 +302,11 @@
 		color: var(--warning);
 		background: color-mix(in srgb, var(--warning) 10%, transparent);
 		border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+	}
+	.tab-chip.danger {
+		color: var(--danger);
+		background: color-mix(in srgb, var(--danger) 10%, transparent);
+		border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
 	}
 	.comprehension {
 		margin: 0 0 0.15rem;

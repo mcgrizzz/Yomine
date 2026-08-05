@@ -347,7 +347,7 @@
 		if ($playerStatus.mode !== 'asbplayer' || $playerStatus.ws_clients === 0)
 			return ' — no audio/screenshot without asbplayer';
 		if ($asbContext.loaded_from_asbplayer && !$asbContext.loaded_has_subtitles)
-			return ' — target has no subtitles in asbplayer; card will get no audio/screenshot';
+			return ' — the loaded video has no subtitles in asbplayer; card will get no audio/screenshot';
 		if ($asbContext.loaded_from_asbplayer && !$asbContext.loaded_is_active)
 			return " — ⚠ the video's tab isn't active; screenshots capture the visible tab";
 		// Timestamp-less sources (EPUB/TXT) never enrich, so no target note.

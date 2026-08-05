@@ -581,18 +581,6 @@ export function getAsbplayerMedia(): Promise<BoundMedia[]> {
 	return invoke('get_asbplayer_media');
 }
 
-/** Re-point mining/seeking at another asbplayer video, keeping the loaded
- * subtitles. The refreshed context arrives via `asbplayer-context`. */
-export function setAsbplayerTarget(mediaId: string): Promise<void> {
-	return invoke('set_asbplayer_target', { mediaId });
-}
-
-/** Push the current session's subtitle file to asbplayer (`load-subtitles`);
- * asbplayer opens its video-select overlay in the active tab. */
-export function sendSubtitlesToAsbplayer(): Promise<void> {
-	return invoke('send_subtitles_to_asbplayer');
-}
-
 /** Fetch a media's subtitles from asbplayer and run them through the same
  * pipeline as a file (issue #105). `trackNumbers = null` loads all tracks;
  * `subtitleFileName` names the saved .srt, `title` is only the fallback. */
@@ -924,8 +912,7 @@ export interface AsbplayerContext {
 	active_has_subtitles: boolean;
 	loaded_is_active: boolean;
 	loaded_from_asbplayer: boolean;
-	loaded_media_id: string | null;
-	/** Whether asbplayer has subtitles loaded on the targeted media — without
+	/** Whether asbplayer has subtitles loaded on the bound media — without
 	 * them enrichment is impossible. */
 	loaded_has_subtitles: boolean;
 }

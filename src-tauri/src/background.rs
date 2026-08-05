@@ -141,8 +141,7 @@ async fn poll_knowledge(app: AppHandle) {
     }
 }
 
-/// Shared with `set_asbplayer_target` so a target switch emits the same event.
-pub(crate) fn asbplayer_context(
+fn asbplayer_context(
     media: &[yomine::websocket::BoundMedia],
     current_media_id: Option<&str>,
 ) -> crate::events::AsbplayerContext {
@@ -154,7 +153,6 @@ pub(crate) fn asbplayer_context(
         active_has_subtitles: active.is_some_and(|m| !m.loaded_subtitles.is_empty()),
         loaded_is_active: loaded.is_some_and(|m| m.active && !m.loaded_subtitles.is_empty()),
         loaded_from_asbplayer: current_media_id.is_some(),
-        loaded_media_id: current_media_id.map(str::to_string),
         loaded_has_subtitles: loaded.is_some_and(|m| !m.loaded_subtitles.is_empty()),
     }
 }

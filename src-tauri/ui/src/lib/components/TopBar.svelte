@@ -101,7 +101,7 @@
 	// the panel's active-tab note is stale outside those.
 	const asbPolled = $derived(
 		($settings?.asbplayer_follow_new_media ?? false) ||
-			($settings?.asbplayer_follow_active_tab ?? false) ||
+			($settings?.asbplayer_follow_active_tab ?? true) ||
 			$asbContext.loaded_from_asbplayer
 	);
 
@@ -345,14 +345,14 @@
 					</label>
 					<label
 						class="menu-check"
-						title="Switch to the active tab's video (with subtitles) when it isn't the loaded one."
+						title="Switch to the active tab's video (with subtitles) when it isn't the loaded one. Recommended: keeps mined screenshots correct — asbplayer captures the visible tab."
 					>
 						<input
 							type="checkbox"
-							checked={$settings?.asbplayer_follow_active_tab ?? false}
+							checked={$settings?.asbplayer_follow_active_tab ?? true}
 							onchange={(e) => setAsbplayerFollowActiveTab(e.currentTarget.checked)}
 						/>
-						Follow active tab
+						Follow active tab <em>(recommended)</em>
 					</label>
 				</div>
 			{/if}

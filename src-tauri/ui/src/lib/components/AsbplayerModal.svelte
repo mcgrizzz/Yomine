@@ -3,9 +3,7 @@
 	// shown but not loadable, so the user learns why nothing happens.
 	import { untrack } from 'svelte';
 	import {
-		asbContext,
 		asbplayerModalOpen,
-		fileResult,
 		loadFromAsbplayer,
 		playerStatus,
 		setAsbplayerFollowNewMedia,
@@ -54,38 +52,11 @@
 		if (ok) asbplayerModalOpen.set(false);
 	}
 
-	// Modal stays open — the moving "targeted" badge is the feedback.
-	async function target(m: ipc.BoundMedia) {
-		busyId = m.id;
-		try {
-			await ipc.setAsbplayerTarget(m.id);
-		} catch (err) {
-			error = String(err);
-		}
-		busyId = null;
-	}
-
-	let sendBusy = $state(false);
-	async function sendSubtitles() {
-		sendBusy = true;
-		try {
-			await ipc.sendSubtitlesToAsbplayer();
-		} catch (err) {
-			error = String(err);
-		}
-		sendBusy = false;
-	}
-
 	function close() {
 		asbplayerModalOpen.set(false);
 	}
 
 	const connected = $derived($playerStatus.ws_clients > 0);
-	const targetedId = $derived($asbContext.loaded_media_id);
-	const fileLoaded = $derived($fileResult !== null);
-	const canSendSubs = $derived(
-		$fileResult?.source_file.file_type === 'SRT' || $fileResult?.source_file.file_type === 'SSA'
-	);
 </script>
 
 <!-- Esc closes from anywhere: the backdrop's own keydown only fires once focus
@@ -148,15 +119,6 @@
 								>
 								<span class="badge">{m.media_type}</span>
 								{#if m.active}<span class="badge active">active tab</span>{/if}
-								{#if m.id === targetedId}<span class="badge targeted">✓ targeted</span>{/if}
-								<button
-									class="load"
-									disabled={busyId !== null || !fileLoaded || m.id === targetedId}
-									title={fileLoaded
-										? 'Mine and seek against this video, keeping the currently loaded subtitles'
-										: 'Load a file first'}
-									onclick={() => target(m)}>Target</button
-								>
 								<button
 									class="load"
 									disabled={!hasSubs || busyId !== null}
@@ -164,19 +126,7 @@
 								>
 							</div>
 							{#if !hasSubs}
-								{#if m.id === targetedId}
-									<p class="no-subs">
-										No subtitles loaded on this video — cards will mine without audio/screenshot.
-										{#if m.active && canSendSubs}
-											<button class="send-subs" disabled={sendBusy} onclick={sendSubtitles}
-												>{sendBusy ? 'Sending…' : 'Send current subtitles'}</button
-											>
-											— asbplayer will ask you to pick the video in its tab, then Refresh here.
-										{/if}
-									</p>
-								{:else}
-									<p class="no-subs">No subtitles loaded — load a subtitle file in asbplayer first.</p>
-								{/if}
+								<p class="no-subs">No subtitles loaded — load a subtitle file in asbplayer first.</p>
 							{:else if m.loaded_subtitles.length > 1}
 								<div class="tracks">
 									{#each m.loaded_subtitles as t (t.track_number)}
@@ -222,13 +172,16 @@
 					/>
 					Follow new videos — load the next episode automatically
 				</label>
-				<label class="follow" title="When you switch to a tab whose video has subtitles, load that video.">
+				<label
+					class="follow"
+					title="When you switch to a tab whose video has subtitles, load that video. Recommended: keeps mined screenshots correct — asbplayer captures the visible tab."
+				>
 					<input
 						type="checkbox"
-						checked={$settings?.asbplayer_follow_active_tab ?? false}
+						checked={$settings?.asbplayer_follow_active_tab ?? true}
 						onchange={(e) => setAsbplayerFollowActiveTab(e.currentTarget.checked)}
 					/>
-					Follow active tab — switch when I change tabs
+					Follow active tab — switch when I change tabs <em>(recommended)</em>
 				</label>
 			</div>
 		</div>
@@ -351,16 +304,8 @@
 		color: var(--success);
 		border-color: var(--success);
 	}
-	.badge.targeted {
-		color: var(--accent);
-		border-color: var(--accent);
-	}
 	.load {
 		padding: 0.25rem 0.7rem;
-	}
-	.send-subs {
-		padding: 0.15rem 0.5rem;
-		font-size: 0.75rem;
 	}
 	.no-subs {
 		margin: 0.3rem 0 0;

@@ -141,8 +141,8 @@ pub async fn mine_term(
         if let Some(id) = note_id {
             if target_lacks_subtitles(&player, media_id.as_deref()).await {
                 warning = Some(
-                    "asbplayer has no subtitles loaded on the targeted video — card created \
-                     without audio/screenshot"
+                    "asbplayer has no subtitles loaded on the loaded video — card created without \
+                     audio/screenshot"
                         .to_string(),
                 );
                 media_missing = true;
@@ -182,7 +182,7 @@ pub async fn retry_mine_media(
 ) -> Result<(), String> {
     let media_id = { state.lock().unwrap().file.asbplayer_media_id.clone() };
     if target_lacks_subtitles(&player, media_id.as_deref()).await {
-        return Err("asbplayer still has no subtitles loaded on the targeted video".to_string());
+        return Err("asbplayer still has no subtitles loaded on the loaded video".to_string());
     }
     let record_secs = cue_duration_secs(timestamp_secs, timestamp_end_secs);
     enrich_and_verify(

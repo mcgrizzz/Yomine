@@ -83,8 +83,7 @@ pub struct AsbplayerContext {
     pub active_has_subtitles: bool,
     pub loaded_is_active: bool,
     pub loaded_from_asbplayer: bool,
-    pub loaded_media_id: Option<String>,
-    /// Whether asbplayer has subtitles loaded on the targeted media — without
+    /// Whether asbplayer has subtitles loaded on the bound media — without
     /// them `mine-subtitle` drops the target and enrichment is impossible.
     pub loaded_has_subtitles: bool,
 }

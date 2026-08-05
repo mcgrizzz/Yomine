@@ -3,22 +3,11 @@
 
 use std::sync::Mutex;
 
-use base64::Engine;
-use tauri::{
-    AppHandle,
-    Emitter,
-    State,
-};
-use yomine::{
-    core::models::SourceFileType,
-    persistence,
-};
+use tauri::State;
+use yomine::persistence;
 
 use crate::{
-    events::{
-        names,
-        PlayerStatus,
-    },
+    events::PlayerStatus,
     player_task::PlayerHandle,
     state::AppState,
 };
@@ -68,55 +57,6 @@ pub async fn get_asbplayer_media(
     player: State<'_, PlayerHandle>,
 ) -> Result<Vec<crate::dto::BoundMediaDto>, String> {
     Ok(player.get_bound_media().await?.into_iter().map(Into::into).collect())
-}
-
-/// Re-point mining/seeking at another asbplayer video, keeping the loaded
-/// subtitles. Emits a fresh `asbplayer-context` so the UI updates immediately.
-#[tauri::command]
-pub async fn set_asbplayer_target(
-    app: AppHandle,
-    state: State<'_, Mutex<AppState>>,
-    player: State<'_, PlayerHandle>,
-    media_id: String,
-) -> Result<(), String> {
-    {
-        let mut guard = state.lock().unwrap();
-        if guard.file.source_file.is_none() {
-            return Err("Load a file before choosing a target video".to_string());
-        }
-        guard.file.asbplayer_media_id = Some(media_id.clone());
-    }
-    if let Ok(media) = player.get_bound_media().await {
-        let ctx = crate::background::asbplayer_context(&media, Some(&media_id));
-        let _ = app.emit(names::ASBPLAYER_CONTEXT, ctx);
-    }
-    Ok(())
-}
-
-/// Push the current session's subtitle file to asbplayer (`load-subtitles`).
-/// asbplayer opens its video-select overlay in the active tab.
-#[tauri::command]
-pub async fn send_subtitles_to_asbplayer(
-    state: State<'_, Mutex<AppState>>,
-    player: State<'_, PlayerHandle>,
-) -> Result<(), String> {
-    let path = {
-        let guard = state.lock().unwrap();
-        let source =
-            guard.file.source_file.as_ref().ok_or_else(|| "No file is loaded".to_string())?;
-        match source.file_type {
-            SourceFileType::SRT | SourceFileType::SSA => source.original_file.clone(),
-            _ => return Err("Only subtitle files can be sent to asbplayer".to_string()),
-        }
-    };
-    let bytes = std::fs::read(&path).map_err(|e| format!("Couldn't read {}: {}", path, e))?;
-    let name = std::path::Path::new(&path)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("subtitles.srt")
-        .to_string();
-    let base64 = base64::engine::general_purpose::STANDARD.encode(bytes);
-    player.load_subtitles(vec![(name, base64)]).await
 }
 
 #[derive(serde::Serialize)]

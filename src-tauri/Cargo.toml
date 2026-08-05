@@ -27,8 +27,6 @@ chrono = "0.4"
 # Katakana→hiragana for furigana readings in the sentence DTO (matches the
 # engine's version so only one copy is compiled).
 wana_kana = "5.0.0"
-# Subtitle payloads for asbplayer's `load-subtitles` command.
-base64 = "0.22"
 yomine = { path = ".." }
 
 # Pin the wry runtime stack to a matched set (currently `tauri` 2.11.5 →

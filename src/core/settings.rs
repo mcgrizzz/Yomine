@@ -128,7 +128,8 @@ pub struct SettingsData {
     #[serde(default)]
     pub asbplayer_follow_new_media: bool,
     /// Follow mode (issue #105): switch to asbplayer's active subtitled tab.
-    #[serde(default)]
+    /// Default on — it keeps mined screenshots correct (asbplayer captures the visible tab).
+    #[serde(default = "default_true")]
     pub asbplayer_follow_active_tab: bool,
     /// How often follow mode polls asbplayer's bound-media list, in seconds.
     #[serde(default = "default_asbplayer_poll_secs")]
@@ -213,7 +214,7 @@ impl Default for SettingsData {
             theme_light: default_theme_light(),
             user_themes: Vec::new(),
             asbplayer_follow_new_media: false,
-            asbplayer_follow_active_tab: false,
+            asbplayer_follow_active_tab: true,
             asbplayer_poll_secs: default_asbplayer_poll_secs(),
             font_scale: default_font_scale(),
             definition_scale: default_font_scale(),
