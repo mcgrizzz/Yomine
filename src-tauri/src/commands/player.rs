@@ -16,11 +16,13 @@ use crate::{
 /// Errors if no player is connected (the handle relays the player's own error).
 #[tauri::command]
 pub async fn seek_timestamp(
+    state: State<'_, Mutex<AppState>>,
     player: State<'_, PlayerHandle>,
     seconds: f32,
     label: String,
 ) -> Result<(), String> {
-    player.seek(seconds, label).await
+    let media_id = { state.lock().unwrap().file.asbplayer_media_id.clone() };
+    player.seek(seconds, label, media_id).await
 }
 
 /// Current player connectivity/mode. Also pushed via the `player-status` event.

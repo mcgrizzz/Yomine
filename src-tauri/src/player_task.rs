@@ -37,6 +37,7 @@ pub enum PlayerCommand {
     Seek {
         seconds: f32,
         label: String,
+        media_id: Option<String>,
         reply: oneshot::Sender<Result<(), String>>,
     },
     Status {
@@ -59,6 +60,8 @@ pub enum PlayerCommand {
     MineSubtitle {
         fields: std::collections::HashMap<String, String>,
         post_mine_action: u8,
+        media_id: Option<String>,
+        note_id: Option<u64>,
         reply: oneshot::Sender<Result<(), String>>,
     },
 }
@@ -68,10 +71,15 @@ pub enum PlayerCommand {
 pub struct PlayerHandle(mpsc::UnboundedSender<PlayerCommand>);
 
 impl PlayerHandle {
-    pub async fn seek(&self, seconds: f32, label: String) -> Result<(), String> {
+    pub async fn seek(
+        &self,
+        seconds: f32,
+        label: String,
+        media_id: Option<String>,
+    ) -> Result<(), String> {
         let (reply, rx) = oneshot::channel();
         self.0
-            .send(PlayerCommand::Seek { seconds, label, reply })
+            .send(PlayerCommand::Seek { seconds, label, media_id, reply })
             .map_err(|_| "player task is not running".to_string())?;
         rx.await.map_err(|_| "player task dropped the seek request".to_string())?
     }
@@ -112,10 +120,18 @@ impl PlayerHandle {
         &self,
         fields: std::collections::HashMap<String, String>,
         post_mine_action: u8,
+        media_id: Option<String>,
+        note_id: Option<u64>,
     ) -> Result<(), String> {
         let (reply, rx) = oneshot::channel();
         self.0
-            .send(PlayerCommand::MineSubtitle { fields, post_mine_action, reply })
+            .send(PlayerCommand::MineSubtitle {
+                fields,
+                post_mine_action,
+                media_id,
+                note_id,
+                reply,
+            })
             .map_err(|_| "player task is not running".to_string())?;
         rx.await.map_err(|_| "player task dropped the request".to_string())?
     }
@@ -178,8 +194,10 @@ async fn run(app: AppHandle, mut port: u16, mut rx: mpsc::UnboundedReceiver<Play
                 }
             }
             Some(cmd) = rx.recv() => match cmd {
-                PlayerCommand::Seek { seconds, label, reply } => {
-                    let result = player.seek_timestamp(seconds, &label).map_err(|e| e.to_string());
+                PlayerCommand::Seek { seconds, label, media_id, reply } => {
+                    let result = player
+                        .seek_timestamp(seconds, &label, media_id.as_deref())
+                        .map_err(|e| e.to_string());
                     let _ = reply.send(result);
                 }
                 PlayerCommand::Status { reply } => {
@@ -207,13 +225,13 @@ async fn run(app: AppHandle, mut port: u16, mut rx: mpsc::UnboundedReceiver<Play
                         let _ = reply.send(result);
                     });
                 }
-                PlayerCommand::MineSubtitle { fields, post_mine_action, reply } => {
+                PlayerCommand::MineSubtitle { fields, post_mine_action, media_id, note_id, reply } => {
                     let server = player.ws.server.clone();
                     tauri::async_runtime::spawn_blocking(move || {
                         let result = match server {
-                            Some(s) => {
-                                s.mine_subtitle(&fields, post_mine_action).map_err(|e| e.to_string())
-                            }
+                            Some(s) => s
+                                .mine_subtitle(&fields, post_mine_action, media_id.as_deref(), note_id)
+                                .map_err(|e| e.to_string()),
                             None => Err("WebSocket server is not running".to_string()),
                         };
                         let _ = reply.send(result);
