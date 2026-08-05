@@ -105,7 +105,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: color-mix(in srgb, var(--bg-darker) 70%, transparent);
+		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
 		z-index: 50;
 	}
 	.dialog {
@@ -114,7 +114,7 @@
 		gap: 0.6rem;
 		width: min(400px, 92%);
 		padding-bottom: 1rem;
-		background: var(--bg-dark);
+		background: var(--bg-panel);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
@@ -129,7 +129,7 @@
 	header h2 {
 		margin: 0;
 		font-size: 1.05rem;
-		color: var(--cyan);
+		color: var(--accent);
 	}
 	.close {
 		padding: 0.1rem 0.4rem;
@@ -148,12 +148,12 @@
 	.version {
 		font-size: 0.9rem;
 		font-weight: 400;
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	.tagline {
 		margin: 0;
 		font-size: 0.85rem;
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	.links {
 		display: flex;
@@ -178,13 +178,13 @@
 		font-size: 0.85rem;
 	}
 	.update-found {
-		color: var(--green);
+		color: var(--success);
 		font-weight: 600;
 	}
 	.up-to-date {
-		color: var(--green);
+		color: var(--success);
 	}
 	.unavailable {
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 </style>

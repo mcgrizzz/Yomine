@@ -15,14 +15,13 @@
 		padding: 0.35rem 1rem;
 		border: none;
 		border-radius: 0;
-		/* egui's amber rgb(180,140,0) on white text. */
-		background: rgb(180, 140, 0);
-		color: #fff;
+		background: color-mix(in srgb, var(--warning) 55%, var(--bg));
+		color: var(--text);
 		font-size: 0.875rem;
 		text-align: center;
 		cursor: pointer;
 	}
 	.banner:hover {
-		background: rgb(200, 156, 0);
+		background: color-mix(in srgb, var(--warning) 70%, var(--bg));
 	}
 </style>

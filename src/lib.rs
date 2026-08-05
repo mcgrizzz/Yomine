@@ -1,6 +1,7 @@
 pub mod anki;
 pub mod core;
 pub mod dictionary;
+pub mod epub;
 pub mod jlpt;
 pub mod mpv;
 pub mod parser;

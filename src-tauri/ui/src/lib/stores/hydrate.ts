@@ -1,12 +1,12 @@
 import { get } from 'svelte/store';
 import * as ipc from '$lib/ipc';
 import { termKey } from '$lib/table';
-import { dragHovering, lastError, overlay, showNotice } from './ui';
+import { dragHovering, initProgress, lastError, showNotice } from './ui';
 import { ankiStatus, knowledge, languageToolsStatus } from './status';
 import { checkForUpdate } from './update';
 import { asbContext, playerStatus } from './player';
 import { fileResult, isSupportedPath, loadAndStore, recentFiles } from './file';
-import { posCatalog, posEnabled } from './controls';
+import { jlptEnabled, posCatalog, posEnabled } from './controls';
 import { settings } from './settings';
 import { refreshIgnoredLemmas } from './ignore';
 import { refreshRecommendedDicts } from './dictionaries';
@@ -20,6 +20,9 @@ let hydrated = false;
 export async function hydrate(): Promise<void> {
 	if (hydrated) return;
 	hydrated = true;
+
+	const settingsPull = ipc.getSettings();
+	const recentsPull = ipc.getRecentFiles().then((r) => recentFiles.set(r));
 
 	// Events are wired before any await so early emits aren't missed. player/
 	// anki/knowledge emit only on *change*: if one fires during the pulls below,
@@ -64,13 +67,14 @@ export async function hydrate(): Promise<void> {
 		selectedTerms.update((s) => new Set([...s].filter((k) => live.has(k))));
 	});
 
-	// Drag-drop is a no-op until the language tools can process a file.
-	const toolsReady = () => get(languageToolsStatus) === 'ready';
+	// Drag-drop works while the tools are still loading (loadAndStore waits for
+	// them); only a failed init disables it.
+	const toolsUsable = () => typeof get(languageToolsStatus) !== 'object';
 	ipc.onDragDrop({
-		onEnter: (paths) => dragHovering.set(toolsReady() && paths.some(isSupportedPath)),
+		onEnter: (paths) => dragHovering.set(toolsUsable() && paths.some(isSupportedPath)),
 		onDrop: (paths) => {
 			dragHovering.set(false);
-			if (!toolsReady()) return;
+			if (!toolsUsable()) return;
 			const file = paths.find(isSupportedPath);
 			if (file) loadAndStore(file);
 		},
@@ -79,31 +83,34 @@ export async function hydrate(): Promise<void> {
 
 	// player/anki must be pulled as well as subscribed: a (re)loaded webview
 	// would otherwise sit on the placeholder until the next change event.
-	const [loadedSettings, catalog, currentFile, recents, player, anki, summary] = await Promise.all([
-		ipc.getSettings(),
+	const batch = Promise.all([
 		ipc.getPosCatalog(),
 		ipc.getTerms(),
-		ipc.getRecentFiles(),
 		ipc.getPlayerStatus(),
 		ipc.getAnkiStatus(),
 		ipc.getKnowledgeSummary()
 	]);
+
+	const loadedSettings = await settingsPull;
 	settings.set(loadedSettings);
 	posEnabled.set({ ...loadedSettings.pos_filters });
+	jlptEnabled.set({ ...loadedSettings.jlpt_filters });
+
+	const [catalog, currentFile, player, anki, summary] = await batch;
 	posCatalog.set(catalog);
 	fileResult.set(currentFile);
-	recentFiles.set(recents);
+	await recentsPull;
 	if (!playerEventSeen) playerStatus.set(player);
 	if (!ankiEventSeen) ankiStatus.set(anki);
 	if (summary && !knowledgeEventSeen) knowledge.set(summary);
 
-	overlay.set('Loading language tools…');
+	initProgress.set('Loading language tools…');
 	try {
-		await ipc.loadLanguageTools((msg) => overlay.set(msg.message));
+		await ipc.loadLanguageTools((msg) => initProgress.set(msg.message));
 	} catch (err) {
 		languageToolsStatus.set({ error: String(err) });
 	} finally {
-		overlay.set(null);
+		initProgress.set(null);
 	}
 
 	// These need the tools loaded (setup's freq-dict bit, the ignore command,

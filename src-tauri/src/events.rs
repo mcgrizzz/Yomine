@@ -20,6 +20,7 @@ pub mod names {
     pub const ANALYSIS_COMPLETE: &str = "analysis-complete";
     pub const ANALYSIS_CANCELLED: &str = "analysis-cancelled";
     pub const EXPORT_COMPLETE: &str = "export-complete";
+    pub const SETTINGS_CHANGED: &str = "settings-changed";
     pub const ERROR: &str = "error";
 }
 

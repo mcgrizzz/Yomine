@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 use crate::anki::FieldMapping;
 
-#[derive(Clone, serde::Serialize, serde::Deserialize, Debug)]
+#[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize, Debug)]
 pub struct FrequencyDictionarySetting {
     pub weight: f32,
     pub enabled: bool,
@@ -78,6 +78,21 @@ pub struct TableColumn {
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct UserTheme {
+    pub name: String,
+    pub dark: bool,
+    pub colors: HashMap<String, String>,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct TextFilterSetting {
+    pub pattern: String,
+    pub replacement: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct SettingsData {
     pub anki_model_mappings: HashMap<String, FieldMapping>,
     #[serde(default = "default_interval")]
@@ -88,10 +103,27 @@ pub struct SettingsData {
     pub frequency_weights: HashMap<String, FrequencyDictionarySetting>,
     #[serde(default)]
     pub pos_filters: HashMap<String, bool>,
+    /// JLPT chip key (N5..N1, "none") → enabled; missing = enabled.
+    #[serde(default)]
+    pub jlpt_filters: HashMap<String, bool>,
+    /// Set only when narrowed inside the file's frequency bounds; clamped per file.
+    #[serde(default)]
+    pub freq_filter_min: Option<u32>,
+    #[serde(default)]
+    pub freq_filter_max: Option<u32>,
+    #[serde(default)]
+    pub freq_include_unknown: bool,
     #[serde(default)]
     pub use_serif_font: bool,
+    /// Which preferred theme slot is active (`theme_dark` vs `theme_light`).
     #[serde(default = "default_true")]
     pub dark_mode: bool,
+    #[serde(default = "default_theme_dark")]
+    pub theme_dark: String,
+    #[serde(default = "default_theme_light")]
+    pub theme_light: String,
+    #[serde(default)]
+    pub user_themes: Vec<UserTheme>,
     /// Follow mode (issue #105): auto-load NEW subtitled videos asbplayer binds.
     #[serde(default)]
     pub asbplayer_follow_new_media: bool,
@@ -123,6 +155,12 @@ pub struct SettingsData {
     /// Term-table column order/visibility (issue #122); empty = built-in layout.
     #[serde(default)]
     pub table_columns: Vec<TableColumn>,
+    /// Custom regex text filters (issue #92), applied in order.
+    #[serde(default)]
+    pub text_filters: Vec<TextFilterSetting>,
+    /// Preset id → enabled (`text_filter::presets`); missing = off.
+    #[serde(default)]
+    pub text_filter_presets: HashMap<String, bool>,
 }
 
 const fn default_font_scale() -> f32 {
@@ -149,6 +187,14 @@ const fn default_true() -> bool {
     true
 }
 
+fn default_theme_dark() -> String {
+    "dracula".to_string()
+}
+
+fn default_theme_light() -> String {
+    "paper".to_string()
+}
+
 impl Default for SettingsData {
     fn default() -> Self {
         Self {
@@ -157,8 +203,15 @@ impl Default for SettingsData {
             websocket_settings: WebSocketSettings::default(),
             frequency_weights: HashMap::new(),
             pos_filters: HashMap::new(),
+            jlpt_filters: HashMap::new(),
+            freq_filter_min: None,
+            freq_filter_max: None,
+            freq_include_unknown: false,
             use_serif_font: false,
             dark_mode: true,
+            theme_dark: default_theme_dark(),
+            theme_light: default_theme_light(),
+            user_themes: Vec::new(),
             asbplayer_follow_new_media: false,
             asbplayer_follow_active_tab: false,
             asbplayer_poll_secs: default_asbplayer_poll_secs(),
@@ -170,6 +223,8 @@ impl Default for SettingsData {
             sentence_underlines: UnderlineToggles::default(),
             show_jlpt_tags: true,
             table_columns: Vec::new(),
+            text_filters: Vec::new(),
+            text_filter_presets: HashMap::new(),
         }
     }
 }

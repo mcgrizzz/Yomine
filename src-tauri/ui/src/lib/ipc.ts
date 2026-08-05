@@ -67,7 +67,7 @@ export interface SentenceDto {
 	comprehension: number;
 }
 
-export type SourceFileType = 'SRT' | 'SSA' | 'TXT' | { Other: string };
+export type SourceFileType = 'SRT' | 'SSA' | 'TXT' | 'EPUB' | { Other: string };
 
 export interface SourceFile {
 	id: number;
@@ -76,6 +76,10 @@ export interface SourceFile {
 	title: string;
 	creator: string | null;
 	original_file: string;
+	/** Selected part ids from the EPUB chapter picker; `null` = whole book. */
+	epub_chapters: number[] | null;
+	/** The picker's selection summary, rendered beside the title. */
+	epub_label: string | null;
 }
 
 export interface FileLoadResult {
@@ -96,6 +100,8 @@ export interface FileLoadResult {
 export interface RecentFileEntry {
 	file_path: string;
 	title: string;
+	/** e.g. the EPUB chapter selection last mined. */
+	subtitle: string | null;
 	creator: string | null;
 	/** RFC3339 timestamp. */
 	last_opened: string;
@@ -211,8 +217,18 @@ export interface SettingsData {
 	websocket_settings: { port: number };
 	frequency_weights: Record<string, FrequencyDictionarySetting>;
 	pos_filters: Record<string, boolean>;
+	/** JLPT chip key (N5..N1, 'none') → enabled; missing = enabled. */
+	jlpt_filters: Record<string, boolean>;
+	/** Absolute harmonic ranks; null = not narrowed (full range). */
+	freq_filter_min: number | null;
+	freq_filter_max: number | null;
+	freq_include_unknown: boolean;
 	use_serif_font: boolean;
+	/** Which preferred theme slot is active (`theme_dark` vs `theme_light`). */
 	dark_mode: boolean;
+	theme_dark: string;
+	theme_light: string;
+	user_themes: UserTheme[];
 	/** Follow mode (issue #105): auto-load NEW subtitled videos asbplayer binds. */
 	asbplayer_follow_new_media: boolean;
 	/** Follow mode (issue #105): switch to asbplayer's active subtitled tab. */
@@ -235,6 +251,29 @@ export interface SettingsData {
 	show_jlpt_tags: boolean;
 	/** Term-table column order/visibility (issue #122); empty = built-in layout. */
 	table_columns: { id: string; visible: boolean }[];
+	/** Custom regex text filters (issue #92), applied in order. */
+	text_filters: TextFilterSetting[];
+	/** Preset id → enabled; missing = off. */
+	text_filter_presets: Record<string, boolean>;
+}
+
+export interface TextFilterSetting {
+	pattern: string;
+	replacement: string;
+	enabled: boolean;
+}
+
+/** Mirrors `UserTheme` (core/settings.rs); colors keyed by `TOKENS` (lib/themes.ts). */
+export interface UserTheme {
+	name: string;
+	dark: boolean;
+	colors: Record<string, string>;
+}
+
+export interface FilterPreset {
+	id: string;
+	label: string;
+	description: string;
 }
 
 /** Aggregated setup readiness for the checklist/banner (`get_setup_status`).
@@ -331,6 +370,30 @@ export function openFileDialog(): Promise<string | null> {
 	return invoke('open_file_dialog');
 }
 
+/** One selectable chapter slice; `id` is what `processFile` takes back, `seen` = mined before. */
+export interface EpubPart {
+	id: number;
+	char_count: number;
+	seen: boolean;
+}
+
+/** One ToC chapter; oversized chapters carry more than one part. */
+export interface EpubChapter {
+	title: string;
+	char_count: number;
+	parts: EpubPart[];
+}
+
+export interface EpubBook {
+	title: string;
+	chapters: EpubChapter[];
+}
+
+/** Book title + chapters for the EPUB chapter-picker modal. */
+export function getEpubChapters(path: string): Promise<EpubBook> {
+	return invoke('get_epub_chapters', { path });
+}
+
 /** Video picker for the MPV launcher (issue #89). */
 export function openVideoDialog(): Promise<string | null> {
 	return invoke('open_video_dialog');
@@ -341,14 +404,18 @@ export function openExecutableDialog(): Promise<string | null> {
 	return invoke('open_executable_dialog');
 }
 
-/** Parse + segment + filter a file; streams progress; returns the minable terms. */
+/** Parse + segment + filter a file; streams progress; returns the minable terms.
+ * `epubChapters` = selected part ids for EPUBs (`null` = whole book);
+ * `epubLabel` = the picker's human-readable selection summary. */
 export async function processFile(
 	path: string,
-	onProgress: (msg: LoadingMessage) => void
+	onProgress: (msg: LoadingMessage) => void,
+	epubChapters: number[] | null = null,
+	epubLabel: string | null = null
 ): Promise<FileLoadResult> {
 	const channel = new Channel<LoadingMessage>();
 	channel.onmessage = onProgress;
-	return invoke('process_file', { path, progress: channel });
+	return invoke('process_file', { path, epubChapters, epubLabel, progress: channel });
 }
 
 /** The currently loaded file, or `null` if none. */
@@ -360,6 +427,26 @@ export function getTerms(): Promise<FileLoadResult | null> {
  * file arrives via the `terms-refreshed` event; no-op when nothing is loaded. */
 export function refreshTerms(): Promise<void> {
 	return invoke('refresh_terms');
+}
+
+export async function reloadCurrentFile(
+	onProgress: (msg: LoadingMessage) => void
+): Promise<FileLoadResult> {
+	const channel = new Channel<LoadingMessage>();
+	channel.onmessage = onProgress;
+	return invoke('reload_current_file', { progress: channel });
+}
+
+export function getTextFilterPresets(): Promise<FilterPreset[]> {
+	return invoke('get_text_filter_presets');
+}
+
+export function testTextFilters(
+	presets: Record<string, boolean>,
+	filters: TextFilterSetting[],
+	sample: string
+): Promise<string> {
+	return invoke('test_text_filters', { presets, filters, sample });
 }
 
 /** Recently-opened files (existing paths only), most-recent first. */
@@ -438,6 +525,21 @@ export function exportIgnoreList(terms: string[]): Promise<string | null> {
 /** Open the app data directory in the OS file explorer (File → Open Data Folder). */
 export function openDataFolder(): Promise<void> {
 	return invoke('open_data_folder');
+}
+
+/** Open (or focus) the floating Themes window. */
+export function openThemesWindow(): Promise<void> {
+	return invoke('open_themes_window');
+}
+
+/** Save-dialog + write a theme JSON export; false = user cancelled. */
+export function exportThemeFile(name: string, json: string): Promise<boolean> {
+	return invoke('export_theme_file', { name, json });
+}
+
+/** Open-dialog + read a theme JSON file; null = user cancelled. */
+export function importThemeFile(): Promise<string | null> {
+	return invoke('import_theme_file');
 }
 
 /** Seek the connected player (mpv or asbplayer) to a sentence timestamp. */

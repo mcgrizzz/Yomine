@@ -192,7 +192,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: color-mix(in srgb, var(--bg-darker) 70%, transparent);
+		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
 		z-index: 50;
 	}
 	.dialog {
@@ -202,7 +202,7 @@
 		width: min(720px, 92%);
 		max-height: 80%;
 		padding-bottom: 0.75rem;
-		background: var(--bg-dark);
+		background: var(--bg-panel);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
@@ -217,7 +217,7 @@
 	header h2 {
 		margin: 0;
 		font-size: 1.05rem;
-		color: var(--cyan);
+		color: var(--accent);
 	}
 	.head-actions {
 		display: flex;
@@ -234,12 +234,12 @@
 	.hint {
 		margin: 0;
 		padding: 0 1rem;
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	.error {
 		margin: 0;
 		padding: 0 1rem;
-		color: var(--red);
+		color: var(--danger);
 	}
 	.media-list {
 		list-style: none;
@@ -252,7 +252,7 @@
 	}
 	.media {
 		padding: 0.5rem 0.6rem;
-		background: var(--bg-light);
+		background: var(--bg-raised);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 	}
@@ -294,12 +294,12 @@
 		padding: 0.1rem 0.4rem;
 		border: 1px solid var(--border);
 		border-radius: 999px;
-		color: var(--comment);
+		color: var(--text-muted);
 		white-space: nowrap;
 	}
 	.badge.active {
-		color: var(--green);
-		border-color: var(--green);
+		color: var(--success);
+		border-color: var(--success);
 	}
 	.load {
 		padding: 0.25rem 0.7rem;
@@ -307,12 +307,12 @@
 	.no-subs {
 		margin: 0.3rem 0 0;
 		font-size: 0.8rem;
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	.single-track {
 		margin: 0.3rem 0 0;
 		font-size: 0.8rem;
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	.tracks {
 		display: flex;
@@ -339,7 +339,7 @@
 		align-items: center;
 		gap: 0.4rem;
 		font-size: 0.85rem;
-		color: var(--comment);
+		color: var(--text-muted);
 		cursor: pointer;
 	}
 </style>

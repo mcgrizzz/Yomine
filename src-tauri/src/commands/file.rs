@@ -1,8 +1,11 @@
 //! File / mining commands (contracts/commands.md "File / mining").
 
-use std::sync::{
-    atomic::Ordering,
-    Mutex,
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::Ordering,
+        Mutex,
+    },
 };
 
 use tauri::{
@@ -31,6 +34,7 @@ use yomine::{
             RecentFileEntry,
             RecentFiles,
         },
+        text_filter,
     },
     persistence::{
         load_json_or_default,
@@ -41,6 +45,9 @@ use yomine::{
 use crate::{
     dto::{
         term_spans_by_sentence,
+        EpubBookDto,
+        EpubChapterDto,
+        EpubPartDto,
         FileLoadResult,
         SentenceDto,
     },
@@ -81,19 +88,39 @@ pub(crate) fn load_result(file: &FileData) -> Option<FileLoadResult> {
 }
 
 /// Construct a `SourceFile` from a filesystem path, parsing title/creator from the
-/// filename the same way the egui file modal does.
-fn source_file_from_path(path: &str) -> SourceFile {
+/// filename the same way the egui file modal does. EPUBs prefer the metadata title
+/// and carry the picker's selection label for the top bar and recents to render.
+fn source_file_from_path(
+    path: &str,
+    epub_chapters: Option<Vec<usize>>,
+    epub_label: Option<String>,
+) -> SourceFile {
     let filename =
         std::path::Path::new(path).file_name().and_then(|n| n.to_str()).unwrap_or("Unknown");
     let media_info = filename_parser::parse_filename(filename);
     let metadata = media_info.get_metadata_string();
+    let file_type = SourceFileType::from_extension(path);
+    let is_epub = matches!(file_type, SourceFileType::EPUB);
+    let title = if is_epub {
+        yomine::epub::book_title(path)
+            .ok()
+            .filter(|t| !t.is_empty())
+            .unwrap_or_else(|| media_info.display_title())
+    } else {
+        media_info.display_title()
+    };
     SourceFile {
         id: DEFAULT_SOURCE_FILE_ID,
         source: None,
-        file_type: SourceFileType::from_extension(path),
-        title: media_info.display_title(),
+        file_type,
+        title,
         creator: if metadata.is_empty() { None } else { Some(metadata) },
         original_file: path.to_string(),
+        epub_chapters,
+        epub_label: epub_label
+            .filter(|_| is_epub)
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty()),
     }
 }
 
@@ -115,6 +142,53 @@ pub async fn open_file_dialog(app: AppHandle) -> Result<Option<String>, String> 
         app.dialog().file().add_filter("Subtitles & text", SourceFileType::supported_extensions()),
     )
     .await
+}
+
+/// Book title + pickable chapters for the EPUB chapter picker.
+#[tauri::command]
+pub async fn get_epub_chapters(path: String) -> Result<EpubBookDto, String> {
+    let (title, chapters) = yomine::epub::list_chapters(&path).map_err(|e| e.to_string())?;
+    let seen = epub_history(&path);
+    Ok(EpubBookDto {
+        title,
+        chapters: chapters
+            .into_iter()
+            .map(|c| EpubChapterDto {
+                title: c.title,
+                char_count: c.char_count,
+                parts: c
+                    .parts
+                    .into_iter()
+                    .map(|p| EpubPartDto {
+                        id: p.id,
+                        char_count: p.char_count,
+                        seen: seen.contains(&p.id),
+                    })
+                    .collect(),
+            })
+            .collect(),
+    })
+}
+
+/// Part ids already mined for this book (`epub_history.json`, keyed by path).
+fn epub_history(path: &str) -> Vec<usize> {
+    let mut history = load_json_or_default::<HashMap<String, Vec<usize>>>("epub_history.json");
+    history.remove(path).unwrap_or_default()
+}
+
+/// Best-effort like `record_recent_file` — history must never fail a good load.
+fn record_epub_history(path: &str, part_ids: &[usize]) {
+    let mut history = load_json_or_default::<HashMap<String, Vec<usize>>>("epub_history.json");
+    let entry = history.entry(path.to_string()).or_default();
+    for id in part_ids {
+        if !entry.contains(id) {
+            entry.push(*id);
+        }
+    }
+    entry.sort_unstable();
+    if let Err(e) = save_json(&history, "epub_history.json") {
+        eprintln!("Failed to save epub history: {e}");
+    }
 }
 
 /// Video picker for the MPV launcher (issue #89).
@@ -145,26 +219,33 @@ pub async fn process_file(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     path: String,
+    epub_chapters: Option<Vec<usize>>,
+    epub_label: Option<String>,
     progress: Channel<LoadingMessage>,
 ) -> Result<FileLoadResult, String> {
-    let tools = state
-        .lock()
-        .unwrap()
-        .language_tools
-        .clone()
-        .ok_or_else(|| "Language tools are still loading".to_string())?;
+    let (tools, filters) = {
+        let guard = state.lock().unwrap();
+        let tools = guard
+            .language_tools
+            .clone()
+            .ok_or_else(|| "Language tools are still loading".to_string())?;
+        (tools, text_filter::compile_filters(&guard.settings))
+    };
 
     let _ = progress.send(LoadingMessage::new("Processing file..."));
-    let source_file = source_file_from_path(&path);
+    let source_file = source_file_from_path(&path, epub_chapters, epub_label);
 
     // Segmentation blocks the async runtime briefly, but the UI is a separate
     // webview process — nothing user-visible freezes.
     let (base_terms, filter_result, sentences, file_comprehension) =
-        process_source_file(&source_file, &tools).await.map_err(|e| e.to_string())?;
+        process_source_file(&source_file, &tools, &filters).await.map_err(|e| e.to_string())?;
 
     // Record the file in the shared `recent_files.json` (same store as egui) so it
     // appears on the landing state, mirroring egui's `add_recent_file`.
     record_recent_file(&source_file, filter_result.terms.len());
+    if let Some(ids) = &source_file.epub_chapters {
+        record_epub_history(&source_file.original_file, ids);
+    }
 
     // Lemmas Anki already knew — kept so an ignore-list change can re-filter
     // without re-querying Anki.
@@ -246,12 +327,14 @@ pub(crate) async fn load_asbplayer_into_state(
     progress: Option<&Channel<LoadingMessage>>,
 ) -> Result<FileLoadResult, String> {
     let state = app.state::<Mutex<AppState>>();
-    let tools = state
-        .lock()
-        .unwrap()
-        .language_tools
-        .clone()
-        .ok_or_else(|| "Language tools are still loading".to_string())?;
+    let (tools, filters) = {
+        let guard = state.lock().unwrap();
+        let tools = guard
+            .language_tools
+            .clone()
+            .ok_or_else(|| "Language tools are still loading".to_string())?;
+        (tools, text_filter::compile_filters(&guard.settings))
+    };
 
     let file_name = subtitle_file_name.filter(|n| !n.trim().is_empty());
     {
@@ -311,6 +394,8 @@ pub(crate) async fn load_asbplayer_into_state(
         title: display_title,
         creator,
         original_file: saved_path.unwrap_or_else(|| format!("asbplayer://{media_id}")),
+        epub_chapters: None,
+        epub_label: None,
     };
 
     let sentences: Vec<_> = subtitles
@@ -324,7 +409,7 @@ pub(crate) async fn load_asbplayer_into_state(
 
     send("Processing subtitles...");
     let (base_terms, filter_result, sentences, file_comprehension) =
-        process_sentences(sentences, &tools).await.map_err(|e| e.to_string())?;
+        process_sentences(sentences, &tools, &filters).await.map_err(|e| e.to_string())?;
 
     // Only a real on-disk file belongs in recent files (reopening goes through
     // the normal parser; text cleaning matches what we just processed).
@@ -452,6 +537,76 @@ pub fn get_terms(state: State<'_, Mutex<AppState>>) -> Option<FileLoadResult> {
     load_result(&state.lock().unwrap().file)
 }
 
+/// Re-run the full pipeline on the loaded file from its on-disk source
+#[tauri::command]
+pub async fn reload_current_file(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    progress: Channel<LoadingMessage>,
+) -> Result<FileLoadResult, String> {
+    let (tools, filters, source_file, media_id, subtitle_file) = {
+        let guard = state.lock().unwrap();
+        let tools = guard
+            .language_tools
+            .clone()
+            .ok_or_else(|| "Language tools are still loading".to_string())?;
+        let source_file =
+            guard.file.source_file.clone().ok_or_else(|| "No file is loaded".to_string())?;
+        (
+            tools,
+            text_filter::compile_filters(&guard.settings),
+            source_file,
+            guard.file.asbplayer_media_id.clone(),
+            guard.file.asbplayer_subtitle_file.clone(),
+        )
+    };
+    if !std::path::Path::new(&source_file.original_file).exists() {
+        return Err(
+            "The loaded file no longer exists on disk — reload it from its source".to_string()
+        );
+    }
+
+    let _ = progress.send(LoadingMessage::new("Reprocessing file..."));
+    let (base_terms, filter_result, sentences, file_comprehension) =
+        process_source_file(&source_file, &tools, &filters).await.map_err(|e| e.to_string())?;
+
+    let anki_known_lemmas =
+        filter_result.anki_filtered.iter().map(|t| t.lemma_form.clone()).collect();
+    let mut guard = state.lock().unwrap();
+    guard.file = FileData {
+        source_file: Some(source_file),
+        terms: filter_result.terms,
+        base_terms,
+        anki_known_lemmas,
+        ignored_count: filter_result.ignore_filtered.len(),
+        sentences,
+        file_comprehension,
+        asbplayer_media_id: media_id,
+        asbplayer_subtitle_file: subtitle_file,
+    };
+    let payload = load_result(&guard.file).expect("file just stored has a source_file");
+    drop(guard);
+
+    let app_handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        if yomine::anki::api::get_version().await.is_ok() {
+            if let Err(e) = live_refresh(&app_handle).await {
+                let _ = app_handle.emit(
+                    names::ERROR,
+                    ErrorPayload {
+                        title: "Refresh Error".into(),
+                        message: "Unable to refresh terms".into(),
+                        detail: Some(e),
+                    },
+                );
+            }
+        }
+    });
+
+    let _ = progress.send(LoadingMessage::clear());
+    Ok(payload)
+}
+
 /// Add (or refresh) a file in the shared recent-files store. Failures are logged,
 /// not surfaced — a recent-files write must never fail an otherwise-good load.
 fn record_recent_file(source_file: &SourceFile, term_count: usize) {
@@ -459,6 +614,7 @@ fn record_recent_file(source_file: &SourceFile, term_count: usize) {
     recent.add_file(
         source_file.original_file.clone(),
         source_file.title.clone(),
+        source_file.epub_label.clone(),
         source_file.creator.clone(),
         term_count,
     );

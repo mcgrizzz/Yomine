@@ -11,7 +11,7 @@ resolver = "2"
 # THE version: both crates inherit it, and tauri.conf.json (no `version` field)
 # falls back to src-tauri/Cargo.toml — bump this one line to cut a release.
 [workspace.package]
-version = "0.6.6"
+version = "0.7.0"
 
 [dependencies]
 zip = { version = "4.3.0", features = ["xz"]}
@@ -19,8 +19,11 @@ bincode = { version = "2.0.1", features = ["serde"]}
 dirs = "6.0.0"
 futures = "0.3.31"
 futures-util = "0.3.30"
-jp-deinflector = "0.2.0"
+# Fork until btrkeks/jp-deinflector#8
+jp-deinflector = "0.2.2"
+quick-xml = "0.38"
 rand = "0.9.2"
+rbook = "0.7"
 rayon = "1.10.0"
 regex = "1.11.1"
 reqwest = { version = "0.12.10", features = ["blocking", "json"] }

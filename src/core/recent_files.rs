@@ -12,6 +12,8 @@ use serde::{
 pub struct RecentFileEntry {
     pub file_path: String,
     pub title: String,
+    #[serde(default)]
+    pub subtitle: Option<String>, // e.g. the EPUB chapter selection last mined
     pub creator: Option<String>,
     pub last_opened: chrono::DateTime<chrono::Utc>,
     pub file_size: Option<u64>,
@@ -22,6 +24,7 @@ impl RecentFileEntry {
     pub fn new(
         file_path: String,
         title: String,
+        subtitle: Option<String>,
         creator: Option<String>,
         term_count: usize,
     ) -> Self {
@@ -30,6 +33,7 @@ impl RecentFileEntry {
         Self {
             file_path,
             title,
+            subtitle,
             creator,
             last_opened: chrono::Utc::now(),
             file_size,
@@ -83,15 +87,21 @@ impl RecentFileEntry {
     }
 }
 
+// Persisted files carry a stale `max_entries: 10` from the egui era — the cap must not deserialize.
+fn default_max_entries() -> usize {
+    50
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecentFiles {
     files: VecDeque<RecentFileEntry>,
+    #[serde(skip, default = "default_max_entries")]
     max_entries: usize,
 }
 
 impl Default for RecentFiles {
     fn default() -> Self {
-        Self::new(10) // Default to 10 recent files
+        Self::new(default_max_entries())
     }
 }
 
@@ -104,12 +114,13 @@ impl RecentFiles {
         &mut self,
         file_path: String,
         title: String,
+        subtitle: Option<String>,
         creator: Option<String>,
         term_count: usize,
     ) {
         self.files.retain(|entry| entry.file_path != file_path);
 
-        let new_entry = RecentFileEntry::new(file_path, title, creator, term_count);
+        let new_entry = RecentFileEntry::new(file_path, title, subtitle, creator, term_count);
         self.files.push_front(new_entry);
 
         while self.files.len() > self.max_entries {
@@ -151,10 +162,23 @@ impl Default for RecentFileEntry {
         Self {
             file_path: String::new(),
             title: String::new(),
+            subtitle: None,
             creator: None,
             last_opened: chrono::Utc::now(),
             file_size: None,
             term_count: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stale_persisted_cap_is_ignored() {
+        let json = r#"{"files": [], "max_entries": 10}"#;
+        let recents: RecentFiles = serde_json::from_str(json).unwrap();
+        assert_eq!(recents.max_entries, default_max_entries());
     }
 }

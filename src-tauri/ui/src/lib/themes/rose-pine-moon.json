@@ -1,0 +1,32 @@
+{
+	"id": "rose-pine-moon",
+	"label": "Rosé Pine Moon",
+	"dark": true,
+	"colors": {
+		"bg-deep": "#191724",
+		"bg-panel": "#1f1d2e",
+		"bg": "#232136",
+		"bg-raised": "#2a273f",
+		"bg-hover": "#393552",
+		"text": "#e0def4",
+		"text-muted": "#908caa",
+		"selection": "#44415a",
+		"border": "#56526e",
+		"accent": "#ea9a97",
+		"term": "#ea9a97",
+		"link": "#9ccfd8",
+		"info": "#9ccfd8",
+		"success": "#8bbf9f",
+		"warning": "#f6c177",
+		"danger": "#eb6f92",
+		"status-ok": "#8bbf9f",
+		"status-warn": "#f6c177",
+		"status-error": "#eb6f92",
+		"status-busy": "#9ccfd8",
+		"status-off": "#6e6a86",
+		"know-unknown": "#eb6f92",
+		"know-new": "#9ccfd8",
+		"know-young": "#e89a5b",
+		"know-mature": "#8bbf9f"
+	}
+}

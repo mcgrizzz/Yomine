@@ -33,6 +33,10 @@ use crate::{
         FieldMapping,
     },
     core::{
+        text_filter::{
+            apply_to_text,
+            CompiledFilter,
+        },
         LanguageTools,
         Sentence,
         SourceFile,
@@ -45,13 +49,14 @@ use crate::{
 pub async fn process_source_file(
     source_file: &SourceFile,
     language_tools: &LanguageTools,
+    text_filters: &[CompiledFilter],
 ) -> Result<(Vec<Term>, FilterResult, Vec<Sentence>, f32), YomineError> {
     // Parse the source file
     let sentences =
         parser::read(source_file).map_err(|e| YomineError::FailedToLoadFile(e.to_string()))?;
     println!("Parsed {} sentences", sentences.len());
 
-    process_sentences(sentences, language_tools).await
+    process_sentences(sentences, language_tools, text_filters).await
 }
 
 /// The shared tail of file processing: tokenize/segment `sentences`, dedupe
@@ -61,8 +66,19 @@ pub async fn process_source_file(
 pub async fn process_sentences(
     mut sentences: Vec<Sentence>,
     language_tools: &LanguageTools,
+    text_filters: &[CompiledFilter],
 ) -> Result<(Vec<Term>, FilterResult, Vec<Sentence>, f32), YomineError> {
     let total_start = Instant::now();
+
+    if !text_filters.is_empty() {
+        for sentence in &mut sentences {
+            sentence.text = apply_to_text(text_filters, &sentence.text);
+        }
+        sentences.retain(|s| !s.text.is_empty());
+        for (id, sentence) in sentences.iter_mut().enumerate() {
+            sentence.id = id;
+        }
+    }
 
     // Extract and deduplicate terms
     let mut terms = extract_words(

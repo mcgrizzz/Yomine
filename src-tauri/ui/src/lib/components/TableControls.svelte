@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Sorting lives in the table's column headers; POS gets a single modal here
 	// (deliberate deviation from egui's per-header popovers).
+	import { get } from 'svelte/store';
 	import {
 		tableSearch,
 		posEnabled,
@@ -9,7 +10,9 @@
 		jlptEnabled,
 		visibleTerms,
 		fileResult,
-		openPosModal
+		openPosModal,
+		saveJlptFilters,
+		saveFreqFilter
 	} from '$lib/stores';
 	import { JLPT_CHIPS, type JlptChip } from '$lib/table';
 	import DualSlider from './DualSlider.svelte';
@@ -34,6 +37,7 @@
 			const to = chips.indexOf(key);
 			const [lo, hi] = from <= to ? [from, to] : [to, from];
 			jlptEnabled.set(Object.fromEntries(chips.map((k, i) => [k, i >= lo && i <= hi])));
+			void saveJlptFilters(get(jlptEnabled));
 			return;
 		}
 		jlptAnchor = key;
@@ -43,10 +47,15 @@
 			if (isSolo) return {};
 			return Object.fromEntries(chips.map((k) => [k, k === key]));
 		});
+		void saveJlptFilters(get(jlptEnabled));
 	}
 
 	// Slider drags apply live; the numeric fields commit on change, clamped to
 	// the bounds and to each other.
+	function persistFreq() {
+		const f = get(freqFilter);
+		if (f) void saveFreqFilter(f);
+	}
 	function setRange(min: number, max: number) {
 		freqFilter.update((f) => (f ? { ...f, min, max } : f));
 	}
@@ -56,6 +65,7 @@
 			const min = Math.min(Math.max(v, f.lo), f.hi);
 			return { ...f, min, max: Math.max(f.max, min) };
 		});
+		persistFreq();
 	}
 	function commitMax(v: number) {
 		freqFilter.update((f) => {
@@ -63,9 +73,11 @@
 			const max = Math.min(Math.max(v, f.lo), f.hi);
 			return { ...f, max, min: Math.min(f.min, max) };
 		});
+		persistFreq();
 	}
 	function setUnknown(on: boolean) {
 		freqFilter.update((f) => (f ? { ...f, includeUnknown: on } : f));
+		persistFreq();
 	}
 </script>
 
@@ -106,6 +118,7 @@
 				min={$freqFilter.min}
 				max={$freqFilter.max}
 				onchange={setRange}
+				oncommit={persistFreq}
 			/>
 			<input
 				class="bound"
@@ -163,7 +176,7 @@
 		gap: 0.4rem;
 	}
 	.lbl {
-		color: var(--comment);
+		color: var(--text-muted);
 		text-transform: uppercase;
 		font-size: 0.7rem;
 		letter-spacing: 0.03em;
@@ -171,24 +184,24 @@
 	.pos {
 		cursor: pointer;
 		padding: 0.3rem 0.6rem;
-		background: var(--bg-light);
+		background: var(--bg-raised);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
-		color: var(--fg);
+		color: var(--text);
 	}
 	.jlpt {
 		cursor: pointer;
 		padding: 0.2rem 0.45rem;
-		background: color-mix(in srgb, var(--cyan) 10%, transparent);
-		border: 1px solid color-mix(in srgb, var(--cyan) 35%, transparent);
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
+		border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
 		border-radius: var(--radius);
-		color: var(--fg);
+		color: var(--text);
 		font-size: 0.75rem;
 	}
 	.jlpt.off {
-		background: var(--bg-light);
+		background: var(--bg-raised);
 		border-color: var(--border);
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	/* Min/Max numeric bounds beside the slider (egui's DragValues). */
 	.bound {
@@ -197,23 +210,23 @@
 		font-variant-numeric: tabular-nums;
 	}
 	.dash {
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	.unknown {
 		display: flex;
 		align-items: center;
 		gap: 0.2rem;
-		color: var(--comment);
+		color: var(--text-muted);
 		cursor: pointer;
 	}
 	.no-freq {
-		color: var(--red);
+		color: var(--danger);
 	}
 	.spacer {
 		flex: 1;
 	}
 	.count {
-		color: var(--comment);
+		color: var(--text-muted);
 		font-variant-numeric: tabular-nums;
 		white-space: nowrap;
 	}

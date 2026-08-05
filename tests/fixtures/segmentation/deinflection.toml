@@ -10,6 +10,13 @@ frequencies = [
 	{ term = "溺れる", reading = "おぼれる", rank = 4700 },
 	{ term = "殺す", reading = "ころす", rank = 400 },
 	{ term = "高い", reading = "たかい", rank = 250 },
+	{ term = "助ける", reading = "たすける", rank = 500 },
+	{ term = "助け", reading = "たすけ", rank = 100 },
+	{ term = "使う", reading = "つかう", rank = 150 },
+	{ term = "覚える", reading = "おぼえる", rank = 900 },
+	{ term = "覚え", reading = "おぼえ", rank = 400 },
+	{ term = "つまらない", reading = "つまらない", rank = 2455, kana = true },
+	{ term = "つまる", reading = "つまる", rank = 2806, kana = true },
 ]
 
 [[case]]
@@ -48,3 +55,28 @@ terms = [{ surface = "高ければ", lemma = "高い", reading = "たかい" }]
 name = "conditional ば merges through ない"
 text = "食べなければならない。"
 terms = [{ surface = "食べなければ", lemma = "食べる", reading = "たべる" }]
+
+# だろう must not bind onto the verb, and a verb's lemma may not be the more
+# frequent masu-stem noun (助け).
+[[case]]
+name = "passive+だろう: だろう splits off and lemma is the verb 助ける"
+text = "魔法を使えば助けられるだろう"
+terms = [
+	{ surface = "使えば", lemma = "使う", reading = "つかう", pos = "Verb" },
+	{ surface = "助けられる", lemma = "助ける", reading = "たすける", pos = "Verb" },
+]
+absent = ["助けられるだろう", "助け"]
+
+# UniDic tags つまらない as 動詞つまる+ない, but the lexicalized negative is the
+# dictionary word — the u-row verb guard must not force つまる.
+[[case]]
+name = "lexicalized negative つまらない keeps its own lemma"
+text = "この映画はつまらなかった。"
+terms = [{ surface = "つまらなかった", lemma = "つまらない", reading = "つまらない" }]
+
+# Needs the なきゃ→ない rule from the jp-deinflector fork (btrkeks/jp-deinflector#8).
+[[case]]
+name = "なきゃ contraction deinflects to the dictionary form"
+text = "覚えなきゃいけないことはたくさんあるからね"
+terms = [{ surface = "覚えなきゃ", lemma = "覚える", reading = "おぼえる", pos = "Verb" }]
+absent = ["覚え"]

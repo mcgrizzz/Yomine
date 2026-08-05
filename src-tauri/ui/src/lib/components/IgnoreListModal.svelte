@@ -244,7 +244,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: color-mix(in srgb, var(--bg-darker) 70%, transparent);
+		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
 		z-index: 50;
 	}
 	.dialog {
@@ -254,7 +254,7 @@
 		width: min(620px, 92%);
 		max-height: 82%;
 		padding-bottom: 0.75rem;
-		background: var(--bg-dark);
+		background: var(--bg-panel);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
@@ -269,7 +269,7 @@
 	header h2 {
 		margin: 0;
 		font-size: 1.05rem;
-		color: var(--cyan);
+		color: var(--accent);
 	}
 	.close {
 		padding: 0.1rem 0.4rem;
@@ -289,7 +289,7 @@
 	}
 	.field label {
 		font-size: 0.8rem;
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	.field .row {
 		display: flex;
@@ -297,8 +297,8 @@
 	}
 	.field input {
 		padding: 0.3rem 0.5rem;
-		background: var(--bg-light);
-		color: var(--fg);
+		background: var(--bg-raised);
+		color: var(--text);
 		border: 1px solid var(--border);
 		border-radius: 3px;
 	}
@@ -321,7 +321,7 @@
 		font-size: 0.85rem;
 	}
 	.list-head .counts {
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	.scroll {
 		overflow-y: auto;
@@ -344,12 +344,12 @@
 		align-items: center;
 		gap: 0.3rem;
 		padding: 0.3rem 0.5rem;
-		background: var(--bg-light);
+		background: var(--bg-raised);
 		border: 1px solid var(--border);
 		border-radius: 4px;
 	}
 	.file-pill.enabled {
-		border-color: var(--cyan);
+		border-color: var(--accent);
 	}
 	.file-pill.missing {
 		opacity: 0.6;
@@ -358,55 +358,55 @@
 		font-size: 0.85rem;
 	}
 	.missing-tag {
-		color: var(--red);
+		color: var(--danger);
 		font-size: 0.8rem;
 	}
 	.file-count {
-		color: var(--comment);
+		color: var(--text-muted);
 		font-size: 0.8rem;
 	}
 	.term {
 		font-size: 1.05rem;
-		color: var(--fg);
+		color: var(--text);
 	}
 	.icon {
 		padding: 0 0.25rem;
 		background: none;
 		border: none;
-		color: var(--fg);
+		color: var(--text);
 		cursor: pointer;
 	}
 	.icon.remove {
-		color: var(--red);
+		color: var(--danger);
 	}
 	.import-pill {
 		padding: 0.3rem 0.5rem;
-		background: var(--bg-light);
+		background: var(--bg-raised);
 		border: 1px dashed var(--border);
 		border-radius: 4px;
-		color: var(--fg);
+		color: var(--text);
 		cursor: pointer;
 	}
 	.empty {
 		margin: 0;
 		padding: 0.5rem;
-		color: var(--comment);
+		color: var(--text-muted);
 		text-align: center;
 	}
 	.status {
 		min-height: 1.2rem;
 		padding: 0 1rem;
 		font-size: 0.85rem;
-		color: var(--yellow);
+		color: var(--warning);
 	}
 	.export-msg {
 		margin: 0;
 		padding: 0 1rem;
 		font-size: 0.85rem;
-		color: var(--red);
+		color: var(--danger);
 	}
 	.export-msg.ok {
-		color: var(--green);
+		color: var(--success);
 	}
 	footer {
 		display: flex;

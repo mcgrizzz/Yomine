@@ -45,8 +45,10 @@
 </script>
 
 <script lang="ts">
+	import { Menu } from '@tauri-apps/api/menu';
 	import type { SegmentKnowledge } from '$lib/ipc';
 	import { comprehensionColor } from '$lib/comprehension';
+	import { furiganaText } from '$lib/furigana';
 	import {
 		ankiFilterActive,
 		minedSentences,
@@ -82,8 +84,19 @@
 	const current = $derived(Math.min(currentIndex ?? 0, count - 1));
 	const occ = $derived(occurrences[current]);
 
-	const prev = () => (currentIndex = current === 0 ? count - 1 : current - 1);
-	const next = () => (currentIndex = (current + 1) % count);
+	// Holding the tallest height seen keeps the nav buttons from jumping
+	let sentenceEl: HTMLParagraphElement | undefined = $state();
+	let heldHeight = $state(0);
+	const holdHeight = () => (heldHeight = Math.max(heldHeight, sentenceEl?.offsetHeight ?? 0));
+
+	const prev = () => {
+		holdHeight();
+		currentIndex = current === 0 ? count - 1 : current - 1;
+	};
+	const next = () => {
+		holdHeight();
+		currentIndex = (current + 1) % count;
+	};
 
 	// Timestamp is null for TXT sources; 👁 once the player acknowledges the seek.
 	const ts = $derived(occ.sentence.timestamp);
@@ -134,6 +147,51 @@
 		return text.slice(0, 16);
 	}
 
+	// The rt nodes stay inside the selection range even though user-select:none
+	// hides them from toString(), so walking it recovers base(reading) pairs.
+	function selectionFuriganaText(): string | null {
+		const sel = window.getSelection();
+		if (!sel || sel.isCollapsed || sel.rangeCount === 0) return null;
+		let out = '';
+		const walk = (node: Node, inRt: boolean) => {
+			if (node.nodeType === Node.TEXT_NODE) {
+				const text = node.textContent ?? '';
+				out += inRt && text ? `(${text})` : text;
+			} else {
+				const rt = inRt || (node as Element).tagName === 'RT';
+				node.childNodes.forEach((child) => walk(child, rt));
+			}
+		};
+		for (let i = 0; i < sel.rangeCount; i++) walk(sel.getRangeAt(i).cloneContents(), false);
+		return out;
+	}
+
+	// Replaces the webview's context menu (which can't be extended) with a native
+	// popup; "Copy" re-provides the affordance the suppression removes.
+	async function copyMenu(e: MouseEvent) {
+		e.preventDefault();
+		const sentence = occ.sentence;
+		const plain = window.getSelection()?.toString() || sentence.text;
+		const ruby =
+			selectionFuriganaText() ??
+			sentence.segments.map((s) => furiganaText(s.surface, s.reading)).join('');
+		const menu = await Menu.new({
+			items: [
+				{
+					id: 'copy',
+					text: 'Copy',
+					action: () => void navigator.clipboard.writeText(plain)
+				},
+				{
+					id: 'copy-furigana',
+					text: 'Copy with furigana',
+					action: () => void navigator.clipboard.writeText(ruby)
+				}
+			]
+		});
+		await menu.popup();
+	}
+
 	function segEnter(e: MouseEvent, seg: SegmentDto) {
 		const el = e.currentTarget as HTMLElement;
 		const sentence = occ.sentence;
@@ -152,7 +210,15 @@
 
 <!-- Each word is an atomic inline-block and Svelte strips inter-tag whitespace,
      so without the <wbr> the sentence would render as one unbreakable line. -->
-<p class="sentence" lang="ja">
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -- right-click copy
+     menu is a mouse affordance; keyboard browsing is issue #91. -->
+<p
+	class="sentence"
+	lang="ja"
+	bind:this={sentenceEl}
+	style:min-height={heldHeight ? `${heldHeight}px` : null}
+	oncontextmenu={copyMenu}
+>
 	{#each occ.sentence.segments as seg, i (i)}
 		{@const isTerm = isTermSeg(seg)}
 		{@const know = mark(seg)}
@@ -163,7 +229,7 @@
 			class:know-new={know === 'new'}
 			class:know-young={know === 'young'}
 			class:know-mature={know === 'mature'}
-			style="color: {isTerm ? 'var(--red)' : 'inherit'}"
+			style="color: {isTerm ? 'var(--term)' : 'inherit'}"
 			onmouseenter={(e) => segEnter(e, seg)}
 			onmouseleave={() => onhover(null)}
 			><Furigana surface={seg.surface} reading={seg.reading} /></span
@@ -172,7 +238,9 @@
 </p>
 
 <div class="meta">
-	<span class="nav">
+	<!-- svelte-ignore a11y_no_static_element_interactions -- mouse-only layout
+	     affordance; keyboard navigation never shifts the pointer target. -->
+	<span class="nav" onmouseleave={() => (heldHeight = 0)}>
 		<button type="button" class="nav-btn" disabled={count <= 1} title="Previous sentence" onclick={prev}
 			>⏮</button
 		>
@@ -228,6 +296,10 @@
 		font-size: 1.4rem;
 		line-height: 2;
 	}
+	/* Copyable text — only the paragraph's empty tail row-selects (TermTable). */
+	.sentence > span {
+		cursor: text;
+	}
 	.sentence .term {
 		font-weight: 700;
 	}
@@ -237,16 +309,16 @@
 	 * Drawn as an inset background bar, not border-bottom — adjacent borders
 	 * fuse into one continuous line and word boundaries disappear. */
 	.sentence .know-unknown {
-		--know-color: var(--red);
+		--know-color: var(--know-unknown);
 	}
 	.sentence .know-new {
-		--know-color: var(--blue);
+		--know-color: var(--know-new);
 	}
 	.sentence .know-young {
-		--know-color: var(--orange);
+		--know-color: var(--know-young);
 	}
 	.sentence .know-mature {
-		--know-color: var(--green);
+		--know-color: var(--know-mature);
 	}
 	.sentence .know-unknown,
 	.sentence .know-new,
@@ -275,14 +347,14 @@
 		padding: 0.1rem 0.35rem;
 		font-size: 0.7rem;
 		line-height: 1.2;
-		color: var(--fg);
-		background: var(--bg-light);
+		color: var(--text);
+		background: var(--bg-raised);
 		border: 1px solid var(--border);
 		border-radius: 2px;
 		cursor: pointer;
 	}
 	.nav-btn:hover:not(:disabled) {
-		background: var(--bg-lighter);
+		background: var(--bg-hover);
 	}
 	.nav-btn:disabled {
 		opacity: 0.4;
@@ -292,7 +364,7 @@
 		min-width: 2.2rem;
 		text-align: center;
 		font-size: 0.7rem;
-		color: var(--cyan);
+		color: var(--accent);
 		font-variant-numeric: tabular-nums;
 	}
 
@@ -304,29 +376,29 @@
 	.ts {
 		display: inline-block;
 		padding: 0.2rem 0.45rem;
-		color: var(--green);
-		background: var(--bg-light);
+		color: var(--success);
+		background: var(--bg-raised);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		cursor: pointer;
 	}
 	.ts:hover:not(:disabled) {
-		background: var(--bg-lighter);
+		background: var(--bg-hover);
 	}
 	.ts:disabled {
 		opacity: 0.5;
 		cursor: default;
 	}
 	.ts.confirmed {
-		background: #559449;
-		color: #fff;
-		border-color: #559449;
+		background: color-mix(in srgb, var(--success) 55%, var(--bg));
+		color: var(--text);
+		border-color: color-mix(in srgb, var(--success) 55%, var(--bg));
 	}
 	.ts.confirmed:hover {
-		background: color-mix(in srgb, #559449 85%, white);
+		background: color-mix(in srgb, var(--success) 70%, var(--bg));
 	}
 	.ts-label {
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 
 	.sentence-mined {
@@ -336,9 +408,9 @@
 		padding: 0.2rem 0.45rem;
 		font-size: 0.78rem;
 		line-height: 1;
-		color: var(--green);
-		background: color-mix(in srgb, var(--green) 12%, transparent);
-		border: 1px solid color-mix(in srgb, var(--green) 35%, transparent);
+		color: var(--success);
+		background: color-mix(in srgb, var(--success) 12%, transparent);
+		border: 1px solid color-mix(in srgb, var(--success) 35%, transparent);
 		border-radius: var(--radius);
 		cursor: help;
 	}
@@ -354,6 +426,6 @@
 		border-radius: 1px;
 	}
 	.bar.empty {
-		background: color-mix(in srgb, var(--comment) 30%, transparent);
+		background: color-mix(in srgb, var(--text-muted) 30%, transparent);
 	}
 </style>

@@ -94,44 +94,49 @@ async fn poll_yomitan(app: AppHandle) {
     }
 }
 
-/// Its own loop so it never queues behind the Anki probe's timeout — it only
-/// needs the offline vocab cache.
+pub(crate) async fn refresh_knowledge_summary(app: &AppHandle) {
+    let pending = {
+        let state = app.state::<Mutex<AppState>>();
+        let guard = state.lock().unwrap();
+        guard.language_tools.as_ref().map(|tools| {
+            (tools.frequency_manager.clone(), tools.known_interval, guard.knowledge_dirty.clone())
+        })
+    };
+    let Some((frequency_manager, known_interval, dirty)) = pending else { return };
+    // Reads the offline Anki vocab cache; only meaningful once it exists.
+    if !anki::has_cached_vocab() {
+        return;
+    }
+    if let Ok(summary) = tauri::async_runtime::spawn_blocking(move || {
+        compute_knowledge_summary(frequency_manager, known_interval)
+    })
+    .await
+    {
+        // Cached for the one-shot pull; pushed to any live webview.
+        let dto = KnowledgeSummaryDto::from_summary(summary);
+        {
+            let state = app.state::<Mutex<AppState>>();
+            state.lock().unwrap().knowledge_summary = Some(dto.clone());
+        }
+        let _ = yomine::persistence::save_json(&dto, crate::state::KNOWLEDGE_SUMMARY_CACHE);
+        let _ = app.emit(names::KNOWLEDGE_SUMMARY, dto);
+        dirty.store(false, Ordering::Relaxed);
+    }
+}
+
 async fn poll_knowledge(app: AppHandle) {
     let mut tick = tokio::time::interval(KNOWLEDGE_POLL_INTERVAL);
 
     loop {
         tick.tick().await;
 
-        let pending = {
+        let dirty = {
             let state = app.state::<Mutex<AppState>>();
             let guard = state.lock().unwrap();
-            match &guard.language_tools {
-                Some(tools) if guard.knowledge_dirty.load(Ordering::Relaxed) => Some((
-                    tools.frequency_manager.clone(),
-                    tools.known_interval,
-                    guard.knowledge_dirty.clone(),
-                )),
-                _ => None,
-            }
+            guard.language_tools.is_some() && guard.knowledge_dirty.load(Ordering::Relaxed)
         };
-        if let Some((frequency_manager, known_interval, dirty)) = pending {
-            // Reads the offline Anki vocab cache; only meaningful once it exists.
-            if anki::has_cached_vocab() {
-                if let Ok(summary) = tauri::async_runtime::spawn_blocking(move || {
-                    compute_knowledge_summary(frequency_manager, known_interval)
-                })
-                .await
-                {
-                    // Cached for the one-shot pull; pushed to any live webview.
-                    let dto = KnowledgeSummaryDto::from_summary(summary);
-                    {
-                        let state = app.state::<Mutex<AppState>>();
-                        state.lock().unwrap().knowledge_summary = Some(dto.clone());
-                    }
-                    let _ = app.emit(names::KNOWLEDGE_SUMMARY, dto);
-                    dirty.store(false, Ordering::Relaxed);
-                }
-            }
+        if dirty {
+            refresh_knowledge_summary(&app).await;
         }
     }
 }

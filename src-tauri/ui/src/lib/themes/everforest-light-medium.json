@@ -1,0 +1,32 @@
+{
+	"id": "everforest-light-medium",
+	"label": "Everforest Light Medium",
+	"dark": false,
+	"colors": {
+		"bg-deep": "#e0dcc7",
+		"bg-panel": "#efebd4",
+		"bg": "#fdf6e3",
+		"bg-raised": "#fffbef",
+		"bg-hover": "#f0f1d2",
+		"text": "#5c6a72",
+		"text-muted": "#63746f",
+		"selection": "#eaedc8",
+		"border": "#bdc3af",
+		"accent": "#a85b1c",
+		"term": "#a33b82",
+		"link": "#2f759c",
+		"info": "#2f759c",
+		"success": "#63752c",
+		"warning": "#8b6500",
+		"danger": "#b64242",
+		"status-ok": "#6f8f43",
+		"status-warn": "#b47c00",
+		"status-error": "#d65353",
+		"status-busy": "#3a94c5",
+		"status-off": "#899087",
+		"know-unknown": "#b64242",
+		"know-new": "#2f759c",
+		"know-young": "#a85b1c",
+		"know-mature": "#63752c"
+	}
+}

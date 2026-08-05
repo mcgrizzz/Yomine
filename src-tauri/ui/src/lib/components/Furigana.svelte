@@ -32,6 +32,8 @@
 		font-size: 0.5em;
 		line-height: 1;
 		font-weight: 400;
-		color: var(--comment);
+		color: var(--text-muted);
+		user-select: none;
+		-webkit-user-select: none;
 	}
 </style>

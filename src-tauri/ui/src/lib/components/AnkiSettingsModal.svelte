@@ -475,7 +475,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: color-mix(in srgb, var(--bg-darker) 70%, transparent);
+		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
 		z-index: 50;
 	}
 	.dialog {
@@ -485,7 +485,7 @@
 		width: min(720px, 94%);
 		max-height: 86%;
 		padding-bottom: 0.75rem;
-		background: var(--bg-dark);
+		background: var(--bg-panel);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
@@ -500,7 +500,7 @@
 	header h2 {
 		margin: 0;
 		font-size: 1.05rem;
-		color: var(--cyan);
+		color: var(--accent);
 	}
 	.close {
 		padding: 0.1rem 0.4rem;
@@ -526,7 +526,7 @@
 	}
 	.info-icon {
 		font-size: 0.75rem;
-		color: var(--comment);
+		color: var(--text-muted);
 		cursor: help;
 	}
 	.row {
@@ -541,7 +541,7 @@
 		justify-content: space-between;
 		gap: 0.75rem;
 		padding: 0.4rem 0.6rem;
-		background: var(--bg-light);
+		background: var(--bg-raised);
 		border-radius: var(--radius);
 	}
 	.mapping-text {
@@ -552,11 +552,11 @@
 	}
 	.mapping-fields {
 		font-size: 0.82rem;
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	.mapping-fields code {
 		font-family: monospace;
-		color: var(--blue);
+		color: var(--info);
 	}
 	.dot {
 		margin: 0 0.25rem;
@@ -575,57 +575,57 @@
 		background: var(--border);
 	}
 	.model-name {
-		color: var(--blue);
+		color: var(--info);
 	}
 	code.model-name {
 		font-family: monospace;
 	}
 	.guessed {
-		color: var(--cyan);
+		color: var(--accent);
 		cursor: help;
 	}
 	.status.ok {
-		color: var(--green);
+		color: var(--success);
 	}
 	.status.error {
-		color: var(--red);
+		color: var(--danger);
 	}
 	.status.pending {
-		color: var(--yellow);
+		color: var(--warning);
 	}
 	.example {
-		color: var(--green);
+		color: var(--success);
 	}
 	.example.reading {
-		color: var(--blue);
+		color: var(--info);
 	}
 	input[type='number'] {
 		width: 5.5rem;
 		padding: 0.3rem 0.5rem;
-		background: var(--bg-light);
-		color: var(--fg);
+		background: var(--bg-raised);
+		color: var(--text);
 		border: 1px solid var(--border);
 		border-radius: 3px;
 	}
 	input[type='text'] {
 		width: 15rem;
 		padding: 0.3rem 0.5rem;
-		background: var(--bg-light);
-		color: var(--fg);
+		background: var(--bg-raised);
+		color: var(--text);
 		border: 1px solid var(--border);
 		border-radius: 3px;
 	}
 	select {
 		min-width: 11rem;
 		padding: 0.3rem 0.5rem;
-		background: var(--bg-light);
-		color: var(--fg);
+		background: var(--bg-raised);
+		color: var(--text);
 		border: 1px solid var(--border);
 		border-radius: 3px;
 	}
 	.hint {
 		font-size: 0.85rem;
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	hr {
 		border: none;
@@ -639,7 +639,7 @@
 		min-height: 1.2rem;
 		padding: 0 1rem;
 		font-size: 0.85rem;
-		color: var(--yellow);
+		color: var(--warning);
 	}
 	footer {
 		display: flex;
@@ -657,8 +657,8 @@
 	.spinner {
 		width: 10px;
 		height: 10px;
-		border: 2px solid var(--comment);
-		border-top-color: var(--cyan);
+		border: 2px solid var(--text-muted);
+		border-top-color: var(--accent);
 		border-radius: 50%;
 		animation: spin 0.7s linear infinite;
 	}

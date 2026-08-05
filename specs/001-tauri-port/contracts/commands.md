@@ -15,7 +15,12 @@ events (see [events.md](./events.md)). Engine handles come from `tauri::State<Ap
 | `load_language_tools` | `progress: Channel<LoadingMessage>` | `()` | `TaskManager::load_language_tools` | Loads tokenizer + freq dicts + ignore list into `AppState`; streams progress; emits `language-tools-status` ready/error. Call on app start. |
 | `get_pos_catalog` | — | `array<PosInfo>` | `POS` static | Static POS key/label list for filters. |
 | `get_settings` | — | `SettingsData` | `load_json` | From `AppState` (loaded at start). |
-| `save_settings` | `settings: SettingsData` | `()` | `save_settings` | Persists via `persistence::save_json`; updates `AppState`; may trigger recompute (e.g. known-interval). |
+| `save_settings` | `settings: SettingsData` | `()` | `save_settings` | Persists via `persistence::save_json`; updates `AppState`; may trigger recompute (e.g. known-interval); emits `settings-changed` to all windows. |
+| `open_themes_window` | — | `()` | — (new in Tauri) | Opens (or focuses) the floating `themes` window at `/themes` — undimmed, natively draggable, for live theme previewing. |
+| `export_theme_file` | `name: string`, `json: string` | `bool` | — (new in Tauri) | Save dialog + write for theme export; `false` = cancelled. |
+| `import_theme_file` | — | `string \| null` | — (new in Tauri) | Open dialog + read for theme import; `null` = cancelled; frontend validates. |
+| `get_text_filter_presets` | — | `array<FilterPresetDto>` | `text_filter::presets` (issue #92) | Built-in preset ids/labels for the filters modal; regexes stay backend-side. |
+| `test_text_filters` | `presets: Record<string, bool>`, `filters: array<TextFilterSetting>`, `sample: string` | `string` | `text_filter` (issue #92) | Applies a staged filter set to a sample line (live preview); `Err` names the first invalid pattern; `""` = line would be dropped. |
 
 ## File / mining
 
@@ -24,9 +29,11 @@ events (see [events.md](./events.md)). Engine handles come from `tauri::State<Ap
 | `open_file_dialog` | — | `string \| null` | `rfd`/FileModal | Via `tauri-plugin-dialog`; returns chosen path or null. |
 | `open_video_dialog` | — | `string \| null` | issue #89 | Video-extension filter (+ All files); same dialog bridge as `open_file_dialog`. |
 | `open_executable_dialog` | — | `string \| null` | issue #89 | "Locate mpv…" picker; `.exe` filter on Windows, unfiltered elsewhere. |
-| `process_file` | `path: string`, `progress: Channel<LoadingMessage>` | `FileLoadResult` | `TaskManager::process_file` → `pipeline::process_source_file` | Parses, segments, filters (cached Anki), returns enriched terms + sentence DTOs + file comprehension. If Anki reachable, triggers background `refresh_terms` and emits `terms-refreshed`. |
+| `process_file` | `path: string`, `epub_chapters: array<usize> \| null`, `epub_label: string \| null`, `progress: Channel<LoadingMessage>` | `FileLoadResult` | `TaskManager::process_file` → `pipeline::process_source_file` | Parses, segments, filters (cached Anki), returns enriched terms + sentence DTOs + file comprehension. If Anki reachable, triggers background `refresh_terms` and emits `terms-refreshed`. `epub_chapters` = selected `get_epub_chapters` part ids for EPUBs (`null` = whole book; ignored otherwise); `epub_label` = the picker's selection summary, suffixed onto the title shown in the top bar and recents. |
+| `get_epub_chapters` | `path: string` | `EpubBookDto` | `epub::list_chapters` | Metadata title + pickable sections (`{ index, title, char_count }`) for the EPUB chapter-picker modal. ToC entries define the chapters (each spans spine files up to the next entry); oversized chapters are split into ~10k-char paragraph-aligned ` (i/n)` parts; empty/negligible entries are skipped. |
 | `get_terms` | — | `FileLoadResult \| null` | current `FileData` | Re-fetch current loaded state (e.g. on UI reload). |
 | `refresh_terms` | — | `()` | `TaskManager::refresh_terms` | Live Anki re-filter + recompute comprehension; emits `terms-refreshed`. |
+| `reload_current_file` | `progress: Channel<LoadingMessage>` | `FileLoadResult` | issue #92 | Full re-parse + re-tokenize of the loaded file from `original_file` (text-filter changes); preserves the asbplayer media link. |
 | `get_recent_files` | — | `array<RecentFile>` | `gui/recent_files.rs` | Reuse existing store/format (O3). |
 
 `FileLoadResult = { source_file: SourceFile, terms: array<Term>, sentences: array<SentenceDto>,

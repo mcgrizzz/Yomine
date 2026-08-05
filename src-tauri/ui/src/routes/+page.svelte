@@ -12,6 +12,7 @@
 		playerStatus,
 		languageToolsStatus,
 		overlay,
+		initProgress,
 		fileResult,
 		visibleTerms,
 		recentFiles,
@@ -37,32 +38,14 @@
 	import SetupChecklistModal from '$lib/components/SetupChecklistModal.svelte';
 	import FrequencyAnalyzerModal from '$lib/components/FrequencyAnalyzerModal.svelte';
 	import AsbplayerModal from '$lib/components/AsbplayerModal.svelte';
+	import TextFiltersModal from '$lib/components/TextFiltersModal.svelte';
+	import RecentFilesModal from '$lib/components/RecentFilesModal.svelte';
+	import EpubChapterPickerModal from '$lib/components/EpubChapterPickerModal.svelte';
 	import KnowledgeSummary from '$lib/components/KnowledgeSummary.svelte';
+	import { fileIcon, filename, formatTermCount, formatFileSize, formatLastOpened } from '$lib/recents';
 
 	onMount(hydrate);
 
-	// Display helpers mirroring egui's `RecentFileEntry` formatters.
-	const filename = (path: string) => path.split(/[\\/]/).pop() ?? path;
-
-	function formatTermCount(n: number | null): string {
-		if (n === null) return 'Unknown terms';
-		return n === 1 ? '1 term' : `${n} terms`;
-	}
-
-	function formatFileSize(bytes: number | null): string {
-		if (bytes === null) return 'Unknown';
-		if (bytes < 1024) return `${bytes} B`;
-		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-		return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-	}
-
-	function formatLastOpened(iso: string): string {
-		const d = new Date(iso);
-		const p = (n: number) => String(n).padStart(2, '0');
-		return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
-	}
-
-	const toolsReady = $derived($languageToolsStatus === 'ready');
 	const followOn = $derived(
 		($settings?.asbplayer_follow_new_media ?? false) ||
 			($settings?.asbplayer_follow_active_tab ?? false)
@@ -98,6 +81,11 @@
 				<div class="header-left">
 					<div class="title-row">
 						<h2 class="title">{$fileResult.source_file.title}</h2>
+						{#if $fileResult.source_file.epub_label}
+							<span class="selection-label" title={$fileResult.source_file.epub_label}
+								>{$fileResult.source_file.epub_label}</span
+							>
+						{/if}
 						{#if followOn}
 							{#if $asbContext.has_active_tab && !$asbContext.active_has_subtitles}
 								<span
@@ -153,16 +141,16 @@
 				<h1 class="landing-title">No File Loaded</h1>
 				<p class="landing-jp">ファイルがまだ読み込まれていません</p>
 				<p class="landing-hint">ℹ You can drag and drop a file at any time to load it.</p>
-				<!-- While the language tools load, the landing renders behind the
-				     $overlay popup (same loading surface as everywhere else). -->
 				<div class="landing-actions">
-					<button class="landing-open" disabled={!toolsReady} onclick={openAndProcessFile}
-						>Open New File</button
+					<button class="landing-open" disabled={toolsError !== null} onclick={openAndProcessFile}
+						>Open File…</button
 					>
 					{#if $playerStatus.ws_clients > 0}
 						<!-- Only offered while asbplayer is actually connected (issue #105). -->
-						<button class="landing-open asb" disabled={!toolsReady} onclick={openAsbplayerModal}
-							>▶ Load from asbplayer</button
+						<button
+							class="landing-open asb"
+							disabled={toolsError !== null}
+							onclick={openAsbplayerModal}>▶ Load from asbplayer</button
 						>
 					{/if}
 				</div>
@@ -179,8 +167,12 @@
 										onclick={() => openRecentFile(entry.file_path)}
 									>
 										<span class="recent-name"
-											>{entry.title.trim() || filename(entry.file_path)}</span
+											>{fileIcon(entry.file_path)}
+											{entry.title.trim() || filename(entry.file_path)}</span
 										>
+										{#if entry.subtitle}
+											<span class="recent-file">{entry.subtitle}</span>
+										{/if}
 										{#if entry.title.trim() && entry.title !== filename(entry.file_path)}
 											<span class="recent-file">{filename(entry.file_path)}</span>
 										{/if}
@@ -208,6 +200,9 @@
 	<AnkiSettingsModal />
 	<FrequencyWeightsModal />
 	<PosFiltersModal />
+	<TextFiltersModal />
+	<RecentFilesModal />
+	<EpubChapterPickerModal />
 	<SetupChecklistModal />
 	<FrequencyAnalyzerModal />
 
@@ -233,6 +228,10 @@
 	{#if $overlay}
 		<div class="overlay">{$overlay}</div>
 	{/if}
+
+	{#if $initProgress && !$overlay}
+		<div class="init-pill" role="status">{$initProgress}</div>
+	{/if}
 </div>
 
 <style>
@@ -253,6 +252,14 @@
 	.title {
 		margin: 0 0 0.25rem;
 	}
+	.selection-label {
+		font-size: 0.78rem;
+		color: var(--text-muted);
+		max-width: 28rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
 	.tab-chip {
 		padding: 0.05rem 0.4rem;
 		font-size: 0.72rem;
@@ -261,14 +268,14 @@
 		cursor: help;
 	}
 	.tab-chip.ok {
-		color: var(--green);
-		background: color-mix(in srgb, var(--green) 10%, transparent);
-		border: 1px solid color-mix(in srgb, var(--green) 35%, transparent);
+		color: var(--success);
+		background: color-mix(in srgb, var(--success) 10%, transparent);
+		border: 1px solid color-mix(in srgb, var(--success) 35%, transparent);
 	}
 	.tab-chip.warn {
-		color: var(--yellow);
-		background: color-mix(in srgb, var(--yellow) 10%, transparent);
-		border: 1px solid color-mix(in srgb, var(--yellow) 35%, transparent);
+		color: var(--warning);
+		background: color-mix(in srgb, var(--warning) 10%, transparent);
+		border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
 	}
 	.comprehension {
 		margin: 0 0 0.15rem;
@@ -278,7 +285,7 @@
 	.counts {
 		margin: 0 0 1rem;
 		font-size: 12px;
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	.table-scroll {
 		flex: 1 1 auto;
@@ -300,17 +307,17 @@
 		margin: 0;
 		font-size: 2rem;
 		font-weight: 700;
-		color: var(--cyan);
+		color: var(--accent);
 	}
 	.landing-jp {
 		margin: 0.25rem 0 0;
 		font-size: 1.125rem;
-		color: var(--orange);
+		color: var(--know-young);
 	}
 	.landing-hint {
 		margin: 0.25rem 0 0;
 		font-size: 0.75rem;
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	.landing-actions {
 		display: flex;
@@ -318,7 +325,7 @@
 		margin-top: 1.25rem;
 	}
 	.landing-open.asb {
-		color: var(--green);
+		color: var(--success);
 	}
 	.recents {
 		margin-top: 2.5rem;
@@ -334,7 +341,7 @@
 		margin: 0 0 0.5rem;
 		font-size: 0.85rem;
 		font-weight: 600;
-		color: var(--cyan);
+		color: var(--accent);
 	}
 	.recents-list {
 		list-style: none;
@@ -355,37 +362,37 @@
 		width: 100%;
 		padding: 0.5rem 0.7rem;
 		text-align: left;
-		background: var(--bg-light);
+		background: var(--bg-raised);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 	}
 	.recent:hover {
-		background: var(--bg-lighter);
-		border-color: var(--cyan);
+		background: var(--bg-hover);
+		border-color: var(--accent);
 	}
 	.recent-name {
 		font-size: 0.9rem;
-		color: var(--fg);
+		color: var(--text);
 	}
 	.recent-file {
 		font-size: 0.7rem;
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	.recent-meta {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 0.6rem;
 		font-size: 0.7rem;
-		color: var(--comment);
+		color: var(--text-muted);
 	}
 	.recent-terms {
-		color: var(--blue);
+		color: var(--info);
 	}
 	.recent-creator {
-		color: var(--orange);
+		color: var(--know-young);
 	}
 	.error {
-		color: var(--red);
+		color: var(--danger);
 	}
 	.error-banner {
 		position: fixed;
@@ -397,16 +404,16 @@
 		gap: 0.6rem;
 		max-width: 90vw;
 		padding: 0.6rem 0.9rem;
-		background: var(--bg-light);
-		border: 1px solid var(--red);
+		background: var(--bg-raised);
+		border: 1px solid var(--danger);
 		border-radius: var(--radius);
-		color: var(--fg);
+		color: var(--text);
 		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 		/* Above modal backdrops (z 50): errors from modal actions must stay visible. */
 		z-index: 60;
 	}
 	.error-banner strong {
-		color: var(--red);
+		color: var(--danger);
 	}
 	/* Transient toast (e.g. follow mode swapped in a new asbplayer video). */
 	.notice {
@@ -416,17 +423,17 @@
 		transform: translateX(-50%);
 		max-width: 80vw;
 		padding: 0.45rem 0.9rem;
-		background: var(--bg-light);
-		border: 1px solid var(--green);
+		background: var(--bg-raised);
+		border: 1px solid var(--success);
 		border-radius: var(--radius);
-		color: var(--fg);
+		color: var(--text);
 		font-size: 0.85rem;
 		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 		/* Above modal backdrops (z 50): follow-mode loads can land mid-modal. */
 		z-index: 60;
 	}
 	.error-banner .detail {
-		color: var(--comment);
+		color: var(--text-muted);
 		font-size: 0.85rem;
 	}
 	.error-banner button {
@@ -438,9 +445,26 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: color-mix(in srgb, var(--bg-darker) 75%, transparent);
-		color: var(--fg);
+		background: color-mix(in srgb, var(--bg-deep) 75%, transparent);
+		color: var(--text);
 		font-size: 1.1rem;
+	}
+	/* Non-blocking init indicator; escalates to .overlay if a load is requested. */
+	.init-pill {
+		position: fixed;
+		right: 1rem;
+		bottom: 1rem;
+		max-width: 24rem;
+		padding: 0.35rem 0.8rem;
+		background: var(--bg-raised);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		color: var(--text-muted);
+		font-size: 0.8rem;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 	}
 	.drop-overlay {
 		position: fixed;
@@ -448,7 +472,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: color-mix(in srgb, var(--bg-darker) 70%, transparent);
+		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
 		/* Don't intercept the native OS drop. */
 		pointer-events: none;
 		z-index: 20;
@@ -457,9 +481,9 @@
 		padding: 2rem 3rem;
 		font-size: 1.5rem;
 		font-weight: 600;
-		color: var(--cyan);
-		background: var(--bg-light);
-		border: 2px dashed var(--cyan);
+		color: var(--accent);
+		background: var(--bg-raised);
+		border: 2px dashed var(--accent);
 		border-radius: var(--radius);
 	}
 </style>

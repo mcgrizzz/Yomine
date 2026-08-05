@@ -1,0 +1,32 @@
+{
+	"id": "paper",
+	"label": "Paper",
+	"dark": false,
+	"colors": {
+		"bg-deep": "#d9d7cc",
+		"bg-panel": "#e7e5da",
+		"bg": "#efede2",
+		"bg-raised": "#f5f3e8",
+		"bg-hover": "#e7e5da",
+		"text": "#282a36",
+		"text-muted": "#50637a",
+		"selection": "#c8c8dc",
+		"border": "#c6c4b6",
+		"accent": "#217faf",
+		"term": "#217faf",
+		"link": "#2f6f9f",
+		"info": "#2f6f9f",
+		"success": "#287a49",
+		"warning": "#706611",
+		"danger": "#ad454b",
+		"status-ok": "#3caa64",
+		"status-warn": "#c99700",
+		"status-error": "#c85050",
+		"status-busy": "#4682b4",
+		"status-off": "#949187",
+		"know-unknown": "#c85050",
+		"know-new": "#2f6f9f",
+		"know-young": "#995018",
+		"know-mature": "#287a49"
+	}
+}

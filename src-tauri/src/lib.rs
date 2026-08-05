@@ -30,13 +30,20 @@ pub fn run() {
             commands::lifecycle::get_pos_catalog,
             commands::lifecycle::get_settings,
             commands::lifecycle::save_settings,
+            commands::lifecycle::get_text_filter_presets,
+            commands::lifecycle::test_text_filters,
             commands::lifecycle::open_data_folder,
+            commands::lifecycle::open_themes_window,
+            commands::lifecycle::export_theme_file,
+            commands::lifecycle::import_theme_file,
             commands::file::open_file_dialog,
+            commands::file::get_epub_chapters,
             commands::file::open_video_dialog,
             commands::file::open_executable_dialog,
             commands::file::process_file,
             commands::file::get_terms,
             commands::file::refresh_terms,
+            commands::file::reload_current_file,
             commands::file::get_recent_files,
             commands::file::load_asbplayer_media,
             commands::ignore::get_ignore_list,
@@ -78,6 +85,13 @@ pub fn run() {
             commands::update::check_for_update,
             commands::knowledge::get_knowledge_summary,
         ])
+        .on_window_event(|window, event| {
+            if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
+                if let Some(themes) = window.app_handle().get_webview_window("themes") {
+                    let _ = themes.close();
+                }
+            }
+        })
         .setup(move |app| {
             // The player runs in its own task that solely owns `PlayerManager`;
             // commands reach it through this handle (no shared lock).

@@ -9,6 +9,9 @@ frequencies = [
 	{ term = "高い", reading = "たかい", rank = 300 },
 	{ term = "何気", reading = "なにげ", rank = 9000 },
 	{ term = "説得", reading = "せっとく", rank = 2000 },
+	{ term = "おぼろげ", reading = "おぼろげ", rank = 12000, kana = true },
+	{ term = "楽しげ", reading = "たのしげ", rank = 15000 },
+	{ term = "楽しい", reading = "たのしい", rank = 800 },
 ]
 
 [[case]]
@@ -42,3 +45,16 @@ terms = [{ surface = "何気", lemma = "何気", reading = "なにげ" }]
 name = "説得する keeps 説得 as the mineable term"
 text = "私は君を説得するだけの言葉を持ち合わせていない"
 terms = [{ surface = "説得する", lemma = "説得", reading = "せっとく", pos = "SuruVerb" }]
+
+[[case]]
+name = "おぼろげ merges the 形状詞的 suffix onto the na-adjective stem"
+text = "どこかおぼろげで、鮮明には思いだせない"
+terms = [{ surface = "おぼろげ", lemma = "おぼろげ", reading = "おぼろげ", pos = "AdjectivalNoun" }]
+absent = ["げ", "おぼろ"]
+
+# Like 悪そう → 悪い: the validated UniDic stem lemma wins over the merged surface.
+[[case]]
+name = "楽しげ merges the suffix and keeps the い-form lemma"
+text = "彼は楽しげに笑った"
+terms = [{ surface = "楽しげ", lemma = "楽しい", reading = "たのしい", pos = "AdjectivalNoun" }]
+absent = ["げ"]

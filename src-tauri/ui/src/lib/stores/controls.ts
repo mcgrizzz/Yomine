@@ -1,7 +1,8 @@
-import { derived, writable } from 'svelte/store';
+import { derived, get, writable } from 'svelte/store';
 import type * as ipc from '$lib/ipc';
 import { applyControls, freqBounds, type SortDir, type SortField } from '$lib/table';
 import { fileResult } from './file';
+import { settings } from './settings';
 
 export const posCatalog = writable<ipc.PosInfo[]>([]);
 
@@ -15,7 +16,7 @@ export const tableSort = writable<{ field: SortField; dir: SortDir }>({
 /** POS-key → enabled; a missing key means enabled. */
 export const posEnabled = writable<Record<string, boolean>>({});
 
-/** JLPT chip key (N5..N1, 'none') → enabled; session-only. */
+/** JLPT chip key (N5..N1, 'none') → enabled; hydrated from `jlpt_filters`. */
 export const jlptEnabled = writable<Record<string, boolean>>({});
 
 /** `lo`/`hi` are the data bounds (slider extent), `min`/`max` the selection. */
@@ -28,15 +29,25 @@ export interface FreqFilterState {
 }
 export const freqFilter = writable<FreqFilterState | null>(null);
 
-// New term set → new bounds; selection resets to the full range and
-// unknown-frequency terms start hidden (the "?" toggle reveals them).
+// New term set → new bounds; persisted narrowing re-applies, clamped into them.
+// `settings` must only be dereferenced inside the callback (import cycle, cf. player.ts).
 fileResult.subscribe((r) => {
 	if (!r) {
 		freqFilter.set(null);
 		return;
 	}
-	const { min, max } = freqBounds(r.terms);
-	freqFilter.set({ lo: min, hi: max, min, max, includeUnknown: false });
+	const { min: lo, max: hi } = freqBounds(r.terms);
+	const s = get(settings);
+	const clamp = (v: number) => Math.min(Math.max(v, lo), hi);
+	const min = s?.freq_filter_min != null ? clamp(s.freq_filter_min) : lo;
+	const max = s?.freq_filter_max != null ? clamp(s.freq_filter_max) : hi;
+	freqFilter.set({
+		lo,
+		hi,
+		min,
+		max: Math.max(max, min),
+		includeUnknown: s?.freq_include_unknown ?? false
+	});
 });
 
 /** The filtered + sorted term list the table renders. */

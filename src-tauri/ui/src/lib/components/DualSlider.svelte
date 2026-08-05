@@ -6,7 +6,8 @@
 		hi,
 		min,
 		max,
-		onchange
+		onchange,
+		oncommit
 	}: {
 		/** Data bounds (slider extent). `lo` is ≥1 (freqBounds floors it), so the
 		 * log mapping is always defined. */
@@ -16,6 +17,7 @@
 		min: number;
 		max: number;
 		onchange: (min: number, max: number) => void;
+		oncommit?: () => void;
 	} = $props();
 
 	const clamp = (v: number, a: number, b: number) => Math.min(Math.max(v, a), b);
@@ -61,7 +63,9 @@
 		if (dragging) apply(dragging, fracAt(e));
 	}
 	function up() {
+		if (!dragging) return;
 		dragging = null;
+		oncommit?.();
 	}
 
 	function key(which: 'min' | 'max', e: KeyboardEvent) {
@@ -69,6 +73,7 @@
 		if (step === 0) return;
 		e.preventDefault();
 		apply(which, clamp((which === 'min' ? minFrac : maxFrac) + step, 0, 1));
+		oncommit?.();
 	}
 </script>
 
@@ -130,7 +135,7 @@
 		right: 7px;
 		height: 4px;
 		transform: translateY(-50%);
-		background: var(--bg-lighter);
+		background: var(--bg-hover);
 		border-radius: 2px;
 	}
 	.fill {
@@ -138,7 +143,7 @@
 		top: 50%;
 		height: 4px;
 		transform: translateY(-50%);
-		background: var(--cyan);
+		background: var(--accent);
 		border-radius: 2px;
 	}
 	.thumb {
@@ -147,12 +152,12 @@
 		width: 12px;
 		height: 12px;
 		transform: translate(-50%, -50%);
-		background: var(--fg);
-		border: 2px solid var(--cyan);
+		background: var(--text);
+		border: 2px solid var(--accent);
 		border-radius: 50%;
 	}
 	.thumb:focus-visible {
-		outline: 2px solid var(--cyan);
+		outline: 2px solid var(--accent);
 		outline-offset: 1px;
 	}
 </style>

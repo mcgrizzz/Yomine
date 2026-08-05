@@ -1,0 +1,32 @@
+{
+	"id": "nord",
+	"label": "Nord",
+	"dark": true,
+	"colors": {
+		"bg-deep": "#242933",
+		"bg-panel": "#292e38",
+		"bg": "#2e3440",
+		"bg-raised": "#3b4252",
+		"bg-hover": "#434c5e",
+		"text": "#d8dee9",
+		"text-muted": "#a5afc4",
+		"selection": "#4c566a",
+		"border": "#434c5e",
+		"accent": "#88c0d0",
+		"term": "#88c0d0",
+		"link": "#8fb3d3",
+		"info": "#8fb3d3",
+		"success": "#a3be8c",
+		"warning": "#ebcb8b",
+		"danger": "#d8878f",
+		"status-ok": "#a3be8c",
+		"status-warn": "#ebcb8b",
+		"status-error": "#d8878f",
+		"status-busy": "#81a1c1",
+		"status-off": "#737984",
+		"know-unknown": "#d8878f",
+		"know-new": "#8fb3d3",
+		"know-young": "#d08770",
+		"know-mature": "#a3be8c"
+	}
+}

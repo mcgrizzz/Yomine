@@ -113,7 +113,9 @@ impl AnkiState {
         );
 
         // Persist the freshly fetched vocab so it can be reused offline / for fast loads
-        if let Err(e) = crate::persistence::save_json(&vocab, ANKI_VOCAB_CACHE) {
+        if vocab.is_empty() {
+            eprintln!("Anki returned no vocab; keeping the existing cache");
+        } else if let Err(e) = crate::persistence::save_json(&vocab, ANKI_VOCAB_CACHE) {
             eprintln!("Failed to save Anki vocab cache: {}", e);
         }
 

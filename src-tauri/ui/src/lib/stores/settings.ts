@@ -3,7 +3,7 @@
 import { get, writable } from 'svelte/store';
 import * as ipc from '$lib/ipc';
 import { lastError } from './ui';
-import { posEnabled } from './controls';
+import { type FreqFilterState, posEnabled } from './controls';
 import { refreshMinedState } from './mining';
 
 export const settings = writable<ipc.SettingsData | null>(null);
@@ -23,6 +23,17 @@ export async function toggleDarkMode(): Promise<void> {
 	if (!s) return;
 	await patchSettings({ dark_mode: !s.dark_mode });
 }
+
+/** Assigns a theme to its preferred slot and switches to it. */
+export const setPreferredTheme = (slot: 'dark' | 'light', id: string) =>
+	patchSettings(
+		slot === 'dark' ? { theme_dark: id, dark_mode: true } : { theme_light: id, dark_mode: false }
+	);
+
+export const saveUserThemes = (
+	themes: ipc.UserTheme[],
+	slots?: { theme_dark?: string; theme_light?: string }
+) => patchSettings({ user_themes: themes.map((t) => ({ ...t, colors: { ...t.colors } })), ...slots });
 
 export async function toggleSerifFont(): Promise<void> {
 	const s = get(settings);
@@ -95,6 +106,22 @@ export async function saveAnkiSettings(
 		return false;
 	}
 }
+
+export const saveJlptFilters = (filters: Record<string, boolean>) =>
+	patchSettings({ jlpt_filters: { ...filters } });
+
+export const saveFreqFilter = (f: FreqFilterState) =>
+	patchSettings({
+		freq_filter_min: f.min > f.lo ? Math.round(f.min) : null,
+		freq_filter_max: f.max < f.hi ? Math.round(f.max) : null,
+		freq_include_unknown: f.includeUnknown
+	});
+
+export const saveTextFilters = (presets: Record<string, boolean>, filters: ipc.TextFilterSetting[]) =>
+	patchSettings({
+		text_filter_presets: { ...presets },
+		text_filters: filters.map((f) => ({ ...f }))
+	});
 
 /** Saving both persists the defaults and applies them to the live table. */
 export async function savePosFilters(filters: Record<string, boolean>): Promise<boolean> {

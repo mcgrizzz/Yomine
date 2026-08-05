@@ -28,3 +28,11 @@ segments = [
 	{ surface = "。", pos = "Symbol" },
 ]
 absent = ["土曜日"]
+
+[[case]]
+name = "な-adnominal おかしな is adjectival, こんな stays a determiner"
+text = "こんな話はおかしなことだ"
+terms = [
+	{ surface = "おかしな", lemma = "おかしな", pos = "AdjectivalNoun" },
+	{ surface = "こんな", lemma = "こんな", pos = "Determiner" },
+]

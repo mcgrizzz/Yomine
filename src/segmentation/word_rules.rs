@@ -68,7 +68,7 @@ pub fn create_default_rules() -> Vec<Rule> {
             name: "Jodoushi to verb binding",
             current: TokenMatcher {
                 pos1: Matcher::Any(vec![UnidicTag::Jodoushi]),
-                conjugation_type: Matcher::Not(vec![UnidicTag::JodoushiTai]),
+                conjugation_type: Matcher::Not(vec![UnidicTag::JodoushiTai, UnidicTag::JodoushiDa]),
                 surface: Matcher::Not(vec!["な".to_string()]),
                 ..Default::default()
             },
@@ -344,6 +344,48 @@ pub fn create_default_rules() -> Vec<Rule> {
                 attach_prev: true,
                 attach_prev_lemma: true,
                 update_prev_pos: Some(POS::Noun),
+                main_word_policy: None,
+            },
+        },
+        Rule {
+            name: "Na-adj-suffix after na-adjective stem",
+            current: TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Setsubiji]),
+                pos2: Matcher::Any(vec![UnidicTag::Keijoushiteki]),
+                ..Default::default()
+            },
+            next: None,
+            prev: Some(TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Keijoushi]),
+                ..Default::default()
+            }),
+            prev_word: WordMatcher::None,
+            action: RuleAction::MergeWithPrevious {
+                attach_prev: true,
+                attach_prev_lemma: true,
+                update_prev_pos: Some(POS::AdjectivalNoun),
+                main_word_policy: None,
+            },
+        },
+        // Same as the そう rule: the stem keeps its い-form lemma (楽し → 楽しい),
+        // so attaching the suffix's lemma would corrupt it; surface only.
+        Rule {
+            name: "Na-adj-suffix after adjective stem",
+            current: TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Setsubiji]),
+                pos2: Matcher::Any(vec![UnidicTag::Keijoushiteki]),
+                ..Default::default()
+            },
+            next: None,
+            prev: Some(TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Keiyoushi]),
+                ..Default::default()
+            }),
+            prev_word: WordMatcher::None,
+            action: RuleAction::MergeWithPrevious {
+                attach_prev: true,
+                attach_prev_lemma: false,
+                update_prev_pos: Some(POS::AdjectivalNoun),
                 main_word_policy: None,
             },
         },

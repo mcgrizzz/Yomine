@@ -253,7 +253,12 @@ pub fn get_default_pos(token: &UnidicToken) -> POS {
             UnidicTag::JodoushiDesu => POS::Copula,
             _ => POS::Postposition,
         },
-        UnidicTag::Rentaishi => POS::Determiner,
+        UnidicTag::Rentaishi => match token.surface.as_str() {
+            "こんな" | "そんな" | "あんな" | "どんな" => POS::Determiner,
+            // Non-demonstrative な-adnominals (おかしな, 大きな) function as adjectives.
+            s if s.ends_with('な') => POS::AdjectivalNoun,
+            _ => POS::Determiner,
+        },
         UnidicTag::Setsuzokushi => POS::Conjunction,
         UnidicTag::Settouji => POS::Prefix,
         UnidicTag::Setsubiji => POS::Suffix,
