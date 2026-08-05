@@ -141,6 +141,22 @@ async fn poll_knowledge(app: AppHandle) {
     }
 }
 
+fn asbplayer_context(
+    media: &[yomine::websocket::BoundMedia],
+    current_media_id: Option<&str>,
+) -> crate::events::AsbplayerContext {
+    let active = media.iter().find(|m| m.active);
+    let loaded = current_media_id.and_then(|id| media.iter().find(|m| m.id == id));
+    crate::events::AsbplayerContext {
+        has_active_tab: active.is_some(),
+        active_title: active.and_then(|m| m.title.clone()),
+        active_has_subtitles: active.is_some_and(|m| !m.loaded_subtitles.is_empty()),
+        loaded_is_active: loaded.is_some_and(|m| m.active && !m.loaded_subtitles.is_empty()),
+        loaded_from_asbplayer: current_media_id.is_some(),
+        loaded_has_subtitles: loaded.is_some_and(|m| !m.loaded_subtitles.is_empty()),
+    }
+}
+
 /// asbplayer follow mode + the `asbplayer-context` awareness event.
 async fn poll_asbplayer_follow(app: AppHandle) {
     // `None` = disarmed; `Some(ids)` = armed with the media ids already seen.
@@ -196,14 +212,7 @@ async fn poll_asbplayer_follow(app: AppHandle) {
             .map(|m| m.id.clone())
             .collect();
 
-        let active = media.iter().find(|m| m.active);
-        let ctx = crate::events::AsbplayerContext {
-            has_active_tab: active.is_some(),
-            active_title: active.and_then(|m| m.title.clone()),
-            active_has_subtitles: active.is_some_and(|m| !m.loaded_subtitles.is_empty()),
-            loaded_is_active: current_media_id.as_ref().is_some_and(|id| actives_now.contains(id)),
-            loaded_from_asbplayer: current_media_id.is_some(),
-        };
+        let ctx = asbplayer_context(&media, current_media_id.as_deref());
         if last_ctx.as_ref() != Some(&ctx) {
             let _ = app.emit(names::ASBPLAYER_CONTEXT, ctx.clone());
             last_ctx = Some(ctx);

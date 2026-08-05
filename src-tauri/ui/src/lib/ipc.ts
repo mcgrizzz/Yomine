@@ -904,13 +904,17 @@ export const onDictionariesChanged = (cb: () => void) =>
 export const onAsbplayerMediaLoaded = (cb: (r: FileLoadResult) => void) =>
 	listenTo('asbplayer-media-loaded', cb);
 
-/** asbplayer active-tab awareness — mining/seek target the active tab. */
+/** asbplayer target awareness — a bound media id is mined/seeked directly;
+ * without one, commands fall through to asbplayer's active tab. */
 export interface AsbplayerContext {
 	has_active_tab: boolean;
 	active_title: string | null;
 	active_has_subtitles: boolean;
 	loaded_is_active: boolean;
 	loaded_from_asbplayer: boolean;
+	/** Whether asbplayer has subtitles loaded on the bound media — without
+	 * them enrichment is impossible. */
+	loaded_has_subtitles: boolean;
 }
 export const onAsbplayerContext = (cb: (c: AsbplayerContext) => void) =>
 	listenTo('asbplayer-context', cb);

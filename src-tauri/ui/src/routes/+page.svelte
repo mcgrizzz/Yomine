@@ -48,7 +48,14 @@
 
 	const followOn = $derived(
 		($settings?.asbplayer_follow_new_media ?? false) ||
-			($settings?.asbplayer_follow_active_tab ?? false)
+			($settings?.asbplayer_follow_active_tab ?? true)
+	);
+	// Unbound subtitle session: mining falls through to asbplayer's active tab.
+	const minesActiveTab = $derived(
+		$playerStatus.mode === 'asbplayer' &&
+			$playerStatus.ws_clients > 0 &&
+			($fileResult?.source_file.file_type === 'SRT' ||
+				$fileResult?.source_file.file_type === 'SSA')
 	);
 	const toolsError = $derived(
 		typeof $languageToolsStatus === 'object' ? $languageToolsStatus.error : null
@@ -86,26 +93,37 @@
 								>{$fileResult.source_file.epub_label}</span
 							>
 						{/if}
-						{#if followOn}
-							{#if $asbContext.has_active_tab && !$asbContext.active_has_subtitles}
-								<span
-									class="tab-chip warn"
-									title="Follow can't switch until subtitles are loaded on the active video in asbplayer"
-									>● no subtitles on active video</span
-								>
-							{:else if $asbContext.loaded_from_asbplayer && $asbContext.loaded_is_active}
-								<span
-									class="tab-chip ok"
-									title="This is asbplayer's active tab — mining captures media from it"
-									>● active tab</span
-								>
-							{:else if $asbContext.loaded_from_asbplayer && $asbContext.has_active_tab}
-								<span
-									class="tab-chip warn"
-									title="Mining targets the bound media, but its tab isn't active in asbplayer — recording may behave unexpectedly"
-									>● bound media not active</span
-								>
-							{/if}
+						{#if followOn && $asbContext.has_active_tab && !$asbContext.active_has_subtitles}
+							<span
+								class="tab-chip warn"
+								title="Follow can't switch until subtitles are loaded on the active video in asbplayer"
+								>● no subtitles on active video</span
+							>
+						{/if}
+						{#if $asbContext.loaded_from_asbplayer && !$asbContext.loaded_has_subtitles}
+							<button
+								class="tab-chip warn"
+								title="asbplayer has no subtitles loaded on this video — cards will mine without audio/screenshot. Click to open the picker."
+								onclick={openAsbplayerModal}>● no subtitles in asbplayer ⇄</button
+							>
+						{:else if $asbContext.loaded_from_asbplayer && $asbContext.loaded_is_active}
+							<button
+								class="tab-chip ok"
+								title="Mining captures media from this video — it's asbplayer's active tab. Click to open the video picker."
+								onclick={openAsbplayerModal}>● active tab ⇄</button
+							>
+						{:else if $asbContext.loaded_from_asbplayer}
+							<button
+								class="tab-chip danger"
+								title="This video's tab isn't active — audio is captured correctly, but screenshots come from the visible tab (asbplayer limitation). Switch to its tab before mining. Click to open the video picker."
+								onclick={openAsbplayerModal}>⚠ background tab ⇄</button
+							>
+						{:else if minesActiveTab}
+							<button
+								class="tab-chip warn"
+								title="These subtitles aren't bound to a video — mining captures from whatever tab is active in asbplayer. Click to pick one."
+								onclick={openAsbplayerModal}>● mines active tab ⇄</button
+							>
 						{/if}
 					</div>
 			{#if $ankiFilterActive && $fileResult.sentences.length > 0}
@@ -263,9 +281,17 @@
 	.tab-chip {
 		padding: 0.05rem 0.4rem;
 		font-size: 0.72rem;
+		font-family: inherit;
 		border-radius: var(--radius);
 		white-space: nowrap;
 		cursor: help;
+	}
+	button.tab-chip {
+		cursor: pointer;
+	}
+	button.tab-chip:hover {
+		background: color-mix(in srgb, currentColor 20%, transparent);
+		border-color: currentColor;
 	}
 	.tab-chip.ok {
 		color: var(--success);
@@ -276,6 +302,11 @@
 		color: var(--warning);
 		background: color-mix(in srgb, var(--warning) 10%, transparent);
 		border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+	}
+	.tab-chip.danger {
+		color: var(--danger);
+		background: color-mix(in srgb, var(--danger) 10%, transparent);
+		border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
 	}
 	.comprehension {
 		margin: 0 0 0.15rem;

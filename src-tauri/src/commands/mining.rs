@@ -139,20 +139,29 @@ pub async fn mine_term(
     let mut media_missing = false;
     if via == "asbplayer" {
         if let Some(id) = note_id {
-            let record_secs = cue_duration_secs(timestamp_secs, timestamp_end_secs);
-            if let Err(e) = enrich_and_verify(
-                &player,
-                id,
-                media_id,
-                timestamp_secs,
-                timestamp_label,
-                record_secs,
-                &progress,
-            )
-            .await
-            {
-                warning = Some(format!("Card created, but media wasn't added: {}", e));
+            if target_lacks_subtitles(&player, media_id.as_deref()).await {
+                warning = Some(
+                    "asbplayer has no subtitles loaded on the loaded video — card created without \
+                     audio/screenshot"
+                        .to_string(),
+                );
                 media_missing = true;
+            } else {
+                let record_secs = cue_duration_secs(timestamp_secs, timestamp_end_secs);
+                if let Err(e) = enrich_and_verify(
+                    &player,
+                    id,
+                    media_id,
+                    timestamp_secs,
+                    timestamp_label,
+                    record_secs,
+                    &progress,
+                )
+                .await
+                {
+                    warning = Some(format!("Card created, but media wasn't added: {}", e));
+                    media_missing = true;
+                }
             }
         }
     }
@@ -172,6 +181,9 @@ pub async fn retry_mine_media(
     progress: Channel<LoadingMessage>,
 ) -> Result<(), String> {
     let media_id = { state.lock().unwrap().file.asbplayer_media_id.clone() };
+    if target_lacks_subtitles(&player, media_id.as_deref()).await {
+        return Err("asbplayer still has no subtitles loaded on the loaded video".to_string());
+    }
     let record_secs = cue_duration_secs(timestamp_secs, timestamp_end_secs);
     enrich_and_verify(
         &player,
@@ -183,6 +195,15 @@ pub async fn retry_mine_media(
         &progress,
     )
     .await
+}
+
+/// asbplayer's `mine-subtitle` drops targets without loaded subtitles, so
+/// enriching against one can only fail — detect it up front. Unknown states
+/// (no target id, pre-v1.20 extension) fall through to the normal attempt.
+async fn target_lacks_subtitles(player: &PlayerHandle, media_id: Option<&str>) -> bool {
+    let Some(id) = media_id else { return false };
+    let Ok(media) = player.get_bound_media().await else { return false };
+    !media.iter().any(|m| m.id == id && !m.loaded_subtitles.is_empty())
 }
 
 fn cue_duration_secs(start: Option<f32>, end: Option<f32>) -> f32 {

@@ -76,11 +76,17 @@
 			if ($asbContext.loaded_from_asbplayer && !$asbContext.loaded_is_active)
 				return {
 					color: YELLOW,
-					tip: "asbplayer's active tab is not the loaded video — mined media would come from the wrong one"
+					tip: 'asbplayer mode — the loaded video is in a background tab; switch to it before mining (screenshots capture the visible tab)'
 				};
+			const unboundSubs =
+				!$asbContext.loaded_from_asbplayer &&
+				($fileResult?.source_file.file_type === 'SRT' ||
+					$fileResult?.source_file.file_type === 'SSA');
 			return {
 				color: GREEN,
-				tip: 'asbplayer mode — seeking and card media capture while mining'
+				tip: unboundSubs
+					? 'asbplayer mode — mining captures from the active tab (subtitles not bound to a video)'
+					: 'asbplayer mode — seeking and card media capture while mining'
 			};
 		}
 		if (s.server_state === 'running')
@@ -95,7 +101,7 @@
 	// the panel's active-tab note is stale outside those.
 	const asbPolled = $derived(
 		($settings?.asbplayer_follow_new_media ?? false) ||
-			($settings?.asbplayer_follow_active_tab ?? false) ||
+			($settings?.asbplayer_follow_active_tab ?? true) ||
 			$asbContext.loaded_from_asbplayer
 	);
 
@@ -315,7 +321,10 @@
 								: 'No active tab in asbplayer'}
 						</span>
 						{#if $asbContext.loaded_from_asbplayer && !$asbContext.loaded_is_active}
-							<span class="menu-note warn">Loaded video is not the active tab</span>
+							<span class="menu-note warn"
+								>Loaded video is in a background tab — switch to it before mining (screenshots
+								capture the visible tab)</span
+							>
 						{/if}
 					{/if}
 					<button
@@ -336,14 +345,14 @@
 					</label>
 					<label
 						class="menu-check"
-						title="Switch to the active tab's video (with subtitles) when it isn't the loaded one."
+						title="Switch to the active tab's video (with subtitles) when it isn't the loaded one. Recommended: keeps mined screenshots correct — asbplayer captures the visible tab."
 					>
 						<input
 							type="checkbox"
-							checked={$settings?.asbplayer_follow_active_tab ?? false}
+							checked={$settings?.asbplayer_follow_active_tab ?? true}
 							onchange={(e) => setAsbplayerFollowActiveTab(e.currentTarget.checked)}
 						/>
-						Follow active tab
+						Follow active tab <em>(recommended)</em>
 					</label>
 				</div>
 			{/if}

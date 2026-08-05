@@ -74,7 +74,8 @@ pub struct PlayerStatus {
     pub confirmed_timestamps: Vec<f32>,
 }
 
-/// asbplayer active-tab awareness — mining/seek target the active tab.
+/// asbplayer target awareness — bound media ids are mined/seeked directly;
+/// without one, commands fall through to asbplayer's active tab.
 #[derive(Serialize, Deserialize, Clone, Default, PartialEq)]
 pub struct AsbplayerContext {
     pub has_active_tab: bool,
@@ -82,6 +83,9 @@ pub struct AsbplayerContext {
     pub active_has_subtitles: bool,
     pub loaded_is_active: bool,
     pub loaded_from_asbplayer: bool,
+    /// Whether asbplayer has subtitles loaded on the bound media — without
+    /// them `mine-subtitle` drops the target and enrichment is impossible.
+    pub loaded_has_subtitles: bool,
 }
 
 /// `export-complete` payload.

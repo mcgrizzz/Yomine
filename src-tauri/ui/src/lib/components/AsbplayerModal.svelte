@@ -172,13 +172,16 @@
 					/>
 					Follow new videos — load the next episode automatically
 				</label>
-				<label class="follow" title="When you switch to a tab whose video has subtitles, load that video.">
+				<label
+					class="follow"
+					title="When you switch to a tab whose video has subtitles, load that video. Recommended: keeps mined screenshots correct — asbplayer captures the visible tab."
+				>
 					<input
 						type="checkbox"
-						checked={$settings?.asbplayer_follow_active_tab ?? false}
+						checked={$settings?.asbplayer_follow_active_tab ?? true}
 						onchange={(e) => setAsbplayerFollowActiveTab(e.currentTarget.checked)}
 					/>
-					Follow active tab — switch when I change tabs
+					Follow active tab — switch when I change tabs <em>(recommended)</em>
 				</label>
 			</div>
 		</div>
