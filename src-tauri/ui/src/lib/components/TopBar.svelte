@@ -75,8 +75,8 @@
 		if (s.server_state === 'running' && s.ws_clients > 0) {
 			if ($asbContext.loaded_from_asbplayer && !$asbContext.loaded_is_active)
 				return {
-					color: GREEN,
-					tip: 'asbplayer mode — mining targets the loaded video even while its tab is in the background'
+					color: YELLOW,
+					tip: 'asbplayer mode — the loaded video is in a background tab; switch to it before mining (screenshots capture the visible tab)'
 				};
 			const unboundSubs =
 				!$asbContext.loaded_from_asbplayer &&
@@ -321,7 +321,10 @@
 								: 'No active tab in asbplayer'}
 						</span>
 						{#if $asbContext.loaded_from_asbplayer && !$asbContext.loaded_is_active}
-							<span class="menu-note">Loaded video is in a background tab — mining still targets it</span>
+							<span class="menu-note warn"
+								>Loaded video is in a background tab — switch to it before mining (screenshots
+								capture the visible tab)</span
+							>
 						{/if}
 					{/if}
 					<button

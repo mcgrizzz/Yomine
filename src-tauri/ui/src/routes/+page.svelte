@@ -114,8 +114,8 @@
 							>
 						{:else if $asbContext.loaded_from_asbplayer}
 							<button
-								class="tab-chip info"
-								title="Mining and seeking still target this video — its tab just isn't the active one in asbplayer. Click to change target."
+								class="tab-chip warn"
+								title="This video's tab isn't active — audio is captured correctly, but screenshots come from the visible tab (asbplayer limitation). Switch to its tab before mining. Click to change target."
 								onclick={openAsbplayerModal}>● background tab</button
 							>
 						{:else if minesActiveTab}
@@ -298,11 +298,6 @@
 		color: var(--warning);
 		background: color-mix(in srgb, var(--warning) 10%, transparent);
 		border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
-	}
-	.tab-chip.info {
-		color: var(--text-muted);
-		background: color-mix(in srgb, var(--text-muted) 10%, transparent);
-		border: 1px solid color-mix(in srgb, var(--text-muted) 35%, transparent);
 	}
 	.comprehension {
 		margin: 0 0 0.15rem;
