@@ -3,6 +3,7 @@
 	// Saving the port also restarts a running server on it.
 	import { untrack } from 'svelte';
 	import { dirtyGuard } from '$lib/dirtyGuard.svelte';
+	import Modal from './Modal.svelte';
 	import {
 		settings,
 		websocketModalOpen,
@@ -68,112 +69,46 @@
 	}
 </script>
 
-<!-- Esc closes from anywhere: the backdrop's own keydown only fires once focus
-     is inside the modal, which it isn't right after opening from a menu. -->
-<svelte:window
-	onkeydown={(e) => $websocketModalOpen && e.key === 'Escape' && guard.request()}
-/>
-
-{#if $websocketModalOpen}
-	<div
-		class="backdrop"
-		role="button"
-		tabindex="-1"
-		onclick={guard.request}
-		onkeydown={(e) => {
-			if (e.key === 'Escape') {
-				e.stopPropagation();
-				guard.request();
-			}
-		}}
-	>
-		<!-- Stop backdrop clicks inside the dialog from closing it. -->
-		<div
-			class="dialog"
-			role="dialog"
-			aria-modal="true"
-			aria-label="WebSocket server settings"
-			tabindex="-1"
-			onclick={(e) => {
-				e.stopPropagation();
-				guard.disarm();
-			}}
-		>
-			<header>
-				<h2>WebSocket Server Settings</h2>
-				<button class="close" aria-label="Close" onclick={guard.request}>✕</button>
-			</header>
-
-			<div class="port-row">
-				<label for="ws-port">Server Port:</label>
-				<input id="ws-port" type="number" min="1024" max="65535" bind:value={tempPort} />
-				<span class="hint">(Valid range: 1024-65535)</span>
-			</div>
-			{#if !valid}
-				<p class="invalid">⚠ Port must be between 1024 and 65535</p>
-			{/if}
-
-			<div class="port-row">
-				<label for="asb-poll">asbplayer poll interval:</label>
-				<input id="asb-poll" type="number" min="1" max="60" bind:value={tempPoll} />
-				<span class="hint">seconds (1-60; used by follow mode)</span>
-			</div>
-			{#if !pollValid}
-				<p class="invalid">⚠ Poll interval must be between 1 and 60 seconds</p>
-			{/if}
-
-			<hr />
-
-			<div class="status">
-				{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings
-					have been modified{/if}
-			</div>
-
-			<footer>
-				<button disabled={!dirty || !valid || !pollValid} onclick={save}>Save Settings</button>
-				<button disabled={!dirty} onclick={cancel}>Cancel</button>
-				<button class="right" onclick={restoreDefault}>Restore Default</button>
-			</footer>
-		</div>
+<Modal
+	open={$websocketModalOpen}
+	title="WebSocket Server Settings"
+	width="min(420px, 92%)"
+	onclose={guard.request}
+	oninteract={guard.disarm}
+>
+	<div class="port-row">
+		<label for="ws-port">Server Port:</label>
+		<input id="ws-port" type="number" min="1024" max="65535" bind:value={tempPort} />
+		<span class="hint">(Valid range: 1024-65535)</span>
 	</div>
-{/if}
+	{#if !valid}
+		<p class="invalid">⚠ Port must be between 1024 and 65535</p>
+	{/if}
+
+	<div class="port-row">
+		<label for="asb-poll">asbplayer poll interval:</label>
+		<input id="asb-poll" type="number" min="1" max="60" bind:value={tempPoll} />
+		<span class="hint">seconds (1-60; used by follow mode)</span>
+	</div>
+	{#if !pollValid}
+		<p class="invalid">⚠ Poll interval must be between 1 and 60 seconds</p>
+	{/if}
+
+	<hr />
+
+	<div class="status">
+		{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings have
+			been modified{/if}
+	</div>
+
+	<footer>
+		<button disabled={!dirty || !valid || !pollValid} onclick={save}>Save Settings</button>
+		<button disabled={!dirty} onclick={cancel}>Cancel</button>
+		<button class="right" onclick={restoreDefault}>Restore Default</button>
+	</footer>
+</Modal>
 
 <style>
-	.backdrop {
-		position: fixed;
-		inset: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
-		z-index: 50;
-	}
-	.dialog {
-		display: flex;
-		flex-direction: column;
-		gap: 0.6rem;
-		width: min(420px, 92%);
-		padding-bottom: 0.75rem;
-		background: var(--bg-panel);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-	}
-	header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 0.75rem 1rem;
-		border-bottom: 1px solid var(--border);
-	}
-	header h2 {
-		margin: 0;
-		font-size: 1.05rem;
-		color: var(--accent);
-	}
-	.close {
-		padding: 0.1rem 0.4rem;
-	}
 	.port-row {
 		display: flex;
 		align-items: center;

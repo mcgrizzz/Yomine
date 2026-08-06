@@ -182,17 +182,10 @@
 		class="backdrop"
 		role="button"
 		tabindex="-1"
-		onclick={close}
+		onclick={(e) => e.target === e.currentTarget && close()}
 		onkeydown={onKeydown}
 	>
-		<div
-			class="dialog"
-			role="dialog"
-			aria-modal="true"
-			aria-label="Frequency analyzer"
-			tabindex="-1"
-			onclick={(e) => e.stopPropagation()}
-		>
+		<div class="dialog" role="dialog" aria-modal="true" aria-label="Frequency analyzer" tabindex="-1">
 			<header>
 				<h2>Frequency Analyzer</h2>
 				<button class="close" aria-label="Close" onclick={close}>✕</button>

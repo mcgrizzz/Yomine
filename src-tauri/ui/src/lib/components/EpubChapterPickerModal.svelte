@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import Modal from './Modal.svelte';
 	import { epubChapterModalOpen, epubPicker, loadAndStore } from '$lib/stores';
 	import { filename } from '$lib/recents';
 	import type { EpubChapter } from '$lib/ipc';
@@ -122,145 +123,88 @@
 	}
 </script>
 
-<svelte:window onkeydown={(e) => $epubChapterModalOpen && e.key === 'Escape' && close()} />
-
-{#if $epubChapterModalOpen && $epubPicker}
-	<div
-		class="backdrop"
-		role="button"
-		tabindex="-1"
-		onclick={close}
-		onkeydown={(e) => e.key === 'Escape' && close()}
-	>
-		<!-- Stop backdrop clicks inside the dialog from closing it. -->
-		<div
-			class="dialog"
-			role="dialog"
-			aria-modal="true"
-			aria-label="Pick chapters to mine"
-			tabindex="-1"
-			onclick={(e) => e.stopPropagation()}
+<Modal
+	open={$epubChapterModalOpen && $epubPicker !== null}
+	title={bookTitle}
+	width="min(560px, 92%)"
+	maxHeight="82%"
+	onclose={close}
+>
+	<div class="controls">
+		<button class="mini" onclick={() => (selected = new Set(allPartIds))}>Select all</button>
+		<button class="mini" disabled={selected.size === 0} onclick={() => (selected = new Set())}
+			>Select none</button
 		>
-			<header>
-				<h2 title={bookTitle}>{bookTitle}</h2>
-				<button class="close" aria-label="Close" onclick={close}>✕</button>
-			</header>
-
-			<div class="controls">
-				<button class="mini" onclick={() => (selected = new Set(allPartIds))}>Select all</button>
-				<button class="mini" disabled={selected.size === 0} onclick={() => (selected = new Set())}
-					>Select none</button
-				>
-				<span class="summary">{selectedChars.toLocaleString()} chars selected</span>
-			</div>
-
-			<ul class="list">
-				{#each chapters as chapter, chapterIndex (chapterIndex)}
-					{@const picked = selectedPartCount(chapter)}
-					{@const split = chapter.parts.length > 1}
-					{@const seenCount = chapter.parts.filter((p) => p.seen).length}
-					<li>
-						<div class="row" class:selected={picked === chapter.parts.length}>
-							<input
-								type="checkbox"
-								checked={picked === chapter.parts.length}
-								indeterminate={picked > 0 && picked < chapter.parts.length}
-								onchange={() => toggleChapter(chapter)}
-							/>
-							{#if split}
-								<!-- Split chapters: title expands, the checkbox selects. -->
-								<button class="title" onclick={() => toggleExpanded(chapterIndex)}>
-									{chapter.title}
-								</button>
-								<button
-									class="parts-hint"
-									class:open={expandedChapters.has(chapterIndex)}
-									onclick={() => toggleExpanded(chapterIndex)}
-								>
-									{picked > 0 ? `${picked}/${chapter.parts.length}` : chapter.parts.length} parts
-									<span class="expand small" class:open={expandedChapters.has(chapterIndex)}
-										>▶</span
-									>
-								</button>
-							{:else}
-								<button class="title" onclick={() => toggleChapter(chapter)}>{chapter.title}</button>
-							{/if}
-							{#if seenCount === chapter.parts.length}
-								<span class="seen" title="Mined before">✓</span>
-							{:else if seenCount > 0}
-								<span class="seen partial" title="Partially mined ({seenCount}/{chapter.parts.length})">✓</span>
-							{/if}
-							<span class="chars">{chapter.char_count.toLocaleString()} chars</span>
-						</div>
-						{#if split && expandedChapters.has(chapterIndex)}
-							<ul class="parts">
-								{#each chapter.parts as part, partIndex (part.id)}
-									<li>
-										<label class="row part" class:selected={selected.has(part.id)}>
-											<input
-												type="checkbox"
-												checked={selected.has(part.id)}
-												onchange={() => togglePart(part.id)}
-											/>
-											<span class="part-title">Part {partIndex + 1}</span>
-											{#if part.seen}<span class="seen" title="Mined before">✓</span>{/if}
-											<span class="chars">{part.char_count.toLocaleString()} chars</span>
-										</label>
-									</li>
-								{/each}
-							</ul>
-						{/if}
-					</li>
-				{/each}
-			</ul>
-
-			<footer>
-				<button disabled={selected.size === 0} onclick={mine}>Mine</button>
-				<button onclick={close}>Cancel</button>
-			</footer>
-		</div>
+		<span class="summary">{selectedChars.toLocaleString()} chars selected</span>
 	</div>
-{/if}
+
+	<ul class="list">
+		{#each chapters as chapter, chapterIndex (chapterIndex)}
+			{@const picked = selectedPartCount(chapter)}
+			{@const split = chapter.parts.length > 1}
+			{@const seenCount = chapter.parts.filter((p) => p.seen).length}
+			<li>
+				<div class="row" class:selected={picked === chapter.parts.length}>
+					<input
+						type="checkbox"
+						checked={picked === chapter.parts.length}
+						indeterminate={picked > 0 && picked < chapter.parts.length}
+						onchange={() => toggleChapter(chapter)}
+					/>
+					{#if split}
+						<!-- Split chapters: title expands, the checkbox selects. -->
+						<button class="title" onclick={() => toggleExpanded(chapterIndex)}>
+							{chapter.title}
+						</button>
+						<button
+							class="parts-hint"
+							class:open={expandedChapters.has(chapterIndex)}
+							onclick={() => toggleExpanded(chapterIndex)}
+						>
+							{picked > 0 ? `${picked}/${chapter.parts.length}` : chapter.parts.length} parts
+							<span class="expand small" class:open={expandedChapters.has(chapterIndex)}
+								>▶</span
+							>
+						</button>
+					{:else}
+						<button class="title" onclick={() => toggleChapter(chapter)}>{chapter.title}</button>
+					{/if}
+					{#if seenCount === chapter.parts.length}
+						<span class="seen" title="Mined before">✓</span>
+					{:else if seenCount > 0}
+						<span class="seen partial" title="Partially mined ({seenCount}/{chapter.parts.length})">✓</span>
+					{/if}
+					<span class="chars">{chapter.char_count.toLocaleString()} chars</span>
+				</div>
+				{#if split && expandedChapters.has(chapterIndex)}
+					<ul class="parts">
+						{#each chapter.parts as part, partIndex (part.id)}
+							<li>
+								<label class="row part" class:selected={selected.has(part.id)}>
+									<input
+										type="checkbox"
+										checked={selected.has(part.id)}
+										onchange={() => togglePart(part.id)}
+									/>
+									<span class="part-title">Part {partIndex + 1}</span>
+									{#if part.seen}<span class="seen" title="Mined before">✓</span>{/if}
+									<span class="chars">{part.char_count.toLocaleString()} chars</span>
+								</label>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</li>
+		{/each}
+	</ul>
+
+	<footer>
+		<button disabled={selected.size === 0} onclick={mine}>Mine</button>
+		<button onclick={close}>Cancel</button>
+	</footer>
+</Modal>
 
 <style>
-	.backdrop {
-		position: fixed;
-		inset: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
-		z-index: 50;
-	}
-	.dialog {
-		display: flex;
-		flex-direction: column;
-		gap: 0.6rem;
-		width: min(560px, 92%);
-		max-height: 82%;
-		padding-bottom: 0.75rem;
-		background: var(--bg-panel);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-	}
-	header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.6rem;
-		padding: 0.75rem 1rem 0;
-	}
-	h2 {
-		margin: 0;
-		font-size: 1rem;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.close {
-		padding: 0.1rem 0.4rem;
-	}
 	.controls {
 		display: flex;
 		align-items: center;

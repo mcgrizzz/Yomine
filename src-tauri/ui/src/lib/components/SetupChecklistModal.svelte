@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { openUrl } from '@tauri-apps/plugin-opener';
+	import Modal from './Modal.svelte';
 	import {
 		setupModalOpen,
 		setupStatus,
@@ -127,94 +128,41 @@
 	}
 </script>
 
-<!-- Esc closes from anywhere: the backdrop's own keydown only fires once focus
-     is inside the modal, which it isn't right after opening from a menu. -->
-<svelte:window onkeydown={(e) => $setupModalOpen && e.key === 'Escape' && close()} />
+<Modal
+	open={$setupModalOpen}
+	title="Setup Checklist"
+	width="min(600px, 92%)"
+	maxHeight="85%"
+	flush
+	onclose={close}
+>
+	<ul class="items">
+		{#each items as item (item.title)}
+			{@const ic = iconFor(item)}
+			<li class="item">
+				<span class="icon {ic.cls}">{ic.icon}</span>
+				<div class="text">
+					<span class="title {ic.cls}">{item.title}</span>
+					<span class="desc">{item.description}</span>
+				</div>
+				<div class="actions">
+					{#if item.action || item.actionText}
+						<button onclick={() => runAction(item)}>{item.actionText}</button>
+					{/if}
+					{#if item.helpUrl}
+						<button class="docs" onclick={() => viewDocs(item.helpUrl!)}>📖 View Docs</button>
+					{/if}
+				</div>
+			</li>
+		{/each}
+	</ul>
 
-{#if $setupModalOpen}
-	<div
-		class="backdrop"
-		role="button"
-		tabindex="-1"
-		onclick={close}
-		onkeydown={(e) => e.key === 'Escape' && close()}
-	>
-		<div
-			class="dialog"
-			role="dialog"
-			aria-modal="true"
-			aria-label="Setup checklist"
-			tabindex="-1"
-			onclick={(e) => e.stopPropagation()}
-		>
-			<header>
-				<h2>Setup Checklist</h2>
-				<button class="close" aria-label="Close" onclick={close}>✕</button>
-			</header>
-
-			<ul class="items">
-				{#each items as item (item.title)}
-					{@const ic = iconFor(item)}
-					<li class="item">
-						<span class="icon {ic.cls}">{ic.icon}</span>
-						<div class="text">
-							<span class="title {ic.cls}">{item.title}</span>
-							<span class="desc">{item.description}</span>
-						</div>
-						<div class="actions">
-							{#if item.action || item.actionText}
-								<button onclick={() => runAction(item)}>{item.actionText}</button>
-							{/if}
-							{#if item.helpUrl}
-								<button class="docs" onclick={() => viewDocs(item.helpUrl!)}>📖 View Docs</button>
-							{/if}
-						</div>
-					</li>
-				{/each}
-			</ul>
-
-			<footer>
-				<button onclick={close}>Close</button>
-			</footer>
-		</div>
-	</div>
-{/if}
+	<footer>
+		<button onclick={close}>Close</button>
+	</footer>
+</Modal>
 
 <style>
-	.backdrop {
-		position: fixed;
-		inset: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
-		z-index: 50;
-	}
-	.dialog {
-		display: flex;
-		flex-direction: column;
-		width: min(600px, 92%);
-		max-height: 85%;
-		background: var(--bg-panel);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-	}
-	header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 0.75rem 1rem;
-		border-bottom: 1px solid var(--border);
-	}
-	header h2 {
-		margin: 0;
-		font-size: 1.05rem;
-		color: var(--accent);
-	}
-	.close {
-		padding: 0.1rem 0.4rem;
-	}
 	.items {
 		list-style: none;
 		margin: 0;

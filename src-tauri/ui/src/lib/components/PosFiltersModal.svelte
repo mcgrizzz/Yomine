@@ -3,6 +3,7 @@
 	// table. Cancel reverts but keeps the modal open (egui behavior).
 	import { untrack } from 'svelte';
 	import { dirtyGuard } from '$lib/dirtyGuard.svelte';
+	import Modal from './Modal.svelte';
 	import { posCatalog, posEnabled, posModalOpen, savePosFilters } from '$lib/stores';
 
 	// NounExpression is intentionally absent (hidden but still saved).
@@ -83,119 +84,52 @@
 	}
 </script>
 
-<!-- Esc closes from anywhere: the backdrop's own keydown only fires once focus
-     is inside the modal, which it isn't right after opening from a menu. -->
-<svelte:window onkeydown={(e) => $posModalOpen && e.key === 'Escape' && guard.request()} />
-
-{#if $posModalOpen}
-	<div
-		class="backdrop"
-		role="button"
-		tabindex="-1"
-		onclick={guard.request}
-		onkeydown={(e) => {
-			if (e.key === 'Escape') {
-				e.stopPropagation();
-				guard.request();
-			}
-		}}
-	>
-		<!-- Stop backdrop clicks inside the dialog from closing it. -->
-		<div
-			class="dialog"
-			role="dialog"
-			aria-modal="true"
-			aria-label="Part of speech filters"
-			tabindex="-1"
-			onclick={(e) => {
-				e.stopPropagation();
-				guard.disarm();
-			}}
+<Modal
+	open={$posModalOpen}
+	title="Part of Speech Filters"
+	width="min(560px, 92%)"
+	onclose={guard.request}
+	oninteract={guard.disarm}
+>
+	<div class="chips">
+		<!-- Parent "Noun" chip; its sub-categories grey out when it's off. -->
+		<button class="chip parent" class:on={nounOn} onclick={() => toggle('Noun')} aria-pressed={nounOn}
+			>{labelOf.get('Noun') ?? 'Noun'}</button
 		>
-			<header>
-				<h2>Part of Speech Filters</h2>
-				<button class="close" aria-label="Close" onclick={guard.request}>✕</button>
-			</header>
-
-			<div class="chips">
-				<!-- Parent "Noun" chip; its sub-categories grey out when it's off. -->
-				<button
-					class="chip parent"
-					class:on={nounOn}
-					onclick={() => toggle('Noun')}
-					aria-pressed={nounOn}>{labelOf.get('Noun') ?? 'Noun'}</button
-				>
-				{#each NOUN_CHILDREN as key (key)}
-					<button
-						class="chip"
-						class:on={staged[key] !== false}
-						disabled={!nounOn}
-						onclick={() => toggle(key)}
-						aria-pressed={staged[key] !== false}>{labelOf.get(key) ?? key}</button
-					>
-				{/each}
-				{#each OTHER_CHIPS as key (key)}
-					<button
-						class="chip"
-						class:on={staged[key] !== false}
-						onclick={() => toggle(key)}
-						aria-pressed={staged[key] !== false}>{labelOf.get(key) ?? key}</button
-					>
-				{/each}
-			</div>
-
-			<hr />
-
-			<div class="status">
-				{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings
-					have been modified{/if}
-			</div>
-
-			<footer>
-				<button disabled={!dirty} onclick={save}>Save Settings</button>
-				<button disabled={!dirty} onclick={cancel}>Cancel</button>
-				<button class="right" onclick={restoreDefault}>Restore Default</button>
-			</footer>
-		</div>
+		{#each NOUN_CHILDREN as key (key)}
+			<button
+				class="chip"
+				class:on={staged[key] !== false}
+				disabled={!nounOn}
+				onclick={() => toggle(key)}
+				aria-pressed={staged[key] !== false}>{labelOf.get(key) ?? key}</button
+			>
+		{/each}
+		{#each OTHER_CHIPS as key (key)}
+			<button
+				class="chip"
+				class:on={staged[key] !== false}
+				onclick={() => toggle(key)}
+				aria-pressed={staged[key] !== false}>{labelOf.get(key) ?? key}</button
+			>
+		{/each}
 	</div>
-{/if}
+
+	<hr />
+
+	<div class="status">
+		{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings have
+			been modified{/if}
+	</div>
+
+	<footer>
+		<button disabled={!dirty} onclick={save}>Save Settings</button>
+		<button disabled={!dirty} onclick={cancel}>Cancel</button>
+		<button class="right" onclick={restoreDefault}>Restore Default</button>
+	</footer>
+</Modal>
 
 <style>
-	.backdrop {
-		position: fixed;
-		inset: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
-		z-index: 50;
-	}
-	.dialog {
-		display: flex;
-		flex-direction: column;
-		gap: 0.6rem;
-		width: min(560px, 92%);
-		padding-bottom: 0.75rem;
-		background: var(--bg-panel);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-	}
-	header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 0.75rem 1rem;
-		border-bottom: 1px solid var(--border);
-	}
-	header h2 {
-		margin: 0;
-		font-size: 1.05rem;
-		color: var(--accent);
-	}
-	.close {
-		padding: 0.1rem 0.4rem;
-	}
 	/* egui flows chips top-to-bottom into width-based columns; CSS multi-column
 	   gives the same vertical fill. */
 	.chips {
