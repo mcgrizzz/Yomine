@@ -153,6 +153,8 @@
 
 	// --- Navigation -----------------------------------------------------------
 	function close() {
+		// The backend job outlives the modal.
+		if (phase === 'analyzing') void ipc.cancelAnalysis();
 		analyzerModalOpen.set(false);
 	}
 

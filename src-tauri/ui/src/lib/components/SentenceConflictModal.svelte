@@ -210,15 +210,9 @@
 
 <svelte:window onkeydown={(e) => e.key === 'Escape' && oncancel()} />
 
-<!-- Only direct backdrop clicks cancel; clicks inside the dialog must still
-     bubble to window so the definition popover's close-on-click works. -->
-<div
-	class="backdrop"
-	role="button"
-	tabindex="-1"
-	onclick={(e) => e.target === e.currentTarget && oncancel()}
-	onkeydown={(e) => e.key === 'Escape' && oncancel()}
->
+<!-- No handlers: a stray click must not discard the batch, and clicks must reach
+     window for DefinitionPopover's close-on-click. -->
+<div class="backdrop">
 	<div class="dialog" role="dialog" aria-modal="true" aria-label="Sentence conflicts" tabindex="-1">
 		<header>
 			<h2>Sentence conflicts</h2>

@@ -15,11 +15,13 @@
 	let version = $state('…');
 	let checking = $state(false);
 	let checkResult = $state<UpdateCheckResult | null>(null);
+	let installArmed = $state(false);
 
 	$effect(() => {
 		if ($aboutModalOpen)
 			untrack(() => {
 				checkResult = null;
+				installArmed = false;
 				void getVersion().then((v) => (version = v));
 			});
 	});
@@ -78,7 +80,12 @@
 						{@const u = $updateInfo}
 						<span class="update-found">{u.latest} is available</span>
 						{#if u.installable}
-							<button onclick={installUpdate}>Download &amp; install</button>
+							<button
+								title="Yomine restarts to finish installing; the loaded file and any queued mining are lost."
+								onclick={() => (installArmed ? installUpdate() : (installArmed = true))}
+							>
+								{installArmed ? 'Restart & install now?' : 'Download & install'}
+							</button>
 						{:else}
 							<button onclick={() => openUrl(u.url)}>Open release page</button>
 						{/if}

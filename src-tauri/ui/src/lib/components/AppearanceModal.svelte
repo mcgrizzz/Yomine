@@ -6,10 +6,7 @@
 	import {
 		settings,
 		appearanceModalOpen,
-		setDefinitionScale,
-		setFontScale,
-		setSentenceColoring,
-		setSentenceUnderlines
+		saveAppearance
 	} from '$lib/stores';
 
 	/** `default_font_scale()` (core/settings.rs), as a percentage. */
@@ -92,10 +89,7 @@
 	}
 
 	async function save() {
-		if (tempPct !== originalPct) await setFontScale(tempPct / 100);
-		if (tempDefPct !== originalDefPct) await setDefinitionScale(tempDefPct / 100);
-		if (tempColoring !== originalColoring) await setSentenceColoring(tempColoring);
-		if (togglesDirty) await setSentenceUnderlines(tempToggles);
+		if (!(await saveAppearance(tempPct / 100, tempDefPct / 100, tempColoring, tempToggles))) return;
 		originalPct = tempPct;
 		originalDefPct = tempDefPct;
 		originalColoring = tempColoring;
