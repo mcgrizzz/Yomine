@@ -168,7 +168,7 @@
 							bind:value={filter.replacement}
 						/>
 						<button
-							class="close"
+							class="icon remove"
 							aria-label="Remove this filter"
 							onclick={() => stagedFilters.splice(i, 1)}>✕</button
 						>
@@ -285,6 +285,16 @@
 		grid-template-columns: auto 1fr 1fr auto;
 		align-items: center;
 		gap: 0.4rem;
+	}
+	.icon {
+		padding: 0.1rem 0.4rem;
+		background: none;
+		border: none;
+		color: var(--text);
+		cursor: pointer;
+	}
+	.icon.remove {
+		color: var(--danger);
 	}
 	.mono {
 		font-family: monospace;

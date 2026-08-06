@@ -102,7 +102,8 @@
 						onclick={(e) => {
 							e.stopPropagation();
 							openEditor(theme.label);
-						}}>✎</button
+						}}
+						onkeydown={(e) => e.stopPropagation()}>✎</button
 					>
 				{/if}
 			</div>
