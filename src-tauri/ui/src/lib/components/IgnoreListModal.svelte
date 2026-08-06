@@ -2,6 +2,7 @@
 	// Staged edits, discarded on close/Cancel. The row right-click "Add to
 	// ignore list" stays immediate (the stores' toggleIgnore), unlike this modal.
 	import { dirtyGuard } from '$lib/dirtyGuard.svelte';
+	import Modal from './Modal.svelte';
 	import { ignoreModalOpen, saveIgnore } from '$lib/stores';
 	import * as ipc from '$lib/ipc';
 	import { textMatches } from '$lib/table';
@@ -120,174 +121,108 @@
 	}
 </script>
 
-<!-- Esc closes from anywhere: the backdrop's own keydown only fires once focus
-     is inside the modal, which it isn't right after opening from a menu. -->
-<svelte:window
-	onkeydown={(e) => $ignoreModalOpen && e.key === 'Escape' && guard.request()}
-/>
-
-{#if $ignoreModalOpen}
-	<div
-		class="backdrop"
-		role="button"
-		tabindex="-1"
-		onclick={guard.request}
-		onkeydown={(e) => {
-			if (e.key === 'Escape') {
-				e.stopPropagation();
-				guard.request();
-			}
-		}}
-	>
-		<!-- Stop backdrop clicks inside the dialog from closing it. -->
-		<div
-			class="dialog"
-			role="dialog"
-			aria-modal="true"
-			aria-label="Ignore list"
-			tabindex="-1"
-			onclick={(e) => {
-				e.stopPropagation();
-				guard.disarm();
-			}}
-		>
-			<header>
-				<h2>Ignore List</h2>
-				<button class="close" aria-label="Close" onclick={guard.request}>✕</button>
-			</header>
-
-			<!-- Controls: add new term + search. -->
-			<div class="controls">
-				<div class="field">
-					<label for="ignore-new-term">Add New Term</label>
-					<div class="row">
-						<input
-							id="ignore-new-term"
-							lang="ja"
-							bind:value={newTerm}
-							onkeydown={(e) => e.key === 'Enter' && addTerm()}
-							placeholder="term…"
-						/>
-						<button onclick={addTerm}>Add</button>
-					</div>
-				</div>
-				<div class="field">
-					<label for="ignore-search">Search Terms</label>
-					<input id="ignore-search" lang="ja" bind:value={searchFilter} placeholder="filter…" />
-				</div>
+<Modal
+	open={$ignoreModalOpen}
+	title="Ignore List"
+	width="min(620px, 92%)"
+	maxHeight="82%"
+	onclose={guard.request}
+	oninteract={guard.disarm}
+>
+	<!-- Controls: add new term + search. -->
+	<div class="controls">
+		<div class="field">
+			<label for="ignore-new-term">Add New Term</label>
+			<div class="row">
+				<input
+					id="ignore-new-term"
+					lang="ja"
+					bind:value={newTerm}
+					onkeydown={(e) => e.key === 'Enter' && addTerm()}
+					placeholder="term…"
+				/>
+				<button onclick={addTerm}>Add</button>
 			</div>
-
-			<!-- Current terms: file pills + term pills. -->
-			<div class="list">
-				<div class="list-head">
-					<span>Current Terms</span>
-					<span class="counts">Manual: {tempTerms.length} | From Files: {fileTermCount}</span>
-				</div>
-
-				<div class="scroll">
-					<div class="pills">
-						{#each tempFiles as file, i (file.path)}
-							<span
-								class="file-pill"
-								class:enabled={file.enabled}
-								class:missing={!file.exists}
-								title={file.path}
-							>
-								<input
-									type="checkbox"
-									checked={file.enabled}
-									aria-label="Enable {fileName(file.path)}"
-									onchange={() => toggleFile(i)}
-								/>
-								<span class="file-name">📄 {fileName(file.path)}</span>
-								{#if !file.exists}<span class="missing-tag">(missing)</span>{/if}
-								<span class="file-count">{file.term_count}</span>
-								<button class="icon" aria-label="Refresh {fileName(file.path)}" onclick={() => refreshFile(i)}>↻</button>
-								<button class="icon remove" aria-label="Remove {fileName(file.path)}" onclick={() => removeFile(i)}>✕</button>
-							</span>
-						{/each}
-						{#if search === ''}
-							<button class="import-pill" onclick={importFile}>+ Import File</button>
-						{/if}
-					</div>
-
-					{#if tempFiles.length > 0 && filteredTerms.length > 0}
-						<hr />
-					{/if}
-
-					{#if filteredTerms.length === 0 && tempFiles.length === 0}
-						<p class="empty">No terms found</p>
-					{:else if filteredTerms.length > 0}
-						<div class="pills">
-							{#each filteredTerms as term (term)}
-								<span class="term-pill">
-									<span class="term" lang="ja">{term}</span>
-									<button class="icon remove" aria-label="Remove {term}" onclick={() => removeTerm(term)}>✕</button>
-								</span>
-							{/each}
-						</div>
-					{/if}
-				</div>
-			</div>
-
-			<div class="status">
-				{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings
-					have been modified{/if}
-			</div>
-
-			{#if exportMessage}
-				<p class="export-msg" class:ok={exportMessage.ok}>
-					{exportMessage.ok ? '✓' : '⚠'} {exportMessage.text}
-				</p>
-			{/if}
-
-			<footer>
-				<button disabled={!dirty} onclick={save}>Save Settings</button>
-				<button disabled={!dirty} onclick={cancel}>Cancel</button>
-				<button onclick={exportTerms}>Export…</button>
-				<button class="right" onclick={restoreDefault}>Restore Default</button>
-			</footer>
+		</div>
+		<div class="field">
+			<label for="ignore-search">Search Terms</label>
+			<input id="ignore-search" lang="ja" bind:value={searchFilter} placeholder="filter…" />
 		</div>
 	</div>
-{/if}
+
+	<!-- Current terms: file pills + term pills. -->
+	<div class="list">
+		<div class="list-head">
+			<span>Current Terms</span>
+			<span class="counts">Manual: {tempTerms.length} | From Files: {fileTermCount}</span>
+		</div>
+
+		<div class="scroll">
+			<div class="pills">
+				{#each tempFiles as file, i (file.path)}
+					<span
+						class="file-pill"
+						class:enabled={file.enabled}
+						class:missing={!file.exists}
+						title={file.path}
+					>
+						<input
+							type="checkbox"
+							checked={file.enabled}
+							aria-label="Enable {fileName(file.path)}"
+							onchange={() => toggleFile(i)}
+						/>
+						<span class="file-name">📄 {fileName(file.path)}</span>
+						{#if !file.exists}<span class="missing-tag">(missing)</span>{/if}
+						<span class="file-count">{file.term_count}</span>
+						<button class="icon" aria-label="Refresh {fileName(file.path)}" onclick={() => refreshFile(i)}>↻</button>
+						<button class="icon remove" aria-label="Remove {fileName(file.path)}" onclick={() => removeFile(i)}>✕</button>
+					</span>
+				{/each}
+				{#if search === ''}
+					<button class="import-pill" onclick={importFile}>+ Import File</button>
+				{/if}
+			</div>
+
+			{#if tempFiles.length > 0 && filteredTerms.length > 0}
+				<hr />
+			{/if}
+
+			{#if filteredTerms.length === 0 && tempFiles.length === 0}
+				<p class="empty">No terms found</p>
+			{:else if filteredTerms.length > 0}
+				<div class="pills">
+					{#each filteredTerms as term (term)}
+						<span class="term-pill">
+							<span class="term" lang="ja">{term}</span>
+							<button class="icon remove" aria-label="Remove {term}" onclick={() => removeTerm(term)}>✕</button>
+						</span>
+					{/each}
+				</div>
+			{/if}
+		</div>
+	</div>
+
+	<div class="status">
+		{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings
+			have been modified{/if}
+	</div>
+
+	{#if exportMessage}
+		<p class="export-msg" class:ok={exportMessage.ok}>
+			{exportMessage.ok ? '✓' : '⚠'} {exportMessage.text}
+		</p>
+	{/if}
+
+	<footer>
+		<button disabled={!dirty} onclick={save}>Save Settings</button>
+		<button disabled={!dirty} onclick={cancel}>Cancel</button>
+		<button onclick={exportTerms}>Export…</button>
+		<button class="right" onclick={restoreDefault}>Restore Default</button>
+	</footer>
+</Modal>
 
 <style>
-	.backdrop {
-		position: fixed;
-		inset: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
-		z-index: 50;
-	}
-	.dialog {
-		display: flex;
-		flex-direction: column;
-		gap: 0.6rem;
-		width: min(620px, 92%);
-		max-height: 82%;
-		padding-bottom: 0.75rem;
-		background: var(--bg-panel);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-	}
-	header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 0.75rem 1rem;
-		border-bottom: 1px solid var(--border);
-	}
-	header h2 {
-		margin: 0;
-		font-size: 1.05rem;
-		color: var(--accent);
-	}
-	.close {
-		padding: 0.1rem 0.4rem;
-	}
 	.controls {
 		display: flex;
 		gap: 1rem;

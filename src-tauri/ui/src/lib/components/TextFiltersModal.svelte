@@ -3,6 +3,7 @@
 	// filters take effect immediately (issue #92).
 	import { untrack } from 'svelte';
 	import { dirtyGuard } from '$lib/dirtyGuard.svelte';
+	import Modal from './Modal.svelte';
 	import {
 		getTextFilterPresets,
 		testTextFilters,
@@ -104,156 +105,89 @@
 	}
 </script>
 
-<!-- Esc closes from anywhere: the backdrop's own keydown only fires once focus
-     is inside the modal, which it isn't right after opening from a menu. -->
-<svelte:window
-	onkeydown={(e) => $textFiltersModalOpen && e.key === 'Escape' && guard.request()}
-/>
+<Modal
+	open={$textFiltersModalOpen}
+	title="Text Filters"
+	width="min(600px, 92%)"
+	maxHeight="88vh"
+	onclose={guard.request}
+	oninteract={guard.disarm}
+>
+	<p class="blurb">
+		Filters run on each line before terms and comprehension are computed. A line left empty is
+		dropped entirely.
+	</p>
 
-{#if $textFiltersModalOpen}
-	<div
-		class="backdrop"
-		role="button"
-		tabindex="-1"
-		onclick={guard.request}
-		onkeydown={(e) => {
-			if (e.key === 'Escape') {
-				e.stopPropagation();
-				guard.request();
-			}
-		}}
-	>
-		<!-- Stop backdrop clicks inside the dialog from closing it. -->
-		<div
-			class="dialog"
-			role="dialog"
-			aria-modal="true"
-			aria-label="Text filters"
-			tabindex="-1"
-			onclick={(e) => {
-				e.stopPropagation();
-				guard.disarm();
-			}}
-		>
-			<header>
-				<h2>Text Filters</h2>
-				<button class="close" aria-label="Close" onclick={guard.request}>✕</button>
-			</header>
+	<section>
+		<h3>Presets</h3>
+		{#each presets as preset (preset.id)}
+			<label class="preset">
+				<input type="checkbox" bind:checked={stagedPresets[preset.id]} />
+				<span>
+					<span class="preset-label" lang="ja">{preset.label}</span>
+					<span class="preset-desc" lang="ja">{preset.description}</span>
+				</span>
+			</label>
+		{/each}
+	</section>
 
-			<p class="blurb">
-				Filters run on each line before terms and comprehension are computed. A line left empty is
-				dropped entirely.
-			</p>
-
-			<section>
-				<h3>Presets</h3>
-				{#each presets as preset (preset.id)}
-					<label class="preset">
-						<input type="checkbox" bind:checked={stagedPresets[preset.id]} />
-						<span>
-							<span class="preset-label" lang="ja">{preset.label}</span>
-							<span class="preset-desc" lang="ja">{preset.description}</span>
-						</span>
-					</label>
-				{/each}
-			</section>
-
-			<section>
-				<h3>Custom filters <span class="dim">(regex, applied in order)</span></h3>
-				{#each stagedFilters as filter, i (i)}
-					<div class="rule">
-						<input
-							type="checkbox"
-							bind:checked={filter.enabled}
-							aria-label="Enable this filter"
-						/>
-						<input
-							class="mono"
-							type="text"
-							placeholder="pattern (regex)"
-							bind:value={filter.pattern}
-						/>
-						<input
-							class="mono"
-							type="text"
-							placeholder="replacement (empty = remove)"
-							bind:value={filter.replacement}
-						/>
-						<button
-							class="icon remove"
-							aria-label="Remove this filter"
-							onclick={() => stagedFilters.splice(i, 1)}>✕</button
-						>
-					</div>
-				{/each}
-				<button class="add" onclick={addFilter}>+ Add filter</button>
-			</section>
-
-			<section>
-				<h3>Test</h3>
-				<input class="mono" type="text" lang="ja" placeholder="Sample line" bind:value={sample} />
-				{#if testError}
-					<p class="test-out error">{testError}</p>
-				{:else if testResult !== null}
-					<p class="test-out" lang="ja">
-						→ {testResult === '' ? '(line dropped)' : testResult}
-					</p>
-				{/if}
-			</section>
-
-			<div class="status">
-				{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if testError}⚠ Fix the
-					invalid pattern to save{:else if dirty}⚠ Settings have been modified{/if}
+	<section>
+		<h3>Custom filters <span class="dim">(regex, applied in order)</span></h3>
+		{#each stagedFilters as filter, i (i)}
+			<div class="rule">
+				<input
+					type="checkbox"
+					bind:checked={filter.enabled}
+					aria-label="Enable this filter"
+				/>
+				<input
+					class="mono"
+					type="text"
+					placeholder="pattern (regex)"
+					bind:value={filter.pattern}
+				/>
+				<input
+					class="mono"
+					type="text"
+					placeholder="replacement (empty = remove)"
+					bind:value={filter.replacement}
+				/>
+				<button
+					class="icon remove"
+					aria-label="Remove this filter"
+					onclick={() => stagedFilters.splice(i, 1)}>✕</button
+				>
 			</div>
+		{/each}
+		<button class="add" onclick={addFilter}>+ Add filter</button>
+	</section>
 
-			<footer>
-				<button disabled={!dirty || saving || testError !== null} onclick={save}>
-					{saving ? 'Applying…' : $fileResult ? 'Save & Apply' : 'Save Settings'}
-				</button>
-				<button disabled={!dirty || saving} onclick={cancel}>Cancel</button>
-			</footer>
-		</div>
+	<section>
+		<h3>Test</h3>
+		<input class="mono" type="text" lang="ja" placeholder="Sample line" bind:value={sample} />
+		{#if testError}
+			<p class="test-out error">{testError}</p>
+		{:else if testResult !== null}
+			<p class="test-out" lang="ja">
+				→ {testResult === '' ? '(line dropped)' : testResult}
+			</p>
+		{/if}
+	</section>
+
+	<div class="status">
+		{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if testError}⚠ Fix the
+			invalid pattern to save{:else if dirty}⚠ Settings have been modified{/if}
 	</div>
-{/if}
+
+	<footer>
+		<button disabled={!dirty || saving || testError !== null} onclick={save}>
+			{saving ? 'Applying…' : $fileResult ? 'Save & Apply' : 'Save Settings'}
+		</button>
+		<button disabled={!dirty || saving} onclick={cancel}>Cancel</button>
+	</footer>
+</Modal>
 
 <style>
-	.backdrop {
-		position: fixed;
-		inset: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
-		z-index: 50;
-	}
-	.dialog {
-		display: flex;
-		flex-direction: column;
-		gap: 0.6rem;
-		width: min(600px, 92%);
-		max-height: 88vh;
-		overflow-y: auto;
-		padding-bottom: 0.75rem;
-		background: var(--bg-panel);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-	}
-	header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 0.75rem 1rem;
-		border-bottom: 1px solid var(--border);
-	}
-	header h2 {
-		margin: 0;
-		font-size: 1.05rem;
-		color: var(--accent);
-	}
-	.close {
-		padding: 0.1rem 0.4rem;
-	}
 	.blurb {
 		margin: 0;
 		padding: 0 1rem;

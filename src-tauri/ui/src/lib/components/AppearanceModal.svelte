@@ -3,6 +3,7 @@
 	// Cancel/✕/backdrop revert the preview to the saved value.
 	import { untrack } from 'svelte';
 	import { dirtyGuard } from '$lib/dirtyGuard.svelte';
+	import Modal from './Modal.svelte';
 	import type { SegmentKnowledge, SentenceColoring, UnderlineToggles } from '$lib/ipc';
 	import {
 		settings,
@@ -122,149 +123,78 @@
 	}
 </script>
 
-<!-- Esc closes from anywhere: the backdrop's own keydown only fires once focus
-     is inside the modal, which it isn't right after opening from a menu. -->
-<svelte:window onkeydown={(e) => $appearanceModalOpen && e.key === 'Escape' && guard.request()} />
-
-{#if $appearanceModalOpen}
-	<div
-		class="backdrop"
-		role="button"
-		tabindex="-1"
-		onclick={guard.request}
-		onkeydown={(e) => {
-			if (e.key === 'Escape') {
-				e.stopPropagation();
-				guard.request();
-			}
-		}}
-	>
-		<!-- Stop backdrop clicks inside the dialog from closing it. -->
-		<div
-			class="dialog"
-			role="dialog"
-			aria-modal="true"
-			aria-label="Appearance settings"
-			tabindex="-1"
-			onclick={(e) => {
-				e.stopPropagation();
-				guard.disarm();
-			}}
-		>
-			<header>
-				<h2>Appearance</h2>
-				<button class="close" aria-label="Close" onclick={guard.request}>✕</button>
-			</header>
-
-			<div class="scale-row">
-				<label for="ui-scale">UI scale:</label>
-				<button class="step" aria-label="Decrease scale" onclick={() => step(-STEP)}>−</button>
-				<input
-					id="ui-scale"
-					type="range"
-					min={MIN_PCT}
-					max={MAX_PCT}
-					step={STEP}
-					bind:value={tempPct}
-				/>
-				<button class="step" aria-label="Increase scale" onclick={() => step(STEP)}>+</button>
-				<span class="value">{tempPct}%</span>
-			</div>
-			<p class="hint">Scales the whole interface — text, controls, and spacing.</p>
-
-			<div class="scale-row">
-				<label for="definition-scale">Definition scale:</label>
-				<button class="step" aria-label="Decrease definition scale" onclick={() => stepDef(-STEP)}
-					>−</button
-				>
-				<input
-					id="definition-scale"
-					type="range"
-					min={DEF_MIN_PCT}
-					max={MAX_PCT}
-					step={STEP}
-					bind:value={tempDefPct}
-				/>
-				<button class="step" aria-label="Increase definition scale" onclick={() => stepDef(STEP)}
-					>+</button
-				>
-				<span class="value">{tempDefPct}%</span>
-			</div>
-			<p class="hint">Scales the Shift+Hover definition popover, on top of the UI scale.</p>
-
-			<div class="coloring-row">
-				<label for="sentence-coloring">Sentence marking:</label>
-				<select id="sentence-coloring" bind:value={tempColoring}>
-					<option value="knowledge">Knowledge underlines</option>
-					<option value="none">None</option>
-				</select>
-			</div>
-			{#if tempColoring === 'knowledge'}
-				<div class="underline-toggles">
-					{#each STATES as s (s)}
-						<label class="state-toggle">
-							<input type="checkbox" bind:checked={tempToggles[s]} />
-							<span style="border-bottom: 2.5px solid {STATE_COLORS[s]}">{STATE_LABELS[s]}</span>
-						</label>
-					{/each}
-				</div>
-				<p class="hint">Underlines words by Anki state; untick a state to hide it.</p>
-			{/if}
-
-			<p class="hint">Table columns: right-click the term-table header to reorder or hide.</p>
-
-			<hr />
-
-			<div class="status">
-				{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings
-					have been modified{/if}
-			</div>
-
-			<footer>
-				<button disabled={!dirty} onclick={save}>Save Settings</button>
-				<button disabled={!dirty} onclick={cancel}>Cancel</button>
-				<button class="right" onclick={restoreDefault}>Restore Default</button>
-			</footer>
-		</div>
+<Modal
+	open={$appearanceModalOpen}
+	title="Appearance"
+	width="min(420px, 92%)"
+	onclose={guard.request}
+	oninteract={guard.disarm}
+>
+	<div class="scale-row">
+		<label for="ui-scale">UI scale:</label>
+		<button class="step" aria-label="Decrease scale" onclick={() => step(-STEP)}>−</button>
+		<input id="ui-scale" type="range" min={MIN_PCT} max={MAX_PCT} step={STEP} bind:value={tempPct} />
+		<button class="step" aria-label="Increase scale" onclick={() => step(STEP)}>+</button>
+		<span class="value">{tempPct}%</span>
 	</div>
-{/if}
+	<p class="hint">Scales the whole interface — text, controls, and spacing.</p>
+
+	<div class="scale-row">
+		<label for="definition-scale">Definition scale:</label>
+		<button class="step" aria-label="Decrease definition scale" onclick={() => stepDef(-STEP)}
+			>−</button
+		>
+		<input
+			id="definition-scale"
+			type="range"
+			min={DEF_MIN_PCT}
+			max={MAX_PCT}
+			step={STEP}
+			bind:value={tempDefPct}
+		/>
+		<button class="step" aria-label="Increase definition scale" onclick={() => stepDef(STEP)}
+			>+</button
+		>
+		<span class="value">{tempDefPct}%</span>
+	</div>
+	<p class="hint">Scales the Shift+Hover definition popover, on top of the UI scale.</p>
+
+	<div class="coloring-row">
+		<label for="sentence-coloring">Sentence marking:</label>
+		<select id="sentence-coloring" bind:value={tempColoring}>
+			<option value="knowledge">Knowledge underlines</option>
+			<option value="none">None</option>
+		</select>
+	</div>
+	{#if tempColoring === 'knowledge'}
+		<div class="underline-toggles">
+			{#each STATES as s (s)}
+				<label class="state-toggle">
+					<input type="checkbox" bind:checked={tempToggles[s]} />
+					<span style="border-bottom: 2.5px solid {STATE_COLORS[s]}">{STATE_LABELS[s]}</span>
+				</label>
+			{/each}
+		</div>
+		<p class="hint">Underlines words by Anki state; untick a state to hide it.</p>
+	{/if}
+
+	<p class="hint">Table columns: right-click the term-table header to reorder or hide.</p>
+
+	<hr />
+
+	<div class="status">
+		{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings have
+			been modified{/if}
+	</div>
+
+	<footer>
+		<button disabled={!dirty} onclick={save}>Save Settings</button>
+		<button disabled={!dirty} onclick={cancel}>Cancel</button>
+		<button class="right" onclick={restoreDefault}>Restore Default</button>
+	</footer>
+</Modal>
 
 <style>
-	.backdrop {
-		position: fixed;
-		inset: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
-		z-index: 50;
-	}
-	.dialog {
-		display: flex;
-		flex-direction: column;
-		gap: 0.6rem;
-		width: min(420px, 92%);
-		padding-bottom: 0.75rem;
-		background: var(--bg-panel);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-	}
-	header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 0.75rem 1rem;
-		border-bottom: 1px solid var(--border);
-	}
-	header h2 {
-		margin: 0;
-		font-size: 1.05rem;
-		color: var(--accent);
-	}
-	.close {
-		padding: 0.1rem 0.4rem;
-	}
 	.scale-row {
 		display: flex;
 		align-items: center;

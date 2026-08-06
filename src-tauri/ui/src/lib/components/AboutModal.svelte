@@ -2,6 +2,7 @@
 	import { untrack } from 'svelte';
 	import { getVersion } from '@tauri-apps/api/app';
 	import { openUrl } from '@tauri-apps/plugin-opener';
+	import Modal from './Modal.svelte';
 	import {
 		aboutModalOpen,
 		checkForUpdate,
@@ -37,110 +38,48 @@
 	}
 </script>
 
-<!-- Esc closes from anywhere: the backdrop's own keydown only fires once focus
-     is inside the modal, which it isn't right after opening from a menu. -->
-<svelte:window onkeydown={(e) => $aboutModalOpen && e.key === 'Escape' && close()} />
+<Modal open={$aboutModalOpen} title="About Yomine" width="min(400px, 92%)" onclose={close}>
+	<div class="body">
+		<p class="name">Yomine <span class="version">v{version}</span></p>
+		<p class="tagline">Japanese vocabulary mining — 読み + mine.</p>
 
-{#if $aboutModalOpen}
-	<div
-		class="backdrop"
-		role="button"
-		tabindex="-1"
-		onclick={close}
-		onkeydown={(e) => e.key === 'Escape' && close()}
-	>
-		<!-- Stop backdrop clicks inside the dialog from closing it. -->
-		<div
-			class="dialog"
-			role="dialog"
-			aria-modal="true"
-			aria-label="About Yomine"
-			tabindex="-1"
-			onclick={(e) => e.stopPropagation()}
-		>
-			<header>
-				<h2>About Yomine</h2>
-				<button class="close" aria-label="Close" onclick={close}>✕</button>
-			</header>
+		<div class="links">
+			<button class="link" onclick={() => openUrl(REPO)}>GitHub</button>
+			<button class="link" onclick={() => openUrl(`${REPO}/releases`)}>Releases</button>
+			<button class="link" onclick={() => openUrl(`${REPO}/issues`)}>Report an issue</button>
+		</div>
 
-			<div class="body">
-				<p class="name">Yomine <span class="version">v{version}</span></p>
-				<p class="tagline">Japanese vocabulary mining — 読み + mine.</p>
+		<hr />
 
-				<div class="links">
-					<button class="link" onclick={() => openUrl(REPO)}>GitHub</button>
-					<button class="link" onclick={() => openUrl(`${REPO}/releases`)}>Releases</button>
-					<button class="link" onclick={() => openUrl(`${REPO}/issues`)}>Report an issue</button>
-				</div>
-
-				<hr />
-
-				<div class="update-row">
-					{#if $updateInfo}
-						{@const u = $updateInfo}
-						<span class="update-found">{u.latest} is available</span>
-						{#if u.installable}
-							<button
-								title="Yomine restarts to finish installing; the loaded file and any queued mining are lost."
-								onclick={() => (installArmed ? installUpdate() : (installArmed = true))}
-							>
-								{installArmed ? 'Restart & install now?' : 'Download & install'}
-							</button>
-						{:else}
-							<button onclick={() => openUrl(u.url)}>Open release page</button>
-						{/if}
-					{:else}
-						<button disabled={checking} onclick={runCheck}>
-							{checking ? 'Checking…' : 'Check for updates'}
-						</button>
-						{#if checkResult === 'up-to-date'}
-							<span class="up-to-date">✓ You're on the latest version</span>
-						{:else if checkResult === 'unavailable'}
-							<span class="unavailable">Couldn't reach GitHub — try again later</span>
-						{/if}
-					{/if}
-				</div>
-			</div>
+		<div class="update-row">
+			{#if $updateInfo}
+				{@const u = $updateInfo}
+				<span class="update-found">{u.latest} is available</span>
+				{#if u.installable}
+					<button
+						title="Yomine restarts to finish installing; the loaded file and any queued mining are lost."
+						onclick={() => (installArmed ? installUpdate() : (installArmed = true))}
+					>
+						{installArmed ? 'Restart & install now?' : 'Download & install'}
+					</button>
+				{:else}
+					<button onclick={() => openUrl(u.url)}>Open release page</button>
+				{/if}
+			{:else}
+				<button disabled={checking} onclick={runCheck}>
+					{checking ? 'Checking…' : 'Check for updates'}
+				</button>
+				{#if checkResult === 'up-to-date'}
+					<span class="up-to-date">✓ You're on the latest version</span>
+				{:else if checkResult === 'unavailable'}
+					<span class="unavailable">Couldn't reach GitHub — try again later</span>
+				{/if}
+			{/if}
 		</div>
 	</div>
-{/if}
+</Modal>
 
 <style>
-	.backdrop {
-		position: fixed;
-		inset: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
-		z-index: 50;
-	}
-	.dialog {
-		display: flex;
-		flex-direction: column;
-		gap: 0.6rem;
-		width: min(400px, 92%);
-		padding-bottom: 1rem;
-		background: var(--bg-panel);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-	}
-	header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 0.75rem 1rem;
-		border-bottom: 1px solid var(--border);
-	}
-	header h2 {
-		margin: 0;
-		font-size: 1.05rem;
-		color: var(--accent);
-	}
-	.close {
-		padding: 0.1rem 0.4rem;
-	}
 	.body {
 		display: flex;
 		flex-direction: column;
