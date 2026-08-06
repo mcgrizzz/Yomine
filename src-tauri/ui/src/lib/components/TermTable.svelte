@@ -27,6 +27,7 @@
 		miningTerm,
 		normalizeSentence,
 		openInAnki,
+		pinOccurrence,
 		playerBusy,
 		playerStatus,
 		posCatalog,
@@ -43,8 +44,10 @@
 		toggleIgnore,
 		toggleSelected,
 		yomitanReachable,
+		type OccurrencePin,
 		type QueueItem
 	} from '$lib/stores';
+	import { untrack } from 'svelte';
 	import { Menu } from '@tauri-apps/api/menu';
 	import { furiganaText } from '$lib/furigana';
 	import DefinitionPopover from './DefinitionPopover.svelte';
@@ -200,9 +203,32 @@
 		return out;
 	}
 
-	// Each row's occurrence index, bound up so the mine button and the
-	// search-jump below target the sentence on display.
+	// Each row's displayed occurrence - a queued term mines its pin instead.
 	let occIdx = $state<Record<string, number>>({});
+
+	let userChosen = $state<Record<string, boolean>>({});
+
+	const pinFor = (key: string): OccurrencePin => ({
+		occIdx: occIdx[key] ?? 0,
+		userChosen: userChosen[key] ?? false
+	});
+
+	function navigated(key: string, index: number) {
+		userChosen[key] = true;
+		if ($selectedTerms.has(key)) pinOccurrence(key, { occIdx: index, userChosen: true });
+	}
+
+	// Must precede the search effect: on load this clears, then that repopulates.
+	let lastFile: unknown = null;
+	$effect(() => {
+		const file = $fileResult;
+		if (file === lastFile) return;
+		lastFile = file;
+		untrack(() => {
+			occIdx = {};
+			userChosen = {};
+		});
+	});
 
 	// A search matching inside a sentence jumps the row to that sentence.
 	$effect(() => {
@@ -379,7 +405,8 @@
 		)
 			return;
 		if (window.getSelection()?.toString()) return;
-		toggleSelected(termKey(term));
+		const key = termKey(term);
+		toggleSelected(key, pinFor(key));
 	}
 
 	let batchEntries = $state<BatchEntry[] | null>(null);
@@ -424,7 +451,8 @@
 			.map((t) => {
 				const key = termKey(t);
 				const occs = occurrencesOf(t);
-				const occ = occs[Math.min(occIdx[key] ?? 0, occs.length - 1)];
+				const pinned = $queuedMineOptions[key]?.occIdx ?? occIdx[key] ?? 0;
+				const occ = occs[Math.min(pinned, occs.length - 1)];
 				const seen = new Set([normalizeSentence(occ?.sentence.text ?? '')]);
 				const alternatives = occs.flatMap((o, idx) => {
 					const k = normalizeSentence(o.sentence.text);
@@ -448,7 +476,7 @@
 					entryIndex: $queuedMineOptions[key]?.entryIndex,
 					formatName: $queuedMineOptions[key]?.formatName,
 					scanText: $queuedMineOptions[key]?.scanText,
-					explicit: occIdx[key] !== undefined,
+					explicit: $queuedMineOptions[key]?.userChosen ?? false,
 					alternatives
 				};
 			});
@@ -472,7 +500,11 @@
 
 	function conflictsResolved(items: QueueItem[], occIdxPatch: Record<string, number>) {
 		// Sync the rows to any reassigned occurrences so display = mined.
-		for (const [key, idx] of Object.entries(occIdxPatch)) occIdx[key] = idx;
+		for (const [key, idx] of Object.entries(occIdxPatch)) {
+			occIdx[key] = idx;
+			// Not `true`: auto-swap reassigns without the user choosing.
+			pinOccurrence(key, { occIdx: idx, userChosen: userChosen[key] ?? false });
+		}
 		batchEntries = null;
 		void mineQueue(items);
 	}
@@ -623,7 +655,7 @@
 					type="checkbox"
 					checked={allSelected}
 					indeterminate={someSelected && !allSelected}
-					onchange={() => setSelected(selectableKeys, !allSelected)}
+					onchange={() => setSelected(selectableKeys, !allSelected, pinFor)}
 					title="Select all visible terms"
 					aria-label="Select all visible terms"
 				/>
@@ -715,7 +747,7 @@
 					<input
 						type="checkbox"
 						checked={$selectedTerms.has(key)}
-						onchange={() => toggleSelected(key)}
+						onchange={() => toggleSelected(key, pinFor(key))}
 						aria-label={`Select ${term.lemma_form}`}
 					/>
 				{/if}
@@ -803,6 +835,7 @@
 								occurrences={occs}
 								{term}
 								bind:currentIndex={occIdx[key]}
+								onnavigate={(idx) => navigated(key, idx)}
 								onlookup={segmentLookup}
 								onhover={(fn) => (hovered = fn)}
 							/>
@@ -838,7 +871,14 @@
 		onmine={(entryIndex, formatName) =>
 			mineable && mine(mineable.term, mineable.occs, entryIndex, formatName, defPopover?.text)}
 		onqueue={(entryIndex, formatName) =>
-			mineable && queueWithEntry(termKey(mineable.term), entryIndex, formatName, defPopover?.text)}
+			mineable &&
+			queueWithEntry(
+				termKey(mineable.term),
+				entryIndex,
+				formatName,
+				defPopover?.text,
+				pinFor(termKey(mineable.term))
+			)}
 		onclose={() => (defPopover = null)}
 	/>
 {/if}
