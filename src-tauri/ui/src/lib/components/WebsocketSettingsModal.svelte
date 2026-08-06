@@ -18,7 +18,6 @@
 	let originalPort = $state(DEFAULT_PORT);
 	let tempPoll = $state(DEFAULT_POLL_SECS);
 	let originalPoll = $state(DEFAULT_POLL_SECS);
-	let status = $state<string | null>(null);
 
 	// untrack: a tracked $settings read would re-hydrate (clobbering the staged
 	// edit) on any settings change while open.
@@ -33,7 +32,6 @@
 		const poll = $settings?.asbplayer_poll_secs ?? DEFAULT_POLL_SECS;
 		tempPoll = poll;
 		originalPoll = poll;
-		status = null;
 	}
 
 	const dirty = $derived(tempPort !== originalPort || tempPoll !== originalPoll);
@@ -42,14 +40,6 @@
 	const pollValid = $derived(Number.isInteger(tempPoll) && tempPoll >= 1 && tempPoll <= 60);
 
 	async function save() {
-		if (!valid) {
-			status = 'Invalid port range. Please use ports 1024-65535.';
-			return;
-		}
-		if (!pollValid) {
-			status = 'Poll interval must be 1-60 seconds.';
-			return;
-		}
 		if (tempPoll !== originalPoll) {
 			await setAsbplayerPollSecs(tempPoll);
 			originalPoll = tempPoll;
@@ -64,13 +54,11 @@
 	function cancel() {
 		tempPort = originalPort;
 		tempPoll = originalPoll;
-		status = null;
 	}
 
 	function restoreDefault() {
 		tempPort = DEFAULT_PORT;
 		tempPoll = DEFAULT_POLL_SECS;
-		status = null;
 	}
 </script>
 
@@ -122,10 +110,6 @@
 				<p class="invalid">⚠ Poll interval must be between 1 and 60 seconds</p>
 			{/if}
 
-			{#if status}
-				<p class="info">ℹ {status}</p>
-			{/if}
-
 			<hr />
 
 			<div class="status">
@@ -133,7 +117,7 @@
 			</div>
 
 			<footer>
-				<button disabled={!dirty} onclick={save}>Save Settings</button>
+				<button disabled={!dirty || !valid || !pollValid} onclick={save}>Save Settings</button>
 				<button disabled={!dirty} onclick={cancel}>Cancel</button>
 				<button class="right" onclick={restoreDefault}>Restore Default</button>
 			</footer>
@@ -200,12 +184,6 @@
 		padding: 0 1rem;
 		font-size: 0.85rem;
 		color: var(--danger);
-	}
-	.info {
-		margin: 0;
-		padding: 0 1rem;
-		font-size: 0.85rem;
-		color: var(--accent);
 	}
 	hr {
 		border: none;

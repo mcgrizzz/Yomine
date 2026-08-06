@@ -274,7 +274,7 @@
 										</svg> Mine</button
 								>
 								<button
-									class="mine-btn"
+									class="mine-btn queue"
 									title={'Select for batch mining using this definition' +
 										(multiFormat ? ` — format: ${activeFormat}` : '')}
 									onclick={() => {
@@ -469,14 +469,20 @@
 		cursor: pointer;
 		padding: 0.1rem 0.45rem;
 		background: var(--bg-raised);
-		border: 1px solid var(--border);
+		border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
 		border-radius: var(--radius);
 		color: var(--accent);
 		font-size: 0.75rem;
 		white-space: nowrap;
 	}
+	.mine-btn.queue {
+		border-color: var(--border);
+		color: var(--text);
+	}
 	.mine-btn:hover:not(:disabled) {
 		background: var(--bg-hover);
+	}
+	.mine-btn:hover:not(.queue):not(:disabled) {
 		border-color: var(--accent);
 	}
 	.mine-btn:disabled {
