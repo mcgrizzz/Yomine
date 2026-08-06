@@ -2,6 +2,7 @@
 	// Staged edits; Save both persists the defaults AND applies them to the live
 	// table. Cancel reverts but keeps the modal open (egui behavior).
 	import { untrack } from 'svelte';
+	import { dirtyGuard } from '$lib/dirtyGuard.svelte';
 	import { posCatalog, posEnabled, posModalOpen, savePosFilters } from '$lib/stores';
 
 	// NounExpression is intentionally absent (hidden but still saved).
@@ -46,6 +47,7 @@
 		for (const p of $posCatalog) current[p.key] = $posEnabled[p.key] !== false;
 		staged = current;
 		original = { ...current };
+		guard.disarm();
 	}
 
 	const labelOf = $derived(
@@ -53,6 +55,10 @@
 	);
 	const nounOn = $derived(staged['Noun'] !== false);
 	const dirty = $derived($posCatalog.some((p) => staged[p.key] !== original[p.key]));
+	const guard = dirtyGuard(
+		() => dirty,
+		() => posModalOpen.set(false)
+	);
 
 	function toggle(key: string) {
 		staged[key] = !(staged[key] !== false);
@@ -79,15 +85,20 @@
 
 <!-- Esc closes from anywhere: the backdrop's own keydown only fires once focus
      is inside the modal, which it isn't right after opening from a menu. -->
-<svelte:window onkeydown={(e) => $posModalOpen && e.key === 'Escape' && posModalOpen.set(false)} />
+<svelte:window onkeydown={(e) => $posModalOpen && e.key === 'Escape' && guard.request()} />
 
 {#if $posModalOpen}
 	<div
 		class="backdrop"
 		role="button"
 		tabindex="-1"
-		onclick={() => posModalOpen.set(false)}
-		onkeydown={(e) => e.key === 'Escape' && posModalOpen.set(false)}
+		onclick={guard.request}
+		onkeydown={(e) => {
+			if (e.key === 'Escape') {
+				e.stopPropagation();
+				guard.request();
+			}
+		}}
 	>
 		<!-- Stop backdrop clicks inside the dialog from closing it. -->
 		<div
@@ -96,11 +107,14 @@
 			aria-modal="true"
 			aria-label="Part of speech filters"
 			tabindex="-1"
-			onclick={(e) => e.stopPropagation()}
+			onclick={(e) => {
+				e.stopPropagation();
+				guard.disarm();
+			}}
 		>
 			<header>
 				<h2>Part of Speech Filters</h2>
-				<button class="close" aria-label="Close" onclick={() => posModalOpen.set(false)}>✕</button>
+				<button class="close" aria-label="Close" onclick={guard.request}>✕</button>
 			</header>
 
 			<div class="chips">
@@ -133,7 +147,8 @@
 			<hr />
 
 			<div class="status">
-				{#if dirty}⚠ Settings have been modified{/if}
+				{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings
+					have been modified{/if}
 			</div>
 
 			<footer>

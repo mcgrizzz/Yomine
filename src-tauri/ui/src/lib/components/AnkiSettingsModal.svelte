@@ -3,6 +3,7 @@
 	// Sample notes + field guesses are fetched lazily per notetype (the guessing
 	// heuristic runs engine-side).
 	import { untrack } from 'svelte';
+	import { dirtyGuard } from '$lib/dirtyGuard.svelte';
 	import * as ipc from '$lib/ipc';
 	import { ankiStatus, ankiModalOpen, settings, saveAnkiSettings } from '$lib/stores';
 
@@ -64,6 +65,7 @@
 		tempYomitanUrl = s?.yomitan_url ?? DEFAULT_YOMITAN_URL;
 		originalYomitanUrl = tempYomitanUrl;
 		resetEditor();
+		guard.disarm();
 		void checkYomitan();
 		if (models.length === 0) fetchModels();
 		else fetchMappedSamples();
@@ -93,6 +95,10 @@
 		tempInterval !== originalInterval ||
 			tempYomitanUrl !== originalYomitanUrl ||
 			!mappingsEqual(tempMappings, originalMappings)
+	);
+	const guard = dirtyGuard(
+		() => dirty,
+		() => ankiModalOpen.set(false)
 	);
 
 	// ---- Connection status (egui ui_connection_status, colored by content; the
@@ -246,15 +252,20 @@
 
 <!-- Esc closes from anywhere: the backdrop's own keydown only fires once focus
      is inside the modal, which it isn't right after opening from a menu. -->
-<svelte:window onkeydown={(e) => $ankiModalOpen && e.key === 'Escape' && ankiModalOpen.set(false)} />
+<svelte:window onkeydown={(e) => $ankiModalOpen && e.key === 'Escape' && guard.request()} />
 
 {#if $ankiModalOpen}
 	<div
 		class="backdrop"
 		role="button"
 		tabindex="-1"
-		onclick={() => ankiModalOpen.set(false)}
-		onkeydown={(e) => e.key === 'Escape' && ankiModalOpen.set(false)}
+		onclick={guard.request}
+		onkeydown={(e) => {
+			if (e.key === 'Escape') {
+				e.stopPropagation();
+				guard.request();
+			}
+		}}
 	>
 		<!-- Stop backdrop clicks inside the dialog from closing it. -->
 		<div
@@ -263,13 +274,14 @@
 			aria-modal="true"
 			aria-label="Anki settings"
 			tabindex="-1"
-			onclick={(e) => e.stopPropagation()}
+			onclick={(e) => {
+				e.stopPropagation();
+				guard.disarm();
+			}}
 		>
 			<header>
 				<h2>Anki Settings</h2>
-				<button class="close" aria-label="Close" onclick={() => ankiModalOpen.set(false)}
-					>✕</button
-				>
+				<button class="close" aria-label="Close" onclick={guard.request}>✕</button>
 			</header>
 
 			<div class="body">
@@ -456,7 +468,8 @@
 			<hr />
 
 			<div class="dirty">
-				{#if dirty}⚠ Settings have been modified{/if}
+				{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings
+					have been modified{/if}
 			</div>
 
 			<footer>

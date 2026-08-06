@@ -3,6 +3,7 @@
 	// install/update/import/remove are immediate and re-hydrate the list,
 	// resetting staged edits with it.
 	import { untrack } from 'svelte';
+	import { dirtyGuard } from '$lib/dirtyGuard.svelte';
 	import {
 		settings,
 		frequencyModalOpen,
@@ -135,12 +136,17 @@
 		entries = list;
 		original = list.map((e) => ({ ...e }));
 		loaded = true;
+		guard.disarm();
 	}
 
 	const dirty = $derived(
 		entries.some(
 			(e, i) => e.weight !== original[i]?.weight || e.enabled !== original[i]?.enabled
 		)
+	);
+	const guard = dirtyGuard(
+		() => dirty,
+		() => frequencyModalOpen.set(false)
 	);
 
 	// egui's Slider is logarithmic over 0.1..=5.0; map it onto a linear 0..1000 range.
@@ -187,7 +193,7 @@
 <!-- Esc closes from anywhere: the backdrop's own keydown only fires once focus
      is inside the modal, which it isn't right after opening from a menu. -->
 <svelte:window
-	onkeydown={(e) => $frequencyModalOpen && e.key === 'Escape' && frequencyModalOpen.set(false)}
+	onkeydown={(e) => $frequencyModalOpen && e.key === 'Escape' && guard.request()}
 />
 
 {#if $frequencyModalOpen}
@@ -195,8 +201,13 @@
 		class="backdrop"
 		role="button"
 		tabindex="-1"
-		onclick={() => frequencyModalOpen.set(false)}
-		onkeydown={(e) => e.key === 'Escape' && frequencyModalOpen.set(false)}
+		onclick={guard.request}
+		onkeydown={(e) => {
+			if (e.key === 'Escape') {
+				e.stopPropagation();
+				guard.request();
+			}
+		}}
 	>
 		<!-- Stop backdrop clicks inside the dialog from closing it. -->
 		<div
@@ -205,13 +216,14 @@
 			aria-modal="true"
 			aria-label="Frequency dictionaries"
 			tabindex="-1"
-			onclick={(e) => e.stopPropagation()}
+			onclick={(e) => {
+				e.stopPropagation();
+				guard.disarm();
+			}}
 		>
 			<header>
 				<h2>Frequency Dictionaries</h2>
-				<button class="close" aria-label="Close" onclick={() => frequencyModalOpen.set(false)}
-					>✕</button
-				>
+				<button class="close" aria-label="Close" onclick={guard.request}>✕</button>
 			</header>
 
 			<section class="recommended">
@@ -323,7 +335,8 @@
 			<hr />
 
 			<div class="status">
-				{#if dirty}⚠ Settings have been modified{/if}
+				{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings
+					have been modified{/if}
 			</div>
 
 			<footer>
