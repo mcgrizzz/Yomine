@@ -41,19 +41,31 @@ export async function toggleSerifFont(): Promise<void> {
 	await patchSettings({ use_serif_font: !s.use_serif_font });
 }
 
-export const setFontScale = (scale: number) =>
-	patchSettings({ font_scale: Math.min(1.5, Math.max(0.75, scale)) });
-
-export const setDefinitionScale = (scale: number) =>
-	patchSettings({ definition_scale: Math.min(1.5, Math.max(0.5, scale)) });
+/** One write so a mid-sequence failure can't leave appearance half-applied. */
+export async function saveAppearance(
+	fontScale: number,
+	definitionScale: number,
+	coloring: ipc.SentenceColoring,
+	underlines: ipc.UnderlineToggles
+): Promise<boolean> {
+	try {
+		return await patchSettings({
+			font_scale: Math.min(1.5, Math.max(0.75, fontScale)),
+			definition_scale: Math.min(1.5, Math.max(0.5, definitionScale)),
+			sentence_coloring: coloring,
+			sentence_underlines: { ...underlines }
+		});
+	} catch (err) {
+		lastError.set({
+			title: 'Appearance',
+			message: 'Failed to save settings',
+			detail: String(err)
+		});
+		return false;
+	}
+}
 
 export const setMpvPath = (path: string) => patchSettings({ mpv_path: path });
-
-export const setSentenceColoring = (mode: ipc.SentenceColoring) =>
-	patchSettings({ sentence_coloring: mode });
-
-export const setSentenceUnderlines = (toggles: ipc.UnderlineToggles) =>
-	patchSettings({ sentence_underlines: { ...toggles } });
 
 export const setTableColumns = (columns: { id: string; visible: boolean }[]) =>
 	patchSettings({ table_columns: columns.map((c) => ({ ...c })) });

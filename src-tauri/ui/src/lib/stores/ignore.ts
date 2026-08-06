@@ -34,8 +34,18 @@ export async function toggleIgnore(lemma: string): Promise<void> {
 }
 
 /** The backend re-filters; a returned file means the table updates in place. */
-export async function saveIgnore(terms: string[], files: ipc.IgnoreFile[]): Promise<void> {
-	const result = await ipc.saveIgnoreList(terms, files);
-	if (result) fileResult.set(result);
-	refreshIgnoredLemmas();
+export async function saveIgnore(terms: string[], files: ipc.IgnoreFile[]): Promise<boolean> {
+	try {
+		const result = await ipc.saveIgnoreList(terms, files);
+		if (result) fileResult.set(result);
+		refreshIgnoredLemmas();
+		return true;
+	} catch (err) {
+		lastError.set({
+			title: 'Ignore list',
+			message: 'Failed to save the ignore list',
+			detail: String(err)
+		});
+		return false;
+	}
 }

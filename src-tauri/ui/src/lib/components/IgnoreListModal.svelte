@@ -93,10 +93,11 @@
 	}
 
 	async function save() {
-		await saveIgnore(
+		const saved = await saveIgnore(
 			tempTerms,
 			tempFiles.map((f) => ({ path: f.path, enabled: f.enabled }))
 		);
+		if (!saved) return;
 		originalTerms = [...tempTerms];
 		originalFiles = tempFiles.map((f) => ({ ...f }));
 		ignoreModalOpen.set(false);
