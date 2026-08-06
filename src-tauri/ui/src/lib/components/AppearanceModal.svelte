@@ -2,6 +2,7 @@
 	// Staged, but live-previews while adjusting so the user can judge readability;
 	// Cancel/✕/backdrop revert the preview to the saved value.
 	import { untrack } from 'svelte';
+	import { dirtyGuard } from '$lib/dirtyGuard.svelte';
 	import type { SegmentKnowledge, SentenceColoring, UnderlineToggles } from '$lib/ipc';
 	import {
 		settings,
@@ -62,6 +63,7 @@
 		const toggles = { ...DEFAULT_TOGGLES, ...$settings?.sentence_underlines };
 		tempToggles = { ...toggles };
 		originalToggles = { ...toggles };
+		guard.disarm();
 	}
 
 	// Live preview: mirror what the root layout does with the saved setting.
@@ -110,6 +112,8 @@
 		appearanceModalOpen.set(false);
 	}
 
+	const guard = dirtyGuard(() => dirty, close);
+
 	function restoreDefault() {
 		tempPct = DEFAULT_PCT;
 		tempDefPct = DEFAULT_PCT;
@@ -120,15 +124,20 @@
 
 <!-- Esc closes from anywhere: the backdrop's own keydown only fires once focus
      is inside the modal, which it isn't right after opening from a menu. -->
-<svelte:window onkeydown={(e) => $appearanceModalOpen && e.key === 'Escape' && close()} />
+<svelte:window onkeydown={(e) => $appearanceModalOpen && e.key === 'Escape' && guard.request()} />
 
 {#if $appearanceModalOpen}
 	<div
 		class="backdrop"
 		role="button"
 		tabindex="-1"
-		onclick={close}
-		onkeydown={(e) => e.key === 'Escape' && close()}
+		onclick={guard.request}
+		onkeydown={(e) => {
+			if (e.key === 'Escape') {
+				e.stopPropagation();
+				guard.request();
+			}
+		}}
 	>
 		<!-- Stop backdrop clicks inside the dialog from closing it. -->
 		<div
@@ -137,11 +146,14 @@
 			aria-modal="true"
 			aria-label="Appearance settings"
 			tabindex="-1"
-			onclick={(e) => e.stopPropagation()}
+			onclick={(e) => {
+				e.stopPropagation();
+				guard.disarm();
+			}}
 		>
 			<header>
 				<h2>Appearance</h2>
-				<button class="close" aria-label="Close" onclick={close}>✕</button>
+				<button class="close" aria-label="Close" onclick={guard.request}>✕</button>
 			</header>
 
 			<div class="scale-row">
@@ -204,7 +216,8 @@
 			<hr />
 
 			<div class="status">
-				{#if dirty}⚠ Settings have been modified{/if}
+				{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings
+					have been modified{/if}
 			</div>
 
 			<footer>

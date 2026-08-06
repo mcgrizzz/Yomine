@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Staged edits, discarded on close/Cancel. The row right-click "Add to
 	// ignore list" stays immediate (the stores' toggleIgnore), unlike this modal.
+	import { dirtyGuard } from '$lib/dirtyGuard.svelte';
 	import { ignoreModalOpen, saveIgnore } from '$lib/stores';
 	import * as ipc from '$lib/ipc';
 	import { textMatches } from '$lib/table';
@@ -29,6 +30,7 @@
 		tempFiles = view.files;
 		originalTerms = [...view.terms];
 		originalFiles = view.files.map((f) => ({ ...f }));
+		guard.disarm();
 	}
 
 	// Compare only the persisted fields (path + enabled) for files, like egui.
@@ -36,6 +38,10 @@
 	const dirty = $derived(
 		JSON.stringify(tempTerms) !== JSON.stringify(originalTerms) ||
 			fileKey(tempFiles) !== fileKey(originalFiles)
+	);
+	const guard = dirtyGuard(
+		() => dirty,
+		() => ignoreModalOpen.set(false)
 	);
 
 	const search = $derived(searchFilter.trim());
@@ -117,7 +123,7 @@
 <!-- Esc closes from anywhere: the backdrop's own keydown only fires once focus
      is inside the modal, which it isn't right after opening from a menu. -->
 <svelte:window
-	onkeydown={(e) => $ignoreModalOpen && e.key === 'Escape' && ignoreModalOpen.set(false)}
+	onkeydown={(e) => $ignoreModalOpen && e.key === 'Escape' && guard.request()}
 />
 
 {#if $ignoreModalOpen}
@@ -125,8 +131,13 @@
 		class="backdrop"
 		role="button"
 		tabindex="-1"
-		onclick={() => ignoreModalOpen.set(false)}
-		onkeydown={(e) => e.key === 'Escape' && ignoreModalOpen.set(false)}
+		onclick={guard.request}
+		onkeydown={(e) => {
+			if (e.key === 'Escape') {
+				e.stopPropagation();
+				guard.request();
+			}
+		}}
 	>
 		<!-- Stop backdrop clicks inside the dialog from closing it. -->
 		<div
@@ -135,13 +146,14 @@
 			aria-modal="true"
 			aria-label="Ignore list"
 			tabindex="-1"
-			onclick={(e) => e.stopPropagation()}
+			onclick={(e) => {
+				e.stopPropagation();
+				guard.disarm();
+			}}
 		>
 			<header>
 				<h2>Ignore List</h2>
-				<button class="close" aria-label="Close" onclick={() => ignoreModalOpen.set(false)}
-					>✕</button
-				>
+				<button class="close" aria-label="Close" onclick={guard.request}>✕</button>
 			</header>
 
 			<!-- Controls: add new term + search. -->
@@ -219,7 +231,8 @@
 			</div>
 
 			<div class="status">
-				{#if dirty}⚠ Settings have been modified{/if}
+				{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings
+					have been modified{/if}
 			</div>
 
 			{#if exportMessage}

@@ -2,6 +2,7 @@
 	// Staged edits; Save persists AND re-processes the loaded file so the new
 	// filters take effect immediately (issue #92).
 	import { untrack } from 'svelte';
+	import { dirtyGuard } from '$lib/dirtyGuard.svelte';
 	import {
 		getTextFilterPresets,
 		testTextFilters,
@@ -28,6 +29,10 @@
 
 	const snapshot = () => JSON.stringify([stagedPresets, stagedFilters]);
 	const dirty = $derived(snapshot() !== original);
+	const guard = dirtyGuard(
+		() => dirty,
+		() => textFiltersModalOpen.set(false)
+	);
 
 	$effect(() => {
 		if ($textFiltersModalOpen) untrack(hydrate);
@@ -43,6 +48,7 @@
 		stagedPresets = { ...($settings?.text_filter_presets ?? {}) };
 		stagedFilters = ($settings?.text_filters ?? []).map((f) => ({ ...f }));
 		original = snapshot();
+		guard.disarm();
 	}
 
 	// Live preview + validation, debounced. Runs even with an empty sample —
@@ -101,7 +107,7 @@
 <!-- Esc closes from anywhere: the backdrop's own keydown only fires once focus
      is inside the modal, which it isn't right after opening from a menu. -->
 <svelte:window
-	onkeydown={(e) => $textFiltersModalOpen && e.key === 'Escape' && textFiltersModalOpen.set(false)}
+	onkeydown={(e) => $textFiltersModalOpen && e.key === 'Escape' && guard.request()}
 />
 
 {#if $textFiltersModalOpen}
@@ -109,8 +115,13 @@
 		class="backdrop"
 		role="button"
 		tabindex="-1"
-		onclick={() => textFiltersModalOpen.set(false)}
-		onkeydown={(e) => e.key === 'Escape' && textFiltersModalOpen.set(false)}
+		onclick={guard.request}
+		onkeydown={(e) => {
+			if (e.key === 'Escape') {
+				e.stopPropagation();
+				guard.request();
+			}
+		}}
 	>
 		<!-- Stop backdrop clicks inside the dialog from closing it. -->
 		<div
@@ -119,13 +130,14 @@
 			aria-modal="true"
 			aria-label="Text filters"
 			tabindex="-1"
-			onclick={(e) => e.stopPropagation()}
+			onclick={(e) => {
+				e.stopPropagation();
+				guard.disarm();
+			}}
 		>
 			<header>
 				<h2>Text Filters</h2>
-				<button class="close" aria-label="Close" onclick={() => textFiltersModalOpen.set(false)}
-					>✕</button
-				>
+				<button class="close" aria-label="Close" onclick={guard.request}>✕</button>
 			</header>
 
 			<p class="blurb">
@@ -190,8 +202,8 @@
 			</section>
 
 			<div class="status">
-				{#if testError}⚠ Fix the invalid pattern to save{:else if dirty}⚠ Settings have been
-					modified{/if}
+				{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if testError}⚠ Fix the
+					invalid pattern to save{:else if dirty}⚠ Settings have been modified{/if}
 			</div>
 
 			<footer>

@@ -2,6 +2,7 @@
 	// Staged edits; Cancel reverts but keeps the modal open (egui behavior).
 	// Saving the port also restarts a running server on it.
 	import { untrack } from 'svelte';
+	import { dirtyGuard } from '$lib/dirtyGuard.svelte';
 	import {
 		settings,
 		websocketModalOpen,
@@ -32,9 +33,14 @@
 		const poll = $settings?.asbplayer_poll_secs ?? DEFAULT_POLL_SECS;
 		tempPoll = poll;
 		originalPoll = poll;
+		guard.disarm();
 	}
 
 	const dirty = $derived(tempPort !== originalPort || tempPoll !== originalPoll);
+	const guard = dirtyGuard(
+		() => dirty,
+		() => websocketModalOpen.set(false)
+	);
 	// u16 caps at 65535 — the number input doesn't.
 	const valid = $derived(Number.isInteger(tempPort) && tempPort >= 1024 && tempPort <= 65535);
 	const pollValid = $derived(Number.isInteger(tempPoll) && tempPoll >= 1 && tempPoll <= 60);
@@ -65,7 +71,7 @@
 <!-- Esc closes from anywhere: the backdrop's own keydown only fires once focus
      is inside the modal, which it isn't right after opening from a menu. -->
 <svelte:window
-	onkeydown={(e) => $websocketModalOpen && e.key === 'Escape' && websocketModalOpen.set(false)}
+	onkeydown={(e) => $websocketModalOpen && e.key === 'Escape' && guard.request()}
 />
 
 {#if $websocketModalOpen}
@@ -73,8 +79,13 @@
 		class="backdrop"
 		role="button"
 		tabindex="-1"
-		onclick={() => websocketModalOpen.set(false)}
-		onkeydown={(e) => e.key === 'Escape' && websocketModalOpen.set(false)}
+		onclick={guard.request}
+		onkeydown={(e) => {
+			if (e.key === 'Escape') {
+				e.stopPropagation();
+				guard.request();
+			}
+		}}
 	>
 		<!-- Stop backdrop clicks inside the dialog from closing it. -->
 		<div
@@ -83,13 +94,14 @@
 			aria-modal="true"
 			aria-label="WebSocket server settings"
 			tabindex="-1"
-			onclick={(e) => e.stopPropagation()}
+			onclick={(e) => {
+				e.stopPropagation();
+				guard.disarm();
+			}}
 		>
 			<header>
 				<h2>WebSocket Server Settings</h2>
-				<button class="close" aria-label="Close" onclick={() => websocketModalOpen.set(false)}
-					>✕</button
-				>
+				<button class="close" aria-label="Close" onclick={guard.request}>✕</button>
 			</header>
 
 			<div class="port-row">
@@ -113,7 +125,8 @@
 			<hr />
 
 			<div class="status">
-				{#if dirty}⚠ Settings have been modified{/if}
+				{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings
+					have been modified{/if}
 			</div>
 
 			<footer>
