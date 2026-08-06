@@ -473,9 +473,9 @@
 		opacity: 1;
 	}
 	.del .danger {
-		padding: 0.15rem 0.4rem;
+		padding: 0.3rem 0.5rem;
 		font-size: 0.75rem;
-		color: #fff;
+		color: var(--bg);
 		background: var(--danger);
 		border: none;
 		border-radius: 3px;
