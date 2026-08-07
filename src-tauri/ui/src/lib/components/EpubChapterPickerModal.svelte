@@ -127,7 +127,6 @@
 	open={$epubChapterModalOpen && $epubPicker !== null}
 	title={bookTitle}
 	width="min(560px, 92%)"
-	maxHeight="82%"
 	onclose={close}
 >
 	<div class="controls">
@@ -198,10 +197,12 @@
 		{/each}
 	</ul>
 
-	<footer>
-		<button disabled={selected.size === 0} onclick={mine}>Mine</button>
-		<button onclick={close}>Cancel</button>
-	</footer>
+	{#snippet footer()}
+		<footer>
+			<button disabled={selected.size === 0} onclick={mine}>Mine</button>
+			<button onclick={close}>Cancel</button>
+		</footer>
+	{/snippet}
 </Modal>
 
 <style>

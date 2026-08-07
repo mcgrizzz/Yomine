@@ -6,11 +6,13 @@
 		width: string;
 		onclose: () => void;
 		open?: boolean;
-		maxHeight?: string;
-		/** Content owns its own bottom edge — for a last child with its own padding and border. */
+		/** Content owns its own bottom edge — for a footer with its own padding and border. */
 		flush?: boolean;
+		/** False leaves the backdrop inert, so a stray click cannot dismiss. */
+		dismissible?: boolean;
 		oninteract?: () => void;
 		actions?: Snippet;
+		footer?: Snippet;
 		children: Snippet;
 	}
 
@@ -19,10 +21,11 @@
 		width,
 		onclose,
 		open = true,
-		maxHeight,
 		flush = false,
+		dismissible = true,
 		oninteract,
 		actions,
+		footer,
 		children
 	}: Props = $props();
 
@@ -74,36 +77,45 @@
 <!-- Backs up the backdrop's keydown for the frame before the focus effect runs. -->
 <svelte:window onkeydown={(e) => open && e.key === 'Escape' && onclose()} />
 
-{#if open}
-	<div class="backdrop" role="button" tabindex="-1" {onclick} {onkeydown}>
-		<div
-			class="dialog"
-			class:flush
-			role="dialog"
-			aria-modal="true"
-			aria-labelledby={headingId}
-			tabindex="-1"
-			bind:this={dialog}
-			style="width: {width};{maxHeight ? ` max-height: ${maxHeight};` : ''}"
-		>
-			<header>
-				<h2 id={headingId} title={title}>{title}</h2>
-				{#if actions}
-					<div class="head-actions">{@render actions()}</div>
-				{/if}
-				<!-- Without stopPropagation the backdrop's oninteract disarms the guard this just armed. -->
-				<button
-					class="close"
-					aria-label="Close"
-					onclick={(e) => {
-						e.stopPropagation();
-						onclose();
-					}}>✕</button
-				>
-			</header>
-			{@render children()}
-		</div>
+{#snippet dialogBox()}
+	<div
+		class="dialog"
+		class:flush
+		role="dialog"
+		aria-modal="true"
+		aria-labelledby={headingId}
+		tabindex="-1"
+		bind:this={dialog}
+		style="width: {width}"
+	>
+		<header>
+			<h2 id={headingId} title={title}>{title}</h2>
+			{#if actions}
+				<div class="head-actions">{@render actions()}</div>
+			{/if}
+			<!-- Without stopPropagation the backdrop's oninteract disarms the guard this just armed. -->
+			<button
+				class="close"
+				aria-label="Close"
+				onclick={(e) => {
+					e.stopPropagation();
+					onclose();
+				}}>✕</button
+			>
+		</header>
+		<div class="content">{@render children()}</div>
+		{@render footer?.()}
 	</div>
+{/snippet}
+
+{#if open}
+	{#if dismissible}
+		<div class="backdrop" role="button" tabindex="-1" {onclick} {onkeydown}>
+			{@render dialogBox()}
+		</div>
+	{:else}
+		<div class="backdrop">{@render dialogBox()}</div>
+	{/if}
 {/if}
 
 <style>
@@ -116,12 +128,13 @@
 		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
 		z-index: 50;
 	}
+	/* Percent, not vh: vh ignores the root `zoom` the Appearance scale applies. */
 	.dialog {
 		display: flex;
 		flex-direction: column;
 		gap: 0.6rem;
+		max-height: 85%;
 		padding-bottom: 0.75rem;
-		overflow-y: auto;
 		background: var(--bg-panel);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
@@ -130,6 +143,15 @@
 	.dialog.flush {
 		gap: 0;
 		padding-bottom: 0;
+	}
+	.content {
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+		overflow-y: auto;
+		/* Flexbox: without this the content refuses to shrink, pushing the footer
+		   off-screen instead of scrolling. */
+		min-height: 0;
 	}
 	header {
 		display: flex;

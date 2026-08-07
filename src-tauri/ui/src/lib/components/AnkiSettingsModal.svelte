@@ -255,7 +255,6 @@
 	open={$ankiModalOpen}
 	title="Anki Settings"
 	width="min(720px, 94%)"
-	maxHeight="86%"
 	onclose={guard.request}
 	oninteract={guard.disarm}
 >
@@ -440,26 +439,22 @@
 		</section>
 	</div>
 
-	<hr />
-
-	<div class="dirty">
-		{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings
-			have been modified{/if}
-	</div>
-
-	<footer>
-		<button disabled={!dirty} onclick={save}>Save Settings</button>
-		<button disabled={!dirty} onclick={cancel}>Cancel</button>
-		<button class="right" onclick={restoreDefault}>Restore Default</button>
-	</footer>
+	{#snippet footer()}
+		<hr />
+		<div class="dirty">
+			{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings
+				have been modified{/if}
+		</div>
+		<footer>
+			<button disabled={!dirty} onclick={save}>Save Settings</button>
+			<button disabled={!dirty} onclick={cancel}>Cancel</button>
+			<button class="right" onclick={restoreDefault}>Restore Default</button>
+		</footer>
+	{/snippet}
 </Modal>
 
 <style>
 	.body {
-		overflow-y: auto;
-		/* Flexbox: without this the body refuses to shrink, pushing the footer
-		   off-screen instead of scrolling. */
-		min-height: 0;
 		display: flex;
 		flex-direction: column;
 		gap: 0.6rem;

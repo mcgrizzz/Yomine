@@ -3,6 +3,7 @@
 	// modal is open and revert to the saved theme on close.
 	import { untrack } from 'svelte';
 	import { emit } from '@tauri-apps/api/event';
+	import Modal from './Modal.svelte';
 	import { exportThemeFile, importThemeFile, type UserTheme } from '$lib/ipc';
 	import { saveUserThemes, settings } from '$lib/stores';
 	import {
@@ -172,128 +173,81 @@
 	}
 </script>
 
-<svelte:window
-	onkeydown={(e) => open && e.key === 'Escape' && close()}
-	onbeforeunload={() => open && void emit('theme-preview', null)}
-/>
+<svelte:window onbeforeunload={() => open && void emit('theme-preview', null)} />
 
-{#if open}
-	<div
-		class="backdrop"
-		role="button"
-		tabindex="-1"
-		onclick={(e) => e.target === e.currentTarget && close()}
-		onkeydown={(e) => e.key === 'Escape' && close()}
-	>
-		<div class="dialog" role="dialog" aria-modal="true" aria-label="Theme editor" tabindex="-1">
-			<header>
-				<h2>{originalName ? 'Edit Theme' : 'New Theme'}</h2>
-				<button class="close" aria-label="Close" onclick={close}>✕</button>
-			</header>
+<Modal
+	{open}
+	title={originalName ? 'Edit Theme' : 'New Theme'}
+	width="min(460px, 92%)"
+	onclose={close}
+>
 
-			<div class="row">
-				<label for="theme-name">Name:</label>
-				<input id="theme-name" type="text" bind:value={name} placeholder="My theme" />
-			</div>
-			{#if taken}
-				<p class="error">A theme with this name already exists.</p>
-			{/if}
-
-			{#if !originalName}
-				<div class="row">
-					<label for="theme-seed">Start from:</label>
-					<select
-						id="theme-seed"
-						bind:value={seedId}
-						onchange={() => seed(seedId)}
-					>
-						{#each allThemes($settings) as t (t.id)}
-							<option value={t.id}>{t.label}</option>
-						{/each}
-					</select>
-				</div>
-			{/if}
-
-			<label class="row dark-toggle">
-				<input type="checkbox" bind:checked={dark} />
-				Dark theme (sets native control styling and which toggle slot it can fill)
-			</label>
-
-			<div class="row file-row">
-				<button onclick={saveToFile}>Save to File…</button>
-				<button onclick={loadFromFile}>Load from File…</button>
-			</div>
-			{#if fileError}
-				<p class="error">{fileError}</p>
-			{/if}
-
-			<div class="groups">
-				{#each TOKEN_GROUPS as group (group.label)}
-					<div class="group">
-						<h3>{group.label}</h3>
-						<div class="tokens">
-							{#each group.tokens as token (token)}
-								<label class="token">
-									<input type="color" bind:value={colors[token]} />
-									<span>{token}</span>
-								</label>
-							{/each}
-						</div>
-					</div>
-				{/each}
-			</div>
-
-			<footer>
-				<button disabled={invalid} onclick={save}>Save Theme</button>
-				<button onclick={close}>Cancel</button>
-				{#if originalName}
-					<button class="right danger" onclick={remove}>
-						{deleteArmed ? 'Really delete?' : 'Delete'}
-					</button>
-				{/if}
-			</footer>
-		</div>
+	<div class="row">
+		<label for="theme-name">Name:</label>
+		<input id="theme-name" type="text" bind:value={name} placeholder="My theme" />
 	</div>
-{/if}
+	{#if taken}
+		<p class="error">A theme with this name already exists.</p>
+	{/if}
+
+	{#if !originalName}
+		<div class="row">
+			<label for="theme-seed">Start from:</label>
+			<select
+				id="theme-seed"
+				bind:value={seedId}
+				onchange={() => seed(seedId)}
+			>
+				{#each allThemes($settings) as t (t.id)}
+					<option value={t.id}>{t.label}</option>
+				{/each}
+			</select>
+		</div>
+	{/if}
+
+	<label class="row dark-toggle">
+		<input type="checkbox" bind:checked={dark} />
+		Dark theme (sets native control styling and which toggle slot it can fill)
+	</label>
+
+	<div class="row file-row">
+		<button onclick={saveToFile}>Save to File…</button>
+		<button onclick={loadFromFile}>Load from File…</button>
+	</div>
+	{#if fileError}
+		<p class="error">{fileError}</p>
+	{/if}
+
+	<div class="groups">
+		{#each TOKEN_GROUPS as group (group.label)}
+			<div class="group">
+				<h3>{group.label}</h3>
+				<div class="tokens">
+					{#each group.tokens as token (token)}
+						<label class="token">
+							<input type="color" bind:value={colors[token]} />
+							<span>{token}</span>
+						</label>
+					{/each}
+				</div>
+			</div>
+		{/each}
+	</div>
+
+	{#snippet footer()}
+		<footer>
+			<button disabled={invalid} onclick={save}>Save Theme</button>
+			<button onclick={close}>Cancel</button>
+			{#if originalName}
+				<button class="right danger" onclick={remove}>
+					{deleteArmed ? 'Really delete?' : 'Delete'}
+				</button>
+			{/if}
+		</footer>
+	{/snippet}
+</Modal>
 
 <style>
-	.backdrop {
-		position: fixed;
-		inset: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
-		z-index: 60;
-	}
-	.dialog {
-		display: flex;
-		flex-direction: column;
-		gap: 0.6rem;
-		width: min(460px, 92%);
-		max-height: 90%;
-		overflow-y: auto;
-		padding-bottom: 0.75rem;
-		background: var(--bg-panel);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-	}
-	header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 0.75rem 1rem;
-		border-bottom: 1px solid var(--border);
-	}
-	header h2 {
-		margin: 0;
-		font-size: 1.05rem;
-		color: var(--accent);
-	}
-	.close {
-		padding: 0.1rem 0.4rem;
-	}
 	.row {
 		display: flex;
 		align-items: center;
