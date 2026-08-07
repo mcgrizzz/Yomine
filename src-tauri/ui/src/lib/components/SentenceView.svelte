@@ -415,7 +415,6 @@
 		line-height: 1;
 		color: var(--success);
 		background: color-mix(in srgb, var(--success) 12%, transparent);
-		border: 1px solid color-mix(in srgb, var(--success) 35%, transparent);
 		border-radius: var(--radius);
 		cursor: help;
 	}

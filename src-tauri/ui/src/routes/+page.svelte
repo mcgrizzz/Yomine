@@ -285,6 +285,7 @@
 		cursor: help;
 	}
 	button.tab-chip {
+		border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
 		cursor: pointer;
 	}
 	button.tab-chip:hover {
@@ -294,17 +295,14 @@
 	.tab-chip.ok {
 		color: var(--success);
 		background: color-mix(in srgb, var(--success) 10%, transparent);
-		border: 1px solid color-mix(in srgb, var(--success) 35%, transparent);
 	}
 	.tab-chip.warn {
 		color: var(--warning);
 		background: color-mix(in srgb, var(--warning) 10%, transparent);
-		border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
 	}
 	.tab-chip.danger {
 		color: var(--danger);
 		background: color-mix(in srgb, var(--danger) 10%, transparent);
-		border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
 	}
 	.comprehension {
 		margin: 0 0 0.15rem;
@@ -348,7 +346,7 @@
 	.landing-jp {
 		margin: 0.25rem 0 0;
 		font-size: 1.125rem;
-		color: var(--know-young);
+		color: var(--text-muted);
 	}
 	.landing-hint {
 		margin: 0.25rem 0 0;
@@ -425,7 +423,7 @@
 		color: var(--info);
 	}
 	.recent-creator {
-		color: var(--know-young);
+		color: var(--text-muted);
 	}
 	.error {
 		color: var(--danger);

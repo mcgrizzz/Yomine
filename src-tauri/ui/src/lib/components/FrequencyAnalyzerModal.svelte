@@ -444,7 +444,7 @@
 		cursor: pointer;
 	}
 	.dir {
-		color: var(--warning);
+		color: var(--text);
 	}
 	.leaf {
 		color: var(--text);
