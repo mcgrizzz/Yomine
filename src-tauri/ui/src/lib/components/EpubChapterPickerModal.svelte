@@ -199,7 +199,7 @@
 
 	{#snippet footer()}
 		<footer>
-			<button disabled={selected.size === 0} onclick={mine}>Mine</button>
+			<button class="primary" disabled={selected.size === 0} onclick={mine}>Mine</button>
 			<button onclick={close}>Cancel</button>
 		</footer>
 	{/snippet}

@@ -184,7 +184,7 @@
 			<div class="row">
 				<button onclick={addFiles}>Add Files…</button>
 				<button onclick={addFolder}>Add Folder…</button>
-				<button class="ghost" onclick={clearAll} disabled={selectedPaths.length === 0}
+				<button onclick={clearAll} disabled={selectedPaths.length === 0}
 					>Clear all</button
 				>
 				<span class="count">{checkedCount} of {selectedPaths.length} files selected</span>
@@ -318,7 +318,7 @@
 			<p class="success">{exportMessage}</p>
 			<footer>
 				<button onclick={() => (phase = 'results')}>← Back to Results</button>
-				<button class="ghost" onclick={newAnalysis}>New Analysis</button>
+				<button onclick={newAnalysis}>New Analysis</button>
 			</footer>
 		{:else if phase === 'error'}
 			<p class="error">{errorMessage}</p>
@@ -579,11 +579,6 @@
 		justify-content: flex-end;
 		padding: 0.6rem 1rem;
 		border-top: 1px solid var(--border);
-	}
-	.primary {
-		background: var(--accent);
-		color: var(--bg-deep);
-		border-color: var(--accent);
 	}
 	.ghost {
 		background: none;

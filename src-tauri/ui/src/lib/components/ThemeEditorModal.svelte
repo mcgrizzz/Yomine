@@ -236,7 +236,7 @@
 
 	{#snippet footer()}
 		<footer>
-			<button disabled={invalid} onclick={save}>Save Theme</button>
+			<button class="primary" disabled={invalid} onclick={save}>Save Theme</button>
 			<button onclick={close}>Cancel</button>
 			{#if originalName}
 				<button class="right danger" onclick={remove}>
@@ -314,9 +314,6 @@
 	}
 	footer .right {
 		margin-left: auto;
-	}
-	footer .danger {
-		color: var(--danger);
 	}
 	button:disabled {
 		opacity: 0.5;

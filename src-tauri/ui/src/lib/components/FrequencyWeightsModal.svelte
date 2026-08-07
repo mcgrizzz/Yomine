@@ -311,7 +311,7 @@
 				have been modified{/if}
 		</div>
 		<footer>
-			<button disabled={!dirty} onclick={save}>Save Settings</button>
+			<button class="primary" disabled={!dirty} onclick={save}>Save Settings</button>
 			<button disabled={!dirty} onclick={cancel}>Cancel</button>
 			<button class="right" disabled={busyTitle !== null} onclick={importFromFile}>
 				{busyTitle === '(import)' ? 'Importing…' : 'Import from file…'}

@@ -101,7 +101,7 @@
 				been modified{/if}
 		</div>
 		<footer>
-			<button disabled={!dirty || !valid || !pollValid} onclick={save}>Save Settings</button>
+			<button class="primary" disabled={!dirty || !valid || !pollValid} onclick={save}>Save Settings</button>
 			<button disabled={!dirty} onclick={cancel}>Cancel</button>
 			<button class="right" onclick={restoreDefault}>Restore Default</button>
 		</footer>

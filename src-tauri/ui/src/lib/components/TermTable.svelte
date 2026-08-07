@@ -1129,16 +1129,7 @@
 		color: var(--text);
 	}
 	.bulk-btn {
-		cursor: pointer;
 		padding: 0.25rem 0.6rem;
-		background: var(--bg-panel);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		color: var(--text);
-	}
-	.bulk-btn.primary {
-		color: var(--accent);
-		border-color: color-mix(in srgb, var(--accent) 35%, transparent);
 	}
 	.bulk-btn:disabled {
 		opacity: 0.5;
