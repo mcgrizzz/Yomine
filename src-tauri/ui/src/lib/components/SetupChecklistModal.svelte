@@ -149,7 +149,7 @@
 						<button onclick={() => runAction(item)}>{item.actionText}</button>
 					{/if}
 					{#if item.helpUrl}
-						<button class="docs" onclick={() => viewDocs(item.helpUrl!)}>📖 View Docs</button>
+						<button onclick={() => viewDocs(item.helpUrl!)}>📖 View Docs</button>
 					{/if}
 				</div>
 			</li>
@@ -218,10 +218,6 @@
 		padding: 0.25rem 0.5rem;
 		font-size: 0.85rem;
 		white-space: nowrap;
-	}
-	.actions button:disabled {
-		opacity: 0.5;
-		cursor: default;
 	}
 	footer {
 		display: flex;

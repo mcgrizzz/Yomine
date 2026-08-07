@@ -209,9 +209,4 @@
 		color: var(--text-muted);
 		font-size: 0.85rem;
 	}
-	.hint {
-		margin: 0;
-		font-size: 0.85rem;
-		color: var(--text-muted);
-	}
 </style>

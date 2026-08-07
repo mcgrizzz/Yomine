@@ -522,9 +522,6 @@
 	.model-name {
 		color: var(--info);
 	}
-	code.model-name {
-		font-family: monospace;
-	}
 	.guessed {
 		color: var(--accent);
 		cursor: help;
