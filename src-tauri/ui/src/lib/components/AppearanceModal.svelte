@@ -132,17 +132,30 @@
 >
 	<div class="scale-row">
 		<label for="ui-scale">UI scale:</label>
-		<button class="step" aria-label="Decrease scale" onclick={() => step(-STEP)}>−</button>
+		<button
+			class="step"
+			aria-label="Decrease scale"
+			disabled={tempPct <= MIN_PCT}
+			onclick={() => step(-STEP)}>−</button
+		>
 		<input id="ui-scale" type="range" min={MIN_PCT} max={MAX_PCT} step={STEP} bind:value={tempPct} />
-		<button class="step" aria-label="Increase scale" onclick={() => step(STEP)}>+</button>
+		<button
+			class="step"
+			aria-label="Increase scale"
+			disabled={tempPct >= MAX_PCT}
+			onclick={() => step(STEP)}>+</button
+		>
 		<span class="value">{tempPct}%</span>
 	</div>
 	<p class="hint">Scales the whole interface — text, controls, and spacing.</p>
 
 	<div class="scale-row">
 		<label for="definition-scale">Definition scale:</label>
-		<button class="step" aria-label="Decrease definition scale" onclick={() => stepDef(-STEP)}
-			>−</button
+		<button
+			class="step"
+			aria-label="Decrease definition scale"
+			disabled={tempDefPct <= DEF_MIN_PCT}
+			onclick={() => stepDef(-STEP)}>−</button
 		>
 		<input
 			id="definition-scale"
@@ -152,8 +165,11 @@
 			step={STEP}
 			bind:value={tempDefPct}
 		/>
-		<button class="step" aria-label="Increase definition scale" onclick={() => stepDef(STEP)}
-			>+</button
+		<button
+			class="step"
+			aria-label="Increase definition scale"
+			disabled={tempDefPct >= MAX_PCT}
+			onclick={() => stepDef(STEP)}>+</button
 		>
 		<span class="value">{tempDefPct}%</span>
 	</div>

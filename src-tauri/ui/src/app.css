@@ -31,12 +31,12 @@
 	--bg-hover: #424550;
 
 	--text: #f8f8f2;
-	--text-muted: #6272a4;
+	--text-muted: #929ec9;
 	--selection: #44475a;
 	--border: #424550;
 
 	--accent: #8be9fd;
-	--term: #ff5555;
+	--term: #ff79c6;
 	--link: #62a0ea;
 	--info: #62a0ea;
 	--success: #50fa7b;
@@ -49,7 +49,7 @@
 	--status-warn: #f1fa8c;
 	--status-error: #ff5555;
 	--status-busy: #62a0ea;
-	--status-off: #6272a4;
+	--status-off: #7f818c;
 
 	/* Anki knowledge states (sentence underlines, state colors) */
 	--know-unknown: #ff5555;

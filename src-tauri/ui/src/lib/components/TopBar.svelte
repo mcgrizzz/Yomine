@@ -576,7 +576,8 @@
 		padding: 0.4rem 0.6rem;
 		font-size: 0.8rem;
 		color: var(--text-muted);
-		white-space: nowrap;
+		max-width: 320px;
+		overflow-wrap: anywhere;
 	}
 	.menu-note.warn {
 		color: var(--warning);

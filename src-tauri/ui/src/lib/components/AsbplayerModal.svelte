@@ -199,8 +199,8 @@
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 	}
-	.media.disabled {
-		opacity: 0.65;
+	.media.disabled .title {
+		color: var(--text-muted);
 	}
 	.media-head {
 		display: flex;

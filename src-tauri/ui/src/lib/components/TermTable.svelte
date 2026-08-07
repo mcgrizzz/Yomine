@@ -930,7 +930,7 @@
 	}
 	/* The row the batch queue is currently mining. */
 	.row.mining {
-		outline: 2px solid var(--accent);
+		outline: 2px dashed var(--accent);
 		outline-offset: -2px;
 	}
 	.row.head {
