@@ -182,7 +182,7 @@
 		bottom: 0.3rem;
 		right: 0.3rem;
 		padding: 0.1rem 0.4rem;
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		font-size: 0.6rem;
 		font-weight: 700;
 		letter-spacing: 0.05em;

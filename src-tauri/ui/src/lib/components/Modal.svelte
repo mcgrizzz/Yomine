@@ -126,7 +126,7 @@
 		align-items: center;
 		justify-content: center;
 		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
-		z-index: 50;
+		z-index: var(--z-modal);
 	}
 	/* Percent, not vh: vh ignores the root `zoom` the Appearance scale applies. */
 	.dialog {
@@ -138,7 +138,7 @@
 		background: var(--bg-panel);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
-		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+		box-shadow: var(--shadow-modal);
 	}
 	.dialog.flush {
 		gap: 0;

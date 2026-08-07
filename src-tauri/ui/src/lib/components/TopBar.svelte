@@ -473,7 +473,7 @@
 		position: absolute;
 		top: 100%;
 		left: 0;
-		z-index: 30;
+		z-index: var(--z-menu);
 		margin-top: 0.2rem;
 		min-width: 220px;
 		display: flex;
@@ -482,7 +482,7 @@
 		background: var(--bg-raised);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
-		box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+		box-shadow: var(--shadow-overlay);
 	}
 	.menu-panel button {
 		text-align: left;
@@ -542,7 +542,7 @@
 		color: var(--success);
 		background: transparent;
 		border: 1px solid var(--success);
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		white-space: nowrap;
 	}
 	.update-pill:hover {

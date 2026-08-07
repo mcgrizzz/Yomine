@@ -550,7 +550,7 @@
 		background: var(--bg-raised);
 		color: var(--text);
 		border: 1px solid var(--border);
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 	}
 	input[type='text'] {
 		width: 15rem;
@@ -558,7 +558,7 @@
 		background: var(--bg-raised);
 		color: var(--text);
 		border: 1px solid var(--border);
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 	}
 	select {
 		min-width: 11rem;
@@ -566,7 +566,7 @@
 		background: var(--bg-raised);
 		color: var(--text);
 		border: 1px solid var(--border);
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 	}
 	.hint {
 		font-size: 0.85rem;

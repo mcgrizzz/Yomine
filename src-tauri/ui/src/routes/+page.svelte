@@ -444,9 +444,9 @@
 		border: 1px solid var(--danger);
 		border-radius: var(--radius);
 		color: var(--text);
-		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+		box-shadow: var(--shadow-overlay);
 		/* Above modal backdrops (z 50): errors from modal actions must stay visible. */
-		z-index: 60;
+		z-index: var(--z-toast);
 	}
 	.error-banner strong {
 		color: var(--danger);
@@ -464,9 +464,9 @@
 		border-radius: var(--radius);
 		color: var(--text);
 		font-size: 0.85rem;
-		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+		box-shadow: var(--shadow-overlay);
 		/* Above modal backdrops (z 50): follow-mode loads can land mid-modal. */
-		z-index: 60;
+		z-index: var(--z-toast);
 	}
 	.error-banner .detail {
 		color: var(--text-muted);
@@ -500,7 +500,7 @@
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+		box-shadow: var(--shadow-overlay);
 	}
 	.drop-overlay {
 		position: fixed;
@@ -511,7 +511,7 @@
 		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
 		/* Don't intercept the native OS drop. */
 		pointer-events: none;
-		z-index: 20;
+		z-index: var(--z-drop);
 	}
 	.drop-card {
 		padding: 2rem 3rem;
