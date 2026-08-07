@@ -95,6 +95,6 @@
 		color: var(--info);
 	}
 	.recent-creator {
-		color: var(--know-young);
+		color: var(--text-muted);
 	}
 </style>

@@ -1063,10 +1063,10 @@
 	.mined {
 		color: var(--success);
 		background: color-mix(in srgb, var(--success) 12%, transparent);
-		border: 1px solid color-mix(in srgb, var(--success) 35%, transparent);
 		cursor: help;
 	}
 	.mined.openable {
+		border: 1px solid color-mix(in srgb, var(--success) 35%, transparent);
 		cursor: pointer;
 	}
 	.mined.openable:hover {
@@ -1101,9 +1101,8 @@
 	.jlpt-chip {
 		padding: 0.05rem 0.3rem;
 		font-size: 0.7rem;
-		color: var(--accent);
-		background: color-mix(in srgb, var(--accent) 10%, transparent);
-		border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+		color: var(--text-muted);
+		background: var(--bg-raised);
 		border-radius: var(--radius);
 		white-space: nowrap;
 	}
