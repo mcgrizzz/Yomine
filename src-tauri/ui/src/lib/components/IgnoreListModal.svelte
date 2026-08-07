@@ -125,7 +125,6 @@
 	open={$ignoreModalOpen}
 	title="Ignore List"
 	width="min(620px, 92%)"
-	maxHeight="82%"
 	onclose={guard.request}
 	oninteract={guard.disarm}
 >
@@ -203,23 +202,23 @@
 		</div>
 	</div>
 
-	<div class="status">
-		{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings
-			have been modified{/if}
-	</div>
-
-	{#if exportMessage}
-		<p class="export-msg" class:ok={exportMessage.ok}>
-			{exportMessage.ok ? '✓' : '⚠'} {exportMessage.text}
-		</p>
-	{/if}
-
-	<footer>
-		<button disabled={!dirty} onclick={save}>Save Settings</button>
-		<button disabled={!dirty} onclick={cancel}>Cancel</button>
-		<button onclick={exportTerms}>Export…</button>
-		<button class="right" onclick={restoreDefault}>Restore Default</button>
-	</footer>
+	{#snippet footer()}
+		<div class="status">
+			{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings
+				have been modified{/if}
+		</div>
+		{#if exportMessage}
+			<p class="export-msg" class:ok={exportMessage.ok}>
+				{exportMessage.ok ? '✓' : '⚠'} {exportMessage.text}
+			</p>
+		{/if}
+		<footer>
+			<button disabled={!dirty} onclick={save}>Save Settings</button>
+			<button disabled={!dirty} onclick={cancel}>Cancel</button>
+			<button onclick={exportTerms}>Export…</button>
+			<button class="right" onclick={restoreDefault}>Restore Default</button>
+		</footer>
+	{/snippet}
 </Modal>
 
 <style>

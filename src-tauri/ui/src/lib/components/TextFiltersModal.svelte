@@ -109,7 +109,6 @@
 	open={$textFiltersModalOpen}
 	title="Text Filters"
 	width="min(600px, 92%)"
-	maxHeight="88vh"
 	onclose={guard.request}
 	oninteract={guard.disarm}
 >
@@ -174,17 +173,18 @@
 		{/if}
 	</section>
 
-	<div class="status">
-		{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if testError}⚠ Fix the
-			invalid pattern to save{:else if dirty}⚠ Settings have been modified{/if}
-	</div>
-
-	<footer>
-		<button disabled={!dirty || saving || testError !== null} onclick={save}>
-			{saving ? 'Applying…' : $fileResult ? 'Save & Apply' : 'Save Settings'}
-		</button>
-		<button disabled={!dirty || saving} onclick={cancel}>Cancel</button>
-	</footer>
+	{#snippet footer()}
+		<div class="status">
+			{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if testError}⚠ Fix the
+				invalid pattern to save{:else if dirty}⚠ Settings have been modified{/if}
+		</div>
+		<footer>
+			<button disabled={!dirty || saving || testError !== null} onclick={save}>
+				{saving ? 'Applying…' : $fileResult ? 'Save & Apply' : 'Save Settings'}
+			</button>
+			<button disabled={!dirty || saving} onclick={cancel}>Cancel</button>
+		</footer>
+	{/snippet}
 </Modal>
 
 <style>

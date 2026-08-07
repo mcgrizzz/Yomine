@@ -13,7 +13,6 @@
 	open={$recentFilesModalOpen}
 	title="Recent Files ({$recentFiles.length})"
 	width="min(620px, 92%)"
-	maxHeight="82%"
 	onclose={() => recentFilesModalOpen.set(false)}
 >
 	{#if $recentFiles.length === 0}

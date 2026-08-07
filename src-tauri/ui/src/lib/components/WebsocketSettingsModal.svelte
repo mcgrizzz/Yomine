@@ -94,18 +94,18 @@
 		<p class="invalid">⚠ Poll interval must be between 1 and 60 seconds</p>
 	{/if}
 
-	<hr />
-
-	<div class="status">
-		{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings have
-			been modified{/if}
-	</div>
-
-	<footer>
-		<button disabled={!dirty || !valid || !pollValid} onclick={save}>Save Settings</button>
-		<button disabled={!dirty} onclick={cancel}>Cancel</button>
-		<button class="right" onclick={restoreDefault}>Restore Default</button>
-	</footer>
+	{#snippet footer()}
+		<hr />
+		<div class="status">
+			{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings have
+				been modified{/if}
+		</div>
+		<footer>
+			<button disabled={!dirty || !valid || !pollValid} onclick={save}>Save Settings</button>
+			<button disabled={!dirty} onclick={cancel}>Cancel</button>
+			<button class="right" onclick={restoreDefault}>Restore Default</button>
+		</footer>
+	{/snippet}
 </Modal>
 
 <style>

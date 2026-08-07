@@ -132,7 +132,6 @@
 	open={$setupModalOpen}
 	title="Setup Checklist"
 	width="min(600px, 92%)"
-	maxHeight="85%"
 	flush
 	onclose={close}
 >
@@ -157,9 +156,11 @@
 		{/each}
 	</ul>
 
-	<footer>
-		<button onclick={close}>Close</button>
-	</footer>
+	{#snippet footer()}
+		<footer>
+			<button onclick={close}>Close</button>
+		</footer>
+	{/snippet}
 </Modal>
 
 <style>

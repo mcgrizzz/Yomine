@@ -64,7 +64,6 @@
 	open={$asbplayerModalOpen}
 	title="Load from asbplayer"
 	width="min(720px, 92%)"
-	maxHeight="80%"
 	onclose={close}
 >
 	{#snippet actions()}

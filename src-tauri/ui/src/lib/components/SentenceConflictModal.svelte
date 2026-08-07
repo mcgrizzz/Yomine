@@ -32,6 +32,7 @@
 </script>
 
 <script lang="ts">
+	import Modal from './Modal.svelte';
 	import { harmonic } from '$lib/table';
 	import { normalizeSentence, type QueueItem } from '$lib/stores';
 
@@ -208,28 +209,56 @@
 	}
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && oncancel()} />
-
-<!-- No handlers: a stray click must not discard the batch, and clicks must reach
-     window for DefinitionPopover's close-on-click. -->
-<div class="backdrop">
-	<div class="dialog" role="dialog" aria-modal="true" aria-label="Sentence conflicts" tabindex="-1">
-		<header>
-			<h2>Sentence conflicts</h2>
-			<button class="close" aria-label="Close" onclick={oncancel}>✕</button>
-		</header>
-
+<!-- Not dismissible: a stray backdrop click must not discard the batch. -->
+<Modal title="Sentence conflicts" width="min(460px, 92%)" dismissible={false} onclose={oncancel}>
+	{#if intro && group}
+		<p class="body">
+			{groups.length} sentence{groups.length === 1 ? ' is' : 's are'} shared by more than one
+			selected term.
+			{#if autoResolvable > 0}
+				{autoResolvable} term{autoResolvable === 1 ? '' : 's'} can switch to an unused sentence
+				automatically; your own sentence picks are never changed.
+			{:else}
+				None of them have an unused sentence to switch to, so each conflict needs a pick.
+			{/if}
+		</p>
+	{:else if group}
+		<p class="count">
+			{groups.length} conflict{groups.length === 1 ? '' : 's'} remaining — click the term this
+			sentence should mine:
+		</p>
+		<blockquote class="sentence" lang="ja">
+			<!-- svelte-ignore a11y_no_static_element_interactions -- Shift+Hover
+			     lookup is a mouse affordance; the pick buttons stay keyboard-usable. -->
+			{#each parts as p, i (i)}
+				{#if p.color && p.entry}<span
+						class="hl"
+						style:color={p.color}
+						onmouseenter={(e) => hoverTerm(e, p.entry!)}
+						onmouseleave={() => onhover?.(null)}>{p.text}</span
+					>{:else}{p.text}{/if}
+			{/each}
+		</blockquote>
+		<div class="choices">
+			{#each ordered as e, i (e.key)}
+				<button
+					class="pick"
+					style:color={colorOf(i)}
+					style:border-color={colorOf(i)}
+					lang="ja"
+					title={`Mine 「${e.term.lemma_form}」 from this sentence`}
+					onclick={() => pickTerm(e)}
+					onmouseenter={(ev) => hoverTerm(ev, e)}
+					onmouseleave={() => onhover?.(null)}
+				>
+					{e.term.lemma_form}
+					<span class="freq">{freqOf(e)}</span>
+				</button>
+			{/each}
+		</div>
+	{/if}
+	{#snippet footer()}
 		{#if intro && group}
-			<p class="body">
-				{groups.length} sentence{groups.length === 1 ? ' is' : 's are'} shared by more than one
-				selected term.
-				{#if autoResolvable > 0}
-					{autoResolvable} term{autoResolvable === 1 ? '' : 's'} can switch to an unused sentence
-					automatically; your own sentence picks are never changed.
-				{:else}
-					None of them have an unused sentence to switch to, so each conflict needs a pick.
-				{/if}
-			</p>
 			<footer>
 				{#if autoResolvable > 0}
 					<button onclick={autoResolve}>Auto-swap sentences</button>
@@ -238,84 +267,16 @@
 				<button class="right" onclick={oncancel}>Cancel</button>
 			</footer>
 		{:else if group}
-			<p class="count">
-				{groups.length} conflict{groups.length === 1 ? '' : 's'} remaining — click the term this
-				sentence should mine:
-			</p>
-			<blockquote class="sentence" lang="ja">
-				<!-- svelte-ignore a11y_no_static_element_interactions -- Shift+Hover
-				     lookup is a mouse affordance; the pick buttons stay keyboard-usable. -->
-				{#each parts as p, i (i)}
-					{#if p.color && p.entry}<span
-							class="hl"
-							style:color={p.color}
-							onmouseenter={(e) => hoverTerm(e, p.entry!)}
-							onmouseleave={() => onhover?.(null)}>{p.text}</span
-						>{:else}{p.text}{/if}
-				{/each}
-			</blockquote>
-			<div class="choices">
-				{#each ordered as e, i (e.key)}
-					<button
-						class="pick"
-						style:color={colorOf(i)}
-						style:border-color={colorOf(i)}
-						lang="ja"
-						title={`Mine 「${e.term.lemma_form}」 from this sentence`}
-						onclick={() => pickTerm(e)}
-						onmouseenter={(ev) => hoverTerm(ev, e)}
-						onmouseleave={() => onhover?.(null)}
-					>
-						{e.term.lemma_form}
-						<span class="freq">{freqOf(e)}</span>
-					</button>
-				{/each}
-			</div>
 			<p class="hint">Unpicked terms are skipped for this batch.</p>
 			<footer>
 				<button onclick={mineAll}>{group.length === 2 ? 'Mine both' : `Mine all ${group.length}`}</button>
 				<button class="right" onclick={oncancel}>Cancel batch</button>
 			</footer>
 		{/if}
-	</div>
-</div>
+	{/snippet}
+</Modal>
 
 <style>
-	.backdrop {
-		position: fixed;
-		inset: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
-		z-index: 50;
-	}
-	.dialog {
-		display: flex;
-		flex-direction: column;
-		gap: 0.6rem;
-		width: min(460px, 92%);
-		padding-bottom: 0.75rem;
-		background: var(--bg-panel);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-	}
-	header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 0.75rem 1rem;
-		border-bottom: 1px solid var(--border);
-	}
-	header h2 {
-		margin: 0;
-		font-size: 1.05rem;
-		color: var(--accent);
-	}
-	.close {
-		padding: 0.1rem 0.4rem;
-	}
 	.body,
 	.count {
 		margin: 0;

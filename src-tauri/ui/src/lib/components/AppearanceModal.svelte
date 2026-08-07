@@ -180,18 +180,18 @@
 
 	<p class="hint">Table columns: right-click the term-table header to reorder or hide.</p>
 
-	<hr />
-
-	<div class="status">
-		{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings have
-			been modified{/if}
-	</div>
-
-	<footer>
-		<button disabled={!dirty} onclick={save}>Save Settings</button>
-		<button disabled={!dirty} onclick={cancel}>Cancel</button>
-		<button class="right" onclick={restoreDefault}>Restore Default</button>
-	</footer>
+	{#snippet footer()}
+		<hr />
+		<div class="status">
+			{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings have
+				been modified{/if}
+		</div>
+		<footer>
+			<button disabled={!dirty} onclick={save}>Save Settings</button>
+			<button disabled={!dirty} onclick={cancel}>Cancel</button>
+			<button class="right" onclick={restoreDefault}>Restore Default</button>
+		</footer>
+	{/snippet}
 </Modal>
 
 <style>
