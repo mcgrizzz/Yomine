@@ -290,7 +290,7 @@
 		color: var(--text-muted);
 		background: var(--bg-panel);
 		border: 1px solid var(--border);
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		white-space: nowrap;
 		cursor: pointer;
 	}

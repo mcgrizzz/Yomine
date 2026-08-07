@@ -58,6 +58,21 @@
 	--know-mature: #50fa7b;
 
 	--radius: 6px;
+	--radius-sm: 3px;
+	--radius-pill: 999px;
+
+	--shadow-overlay: 0 4px 16px rgba(0, 0, 0, 0.4);
+	--shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.5);
+
+	/* Popover and toast outrank modals deliberately: Escape peels the popover
+	 * first (TermTable.svelte), and a failed save must show over its own modal. */
+	--z-sticky: 1;
+	--z-drop: 20;
+	--z-menu: 30;
+	--z-bar: 40;
+	--z-modal: 50;
+	--z-toast: 60;
+	--z-popover: 100;
 
 	color-scheme: dark;
 }
@@ -134,7 +149,7 @@ textarea {
 	color: var(--text);
 	background: var(--bg-raised);
 	border: 1px solid var(--border);
-	border-radius: 3px;
+	border-radius: var(--radius-sm);
 	padding: 0.3rem 0.5rem;
 }
 

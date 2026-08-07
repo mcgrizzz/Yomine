@@ -248,7 +248,7 @@
 		background: var(--bg-raised);
 		color: var(--text);
 		border: 1px solid var(--border);
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 	}
 	.field .row input {
 		flex: 1;
@@ -258,7 +258,7 @@
 		flex-direction: column;
 		margin: 0 1rem;
 		border: 1px solid var(--border);
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 	}
 	.list-head {
 		display: flex;

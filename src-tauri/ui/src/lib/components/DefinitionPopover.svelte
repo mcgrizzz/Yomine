@@ -318,13 +318,13 @@
 <style>
 	.popover {
 		position: fixed;
-		z-index: 100;
+		z-index: var(--z-popover);
 		display: flex;
 		flex-direction: column;
 		background: var(--bg-panel);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
-		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+		box-shadow: var(--shadow-overlay);
 		resize: both;
 		overflow: hidden;
 		min-width: 14rem;

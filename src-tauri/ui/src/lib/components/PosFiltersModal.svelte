@@ -149,7 +149,7 @@
 		background: var(--bg-raised);
 		color: var(--text);
 		border: 1px solid var(--border);
-		border-radius: 18px;
+		border-radius: var(--radius-pill);
 		break-inside: avoid;
 	}
 	.chip.parent {

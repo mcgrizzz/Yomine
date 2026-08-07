@@ -379,7 +379,7 @@
 	.badge {
 		font-size: 0.75rem;
 		padding: 0.15rem 0.5rem;
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		border: 1px solid var(--border);
 		white-space: nowrap;
 	}
@@ -426,7 +426,7 @@
 		color: var(--bg);
 		background: var(--danger);
 		border: none;
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 	}
 	.table {
 		display: flex;
@@ -475,7 +475,7 @@
 		background: var(--bg-raised);
 		color: var(--text);
 		border: 1px solid var(--border);
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 	}
 	input:disabled {
 		opacity: 0.5;

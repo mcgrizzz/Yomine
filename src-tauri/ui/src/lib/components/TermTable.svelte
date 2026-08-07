@@ -936,6 +936,7 @@
 	.row.head {
 		position: sticky;
 		top: 0;
+		z-index: var(--z-sticky);
 		background: var(--bg-panel);
 		color: var(--text-muted);
 		font-size: 0.8rem;
@@ -958,7 +959,7 @@
 		padding: 0.1rem 0.35rem;
 		background: transparent;
 		border: none;
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 		color: inherit;
 		font: inherit;
 		text-transform: inherit;
@@ -1113,7 +1114,7 @@
 		bottom: 1.25rem;
 		left: 50%;
 		transform: translateX(-50%);
-		z-index: 40;
+		z-index: var(--z-bar);
 		display: flex;
 		align-items: center;
 		gap: 0.6rem;
@@ -1122,7 +1123,7 @@
 		background: var(--bg-panel);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
-		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+		box-shadow: var(--shadow-overlay);
 		font-size: 0.85rem;
 	}
 	.bulk-info {
@@ -1141,7 +1142,7 @@
 		bottom: 4rem;
 		left: 50%;
 		transform: translateX(-50%);
-		z-index: 40;
+		z-index: var(--z-bar);
 		min-width: 18rem;
 		max-width: 90vw;
 		max-height: 40vh;
@@ -1150,7 +1151,7 @@
 		background: var(--bg-panel);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
-		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+		box-shadow: var(--shadow-overlay);
 		font-size: 0.85rem;
 	}
 	.detail-row {
@@ -1183,7 +1184,7 @@
 		align-items: center;
 		justify-content: center;
 		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
-		z-index: 50;
+		z-index: var(--z-modal);
 	}
 	.dialog {
 		display: flex;
@@ -1194,7 +1195,7 @@
 		background: var(--bg-panel);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
-		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+		box-shadow: var(--shadow-modal);
 	}
 	.dialog-body {
 		margin: 0;

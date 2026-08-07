@@ -413,7 +413,7 @@
 		max-height: 220px;
 		overflow-y: auto;
 		border: 1px solid var(--border);
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 		padding: 0.35rem;
 		background: var(--bg-deep);
 	}
@@ -448,7 +448,7 @@
 		position: relative;
 		height: 1.4rem;
 		border: 1px solid var(--border);
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 		background: var(--bg-deep);
 		overflow: hidden;
 	}
@@ -494,7 +494,7 @@
 		max-height: 340px;
 		overflow-y: auto;
 		border: 1px solid var(--border);
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 	}
 	.results-table {
 		width: 100%;
@@ -512,7 +512,7 @@
 		top: 0;
 		background: var(--bg-raised);
 		color: var(--text-muted);
-		z-index: 1;
+		z-index: var(--z-sticky);
 	}
 	.results-table .rank {
 		width: 2.5rem;
@@ -547,7 +547,7 @@
 		background: var(--bg-raised);
 		color: var(--text);
 		border: 1px solid var(--border);
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 		font: inherit;
 	}
 	.export-form .checks {
