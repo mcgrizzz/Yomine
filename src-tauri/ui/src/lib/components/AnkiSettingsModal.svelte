@@ -304,7 +304,7 @@
 					</div>
 					<div class="mapping-actions">
 						<button onclick={() => editMapping(name)}>Edit</button>
-						<button onclick={() => deleteMapping(name)}>Delete</button>
+						<button class="danger" onclick={() => deleteMapping(name)}>Delete</button>
 					</div>
 				</div>
 			{/each}
@@ -446,7 +446,7 @@
 				have been modified{/if}
 		</div>
 		<footer>
-			<button disabled={!dirty} onclick={save}>Save Settings</button>
+			<button class="primary" disabled={!dirty} onclick={save}>Save Settings</button>
 			<button disabled={!dirty} onclick={cancel}>Cancel</button>
 			<button class="right" onclick={restoreDefault}>Restore Default</button>
 		</footer>

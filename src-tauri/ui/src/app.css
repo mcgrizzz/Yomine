@@ -108,6 +108,23 @@ button:disabled {
 	cursor: default;
 }
 
+/* Labels stay --text: neither accent nor danger reaches 4.5:1 under one across
+ * all 14 themes, and 12% is the strongest tint --text survives. */
+.primary {
+	background: color-mix(in srgb, var(--accent) 8%, var(--bg-raised));
+	border-color: var(--accent);
+}
+.primary:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--accent) 12%, var(--bg-raised));
+}
+.danger {
+	background: color-mix(in srgb, var(--danger) 8%, var(--bg-raised));
+	border-color: var(--danger);
+}
+.danger:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--danger) 12%, var(--bg-raised));
+}
+
 /* Text-like inputs share the themed surface everywhere (checkbox/radio/range
  * keep their native rendering). Component styles may tighten padding/width. */
 input:not([type='checkbox']):not([type='radio']):not([type='range']),

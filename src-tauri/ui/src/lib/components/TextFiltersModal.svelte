@@ -179,7 +179,7 @@
 				invalid pattern to save{:else if dirty}⚠ Settings have been modified{/if}
 		</div>
 		<footer>
-			<button disabled={!dirty || saving || testError !== null} onclick={save}>
+			<button class="primary" disabled={!dirty || saving || testError !== null} onclick={save}>
 				{saving ? 'Applying…' : $fileResult ? 'Save & Apply' : 'Save Settings'}
 			</button>
 			<button disabled={!dirty || saving} onclick={cancel}>Cancel</button>
