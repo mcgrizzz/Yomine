@@ -424,7 +424,12 @@
 		padding: 0.05rem 0;
 	}
 	.twisty {
-		padding: 0 0.25rem;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 1.5rem;
+		min-height: 1.5rem;
+		padding: 0;
 		font-size: 0.7rem;
 		background: none;
 		border: none;

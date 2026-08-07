@@ -141,6 +141,9 @@
 		cursor: pointer;
 		text-align: left;
 	}
+	.theme-card.current {
+		box-shadow: 0 0 0 2px var(--accent);
+	}
 	.strip {
 		display: flex;
 		flex-direction: column;

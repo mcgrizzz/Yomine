@@ -241,7 +241,6 @@
 	}
 	.row:hover {
 		background: var(--bg-hover);
-		border-color: var(--accent);
 	}
 	.row.selected {
 		border-color: var(--accent);

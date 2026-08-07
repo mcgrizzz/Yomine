@@ -139,12 +139,13 @@
 			<p class="counts">
 				{$visibleTerms.length} shown
 				{#if known > 0}
-					/ <span
+					· <span
+						class="excluded"
 						title={`Ignore list: ${$fileResult.ignored_terms}\nAnki filtered: ${known - $fileResult.ignored_terms}`}
-						>{known} known</span
+						>{known} excluded</span
 					>
 				{/if}
-				/ {total} total
+				· {total} total
 			</p>
 				</div>
 				<KnowledgeSummary />
@@ -315,6 +316,9 @@
 		font-size: 12px;
 		color: var(--text-muted);
 	}
+	.excluded {
+		cursor: help;
+	}
 	.table-scroll {
 		flex: 1 1 auto;
 		min-height: 0;
@@ -425,6 +429,8 @@
 	}
 	.error {
 		color: var(--danger);
+		overflow-y: auto;
+		overflow-wrap: anywhere;
 	}
 	.error-banner {
 		position: fixed;
