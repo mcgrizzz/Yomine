@@ -161,15 +161,11 @@
 				<p class="landing-jp">ファイルがまだ読み込まれていません</p>
 				<p class="landing-hint">ℹ You can drag and drop a file at any time to load it.</p>
 				<div class="landing-actions">
-					<button class="landing-open" disabled={toolsError !== null} onclick={openAndProcessFile}
-						>Open File…</button
-					>
+					<button class="landing-open" onclick={openAndProcessFile}>Open File…</button>
 					{#if $playerStatus.ws_clients > 0}
 						<!-- Only offered while asbplayer is actually connected (issue #105). -->
-						<button
-							class="landing-open asb"
-							disabled={toolsError !== null}
-							onclick={openAsbplayerModal}>▶ Load from asbplayer</button
+						<button class="landing-open asb" onclick={openAsbplayerModal}
+							>▶ Load from asbplayer</button
 						>
 					{/if}
 				</div>
