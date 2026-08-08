@@ -90,9 +90,11 @@
 		label = text,
 		anchor,
 		scale = 1,
-		showMine,
+		canMine,
+		canQueue,
+		isDuplicate,
 		mineDisabled,
-		mineTitle = 'Create an Anki card from the displayed sentence',
+		mineTitle,
 		formats = [],
 		onmine,
 		onqueue,
@@ -103,13 +105,15 @@
 		label?: string;
 		anchor: DOMRect;
 		scale?: number;
-		showMine: boolean;
-		mineDisabled: boolean;
-		mineTitle?: string;
+		canMine: boolean;
+		canQueue: (entry: DefinitionEntry) => boolean;
+		isDuplicate: (entry: DefinitionEntry) => boolean;
+		mineDisabled: (entry: DefinitionEntry) => boolean;
+		mineTitle: (entry: DefinitionEntry) => string;
 		/** Yomitan term card formats; >1 renders per-format buttons. */
 		formats?: CardFormat[];
-		onmine: (entryIndex: number, formatName?: string) => void;
-		onqueue: (entryIndex: number, formatName?: string) => void;
+		onmine: (entry: DefinitionEntry, formatName?: string) => void;
+		onqueue: (entry: DefinitionEntry, formatName?: string) => void;
 		onclose: () => void;
 	} = $props();
 
@@ -217,7 +221,7 @@
 		pos.anchored}
 	onclick={(e) => e.stopPropagation()}
 >
-	{#if showMine && multiFormat}
+	{#if canMine && multiFormat}
 		<div class="format-row">
 			<label for="popover-format">Card format</label>
 			<select
@@ -250,14 +254,18 @@
 								<span class="reading">【{entry.reading}】</span>
 							{/if}
 						{/if}
-						{#if showMine}
+						{#if canMine}
+							{@const dupe = isDuplicate(entry)}
 							<span class="actions">
 								<button
-									class="mine-btn primary"
-									disabled={mineDisabled}
-									title={multiFormat ? `${mineTitle} — format: ${activeFormat}` : mineTitle}
+									class="mine-btn"
+									class:primary={!dupe}
+									disabled={mineDisabled(entry)}
+									title={(dupe
+										? 'Already in Anki — mine again to add another card'
+										: mineTitle(entry)) + (multiFormat ? ` — format: ${activeFormat}` : '')}
 									onclick={() => {
-										onmine(entry.index, multiFormat ? activeFormat : undefined);
+										onmine(entry, multiFormat ? activeFormat : undefined);
 										onclose();
 									}}
 									><svg
@@ -271,17 +279,19 @@
 										>
 											<path d="M3 21 L13.5 10.5" />
 											<path d="M10 4 Q 17.8 6.2 20 14" />
-										</svg> Mine</button
+										</svg> {dupe ? 'Mine again' : 'Mine'}</button
 								>
-								<button
-									class="mine-btn"
-									title={'Select for batch mining using this definition' +
-										(multiFormat ? ` — format: ${activeFormat}` : '')}
-									onclick={() => {
-										onqueue(entry.index, multiFormat ? activeFormat : undefined);
-										onclose();
-									}}>Queue</button
-								>
+								{#if canQueue(entry)}
+									<button
+										class="mine-btn"
+										title={'Select for batch mining using this definition' +
+											(multiFormat ? ` — format: ${activeFormat}` : '')}
+										onclick={() => {
+											onqueue(entry, multiFormat ? activeFormat : undefined);
+											onclose();
+										}}>Queue</button
+									>
+								{/if}
 							</span>
 						{/if}
 					</div>

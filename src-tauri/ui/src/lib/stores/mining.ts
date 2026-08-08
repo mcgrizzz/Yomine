@@ -3,9 +3,8 @@
 
 import { get, writable } from 'svelte/store';
 import * as ipc from '$lib/ipc';
-import { termKey } from '$lib/table';
 import { playerStatus } from './player';
-import { selectedTerms } from './selection';
+import { dropAdhoc, selectedTerms } from './selection';
 import { lastError, showNotice } from './ui';
 
 /** Lemmas mined this session (optimistic, until the next refresh). */
@@ -71,7 +70,7 @@ export async function refreshMinedState(force = false): Promise<void> {
 /** One mine: IPC + bookkeeping only — locking, toasts, and refresh belong to
  * the callers. Resolves once the backend has verified the mine end-to-end. */
 async function mineOne(
-	term: ipc.Term,
+	lemma: string,
 	surface: string,
 	sentence: string,
 	timestamp: ipc.TimeStampDto | null,
@@ -83,7 +82,7 @@ async function mineOne(
 	const result = await ipc.mineTerm(
 		{
 			// entryIndex is a position within the scan of scanText — mine_term must rescan that same string.
-			term: scanText ?? term.lemma_form,
+			term: scanText ?? lemma,
 			surface,
 			sentence,
 			timestampSecs: timestamp?.start_secs ?? null,
@@ -97,12 +96,12 @@ async function mineOne(
 			if (msg.message) showNotice(msg.message);
 		}
 	);
-	minedTerms.update((s) => new Set(s).add(term.lemma_form));
+	minedTerms.update((s) => new Set(s).add(lemma));
 	if (result.note_id !== null) {
-		minedNoteIds.update((m) => ({ ...m, [term.lemma_form]: result.note_id! }));
+		minedNoteIds.update((m) => ({ ...m, [lemma]: result.note_id! }));
 	}
 	if (result.media_missing) {
-		mediaMissing.update((s) => new Set(s).add(term.lemma_form));
+		mediaMissing.update((s) => new Set(s).add(lemma));
 	}
 	if (sentence && result.status === 'created') {
 		sessionMinedSentences.update((s) => new Set(s).add(normalizeSentence(sentence)));
@@ -113,21 +112,21 @@ async function mineOne(
 /** Mine one term from its displayed sentence; the caller decides `via`.
  * `surface` is the occurrence text the table highlighted (cloze/bold). */
 export async function mineTerm(
-	term: ipc.Term,
+	lemma: string,
 	sentence: string,
 	timestamp: ipc.TimeStampDto | null,
 	via: 'asbplayer' | 'direct',
-	surface: string = term.surface_form,
+	surface: string,
 	entryIndex?: number,
 	formatName?: string,
 	scanText?: string
 ): Promise<void> {
 	if (get(miningTerm) !== null || get(playerBusy)) return;
-	miningTerm.set(term.lemma_form);
+	miningTerm.set(lemma);
 	playerBusy.set(true);
 	try {
 		const result = await mineOne(
-			term,
+			lemma,
 			surface,
 			sentence,
 			timestamp,
@@ -139,8 +138,8 @@ export async function mineTerm(
 		showNotice(
 			result.warning ??
 				(result.status === 'duplicate'
-					? `「${term.lemma_form}」 is already in Anki`
-					: `Added 「${term.lemma_form}」 to Anki`)
+					? `「${lemma}」 is already in Anki`
+					: `Added 「${lemma}」 to Anki`)
 		);
 		setTimeout(() => void refreshMinedState(true), 2000);
 	} catch (err) {
@@ -153,7 +152,9 @@ export async function mineTerm(
 
 /** One selected row, with the occurrence the table displayed at queue time. */
 export interface QueueItem {
-	term: ipc.Term;
+	lemma: string;
+	/** `termKey` for a row, a synthetic key for an ad-hoc entry. */
+	key: string;
 	/** The occurrence text the table highlighted (cloze/bold). */
 	surface: string;
 	sentence: string;
@@ -201,12 +202,12 @@ export async function mineQueue(items: QueueItem[]): Promise<void> {
 	try {
 		for (const item of sorted) {
 			if (queueCancelled) break;
-			miningTerm.set(item.term.lemma_form);
+			miningTerm.set(item.lemma);
 			mineQueueState.set({
 				total: sorted.length,
 				done,
-				current: item.term.lemma_form,
-				key: termKey(item.term)
+				current: item.lemma,
+				key: item.key
 			});
 			// Must match the `via` rule in TermTable's mine().
 			const status = get(playerStatus);
@@ -216,7 +217,7 @@ export async function mineQueue(items: QueueItem[]): Promise<void> {
 					: 'direct';
 			try {
 				const result = await mineOne(
-					item.term,
+					item.lemma,
 					item.surface,
 					item.sentence,
 					item.timestamp,
@@ -231,11 +232,12 @@ export async function mineQueue(items: QueueItem[]): Promise<void> {
 				if (result.media_missing) mediaMissed++;
 				selectedTerms.update((s) => {
 					const next = new Set(s);
-					next.delete(termKey(item.term));
+					next.delete(item.key);
 					return next;
 				});
+				dropAdhoc(item.key);
 			} catch (err) {
-				failures.push(`「${item.term.lemma_form}」: ${String(err)}`);
+				failures.push(`「${item.lemma}」: ${String(err)}`);
 			}
 			done++;
 		}

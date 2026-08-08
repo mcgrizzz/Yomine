@@ -39,6 +39,8 @@ const SEEK_CONFIRM_POLL: Duration = Duration::from_millis(250);
 const RECORD_BUFFER: Duration = Duration::from_millis(1500);
 const MEDIA_VERIFY_TIMEOUT: Duration = Duration::from_secs(6);
 const MEDIA_VERIFY_POLL: Duration = Duration::from_millis(500);
+/// Cloze refinement is optional, so it must never hold up the mine.
+const MATCH_LOOKUP_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[tauri::command]
 pub async fn mine_term(
@@ -84,11 +86,22 @@ pub async fn mine_term(
 
     // Cloze highlighting must match the text as it appears in the sentence: an
     // inflected occurrence (沈めて) never contains the lemma (沈める).
-    let cloze_term = if !surface.is_empty() && sentence.contains(&surface) {
-        surface.as_str()
-    } else {
-        term.as_str()
-    };
+    let matched = tokio::time::timeout(
+        MATCH_LOOKUP_TIMEOUT,
+        yomitan::matched_source(&yomitan_url, &term, entry_index),
+    )
+    .await
+    .ok()
+    .flatten();
+    let cloze_term = matched
+        .as_deref()
+        .filter(|m| sentence.contains(m) && (m.starts_with(&surface) || surface.starts_with(*m)))
+        .or(if !surface.is_empty() && sentence.contains(&surface) {
+            Some(surface.as_str())
+        } else {
+            None
+        })
+        .unwrap_or(term.as_str());
     let ctx = yomitan::SentenceContext { sentence: &sentence, term: cloze_term };
     let fields = yomitan::assemble_fields(format, marker_values, Some(ctx));
     if fields.is_empty() {

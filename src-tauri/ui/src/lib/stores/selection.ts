@@ -2,9 +2,42 @@
 // No module-scope store access: player→mining→selection is an import cycle
 // (TDZ crash) — the fileResult prune subscription lives in hydrate.ts.
 
-import { writable } from 'svelte/store';
+import { derived, writable } from 'svelte/store';
+import type { TimeStampDto } from '$lib/ipc';
 
 export const selectedTerms = writable<Set<string>>(new Set());
+
+/** No table row, so kept out of `selectedTerms`: hydrate.ts prunes that to live keys. */
+export interface AdhocQueued {
+	key: string;
+	lemma: string;
+	surface: string;
+	sentence: string;
+	timestamp: TimeStampDto | null;
+	entryIndex?: number;
+	formatName?: string;
+	scanText?: string;
+}
+
+export const adhocQueue = writable<AdhocQueued[]>([]);
+
+/** Everything staged for the next batch, rows and ad-hoc entries alike. */
+export const queuedCount = derived(
+	[selectedTerms, adhocQueue],
+	([$selected, $adhoc]) => $selected.size + $adhoc.length
+);
+
+export function queueAdhoc(item: AdhocQueued): void {
+	adhocQueue.update((q) => (q.some((i) => i.key === item.key) ? q : [...q, item]));
+}
+
+export function dropAdhoc(key: string): void {
+	adhocQueue.update((q) => q.filter((i) => i.key !== key));
+}
+
+export function setAdhocFormat(key: string, formatName: string): void {
+	adhocQueue.update((q) => q.map((i) => (i.key === key ? { ...i, formatName } : i)));
+}
 
 export type OccurrencePin = { occIdx: number; userChosen: boolean };
 
@@ -94,4 +127,5 @@ export function setQueuedFormat(key: string, formatName: string): void {
 export function clearSelection(): void {
 	selectedTerms.set(new Set());
 	queuedMineOptions.set({});
+	adhocQueue.set([]);
 }

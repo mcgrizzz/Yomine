@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { SentenceDto, Term } from '$lib/ipc';
+	import type { DefinitionEntry, SentenceDto, Term, TimeStampDto } from '$lib/ipc';
 	import {
 		defaultDir,
 		harmonic,
@@ -11,6 +11,7 @@
 	} from '$lib/table';
 	import {
 		addedTerms,
+		adhocQueue,
 		ankiStatus,
 		asbContext,
 		cancelQueue,
@@ -31,10 +32,13 @@
 		playerBusy,
 		playerStatus,
 		posCatalog,
+		queuedCount,
 		queuedMineOptions,
+		queueAdhoc,
 		queueWithEntry,
 		retryMedia,
 		selectedTerms,
+		setAdhocFormat,
 		setQueuedFormat,
 		setSelected,
 		setTableColumns,
@@ -134,6 +138,8 @@
 		label: string;
 		anchor: DOMRect;
 		mineable: { term: Term; occs: Occurrence[] } | null;
+		/** The hovered span, so an entry with no table Term is still mineable. */
+		segment: { sentence: SentenceDto; surface: string } | null;
 	} | null>(null);
 	let hovered: (() => void) | null = null;
 
@@ -147,7 +153,8 @@
 				text: term.lemma_form,
 				label: term.lemma_form,
 				anchor: el.getBoundingClientRect(),
-				mineable: { term, occs: occurrencesOf(term) }
+				mineable: { term, occs: occurrencesOf(term) },
+				segment: null
 			};
 		};
 		hovered = open;
@@ -164,7 +171,13 @@
 				break outer;
 			}
 		}
-		defPopover = { text: req.text, label: req.label, anchor: req.anchor, mineable };
+		defPopover = {
+			text: req.text,
+			label: req.label,
+			anchor: req.anchor,
+			mineable,
+			segment: { sentence: req.sentence, surface: req.seg.surface }
+		};
 	}
 
 	// Ctrl (Win/Linux) or Cmd (macOS) + click toggles ignore; a plain click is left
@@ -249,7 +262,7 @@
 	let confirmMine = $state<{ term: Term; occs: Occurrence[] } | null>(null);
 
 	function mineClicked(term: Term, occs: Occurrence[]) {
-		if ($selectedTerms.size > 0) confirmMine = { term, occs };
+		if ($queuedCount > 0) confirmMine = { term, occs };
 		else mine(term, occs);
 	}
 
@@ -260,6 +273,12 @@
 		mine(term, occs);
 	}
 
+	// asbplayer enrichment needs asbplayer active (same rule as seeking) + a cue.
+	const viaFor = (ts: TimeStampDto | null): 'asbplayer' | 'direct' =>
+		$playerStatus.mode === 'asbplayer' && $playerStatus.ws_clients > 0 && ts !== null
+			? 'asbplayer'
+			: 'direct';
+
 	function mine(
 		term: Term,
 		occs: Occurrence[],
@@ -269,19 +288,52 @@
 	) {
 		const occ = occs[Math.min(occIdx[termKey(term)] ?? 0, occs.length - 1)];
 		const ts = occ?.sentence.timestamp ?? null;
-		// asbplayer enrichment needs asbplayer active (same rule as seeking) + a cue.
-		const via =
-			$playerStatus.mode === 'asbplayer' && $playerStatus.ws_clients > 0 && ts !== null
-				? 'asbplayer'
-				: 'direct';
 		const surface = occ ? termHighlightText(term, occ) : term.surface_form;
 		void mineTerm(
-			term,
+			term.lemma_form,
 			occ?.sentence.text ?? '',
 			ts,
-			via,
+			viaFor(ts),
 			surface,
 			entryIndex,
+			formatName,
+			scanText
+		);
+	}
+
+	/** Only the row whose term IS this entry — `termCoversSegment` merely overlaps. */
+	function rowFor(entry: DefinitionEntry): { term: Term; occs: Occurrence[] } | null {
+		const p = defPopover;
+		if (!p?.mineable) return null;
+		if (!p.segment) return p.mineable;
+		const t = p.mineable.term;
+		return entry.expression === t.lemma_form ||
+			entry.expression === t.surface_form ||
+			entry.expression === t.full_segment
+			? p.mineable
+			: null;
+	}
+
+	function queueable(entry: DefinitionEntry): boolean {
+		const row = rowFor(entry);
+		return row ? !isMined(row.term) : defPopover?.segment != null;
+	}
+
+	/** Mine a hovered span that no table row represents. */
+	function mineSegment(
+		segment: { sentence: SentenceDto; surface: string },
+		entry: DefinitionEntry,
+		formatName?: string,
+		scanText?: string
+	) {
+		const ts = segment.sentence.timestamp ?? null;
+		void mineTerm(
+			entry.expression,
+			segment.sentence.text,
+			ts,
+			viaFor(ts),
+			segment.surface,
+			entry.index,
 			formatName,
 			scanText
 		);
@@ -420,7 +472,7 @@
 	let showQueueDetails = $state(false);
 	const queueDetails = $derived.by(() => {
 		const visible = new Set(terms.map(termKey));
-		return ($fileResult?.terms ?? terms)
+		const rows = ($fileResult?.terms ?? terms)
 			.filter((t) => $selectedTerms.has(termKey(t)))
 			.map((t) => {
 				const key = termKey(t);
@@ -429,13 +481,25 @@
 					key,
 					lemma: t.lemma_form,
 					hidden: !visible.has(key),
+					adhoc: false,
 					formatName: opt?.formatName,
 					entryIndex: opt?.entryIndex
 				};
 			});
+		return [
+			...rows,
+			...$adhocQueue.map((a) => ({
+				key: a.key,
+				lemma: a.lemma,
+				hidden: false,
+				adhoc: true,
+				formatName: a.formatName,
+				entryIndex: a.entryIndex
+			}))
+		];
 	});
 	$effect(() => {
-		if ($selectedTerms.size === 0 || $mineQueueState !== null) showQueueDetails = false;
+		if ($queuedCount === 0 || $mineQueueState !== null) showQueueDetails = false;
 	});
 
 	$effect(() => {
@@ -446,7 +510,7 @@
 	});
 
 	function startBatch() {
-		const entries: BatchEntry[] = ($fileResult?.terms ?? terms)
+		const rows: BatchEntry[] = ($fileResult?.terms ?? terms)
 			.filter((t) => $selectedTerms.has(termKey(t)) && !isMined(t))
 			.map((t) => {
 				const key = termKey(t);
@@ -469,6 +533,7 @@
 				});
 				return {
 					term: t,
+					lemma: t.lemma_form,
 					key,
 					surface: occ ? termHighlightText(t, occ) : t.surface_form,
 					sentence: occ?.sentence.text ?? '',
@@ -480,18 +545,35 @@
 					alternatives
 				};
 			});
+		// explicit + no alternatives: the conflict modal keeps their sentence and moves the row.
+		const adhoc: BatchEntry[] = $adhocQueue.map((a) => ({
+			lemma: a.lemma,
+			key: a.key,
+			surface: a.surface,
+			sentence: a.sentence,
+			timestamp: a.timestamp,
+			entryIndex: a.entryIndex,
+			formatName: a.formatName,
+			scanText: a.scanText,
+			explicit: true,
+			alternatives: []
+		}));
+		const entries = [...rows, ...adhoc];
 		const keys = entries.map((e) => normalizeSentence(e.sentence)).filter((s) => s !== '');
 		if (new Set(keys).size === keys.length) {
 			void mineQueue(
-				entries.map(({ term, surface, sentence, timestamp, entryIndex, formatName, scanText }) => ({
-					term,
-					surface,
-					sentence,
-					timestamp,
-					entryIndex,
-					formatName,
-					scanText
-				}))
+				entries.map(
+					({ lemma, key, surface, sentence, timestamp, entryIndex, formatName, scanText }) => ({
+						lemma,
+						key,
+						surface,
+						sentence,
+						timestamp,
+						entryIndex,
+						formatName,
+						scanText
+					})
+				)
 			);
 			return;
 		}
@@ -522,7 +604,8 @@
 			}
 			batchEntries = null;
 		}}
-		onlookup={(req) => $yomitanReachable && (defPopover = { ...req, mineable: null })}
+		onlookup={(req) =>
+			$yomitanReachable && (defPopover = { ...req, mineable: null, segment: null })}
 		onhover={(fn) => (hovered = fn)}
 	/>
 {/if}
@@ -540,7 +623,7 @@
 			onclick={(e) => e.stopPropagation()}
 		>
 			<p class="dialog-body">
-				You have {$selectedTerms.size} term{$selectedTerms.size === 1 ? '' : 's'} selected for batch
+				You have {$queuedCount} term{$queuedCount === 1 ? '' : 's'} selected for batch
 				mining. Mine 「<span lang="ja">{confirmMine.term.lemma_form}</span>」 individually now?
 			</p>
 			<footer class="dialog-footer">
@@ -558,7 +641,7 @@
 		</span>
 		<button class="bulk-btn" onclick={cancelQueue}>Cancel</button>
 	</div>
-{:else if canMine && $selectedTerms.size > 0}
+{:else if canMine && $queuedCount > 0}
 	{#if showQueueDetails}
 		<div class="bulk-details">
 			<div class="detail-row detail-head">
@@ -568,7 +651,11 @@
 			{#each queueDetails as d (d.key)}
 				<div class="detail-row">
 					<span lang="ja">
-						{d.lemma}{#if d.hidden}<span class="detail-dim"> (hidden)</span>{/if}
+						{d.lemma}{#if d.hidden}<span class="detail-dim"> (hidden)</span>{:else if d.adhoc}<span
+								class="detail-dim"
+							>
+								(not in table)</span
+							>{/if}
 					</span>
 					<span>
 						{#if $cardFormats.length > 1}
@@ -576,7 +663,10 @@
 								class="detail-select"
 								value={d.formatName ?? $cardFormats[0].name}
 								aria-label={`Card format for ${d.lemma}`}
-								onchange={(e) => setQueuedFormat(d.key, e.currentTarget.value)}
+								onchange={(e) =>
+									d.adhoc
+										? setAdhocFormat(d.key, e.currentTarget.value)
+										: setQueuedFormat(d.key, e.currentTarget.value)}
 							>
 								{#each $cardFormats as f (f.name)}
 									<option value={f.name}>{f.name}</option>
@@ -594,7 +684,7 @@
 	{/if}
 	<div class="bulk-bar">
 		<span class="bulk-info">
-			{$selectedTerms.size} selected{hiddenSelected > 0
+			{$queuedCount} selected{hiddenSelected > 0
 				? ` · ${hiddenSelected} hidden by filters`
 				: ''}
 		</span>
@@ -609,7 +699,7 @@
 				class="bulk-btn primary"
 				disabled={$miningTerm !== null || $playerBusy}
 				title="Mine the selected terms one by one, in timestamp order"
-				onclick={startBatch}>Mine {$selectedTerms.size}</button
+				onclick={startBatch}>Mine {$queuedCount}</button
 			>
 		{/if}
 		<button class="bulk-btn" onclick={clearSelection}>Clear</button>
@@ -862,23 +952,40 @@
 		label={defPopover.label}
 		anchor={defPopover.anchor}
 		scale={$settings?.definition_scale ?? 1}
-		showMine={canMine && mineable !== null && !isMined(mineable.term)}
-		mineDisabled={$miningTerm !== null || $playerBusy || $selectedTerms.size > 0}
-		mineTitle={$selectedTerms.size > 0
-			? 'A batch selection is active — Queue this term instead, or clear the selection'
-			: 'Create an Anki card from the displayed sentence' + mediaNote}
+		canMine={canMine && (mineable !== null || defPopover.segment !== null)}
+		canQueue={queueable}
+		isDuplicate={(entry) => $minedTerms.has(entry.expression) || $addedTerms.has(entry.expression)}
+		mineDisabled={(entry) =>
+			$miningTerm !== null || $playerBusy || ($queuedCount > 0 && queueable(entry))}
+		mineTitle={(entry) =>
+			$queuedCount > 0 && queueable(entry)
+				? 'A batch selection is active — Queue this term instead, or clear the selection'
+				: 'Create an Anki card from the displayed sentence' + mediaNote}
 		formats={$cardFormats}
-		onmine={(entryIndex, formatName) =>
-			mineable && mine(mineable.term, mineable.occs, entryIndex, formatName, defPopover?.text)}
-		onqueue={(entryIndex, formatName) =>
-			mineable &&
-			queueWithEntry(
-				termKey(mineable.term),
-				entryIndex,
-				formatName,
-				defPopover?.text,
-				pinFor(termKey(mineable.term))
-			)}
+		onmine={(entry, formatName) => {
+			const row = rowFor(entry);
+			if (row) mine(row.term, row.occs, entry.index, formatName, defPopover?.text);
+			else if (defPopover?.segment)
+				mineSegment(defPopover.segment, entry, formatName, defPopover.text);
+		}}
+		onqueue={(entry, formatName) => {
+			const row = rowFor(entry);
+			if (row) {
+				const key = termKey(row.term);
+				queueWithEntry(key, entry.index, formatName, defPopover?.text, pinFor(key));
+			} else if (defPopover?.segment) {
+				queueAdhoc({
+					key: `adhoc:${defPopover.segment.sentence.id}:${entry.expression}`,
+					lemma: entry.expression,
+					surface: defPopover.segment.surface,
+					sentence: defPopover.segment.sentence.text,
+					timestamp: defPopover.segment.sentence.timestamp ?? null,
+					entryIndex: entry.index,
+					formatName,
+					scanText: defPopover.text
+				});
+			}
+		}}
 		onclose={() => (defPopover = null)}
 	/>
 {/if}
