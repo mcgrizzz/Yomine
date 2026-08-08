@@ -12,7 +12,9 @@
 
 	/** One queued term with what's needed to resolve sentence conflicts. */
 	export interface BatchEntry {
-		term: Term;
+		/** Absent for an ad-hoc entry: no table row backs it. */
+		term?: Term;
+		lemma: string;
 		key: string;
 		/** The occurrence text the table highlighted (cloze/bold). */
 		surface: string;
@@ -96,12 +98,15 @@
 
 	// Must match `freqLabel` in TermTable.svelte.
 	const freqOf = (e: BatchEntry) => {
-		const v = harmonic(e.term);
+		const v = e.term ? harmonic(e.term) : Infinity;
 		return v === Infinity ? '？' : String(v);
 	};
 
 	const matchIn = (text: string, e: BatchEntry) => {
-		for (const form of [e.term.surface_form, e.term.full_segment, e.term.lemma_form]) {
+		const forms = e.term
+			? [e.term.surface_form, e.term.full_segment, e.term.lemma_form]
+			: [e.surface, e.lemma];
+		for (const form of forms) {
 			const at = form ? text.indexOf(form) : -1;
 			if (at >= 0) return { start: at, end: at + form.length };
 		}
@@ -144,8 +149,8 @@
 		const el = e.currentTarget as HTMLElement;
 		const open = () =>
 			onlookup({
-				text: entry.term.lemma_form,
-				label: entry.term.lemma_form,
+				text: entry.lemma,
+				label: entry.lemma,
 				anchor: el.getBoundingClientRect()
 			});
 		onhover?.(open);
@@ -164,8 +169,9 @@
 		ondone(
 			work
 				.filter((e) => !skipped.has(e.key))
-				.map(({ term, surface, sentence, timestamp, entryIndex, formatName, scanText }) => ({
-					term,
+				.map(({ lemma, key, surface, sentence, timestamp, entryIndex, formatName, scanText }) => ({
+					lemma,
+					key,
 					surface,
 					sentence,
 					timestamp,
@@ -246,12 +252,12 @@
 					style:color={colorOf(i)}
 					style:border-color={colorOf(i)}
 					lang="ja"
-					title={`Mine 「${e.term.lemma_form}」 from this sentence`}
+					title={`Mine 「${e.lemma}」 from this sentence`}
 					onclick={() => pickTerm(e)}
 					onmouseenter={(ev) => hoverTerm(ev, e)}
 					onmouseleave={() => onhover?.(null)}
 				>
-					{e.term.lemma_form}
+					{e.lemma}
 					<span class="freq">{freqOf(e)}</span>
 				</button>
 			{/each}

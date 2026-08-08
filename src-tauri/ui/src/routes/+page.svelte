@@ -22,7 +22,7 @@
 		ankiFilterActive,
 		refreshTerms,
 		refreshMinedState,
-		selectedTerms,
+		queuedCount,
 		settings
 	} from '$lib/stores';
 	import TopBar from '$lib/components/TopBar.svelte';
@@ -153,7 +153,7 @@
 			<TableControls />
 			<!-- The one scroll region in the file view: title/coverage/controls above
 			     stay put, the sticky column header sticks to this container's top. -->
-			<div class="table-scroll" class:bulk-open={$selectedTerms.size > 0}>
+			<div class="table-scroll" class:bulk-open={$queuedCount > 0}>
 				<TermTable terms={$visibleTerms} sentences={$fileResult.sentences} />
 			</div>
 		{:else}

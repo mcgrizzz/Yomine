@@ -49,6 +49,49 @@ pub struct RenderedFields {
     pub dictionary_media: Vec<MediaItem>,
 }
 
+/// Only the field we need: `termEntries` is Yomitan's internal, unstable format.
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TermEntries {
+    #[serde(default)]
+    dictionary_entries: Vec<TermDictionaryEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TermDictionaryEntry {
+    #[serde(default)]
+    headwords: Vec<Headword>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Headword {
+    #[serde(default)]
+    sources: Vec<HeadwordSource>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct HeadwordSource {
+    #[serde(default)]
+    original_text: String,
+}
+
+/// The text this entry matched in `text`, as written; `None` means fall back, not error.
+pub async fn matched_source(base_url: &str, text: &str, entry_index: usize) -> Option<String> {
+    let entries: TermEntries =
+        post(base_url, "termEntries", serde_json::json!({ "term": text })).await.ok()?;
+    entries
+        .dictionary_entries
+        .get(entry_index)?
+        .headwords
+        .iter()
+        .flat_map(|h| h.sources.iter())
+        .map(|s| s.original_text.as_str())
+        .filter(|t| !t.is_empty())
+        .max_by_key(|t| t.chars().count())
+        .map(str::to_string)
+}
+
 async fn post<T: for<'de> Deserialize<'de>>(
     base_url: &str,
     path: &str,
