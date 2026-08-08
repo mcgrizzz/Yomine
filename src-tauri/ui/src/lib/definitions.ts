@@ -13,6 +13,12 @@ export async function fetchEntries(text: string): Promise<DefinitionEntry[]> {
 	return result;
 }
 
+/** The queued entry, resolved by Yomitan's pre-filter index rather than position. */
+export function cachedEntry(scanText?: string, entryIndex?: number): DefinitionEntry | undefined {
+	if (scanText === undefined || entryIndex === undefined) return undefined;
+	return cache.get(scanText)?.find((e) => e.index === entryIndex);
+}
+
 /** Plain-text entry label, matching DefinitionPopover's non-furigana header branch. */
 export function entryLabel(entry: DefinitionEntry, fallback = ''): string {
 	const expression = entry.expression || fallback;

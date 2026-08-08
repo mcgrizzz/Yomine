@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { cachedEntries, entryLabel } from '$lib/definitions';
-	import type { DefinitionEntry, Term } from '$lib/ipc';
+	import { cachedEntry, entryLabel } from '$lib/definitions';
+	import type { Term } from '$lib/ipc';
 	import {
 		adhocQueue,
 		cardFormats,
@@ -22,11 +22,6 @@
 
 	let { terms, onclose }: { terms: Term[]; onclose: () => void } = $props();
 
-	function entryFor(scanText?: string, entryIndex?: number): DefinitionEntry | undefined {
-		if (scanText === undefined || entryIndex === undefined) return undefined;
-		return cachedEntries(scanText)?.find((e) => e.index === entryIndex);
-	}
-
 	const queueDetails = $derived.by(() => {
 		const visible = new Set(terms.map(termKey));
 		const rows = ($fileResult?.terms ?? terms)
@@ -42,7 +37,7 @@
 					formatName: opt?.formatName,
 					entryIndex: opt?.entryIndex,
 					scanText: opt?.scanText,
-					entry: entryFor(opt?.scanText, opt?.entryIndex)
+					entry: cachedEntry(opt?.scanText, opt?.entryIndex)
 				};
 			});
 		return [
@@ -55,7 +50,7 @@
 				formatName: a.formatName,
 				entryIndex: a.entryIndex,
 				scanText: a.scanText,
-				entry: entryFor(a.scanText, a.entryIndex)
+				entry: cachedEntry(a.scanText, a.entryIndex)
 			}))
 		];
 	});

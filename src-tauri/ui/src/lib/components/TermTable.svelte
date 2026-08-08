@@ -23,6 +23,8 @@
 		mineQueue,
 		mineQueueState,
 		mineTerm,
+		addedKeys,
+		minedKeys,
 		minedNoteIds,
 		minedTerms,
 		miningTerm,
@@ -887,7 +889,7 @@
 		scale={$settings?.definition_scale ?? 1}
 		canMine={canMine && (mineable !== null || defPopover.segment !== null)}
 		canQueue={queueable}
-		isDuplicate={(entry) => $minedTerms.has(entry.expression) || $addedTerms.has(entry.expression)}
+		isDuplicate={(entry) => entry.known || $minedKeys.has(entry.key) || $addedKeys.has(entry.key)}
 		mineDisabled={(entry) =>
 			$miningTerm !== null || $playerBusy || ($queuedCount > 0 && queueable(entry))}
 		mineTitle={(entry) =>

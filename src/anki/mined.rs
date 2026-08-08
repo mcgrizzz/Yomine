@@ -1,7 +1,12 @@
 //! Already-mined detection (issue #3): terms with a recently-added card and
 //! sentences that already exist in the user's notes.
 
-use std::collections::HashMap;
+use std::collections::{
+    HashMap,
+    HashSet,
+};
+
+use wana_kana::IsJapaneseStr;
 
 use super::{
     api::{
@@ -9,6 +14,10 @@ use super::{
         get_notes,
     },
     types::FieldMapping,
+};
+use crate::core::utils::{
+    normalize_japanese_text,
+    FilterKana,
 };
 
 /// Sentence-field harvest, overwritten by each `get_total_vocab` pass.
@@ -24,23 +33,56 @@ pub struct MinedSentence {
     pub sentence: String,
 }
 
-/// Terms + normalized sentences from notes added in the last day (`added:1`).
+/// Match key for a dictionary entry: normalized (expression, reading).
+pub fn entry_key(expression: &str, reading: &str) -> String {
+    let expression = normalize_japanese_text(strip_html(expression).trim());
+    // Anki reading fields carry furigana markup that Yomitan's readings never do.
+    let mut reading = normalize_japanese_text(&strip_html(reading).filter_kana());
+    // Mirrors the vocab harvest's fallback (state.rs): a kana term is its own reading.
+    if reading.is_empty() && expression.as_str().is_kana() {
+        reading = expression.clone();
+    }
+    format!("{expression}\u{0}{reading}")
+}
+
+pub fn vocab_cache_mtime() -> Option<std::time::SystemTime> {
+    std::fs::metadata(crate::persistence::get_data_file_path(super::state::ANKI_VOCAB_CACHE))
+        .and_then(|m| m.modified())
+        .ok()
+}
+
+/// Every (term, reading) in the vocab cache as `entry_key`s; empty until one is harvested.
+pub fn known_entry_keys() -> HashSet<String> {
+    let vocab: Vec<super::types::Vocab> =
+        crate::persistence::load_json_or_default(super::state::ANKI_VOCAB_CACHE);
+    vocab.iter().map(|v| entry_key(&v.term, &v.reading)).collect()
+}
+
+/// Recently-added terms, their `entry_key`s, and normalized sentences, from
+/// notes added in the last day (`added:1`).
 pub async fn get_recently_added(
     model_mapping: &HashMap<String, FieldMapping>,
-) -> Result<(Vec<String>, Vec<String>), reqwest::Error> {
+) -> Result<(Vec<String>, Vec<String>, Vec<String>), reqwest::Error> {
     let note_ids = get_note_ids("added:1").await?;
     if note_ids.is_empty() {
-        return Ok((Vec::new(), Vec::new()));
+        return Ok((Vec::new(), Vec::new(), Vec::new()));
     }
     let notes = get_notes(note_ids).await?;
 
     let mut terms = Vec::new();
+    let mut keys = Vec::new();
     let mut sentences = Vec::new();
     for note in notes {
         let Some(mapping) = model_mapping.get(&note.model_name) else { continue };
         if let Some(field) = note.fields.get(&mapping.term_field) {
             let term = strip_html(&field.value).trim().to_string();
             if !term.is_empty() {
+                let reading = note
+                    .fields
+                    .get(&mapping.reading_field)
+                    .map(|f| f.value.as_str())
+                    .unwrap_or_default();
+                keys.push(entry_key(&term, reading));
                 terms.push(term);
             }
         }
@@ -53,7 +95,7 @@ pub async fn get_recently_added(
             }
         }
     }
-    Ok((terms, sentences))
+    Ok((terms, keys, sentences))
 }
 
 /// Written by the `get_total_vocab` harvest.
@@ -159,6 +201,31 @@ mod tests {
             normalize_sentence("毎日\u{3000}パンを <b>食べる</b>。\n"),
             "毎日パンを食べる。"
         );
+    }
+
+    #[test]
+    fn entries_sharing_an_expression_key_apart() {
+        assert_ne!(entry_key("期", "き"), entry_key("期", "ご"));
+    }
+
+    #[test]
+    fn note_markup_keys_like_a_clean_entry() {
+        assert_eq!(entry_key("<b>期</b>", "期[き]"), entry_key("期", "き"));
+    }
+
+    #[test]
+    fn katakana_and_hiragana_readings_agree() {
+        assert_eq!(entry_key("チャンス", "チャンス"), entry_key("ちゃんす", "ちゃんす"));
+    }
+
+    #[test]
+    fn long_vowel_spellings_fold_together() {
+        assert_eq!(entry_key("遠い", "とおい"), entry_key("遠い", "とうい"));
+    }
+
+    #[test]
+    fn kana_note_without_a_reading_keys_like_the_entry() {
+        assert_eq!(entry_key("チャンス", ""), entry_key("チャンス", "チャンス"));
     }
 
     #[test]

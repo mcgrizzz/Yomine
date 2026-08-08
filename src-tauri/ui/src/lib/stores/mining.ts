@@ -9,8 +9,12 @@ import { lastError, showNotice } from './ui';
 
 /** Lemmas mined this session (optimistic, until the next refresh). */
 export const minedTerms = writable<Set<string>>(new Set());
+/** `entry_key`s mined this session — the reading-keyed twin of `minedTerms`. */
+export const minedKeys = writable<Set<string>>(new Set());
 /** Terms with an Anki card added in the last day (`added:1`). */
 export const addedTerms = writable<Set<string>>(new Set());
+/** `entry_key`s for those same notes; covers what the vocab cache is too old for. */
+export const addedKeys = writable<Set<string>>(new Set());
 /** Normalized sentences that already exist in the user's notes. */
 export const minedSentences = writable<Set<string>>(new Set());
 /** Normalized sentences mined this session (optimistic). */
@@ -57,10 +61,12 @@ export async function refreshMinedState(force = false): Promise<void> {
 	try {
 		const state = await ipc.getMinedState();
 		addedTerms.set(new Set(state.added_terms));
+		addedKeys.set(new Set(state.added_keys));
 		minedSentences.set(new Set(state.mined_sentences));
 		// Backend state covers session mines; keeping the optimistic sets
 		// would mask notes deleted in Anki.
 		minedTerms.set(new Set());
+		minedKeys.set(new Set());
 		sessionMinedSentences.set(new Set());
 	} catch {
 		// keep the optimistic sets when Anki is unreachable
@@ -97,6 +103,7 @@ async function mineOne(
 		}
 	);
 	minedTerms.update((s) => new Set(s).add(lemma));
+	minedKeys.update((s) => new Set(s).add(result.key));
 	if (result.note_id !== null) {
 		minedNoteIds.update((m) => ({ ...m, [lemma]: result.note_id! }));
 	}

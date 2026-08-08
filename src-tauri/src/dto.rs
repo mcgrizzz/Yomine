@@ -34,12 +34,16 @@ pub struct MineResultDto {
     pub warning: Option<String>,
     pub note_id: Option<u64>,
     pub media_missing: bool,
+    /// `mined::entry_key` of the entry that was mined.
+    pub key: String,
 }
 
 /// Already-mined state (issue #3): `added:1` terms + normalized sentence keys.
 #[derive(Serialize, Clone)]
 pub struct MinedStateDto {
     pub added_terms: Vec<String>,
+    /// `mined::entry_key`s for the same notes — reading-keyed, for the popover.
+    pub added_keys: Vec<String>,
     pub mined_sentences: Vec<String>,
 }
 
@@ -71,6 +75,10 @@ pub struct DefinitionEntryDto {
     pub index: usize,
     pub expression: String,
     pub reading: String,
+    /// `mined::entry_key` of this entry.
+    pub key: String,
+    /// This exact (expression, reading) is already in the vocab cache.
+    pub known: bool,
     /// `{furigana}` — the expression as `<ruby>` markup for the header.
     pub furigana_html: String,
     /// `{frequencies}` — `<ul><li>Dict: rank</li>…</ul>`, restyled into chips.
