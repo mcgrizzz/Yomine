@@ -2,9 +2,6 @@
 	// Never write a literal style tag in this file (strings and comments count):
 	// Svelte's preprocess regex would parse it as the component's style block.
 
-	// Session-wide so reopening a term never refetches.
-	const cache = new Map<string, DefinitionEntry[]>();
-
 	const SIZE_KEY = 'yomine:definition-popover-size';
 	const FORMAT_KEY = 'yomine:mine-format';
 
@@ -83,21 +80,24 @@
 </script>
 
 <script lang="ts">
-	import { renderDefinition, type CardFormat, type DefinitionEntry } from '$lib/ipc';
+	import { cachedEntries, fetchEntries } from '$lib/definitions';
+	import { type CardFormat, type DefinitionEntry } from '$lib/ipc';
 
 	let {
 		text,
 		label = text,
 		anchor,
 		scale = 1,
-		canMine,
+		canMine = false,
 		canQueue,
 		isDuplicate,
 		mineDisabled,
 		mineTitle,
 		formats = [],
+		pickedIndex,
 		onmine,
 		onqueue,
+		onpick,
 		onclose
 	}: {
 		/** What Yomitan scans (a lemma, or a sentence remainder to longest-match). */
@@ -105,15 +105,18 @@
 		label?: string;
 		anchor: DOMRect;
 		scale?: number;
-		canMine: boolean;
-		canQueue: (entry: DefinitionEntry) => boolean;
-		isDuplicate: (entry: DefinitionEntry) => boolean;
-		mineDisabled: (entry: DefinitionEntry) => boolean;
-		mineTitle: (entry: DefinitionEntry) => string;
+		canMine?: boolean;
+		canQueue?: (entry: DefinitionEntry) => boolean;
+		isDuplicate?: (entry: DefinitionEntry) => boolean;
+		mineDisabled?: (entry: DefinitionEntry) => boolean;
+		mineTitle?: (entry: DefinitionEntry) => string;
 		/** Yomitan term card formats; >1 renders per-format buttons. */
 		formats?: CardFormat[];
-		onmine: (entry: DefinitionEntry, formatName?: string) => void;
-		onqueue: (entry: DefinitionEntry, formatName?: string) => void;
+		pickedIndex?: number;
+		onmine?: (entry: DefinitionEntry, formatName?: string) => void;
+		onqueue?: (entry: DefinitionEntry, formatName?: string) => void;
+		/** Set to pick an entry for an already-queued term instead of mining. */
+		onpick?: (entry: DefinitionEntry) => void;
 		onclose: () => void;
 	} = $props();
 
@@ -140,15 +143,14 @@
 	$effect(() => {
 		const lookup = text;
 		error = null;
-		const hit = cache.get(lookup);
+		const hit = cachedEntries(lookup);
 		if (hit) {
 			entries = hit;
 			return;
 		}
 		entries = null;
-		renderDefinition(lookup).then(
+		fetchEntries(lookup).then(
 			(result) => {
-				cache.set(lookup, result);
 				if (lookup === text) entries = result;
 			},
 			(e) => {
@@ -254,16 +256,33 @@
 								<span class="reading">【{entry.reading}】</span>
 							{/if}
 						{/if}
-						{#if canMine}
-							{@const dupe = isDuplicate(entry)}
+						{#if onpick}
+							{@const current = entry.index === pickedIndex}
+							<span class="actions">
+								<button
+									class="mine-btn"
+									class:primary={!current}
+									disabled={current}
+									title={current
+										? 'This entry is already selected for the queued term'
+										: 'Use this entry for the queued term'}
+									onclick={() => {
+										onpick(entry);
+										onclose();
+									}}>{current ? 'Current' : 'Use this entry'}</button
+								>
+							</span>
+						{:else if canMine && onmine}
+							{@const dupe = isDuplicate?.(entry) ?? false}
 							<span class="actions">
 								<button
 									class="mine-btn"
 									class:primary={!dupe}
-									disabled={mineDisabled(entry)}
+									disabled={mineDisabled?.(entry) ?? false}
 									title={(dupe
 										? 'Already in Anki — mine again to add another card'
-										: mineTitle(entry)) + (multiFormat ? ` — format: ${activeFormat}` : '')}
+										: (mineTitle?.(entry) ?? '')) +
+										(multiFormat ? ` — format: ${activeFormat}` : '')}
 									onclick={() => {
 										onmine(entry, multiFormat ? activeFormat : undefined);
 										onclose();
@@ -281,7 +300,7 @@
 											<path d="M10 4 Q 17.8 6.2 20 14" />
 										</svg> {dupe ? 'Mine again' : 'Mine'}</button
 								>
-								{#if canQueue(entry)}
+								{#if onqueue && canQueue?.(entry)}
 									<button
 										class="mine-btn"
 										title={'Select for batch mining using this definition' +
