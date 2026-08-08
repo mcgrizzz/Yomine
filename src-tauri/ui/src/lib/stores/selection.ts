@@ -39,6 +39,10 @@ export function setAdhocFormat(key: string, formatName: string): void {
 	adhocQueue.update((q) => q.map((i) => (i.key === key ? { ...i, formatName } : i)));
 }
 
+export function setAdhocEntry(key: string, entryIndex: number): void {
+	adhocQueue.update((q) => q.map((i) => (i.key === key ? { ...i, entryIndex } : i)));
+}
+
 export type OccurrencePin = { occIdx: number; userChosen: boolean };
 
 export interface QueuedMineOption {
@@ -122,6 +126,10 @@ export function queueWithEntry(
 /** Change the card format of a queued term (the Details panel's selector). */
 export function setQueuedFormat(key: string, formatName: string): void {
 	queuedMineOptions.update((m) => ({ ...m, [key]: { ...m[key], formatName } }));
+}
+
+export function setQueuedEntry(key: string, entryIndex: number, scanText: string): void {
+	queuedMineOptions.update((m) => ({ ...m, [key]: { ...m[key], entryIndex, scanText } }));
 }
 
 export function clearSelection(): void {

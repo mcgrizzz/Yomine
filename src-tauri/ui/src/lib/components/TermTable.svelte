@@ -38,8 +38,6 @@
 		queueWithEntry,
 		retryMedia,
 		selectedTerms,
-		setAdhocFormat,
-		setQueuedFormat,
 		setSelected,
 		setTableColumns,
 		settings,
@@ -56,6 +54,7 @@
 	import { furiganaText } from '$lib/furigana';
 	import DefinitionPopover from './DefinitionPopover.svelte';
 	import Furigana from './Furigana.svelte';
+	import MiningQueueModal from './MiningQueueModal.svelte';
 	import SentenceConflictModal, { type BatchEntry } from './SentenceConflictModal.svelte';
 	import SentenceView, {
 		termCoversSegment,
@@ -470,34 +469,6 @@
 	);
 
 	let showQueueDetails = $state(false);
-	const queueDetails = $derived.by(() => {
-		const visible = new Set(terms.map(termKey));
-		const rows = ($fileResult?.terms ?? terms)
-			.filter((t) => $selectedTerms.has(termKey(t)))
-			.map((t) => {
-				const key = termKey(t);
-				const opt = $queuedMineOptions[key];
-				return {
-					key,
-					lemma: t.lemma_form,
-					hidden: !visible.has(key),
-					adhoc: false,
-					formatName: opt?.formatName,
-					entryIndex: opt?.entryIndex
-				};
-			});
-		return [
-			...rows,
-			...$adhocQueue.map((a) => ({
-				key: a.key,
-				lemma: a.lemma,
-				hidden: false,
-				adhoc: true,
-				formatName: a.formatName,
-				entryIndex: a.entryIndex
-			}))
-		];
-	});
 	$effect(() => {
 		if ($queuedCount === 0 || $mineQueueState !== null) showQueueDetails = false;
 	});
@@ -643,44 +614,7 @@
 	</div>
 {:else if canMine && $queuedCount > 0}
 	{#if showQueueDetails}
-		<div class="bulk-details">
-			<div class="detail-row detail-head">
-				<span>Term</span>
-				<span>Card format</span>
-			</div>
-			{#each queueDetails as d (d.key)}
-				<div class="detail-row">
-					<span lang="ja">
-						{d.lemma}{#if d.hidden}<span class="detail-dim"> (hidden)</span>{:else if d.adhoc}<span
-								class="detail-dim"
-							>
-								(not in table)</span
-							>{/if}
-					</span>
-					<span>
-						{#if $cardFormats.length > 1}
-							<select
-								class="detail-select"
-								value={d.formatName ?? $cardFormats[0].name}
-								aria-label={`Card format for ${d.lemma}`}
-								onchange={(e) =>
-									d.adhoc
-										? setAdhocFormat(d.key, e.currentTarget.value)
-										: setQueuedFormat(d.key, e.currentTarget.value)}
-							>
-								{#each $cardFormats as f (f.name)}
-									<option value={f.name}>{f.name}</option>
-								{/each}
-							</select>
-						{:else}
-							{$cardFormats[0]?.name ?? '—'}
-						{/if}
-						{#if d.entryIndex !== undefined}<span class="detail-dim">· def #{d.entryIndex + 1}</span
-							>{/if}
-					</span>
-				</div>
-			{/each}
-		</div>
+		<MiningQueueModal {terms} onclose={() => (showQueueDetails = false)} />
 	{/if}
 	<div class="bulk-bar">
 		<span class="bulk-info">
@@ -690,9 +624,8 @@
 		</span>
 		<button
 			class="bulk-btn"
-			title="Show the queued terms and the card format each will use"
-			onclick={() => (showQueueDetails = !showQueueDetails)}
-			>Details {showQueueDetails ? '▾' : '▸'}</button
+			title="Review the queued terms — entry, card format, and what to drop"
+			onclick={() => (showQueueDetails = true)}>Details…</button
 		>
 		{#if canMine}
 			<button
@@ -1241,47 +1174,6 @@
 	.bulk-btn:disabled {
 		opacity: 0.5;
 		cursor: default;
-	}
-	/* Queue-details panel, stacked just above the fixed bulk-bar. */
-	.bulk-details {
-		position: fixed;
-		bottom: 4rem;
-		left: 50%;
-		transform: translateX(-50%);
-		z-index: var(--z-bar);
-		min-width: 18rem;
-		max-width: 90vw;
-		max-height: 40vh;
-		overflow-y: auto;
-		padding: 0.45rem 0.9rem;
-		background: var(--bg-panel);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		box-shadow: var(--shadow-overlay);
-		font-size: 0.85rem;
-	}
-	.detail-row {
-		display: grid;
-		grid-template-columns: minmax(6rem, auto) 1fr;
-		gap: 1rem;
-		padding: 0.15rem 0;
-	}
-	.detail-head {
-		color: var(--text-muted);
-		font-size: 0.75rem;
-		text-transform: uppercase;
-		letter-spacing: 0.03em;
-		border-bottom: 1px solid var(--border);
-		padding-bottom: 0.3rem;
-		margin-bottom: 0.2rem;
-	}
-	.detail-dim {
-		color: var(--text-muted);
-		font-size: 0.8em;
-	}
-	.detail-select {
-		max-width: 100%;
-		font-size: 0.8rem;
 	}
 	.backdrop {
 		position: fixed;
