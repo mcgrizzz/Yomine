@@ -438,7 +438,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.6rem;
-		max-width: 90vw;
+		max-width: 90%;
 		padding: 0.6rem 0.9rem;
 		background: var(--bg-raised);
 		border: 1px solid var(--danger);
@@ -457,7 +457,7 @@
 		top: 3.2rem;
 		left: 50%;
 		transform: translateX(-50%);
-		max-width: 80vw;
+		max-width: 80%;
 		padding: 0.45rem 0.9rem;
 		background: var(--bg-raised);
 		border: 1px solid var(--success);

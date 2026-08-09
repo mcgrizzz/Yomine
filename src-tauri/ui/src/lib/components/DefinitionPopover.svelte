@@ -358,8 +358,8 @@
 		overflow: hidden;
 		min-width: 14rem;
 		min-height: 4rem;
-		max-width: calc(100vw - 1rem);
-		max-height: calc(100vh - 1rem);
+		max-width: calc(100% - 1rem);
+		max-height: calc(100% - 1rem);
 	}
 	/* Scale the content, not .popover itself: the position math and remembered
 	 * size (script above) work in unscaled px. */
