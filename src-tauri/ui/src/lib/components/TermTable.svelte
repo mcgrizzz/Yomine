@@ -950,7 +950,9 @@
 		padding: 0.5rem;
 		border-bottom: 1px solid var(--border);
 	}
-	.sel {
+	/* Box-centred, not baseline-centred: an inline child rides ~1px low on the strut. */
+	.sel,
+	.jlpt-cell:not(.head-cell) {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -1057,14 +1059,14 @@
 		align-items: center;
 		gap: 0.45rem;
 	}
-	.jlpt-cell {
-		text-align: center;
-	}
 	.term {
 		font-size: 1.5rem;
 		color: var(--term);
 		line-height: 1.1;
 		cursor: text;
+		/* The CJK ideographic em box (sTypo 880/-120) centres 0.38em above the baseline,
+		   0.056em below this line box's centre; pad twice that to cancel it. */
+		padding-bottom: 0.112em;
 	}
 	/* The furigana annotation only adds height ABOVE the base text; pad the same
 	   amount below (rt is 0.5em at line-height 1) so row-centering keeps the base
@@ -1076,13 +1078,13 @@
 	.term.mined-term {
 		color: var(--success);
 	}
-	/* Mine (+) and mined (✓) share one footprint so the swap doesn't shift layout. */
+	/* Every chip state shares one footprint so a completed mine doesn't shift the row. */
 	.chip {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 1.5rem;
-		height: 1.5rem;
+		width: 1.75rem;
+		height: 1.75rem;
 		padding: 0;
 		font-size: 0.95rem;
 		line-height: 1;
