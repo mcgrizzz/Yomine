@@ -208,6 +208,9 @@
 		{/if}
 	</main>
 
+	<!-- First: every backdrop shares --z-modal, so paint order is DOM order, and the
+	     checklist is the one modal that opens others on top of itself. -->
+	<SetupChecklistModal />
 	<IgnoreListModal />
 	<AsbplayerModal />
 	<WebsocketSettingsModal />
@@ -219,7 +222,6 @@
 	<TextFiltersModal />
 	<RecentFilesModal />
 	<EpubChapterPickerModal />
-	<SetupChecklistModal />
 	<FrequencyAnalyzerModal />
 
 	{#if $lastError}

@@ -9,6 +9,9 @@
 		openAnkiModal,
 		openWebsocketModal,
 		openFrequencyModal,
+		ankiModalOpen,
+		websocketModalOpen,
+		frequencyModalOpen,
 		settings
 	} from '$lib/stores';
 
@@ -24,9 +27,11 @@
 		actionText: string | null;
 	}
 
+	const actionModalOpen = $derived($ankiModalOpen || $websocketModalOpen || $frequencyModalOpen);
+
 	// untrack: the refresh reads stores that must not re-trigger this effect.
 	$effect(() => {
-		if ($setupModalOpen) untrack(() => refreshSetupStatus());
+		if ($setupModalOpen && !actionModalOpen) untrack(() => refreshSetupStatus());
 	});
 
 	function s(complete: boolean): ItemStatus {
@@ -114,11 +119,6 @@
 		return { icon: '✕', cls: 'required' };
 	}
 
-	function runAction(item: CheckItem) {
-		item.action?.();
-		setupModalOpen.set(false); // egui closes the checklist after an action.
-	}
-
 	function viewDocs(url: string) {
 		openUrl(url);
 	}
@@ -146,7 +146,7 @@
 				</div>
 				<div class="actions">
 					{#if item.action || item.actionText}
-						<button onclick={() => runAction(item)}>{item.actionText}</button>
+						<button onclick={() => item.action?.()}>{item.actionText}</button>
 					{/if}
 					{#if item.helpUrl}
 						<button onclick={() => viewDocs(item.helpUrl!)}>📖 View Docs</button>
