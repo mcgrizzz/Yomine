@@ -33,6 +33,7 @@ pub fn download_with_progress(
     client: &Client,
     url: &str,
     path: &Path,
+    label: &str,
     message_callback: Option<&(dyn Fn(String) + Send)>,
 ) -> Result<(), YomineError> {
     let mut attempts: usize = 0;
@@ -82,14 +83,16 @@ pub fn download_with_progress(
                     if let Some(ref callback) = message_callback {
                         let progress_msg = if let Some(total_bytes) = total_size {
                             format!(
-                                "Downloading Tokenizer Model: {:.1}MB/{:.1}MB ({:.1}%)",
+                                "Downloading {}: {:.1}MB/{:.1}MB ({:.1}%)",
+                                label,
                                 downloaded as f64 / 1_048_576.0,
                                 total_bytes as f64 / 1_048_576.0,
                                 (downloaded as f64 / total_bytes as f64) * 100.0
                             )
                         } else {
                             format!(
-                                "Downloading Tokenizer Model: {:.1}MB",
+                                "Downloading {}: {:.1}MB",
+                                label,
                                 downloaded as f64 / 1_048_576.0
                             )
                         };
@@ -136,6 +139,7 @@ pub fn try_download_from_urls(
     urls: &[&str],
     download_path: &Path,
     cleanup_paths: &[&Path],
+    label: &str,
     progress_callback: Option<&(dyn Fn(String) + Send)>,
 ) -> Result<(), String> {
     use std::fs;
@@ -168,7 +172,7 @@ pub fn try_download_from_urls(
             }
         };
 
-        match download_with_progress(&client, url, download_path, progress_callback) {
+        match download_with_progress(&client, url, download_path, label, progress_callback) {
             Ok(_) => match download_path.metadata() {
                 Ok(metadata) if metadata.len() > 0 => {
                     if let Some(callback) = progress_callback {

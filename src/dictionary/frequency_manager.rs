@@ -432,8 +432,13 @@ fn ensure_default_frequency_dict(
         return Some(format!("Could not create directory: {}", e));
     }
 
-    match try_download_from_urls(DEFAULT_FREQ_DICT_URLS, &zip_path, &[&zip_path], progress_callback)
-    {
+    match try_download_from_urls(
+        DEFAULT_FREQ_DICT_URLS,
+        &zip_path,
+        &[&zip_path],
+        "Frequency Dictionary",
+        progress_callback,
+    ) {
         Ok(_) => {
             println!("Downloaded default frequency dictionary");
 

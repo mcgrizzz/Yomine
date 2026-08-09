@@ -198,6 +198,7 @@ pub fn ensure_dictionary(
         &urls,
         &download_path,
         &[&download_path, &tar_path, &extract_path],
+        "Tokenizer Model",
         progress_callback.as_deref(),
     )
     .map_err(|error_summary| {
