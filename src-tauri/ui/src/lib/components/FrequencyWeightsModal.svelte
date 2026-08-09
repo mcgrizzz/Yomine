@@ -270,7 +270,7 @@
 						aria-label={`${entry.name} weight`}
 					/>
 					<span class="value">
-						<input
+						×<input
 							type="number"
 							min={MIN_WEIGHT}
 							max={MAX_WEIGHT}
@@ -278,7 +278,7 @@
 							value={entry.weight}
 							disabled={!entry.enabled}
 							onchange={(e) => (entry.weight = clampWeight(e.currentTarget.valueAsNumber))}
-						/>x
+						/>
 					</span>
 					<span class="del">
 						{#if confirmRemove === entry.name}
