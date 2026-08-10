@@ -8,14 +8,20 @@ import { refreshMinedState } from './mining';
 
 export const settings = writable<ipc.SettingsData | null>(null);
 
-/** Returns false when settings haven't hydrated yet (nothing to patch against). */
+/** Returns false when settings haven't hydrated yet, or when the save failed. */
 async function patchSettings(patch: Partial<ipc.SettingsData>): Promise<boolean> {
 	const s = get(settings);
 	if (!s) return false;
 	const updated = { ...s, ...patch };
 	settings.set(updated);
-	await ipc.saveSettings(updated);
-	return true;
+	try {
+		await ipc.saveSettings(updated);
+		return true;
+	} catch (err) {
+		settings.set(s);
+		lastError.set({ title: 'Settings', message: 'Failed to save settings', detail: String(err) });
+		return false;
+	}
 }
 
 export async function toggleDarkMode(): Promise<void> {
@@ -48,21 +54,12 @@ export async function saveAppearance(
 	coloring: ipc.SentenceColoring,
 	underlines: ipc.UnderlineToggles
 ): Promise<boolean> {
-	try {
-		return await patchSettings({
-			font_scale: Math.min(1.5, Math.max(0.75, fontScale)),
-			definition_scale: Math.min(1.5, Math.max(0.5, definitionScale)),
-			sentence_coloring: coloring,
-			sentence_underlines: { ...underlines }
-		});
-	} catch (err) {
-		lastError.set({
-			title: 'Appearance',
-			message: 'Failed to save settings',
-			detail: String(err)
-		});
-		return false;
-	}
+	return patchSettings({
+		font_scale: Math.min(1.5, Math.max(0.75, fontScale)),
+		definition_scale: Math.min(1.5, Math.max(0.5, definitionScale)),
+		sentence_coloring: coloring,
+		sentence_underlines: { ...underlines }
+	});
 }
 
 export const setMpvPath = (path: string) => patchSettings({ mpv_path: path });

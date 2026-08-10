@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { openUrl } from '@tauri-apps/plugin-opener';
 	import Modal from './Modal.svelte';
 	import {
+		openExternal,
 		setupModalOpen,
 		setupStatus,
 		refreshSetupStatus,
@@ -43,6 +43,8 @@
 		const mappingsEmpty = !$settings || Object.keys($settings.anki_model_mappings).length === 0;
 		const count = st?.frequency_dict_count ?? 0;
 
+		// Only AnkiConnect has a helpUrl: the README anchors the others pointed at no
+		// longer exist. Restore them against the docs site, not the README.
 		return [
 			{
 				title: 'Tokenizer Installed',
@@ -76,8 +78,7 @@
 				description: 'Required for Anki integration',
 				status: s(!mappingsEmpty),
 				optional: false,
-				helpUrl:
-					'https://github.com/mcgrizzz/Yomine?tab=readme-ov-file#setting-up-anki-integration',
+				helpUrl: null,
 				action: openAnkiModal,
 				actionText: 'Setup Anki'
 			},
@@ -86,8 +87,7 @@
 				description: 'Required for video timestamp integration',
 				status: s(st?.player_connected ?? false),
 				optional: false,
-				helpUrl:
-					'https://github.com/mcgrizzz/Yomine?tab=readme-ov-file#configuring-websocket-connection',
+				helpUrl: null,
 				action: openWebsocketModal,
 				actionText: 'Configure WebSocket'
 			},
@@ -96,7 +96,7 @@
 				description: 'Enables one-click mining — Anki cards rendered with your Yomitan templates',
 				status: s(st?.yomitan_connected ?? false),
 				optional: true,
-				helpUrl: 'https://github.com/mcgrizzz/Yomine?tab=readme-ov-file#one-click-mining',
+				helpUrl: null,
 				action: openAnkiModal,
 				actionText: 'Configure URL'
 			},
@@ -105,8 +105,7 @@
 				description: 'Load additional dictionaries via Mining → Frequency Dictionaries',
 				status: s(count > 1),
 				optional: true,
-				helpUrl:
-					'https://github.com/mcgrizzz/Yomine?tab=readme-ov-file#setting-up-frequency-dictionaries',
+				helpUrl: null,
 				action: openFrequencyModal,
 				actionText: '+ Install Dictionary'
 			}
@@ -117,10 +116,6 @@
 		if (item.status === 'complete') return { icon: '✓', cls: 'complete' };
 		if (item.optional) return { icon: '◯', cls: 'optional' };
 		return { icon: '✕', cls: 'required' };
-	}
-
-	function viewDocs(url: string) {
-		openUrl(url);
 	}
 
 	function close() {
@@ -149,7 +144,7 @@
 						<button onclick={() => item.action?.()}>{item.actionText}</button>
 					{/if}
 					{#if item.helpUrl}
-						<button onclick={() => viewDocs(item.helpUrl!)}>📖 View Docs</button>
+						<button onclick={() => openExternal(item.helpUrl!)}>📖 View Docs</button>
 					{/if}
 				</div>
 			</li>

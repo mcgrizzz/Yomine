@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { getVersion } from '@tauri-apps/api/app';
-	import { openUrl } from '@tauri-apps/plugin-opener';
 	import Modal from './Modal.svelte';
 	import {
 		aboutModalOpen,
 		checkForUpdate,
 		installUpdate,
+		openExternal,
 		updateInfo,
 		type UpdateCheckResult
 	} from '$lib/stores';
@@ -44,9 +44,9 @@
 		<p class="tagline">Japanese vocabulary mining — 読み + mine.</p>
 
 		<div class="links">
-			<button class="link" onclick={() => openUrl(REPO)}>GitHub</button>
-			<button class="link" onclick={() => openUrl(`${REPO}/releases`)}>Releases</button>
-			<button class="link" onclick={() => openUrl(`${REPO}/issues`)}>Report an issue</button>
+			<button class="link" onclick={() => openExternal(REPO)}>GitHub</button>
+			<button class="link" onclick={() => openExternal(`${REPO}/releases`)}>Releases</button>
+			<button class="link" onclick={() => openExternal(`${REPO}/issues`)}>Report an issue</button>
 		</div>
 
 		<hr />
@@ -63,7 +63,7 @@
 						{installArmed ? 'Restart & install now?' : 'Download & install'}
 					</button>
 				{:else}
-					<button onclick={() => openUrl(u.url)}>Open release page</button>
+					<button onclick={() => openExternal(u.url)}>Open release page</button>
 				{/if}
 			{:else}
 				<button disabled={checking} onclick={runCheck}>

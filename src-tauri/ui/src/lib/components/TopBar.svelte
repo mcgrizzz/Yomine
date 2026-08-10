@@ -1,8 +1,8 @@
 <script lang="ts">
 	// Menu grouping deviates from egui: Mining = what you tweak while working;
 	// Settings = configuration + the setup checklist.
-	import { openUrl } from '@tauri-apps/plugin-opener';
 	import {
+		openExternal,
 		settings,
 		ankiStatus,
 		asbContext,
@@ -293,7 +293,7 @@
 			title={u.installable
 				? `Yomine ${u.latest} is available (you have v${u.current}) — click to download and install`
 				: `Yomine ${u.latest} is available (you have v${u.current}) — open the release page`}
-			onclick={() => (u.installable ? installUpdate() : openUrl(u.url))}
+			onclick={() => (u.installable ? installUpdate() : openExternal(u.url))}
 		>
 			⬆ {u.latest} available
 		</button>

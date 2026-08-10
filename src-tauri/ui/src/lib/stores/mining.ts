@@ -306,7 +306,7 @@ export async function retryMedia(
 		});
 		showNotice(`Added media to 「${term.lemma_form}」`);
 	} catch (err) {
-		showNotice(`Media retry failed: ${String(err)}`);
+		lastError.set({ title: 'Media retry failed', message: String(err), detail: null });
 	} finally {
 		miningTerm.set(null);
 		playerBusy.set(false);
