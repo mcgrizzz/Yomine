@@ -195,6 +195,8 @@
 		top: 0.25rem;
 		right: 0.25rem;
 		padding: 0 0.3rem;
+		min-width: 24px;
+		min-height: 24px;
 		font-size: 0.75rem;
 		background: none;
 		border: none;
