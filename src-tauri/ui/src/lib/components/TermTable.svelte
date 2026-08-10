@@ -752,9 +752,6 @@
 			{/if}
 		{/each}
 	</div>
-	{#if terms.length === 0}
-		<p class="no-match">No terms match the current filters.</p>
-	{/if}
 	{#each terms as term (termKey(term))}
 		{@const occs = occurrencesOf(term)}
 		{@const key = termKey(term)}
@@ -1210,13 +1207,6 @@
 	}
 	.empty {
 		color: var(--text-muted);
-	}
-	.no-match {
-		grid-column: 1 / -1;
-		margin: 0;
-		padding: 1.5rem 0.5rem;
-		color: var(--text-muted);
-		text-align: center;
 	}
 	.col-edit-bar {
 		display: flex;

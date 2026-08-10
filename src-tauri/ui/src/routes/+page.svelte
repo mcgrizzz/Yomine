@@ -15,6 +15,10 @@
 		initProgress,
 		fileResult,
 		visibleTerms,
+		clearTableFilters,
+		posCatalog,
+		posEnabled,
+		openPosModal,
 		recentFiles,
 		dragHovering,
 		lastError,
@@ -154,7 +158,37 @@
 			<!-- The one scroll region in the file view: title/coverage/controls above
 			     stay put, the sticky column header sticks to this container's top. -->
 			<div class="table-scroll" class:bulk-open={$queuedCount > 0}>
-				<TermTable terms={$visibleTerms} sentences={$fileResult.sentences} />
+				{#if $visibleTerms.length === 0}
+					{@const posNarrowed = $posCatalog.some((p) => $posEnabled[p.key] === false)}
+					<div class="landing empty">
+						{#if $fileResult.terms.length === 0}
+							<h1 class="landing-title">Nothing left to mine</h1>
+							<p class="landing-jp">[JP line]</p>
+							<p class="landing-hint">
+								Every term in this file is already in Anki or on your ignore list.
+							</p>
+							<div class="landing-actions">
+								<button class="landing-open" onclick={openAndProcessFile}>Open File…</button>
+							</div>
+						{:else}
+							<h1 class="landing-title">Your filters are hiding everything</h1>
+							<p class="landing-jp">ちょっと絞り込みすぎたみたいです。</p>
+							<p class="landing-hint">
+								{$fileResult.terms.length} terms in this file, none of them shown.
+							</p>
+							<div class="landing-actions">
+								<button class="landing-open" onclick={clearTableFilters}>Clear filters</button>
+								{#if posNarrowed}
+									<button class="landing-open" onclick={openPosModal}>
+										Part of Speech Filters…
+									</button>
+								{/if}
+							</div>
+						{/if}
+					</div>
+				{:else}
+					<TermTable terms={$visibleTerms} sentences={$fileResult.sentences} />
+				{/if}
 			</div>
 		{:else}
 			<div class="landing">
@@ -338,6 +372,10 @@
 		   never the whole welcome screen. */
 		height: 100%;
 		min-height: 0;
+	}
+	.landing.empty {
+		padding-top: 3rem;
+		height: auto;
 	}
 	.landing-title {
 		margin: 0;

@@ -2,7 +2,7 @@ import { derived, get, writable } from 'svelte/store';
 import type * as ipc from '$lib/ipc';
 import { applyControls, freqBounds, type SortDir, type SortField } from '$lib/table';
 import { fileResult } from './file';
-import { settings } from './settings';
+import { saveFreqFilter, saveJlptFilters, settings } from './settings';
 
 export const posCatalog = writable<ipc.PosInfo[]>([]);
 
@@ -64,3 +64,16 @@ export const visibleTerms = derived(
 				})
 			: []
 );
+
+/** Clears the inline toolbar controls. POS lives in its own modal and is left alone. */
+export function clearTableFilters(): void {
+	tableSearch.set('');
+	jlptEnabled.set({});
+	void saveJlptFilters({});
+	freqFilter.update((f) => {
+		if (!f) return f;
+		const next = { ...f, min: f.lo, max: f.hi, includeUnknown: true };
+		void saveFreqFilter(next);
+		return next;
+	});
+}
