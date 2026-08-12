@@ -101,7 +101,9 @@
 							>{m.title?.trim() || 'Untitled video'}</span
 						>
 						<span class="badge">{m.media_type}</span>
-						{#if m.active}<span class="badge active">active tab</span>{/if}
+						<span class="badge" class:active={m.active}
+							>{m.active ? 'active tab' : 'background tab'}</span
+						>
 						<button
 							class="load"
 							disabled={!hasSubs || busyId !== null}
