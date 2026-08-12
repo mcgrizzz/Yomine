@@ -12,10 +12,11 @@
 		ankiModalOpen,
 		websocketModalOpen,
 		frequencyModalOpen,
+		languageToolsStatus,
 		settings
 	} from '$lib/stores';
 
-	type ItemStatus = 'complete' | 'incomplete';
+	type ItemStatus = 'complete' | 'incomplete' | 'pending' | 'installing';
 
 	interface CheckItem {
 		title: string;
@@ -34,12 +35,14 @@
 		if ($setupModalOpen && !actionModalOpen) untrack(() => refreshSetupStatus());
 	});
 
-	function s(complete: boolean): ItemStatus {
-		return complete ? 'complete' : 'incomplete';
-	}
-
 	const items = $derived.by<CheckItem[]>(() => {
 		const st = $setupStatus;
+		const loading = st === null || !$settings;
+		const s = (complete: boolean): ItemStatus =>
+			loading ? 'pending' : complete ? 'complete' : 'incomplete';
+		// Both read off `language_tools` (commands/setup.rs) — unknowable until it loads.
+		const fromTools = (complete: boolean): ItemStatus =>
+			$languageToolsStatus === 'loading' ? 'installing' : s(complete);
 		const mappingsEmpty = !$settings || Object.keys($settings.anki_model_mappings).length === 0;
 		const count = st?.frequency_dict_count ?? 0;
 
@@ -49,7 +52,7 @@
 			{
 				title: 'Tokenizer Installed',
 				description: 'Required for Japanese text segmentation',
-				status: s(st?.tools_loaded ?? false),
+				status: fromTools(st?.tools_loaded ?? false),
 				optional: false,
 				helpUrl: null,
 				action: null,
@@ -58,7 +61,7 @@
 			{
 				title: 'Default Frequency Dictionary Installed',
 				description: 'Auto-downloads on first run',
-				status: s((st?.has_frequency_dict ?? false) && count >= 1),
+				status: fromTools((st?.has_frequency_dict ?? false) && count >= 1),
 				optional: false,
 				helpUrl: null,
 				action: openFrequencyModal,
@@ -113,6 +116,9 @@
 	});
 
 	function iconFor(item: CheckItem): { icon: string; cls: string } {
+		// ◐ / --status-busy is TopBar's `busy` kind, for the same "still checking" state.
+		if (item.status === 'installing') return { icon: '', cls: 'pending' };
+		if (item.status === 'pending') return { icon: '◐', cls: 'pending' };
 		if (item.status === 'complete') return { icon: '✓', cls: 'complete' };
 		if (item.optional) return { icon: '◯', cls: 'optional' };
 		return { icon: '✕', cls: 'required' };
@@ -134,7 +140,11 @@
 		{#each items as item (item.title)}
 			{@const ic = iconFor(item)}
 			<li class="item">
-				<span class="icon {ic.cls}">{ic.icon}</span>
+				<span class="icon {ic.cls}">
+					{#if item.status === 'installing'}
+						<span class="spinner" aria-label="Installing"></span>
+					{:else}{ic.icon}{/if}
+				</span>
 				<div class="text">
 					<span class="title {ic.cls}">{item.title}</span>
 					<span class="desc">{item.description}</span>
@@ -202,6 +212,24 @@
 	}
 	.optional {
 		color: var(--text-muted);
+	}
+	.pending {
+		color: var(--status-busy);
+	}
+	.spinner {
+		display: inline-block;
+		vertical-align: middle;
+		width: 12px;
+		height: 12px;
+		border: 2px solid var(--text-muted);
+		border-top-color: var(--accent);
+		border-radius: 50%;
+		animation: spin 0.7s linear infinite;
+	}
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 	.actions {
 		display: flex;

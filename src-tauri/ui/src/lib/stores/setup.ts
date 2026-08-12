@@ -21,8 +21,8 @@ export async function refreshSetupStatus(): Promise<void> {
 }
 
 export const showSetupBanner = derived([setupStatus, settings], ([$status, $settings]) => {
-	if (!$status) return false;
-	const freqDictMissing = !$status.has_frequency_dict;
-	const ankiModelsMissing = !$settings || Object.keys($settings.anki_model_mappings).length === 0;
-	return freqDictMissing || ankiModelsMissing;
+	if (!$settings) return false;
+	// Not gated on `setupStatus`: hydrate.ts sets it only after the language-tools load.
+	if (Object.keys($settings.anki_model_mappings).length === 0) return true;
+	return $status ? !$status.has_frequency_dict : false;
 });
