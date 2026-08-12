@@ -319,6 +319,8 @@
 	}
 	.icon {
 		padding: 0 0.25rem;
+		min-width: 24px;
+		min-height: 24px;
 		background: none;
 		border: none;
 		color: var(--text);
