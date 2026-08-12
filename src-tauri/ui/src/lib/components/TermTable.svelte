@@ -420,6 +420,13 @@
 
 	// Mining needs Yomitan (renders the card) + AnkiConnect (stores it).
 	const canMine = $derived($yomitanReachable && $ankiStatus.connected);
+	const busyReason = $derived(
+		$miningTerm !== null
+			? 'Mining in progress — wait for the current card to finish'
+			: $playerBusy
+				? 'Waiting for asbplayer to finish recording the mined line…'
+				: null
+	);
 	// Only asbplayer can record audio/screenshots onto the mined card, and it
 	// records from its ACTIVE tab.
 	const mediaNote = $derived.by(() => {
@@ -633,7 +640,7 @@
 			<button
 				class="bulk-btn primary"
 				disabled={$miningTerm !== null || $playerBusy}
-				title="Mine the selected terms one by one, in timestamp order"
+				title={busyReason ?? 'Mine the selected terms one by one, in timestamp order'}
 				onclick={startBatch}>Mine {$queuedCount}</button
 			>
 		{/if}
@@ -651,6 +658,7 @@
 				class:col-hidden={!col.visible}
 				class:dragging={dragId === col.id}
 				data-col={col.id}
+				title={col.id === 'term' ? 'The term column can’t be hidden' : undefined}
 				onpointerdown={(e) => pillDown(e, col.id)}
 				onpointermove={pillMove}
 				onpointerup={pillUp}
@@ -803,7 +811,8 @@
 								<button
 									class="chip warn"
 									disabled={$miningTerm !== null || $playerBusy}
-									title="Card is in Anki, but asbplayer never added the audio/screenshot — click to retry"
+									title={busyReason ??
+										'Card is in Anki, but asbplayer never added the audio/screenshot — click to retry'}
 									onclick={() => retry(term, occs)}
 								>
 									{$miningTerm === term.lemma_form ? '…' : '⚠'}
@@ -821,9 +830,7 @@
 							<button
 								class="chip mine"
 								disabled={$miningTerm !== null || $playerBusy}
-								title={$playerBusy && $miningTerm === null
-									? 'Waiting for asbplayer to finish recording the mined line…'
-									: 'Create an Anki card from the displayed sentence' + mediaNote}
+								title={busyReason ?? 'Create an Anki card from the displayed sentence' + mediaNote}
 								onclick={() => mineClicked(term, occs)}
 							>
 								{#if $miningTerm === term.lemma_form}…{:else}
