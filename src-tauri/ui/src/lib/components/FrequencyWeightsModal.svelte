@@ -3,6 +3,8 @@
 	// install/update/import/remove are immediate and re-hydrate the list,
 	// resetting staged edits with it.
 	import { untrack } from 'svelte';
+	import { dirtyGuard } from '$lib/dirtyGuard.svelte';
+	import Modal from './Modal.svelte';
 	import {
 		settings,
 		frequencyModalOpen,
@@ -135,12 +137,17 @@
 		entries = list;
 		original = list.map((e) => ({ ...e }));
 		loaded = true;
+		guard.disarm();
 	}
 
 	const dirty = $derived(
 		entries.some(
 			(e, i) => e.weight !== original[i]?.weight || e.enabled !== original[i]?.enabled
 		)
+	);
+	const guard = dirtyGuard(
+		() => dirty,
+		() => frequencyModalOpen.set(false)
 	);
 
 	// egui's Slider is logarithmic over 0.1..=5.0; map it onto a linear 0..1000 range.
@@ -184,196 +191,137 @@
 	}
 </script>
 
-<!-- Esc closes from anywhere: the backdrop's own keydown only fires once focus
-     is inside the modal, which it isn't right after opening from a menu. -->
-<svelte:window
-	onkeydown={(e) => $frequencyModalOpen && e.key === 'Escape' && frequencyModalOpen.set(false)}
-/>
-
-{#if $frequencyModalOpen}
-	<div
-		class="backdrop"
-		role="button"
-		tabindex="-1"
-		onclick={() => frequencyModalOpen.set(false)}
-		onkeydown={(e) => e.key === 'Escape' && frequencyModalOpen.set(false)}
-	>
-		<!-- Stop backdrop clicks inside the dialog from closing it. -->
-		<div
-			class="dialog"
-			role="dialog"
-			aria-modal="true"
-			aria-label="Frequency dictionaries"
-			tabindex="-1"
-			onclick={(e) => e.stopPropagation()}
-		>
-			<header>
-				<h2>Frequency Dictionaries</h2>
-				<button class="close" aria-label="Close" onclick={() => frequencyModalOpen.set(false)}
-					>✕</button
-				>
-			</header>
-
-			<section class="recommended">
-				<div class="rec-head">
-					<h3>Recommended</h3>
-					<button disabled={checking || busyTitle !== null} onclick={checkUpdates}>
-						{checking ? 'Checking…' : '⟳ Check for updates'}
-					</button>
-				</div>
-				{#if $recommendedDicts === null}
-					<p class="hint">Updates not checked yet.</p>
-				{:else}
-					{#each $recommendedDicts as r (r.title)}
-						<div class="rec-row">
-							<div class="rec-text">
-								<span class="rec-name">
-									{r.name}
-									{#if r.status === 'update-available'}
-										<span class="rev">{r.installed_revision} → {r.latest_revision}</span>
-									{:else if r.installed_revision ?? r.latest_revision}
-										<span class="rev">({r.installed_revision ?? r.latest_revision})</span>
-									{/if}
-								</span>
-								<span class="rec-desc">{r.description}</span>
-							</div>
-							<span class="badge {r.status}">{badgeText[r.status]}</span>
-							{#if r.status === 'not-installed' || r.status === 'update-available'}
-								<button disabled={busyTitle !== null} onclick={() => install(r.title)}>
-									{busyTitle === r.title
-										? 'Working…'
-										: r.status === 'not-installed'
-											? 'Download'
-											: 'Update'}
-								</button>
-							{/if}
-						</div>
-					{/each}
-				{/if}
-				{#if busyMsg}<p class="hint">{busyMsg}</p>{/if}
-				{#if opError}<p class="op-error">{opError}</p>{/if}
-			</section>
-
-			<hr />
-
-			{#if loaded && entries.length === 0}
-				<p class="empty">No frequency dictionaries loaded.</p>
-			{:else if loaded}
-				<div class="table">
-					<div class="thead">
-						<span></span>
-						<span>Dictionary</span>
-						<span>Weight</span>
-						<span>Value</span>
-						<span></span>
-					</div>
-					{#each entries as entry, i (entry.name)}
-						<div class="row">
-							<input
-								type="checkbox"
-								checked={entry.enabled}
-								onchange={(e) => setEnabled(i, e.currentTarget.checked)}
-								aria-label={`Enable ${entry.name}`}
-							/>
-							<span class="name" class:off={!entry.enabled}>{entry.name}</span>
-							<input
-								type="range"
-								min="0"
-								max={SLIDER_STEPS}
-								value={toSlider(entry.weight)}
-								disabled={!entry.enabled}
-								oninput={(e) => (entry.weight = fromSlider(e.currentTarget.valueAsNumber))}
-								aria-label={`${entry.name} weight`}
-							/>
-							<span class="value">
-								<input
-									type="number"
-									min={MIN_WEIGHT}
-									max={MAX_WEIGHT}
-									step="0.05"
-									value={entry.weight}
-									disabled={!entry.enabled}
-									onchange={(e) => (entry.weight = clampWeight(e.currentTarget.valueAsNumber))}
-								/>x
-							</span>
-							<span class="del">
-								{#if confirmRemove === entry.name}
-									<button
-										class="danger"
-										disabled={busyTitle !== null}
-										onclick={() => removeDict(entry.name)}>Confirm</button
-									>
-									<button aria-label="Keep dictionary" onclick={() => (confirmRemove = null)}
-										>✕</button
-									>
-								{:else}
-									<button
-										class="ghost"
-										title={`Remove ${entry.name}`}
-										disabled={busyTitle !== null}
-										onclick={() => (confirmRemove = entry.name)}>🗑</button
-									>
-								{/if}
-							</span>
-						</div>
-					{/each}
-				</div>
-			{/if}
-
-			<hr />
-
-			<div class="status">
-				{#if dirty}⚠ Settings have been modified{/if}
-			</div>
-
-			<footer>
-				<button disabled={!dirty} onclick={save}>Save Settings</button>
-				<button disabled={!dirty} onclick={cancel}>Cancel</button>
-				<button class="right" disabled={busyTitle !== null} onclick={importFromFile}>
-					{busyTitle === '(import)' ? 'Importing…' : 'Import from file…'}
-				</button>
-				<button onclick={restoreDefault}>Restore Default</button>
-			</footer>
+<Modal
+	open={$frequencyModalOpen}
+	title="Frequency Dictionaries"
+	width="min(620px, 92%)"
+	onclose={guard.request}
+	oninteract={guard.disarm}
+>
+	<section class="recommended">
+		<div class="rec-head">
+			<h3>Recommended</h3>
+			<button disabled={checking || busyTitle !== null} onclick={checkUpdates}>
+				{checking ? 'Checking…' : '⟳ Check for updates'}
+			</button>
 		</div>
-	</div>
-{/if}
+		{#if $recommendedDicts === null}
+			<p class="hint">Updates not checked yet.</p>
+		{:else}
+			{#each $recommendedDicts as r (r.title)}
+				<div class="rec-row">
+					<div class="rec-text">
+						<span class="rec-name">
+							{r.name}
+							{#if r.status === 'update-available'}
+								<span class="rev">{r.installed_revision} → {r.latest_revision}</span>
+							{:else if r.installed_revision ?? r.latest_revision}
+								<span class="rev">({r.installed_revision ?? r.latest_revision})</span>
+							{/if}
+						</span>
+						<span class="rec-desc">{r.description}</span>
+					</div>
+					<span class="badge {r.status}">{badgeText[r.status]}</span>
+					{#if r.status === 'not-installed' || r.status === 'update-available'}
+						<button disabled={busyTitle !== null} onclick={() => install(r.title)}>
+							{busyTitle === r.title
+								? 'Working…'
+								: r.status === 'not-installed'
+									? 'Download'
+									: 'Update'}
+						</button>
+					{/if}
+				</div>
+			{/each}
+		{/if}
+		{#if busyMsg}<p class="hint">{busyMsg}</p>{/if}
+		{#if opError}<p class="op-error">{opError}</p>{/if}
+	</section>
+
+	<hr />
+
+	{#if loaded && entries.length === 0}
+		<p class="empty">No frequency dictionaries loaded.</p>
+	{:else if loaded}
+		<div class="table">
+			<div class="thead">
+				<span></span>
+				<span>Dictionary</span>
+				<span>Weight</span>
+				<span>Value</span>
+				<span></span>
+			</div>
+			{#each entries as entry, i (entry.name)}
+				<div class="row">
+					<input
+						type="checkbox"
+						checked={entry.enabled}
+						onchange={(e) => setEnabled(i, e.currentTarget.checked)}
+						aria-label={`Enable ${entry.name}`}
+					/>
+					<span class="name" class:off={!entry.enabled}>{entry.name}</span>
+					<input
+						type="range"
+						min="0"
+						max={SLIDER_STEPS}
+						value={toSlider(entry.weight)}
+						disabled={!entry.enabled}
+						oninput={(e) => (entry.weight = fromSlider(e.currentTarget.valueAsNumber))}
+						aria-label={`${entry.name} weight`}
+					/>
+					<span class="value">
+						×<input
+							type="number"
+							min={MIN_WEIGHT}
+							max={MAX_WEIGHT}
+							step="0.05"
+							value={entry.weight}
+							disabled={!entry.enabled}
+							onchange={(e) => (entry.weight = clampWeight(e.currentTarget.valueAsNumber))}
+						/>
+					</span>
+					<span class="del">
+						{#if confirmRemove === entry.name}
+							<button
+								class="danger"
+								disabled={busyTitle !== null}
+								onclick={() => removeDict(entry.name)}>Confirm</button
+							>
+							<button aria-label="Keep dictionary" onclick={() => (confirmRemove = null)}
+								>✕</button
+							>
+						{:else}
+							<button
+								class="ghost"
+								title={`Remove ${entry.name}`}
+								disabled={busyTitle !== null}
+								onclick={() => (confirmRemove = entry.name)}>🗑</button
+							>
+						{/if}
+					</span>
+				</div>
+			{/each}
+		</div>
+	{/if}
+
+	{#snippet footer()}
+		<hr />
+		<div class="status">
+			{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings
+				have been modified{/if}
+		</div>
+		<footer>
+			<button class="primary" disabled={!dirty} onclick={save}>Save Settings</button>
+			<button disabled={!dirty} onclick={cancel}>Cancel</button>
+			<button class="right" disabled={busyTitle !== null} onclick={importFromFile}>
+				{busyTitle === '(import)' ? 'Importing…' : 'Import from file…'}
+			</button>
+			<button onclick={restoreDefault}>Restore Default</button>
+		</footer>
+	{/snippet}
+</Modal>
 
 <style>
-	.backdrop {
-		position: fixed;
-		inset: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
-		z-index: 50;
-	}
-	.dialog {
-		display: flex;
-		flex-direction: column;
-		gap: 0.6rem;
-		width: min(620px, 92%);
-		padding-bottom: 0.75rem;
-		background: var(--bg-panel);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-	}
-	header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 0.75rem 1rem;
-		border-bottom: 1px solid var(--border);
-	}
-	header h2 {
-		margin: 0;
-		font-size: 1.05rem;
-		color: var(--accent);
-	}
-	.close {
-		padding: 0.1rem 0.4rem;
-	}
 	.empty {
 		margin: 0;
 		padding: 0 1rem;
@@ -431,7 +379,7 @@
 	.badge {
 		font-size: 0.75rem;
 		padding: 0.15rem 0.5rem;
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		border: 1px solid var(--border);
 		white-space: nowrap;
 	}
@@ -473,12 +421,12 @@
 		opacity: 1;
 	}
 	.del .danger {
-		padding: 0.15rem 0.4rem;
+		padding: 0.3rem 0.5rem;
 		font-size: 0.75rem;
-		color: #fff;
+		color: var(--bg);
 		background: var(--danger);
 		border: none;
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 	}
 	.table {
 		display: flex;
@@ -527,7 +475,7 @@
 		background: var(--bg-raised);
 		color: var(--text);
 		border: 1px solid var(--border);
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 	}
 	input:disabled {
 		opacity: 0.5;

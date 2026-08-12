@@ -4,6 +4,7 @@
 	// The flow is driven off the command promises — the analysis/export events
 	// are intentionally NOT subscribed, handling both would double-fire.
 	import { open as openDialog } from '@tauri-apps/plugin-dialog';
+	import Modal from './Modal.svelte';
 	import * as ipc from '$lib/ipc';
 	import { analyzerModalOpen } from '$lib/stores';
 	import { buildFileTree, collectChecked, type TreeNode } from '$lib/fileTree';
@@ -153,6 +154,8 @@
 
 	// --- Navigation -----------------------------------------------------------
 	function close() {
+		// The backend job outlives the modal.
+		if (phase === 'analyzing') void ipc.cancelAnalysis();
 		analyzerModalOpen.set(false);
 	}
 
@@ -165,193 +168,172 @@
 		opts = ipc.defaultExportOptions();
 		phase = 'selecting';
 	}
-
-	function onKeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape') close();
-	}
 </script>
 
-<!-- Esc closes from anywhere: the backdrop's own keydown only fires once focus
-     is inside the modal, which it isn't right after opening from a menu. -->
-<svelte:window onkeydown={(e) => $analyzerModalOpen && e.key === 'Escape' && close()} />
+<Modal
+	open={$analyzerModalOpen}
+	title="Frequency Analyzer"
+	width="min(760px, 94%)"
+	flush
+	onclose={close}
+>
 
-{#if $analyzerModalOpen}
-	<div
-		class="backdrop"
-		role="button"
-		tabindex="-1"
-		onclick={close}
-		onkeydown={onKeydown}
-	>
-		<div
-			class="dialog"
-			role="dialog"
-			aria-modal="true"
-			aria-label="Frequency analyzer"
-			tabindex="-1"
-			onclick={(e) => e.stopPropagation()}
-		>
-			<header>
-				<h2>Frequency Analyzer</h2>
-				<button class="close" aria-label="Close" onclick={close}>✕</button>
-			</header>
+	<div class="body">
+		{#if phase === 'selecting'}
+			<h3>Step 1 · Select files</h3>
+			<div class="row">
+				<button onclick={addFiles}>Add Files…</button>
+				<button onclick={addFolder}>Add Folder…</button>
+				<button onclick={clearAll} disabled={selectedPaths.length === 0}
+					>Clear all</button
+				>
+				<span class="count">{checkedCount} of {selectedPaths.length} files selected</span>
+			</div>
 
-			<div class="body">
-				{#if phase === 'selecting'}
-					<h3>Step 1 · Select files</h3>
-					<div class="row">
-						<button onclick={addFiles}>Add Files…</button>
-						<button onclick={addFolder}>Add Folder…</button>
-						<button class="ghost" onclick={clearAll} disabled={selectedPaths.length === 0}
-							>Clear all</button
+			{#if selectedPaths.length > 0}
+				<div class="tree">
+					{#each tree as node (node.id)}
+						{@render treeNode(node, 0)}
+					{/each}
+				</div>
+			{:else}
+				<p class="hint">Add subtitle, text, or EPUB files (or a folder) to begin.</p>
+			{/if}
+
+			<footer>
+				<label
+					class="cb"
+					title="Uses trimmed mean (10% trimming) to calculate balanced sample sizes."
+				>
+					<input type="checkbox" bind:checked={balanceCorpus} /> Balance corpus by source
+				</label>
+				<button class="primary" onclick={analyze} disabled={checkedCount === 0}
+					>Analyze files</button
+				>
+			</footer>
+		{:else if phase === 'analyzing'}
+			<h3>Step 2 · Analyzing</h3>
+			<div class="progress-bar">
+				<div class="progress-fill" style:width={`${progressFraction * 100}%`}></div>
+				<span class="progress-text"
+					>{progress?.current_file ?? 0}/{progress?.total_files ?? 0}</span
+				>
+			</div>
+			<p class="message">{progress?.message ?? 'Starting…'}</p>
+			{#if progress?.eta_secs != null}
+				<p class="hint">Estimated {fmtSecs(progress.eta_secs)} remaining</p>
+			{/if}
+			<footer>
+				<button onclick={cancel}>Cancel Analysis</button>
+			</footer>
+		{:else if phase === 'results'}
+			<div class="results-head">
+				<h3>Step 3 · Results &amp; export</h3>
+				<button class="ghost" onclick={() => (phase = 'selecting')}
+					>← Back to file selection</button
+				>
+			</div>
+			<p class="hint">
+				{preview?.total ?? 0} unique terms{#if preview && preview.total > preview.entries.length}
+					(showing top {preview.entries.length}){/if}
+			</p>
+
+			<div class="results-grid">
+				<div class="results-table-col">
+					<div class="show-toggle">
+						<span>Show:</span>
+						<label class="cb"
+							><input type="radio" name="show-slice" checked={showTop} onchange={() => (showTop = true)} />
+							Top 250</label
 						>
-						<span class="count">{checkedCount} of {selectedPaths.length} files selected</span>
+						<label class="cb"
+							><input
+								type="radio"
+								name="show-slice"
+								checked={!showTop}
+								onchange={() => (showTop = false)}
+							/> Bottom 250</label
+						>
 					</div>
-
-					{#if selectedPaths.length > 0}
-						<div class="tree">
-							{#each tree as node (node.id)}
-								{@render treeNode(node, 0)}
+					<div class="results-table-wrap">
+					<table class="results-table">
+						<thead>
+							<tr>
+								<th class="rank">#</th>
+								<th>Term</th>
+								<th>Reading</th>
+								<th class="num">Freq</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each displayedEntries as e, i (e.term + (e.reading ?? '') + i)}
+								<tr>
+									<td class="rank">{i + 1}</td>
+									<td class="jp">{e.term}</td>
+									<td class="jp reading">{e.reading ?? ''}</td>
+									<td class="num">{e.frequency}</td>
+								</tr>
 							{/each}
-						</div>
-					{:else}
-						<p class="hint">Add subtitle, text, or EPUB files (or a folder) to begin.</p>
-					{/if}
+						</tbody>
+					</table>
+					</div>
+				</div>
 
-					<footer>
-						<label
-							class="cb"
-							title="Uses trimmed mean (10% trimming) to calculate balanced sample sizes."
+				<div class="export-form">
+					<h4>Export Options</h4>
+					<label>Title<input type="text" bind:value={opts.dict_name} /></label>
+					<label>Author<input type="text" bind:value={opts.dict_author} /></label>
+					<label>URL<input type="text" bind:value={opts.dict_url} /></label>
+					<label
+						>Revision prefix<input type="text" bind:value={opts.revision_prefix} /></label
+					>
+					<label
+						>Description<textarea rows="2" bind:value={opts.dict_description}></textarea></label
+					>
+
+					<div class="checks">
+						<label class="cb"
+							><input type="checkbox" bind:checked={opts.export_yomitan} /> Export as Yomitan
+							ZIP</label
 						>
-							<input type="checkbox" bind:checked={balanceCorpus} /> Balance corpus by source
-						</label>
-						<button class="primary" onclick={analyze} disabled={checkedCount === 0}
-							>Analyze files</button
+						<label class="cb"
+							><input type="checkbox" bind:checked={opts.export_csv} /> Export as CSV</label
 						>
-					</footer>
-				{:else if phase === 'analyzing'}
-					<h3>Step 2 · Analyzing</h3>
-					<div class="progress-bar">
-						<div class="progress-fill" style:width={`${progressFraction * 100}%`}></div>
-						<span class="progress-text"
-							>{progress?.current_file ?? 0}/{progress?.total_files ?? 0}</span
+						<label class="cb"
+							><input type="checkbox" bind:checked={opts.pretty_json} /> Pretty JSON output</label
+						>
+						<label class="cb"
+							><input type="checkbox" bind:checked={opts.exclude_hapax} /> Exclude hapax
+							(occurrences=1)</label
 						>
 					</div>
-					<p class="message">{progress?.message ?? 'Starting…'}</p>
-					{#if progress?.eta_secs != null}
-						<p class="hint">Estimated {fmtSecs(progress.eta_secs)} remaining</p>
-					{/if}
-					<footer>
-						<button onclick={cancel}>Cancel Analysis</button>
-					</footer>
-				{:else if phase === 'results'}
-					<div class="results-head">
-						<h3>Step 3 · Results &amp; export</h3>
-						<button class="ghost" onclick={() => (phase = 'selecting')}
-							>← Back to file selection</button
-						>
-					</div>
-					<p class="hint">
-						{preview?.total ?? 0} unique terms{#if preview && preview.total > preview.entries.length}
-							(showing top {preview.entries.length}){/if}
-					</p>
 
-					<div class="results-grid">
-						<div class="results-table-col">
-							<div class="show-toggle">
-								<span>Show:</span>
-								<label class="cb"
-									><input type="radio" name="show-slice" checked={showTop} onchange={() => (showTop = true)} />
-									Top 250</label
-								>
-								<label class="cb"
-									><input
-										type="radio"
-										name="show-slice"
-										checked={!showTop}
-										onchange={() => (showTop = false)}
-									/> Bottom 250</label
-								>
-							</div>
-							<div class="results-table-wrap">
-							<table class="results-table">
-								<thead>
-									<tr>
-										<th class="rank">#</th>
-										<th>Term</th>
-										<th>Reading</th>
-										<th class="num">Freq</th>
-									</tr>
-								</thead>
-								<tbody>
-									{#each displayedEntries as e, i (e.term + (e.reading ?? '') + i)}
-										<tr>
-											<td class="rank">{i + 1}</td>
-											<td class="jp">{e.term}</td>
-											<td class="jp reading">{e.reading ?? ''}</td>
-											<td class="num">{e.frequency}</td>
-										</tr>
-									{/each}
-								</tbody>
-							</table>
-							</div>
-						</div>
-
-						<div class="export-form">
-							<h4>Export Options</h4>
-							<label>Title<input type="text" bind:value={opts.dict_name} /></label>
-							<label>Author<input type="text" bind:value={opts.dict_author} /></label>
-							<label>URL<input type="text" bind:value={opts.dict_url} /></label>
-							<label
-								>Revision prefix<input type="text" bind:value={opts.revision_prefix} /></label
-							>
-							<label
-								>Description<textarea rows="2" bind:value={opts.dict_description}></textarea></label
-							>
-
-							<div class="checks">
-								<label class="cb"
-									><input type="checkbox" bind:checked={opts.export_yomitan} /> Export as Yomitan
-									ZIP</label
-								>
-								<label class="cb"
-									><input type="checkbox" bind:checked={opts.export_csv} /> Export as CSV</label
-								>
-								<label class="cb"
-									><input type="checkbox" bind:checked={opts.pretty_json} /> Pretty JSON output</label
-								>
-								<label class="cb"
-									><input type="checkbox" bind:checked={opts.exclude_hapax} /> Exclude hapax
-									(occurrences=1)</label
-								>
-							</div>
-
-							<button class="primary" onclick={doExport} disabled={!canExport}>Export…</button>
-						</div>
-					</div>
-				{:else if phase === 'exporting'}
-					<h3>Exporting…</h3>
-					<p class="message">Writing dictionary files…</p>
-				{:else if phase === 'complete'}
-					<p class="success">{exportMessage}</p>
-					<footer>
-						<button onclick={() => (phase = 'results')}>← Back to Results</button>
-						<button class="ghost" onclick={newAnalysis}>New Analysis</button>
-					</footer>
-				{:else if phase === 'error'}
-					<p class="error">{errorMessage}</p>
-					<footer>
-						<button onclick={newAnalysis}>Start New Analysis</button>
-					</footer>
-				{/if}
+					<button class="primary" onclick={doExport} disabled={!canExport}>Export…</button>
+				</div>
 			</div>
-
-			<div class="modal-footer">
-				<button class="ghost" onclick={close}>Close</button>
-			</div>
-		</div>
+		{:else if phase === 'exporting'}
+			<h3>Exporting…</h3>
+			<p class="message">Writing dictionary files…</p>
+		{:else if phase === 'complete'}
+			<p class="success">{exportMessage}</p>
+			<footer>
+				<button onclick={() => (phase = 'results')}>← Back to Results</button>
+				<button onclick={newAnalysis}>New Analysis</button>
+			</footer>
+		{:else if phase === 'error'}
+			<p class="error">{errorMessage}</p>
+			<footer>
+				<button onclick={newAnalysis}>Start New Analysis</button>
+			</footer>
+		{/if}
 	</div>
-{/if}
+
+	{#snippet footer()}
+		<div class="modal-footer">
+			<button class="ghost" onclick={close}>Close</button>
+		</div>
+	{/snippet}
+</Modal>
 
 {#snippet treeNode(node: TreeNode, depth: number)}
 	<div class="tree-row" style:padding-left={`${depth * 1.1}rem`}>
@@ -390,46 +372,11 @@
 {/snippet}
 
 <style>
-	.backdrop {
-		position: fixed;
-		inset: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
-		z-index: 50;
-	}
-	.dialog {
-		display: flex;
-		flex-direction: column;
-		width: min(760px, 94%);
-		max-height: 88%;
-		background: var(--bg-panel);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-	}
-	header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 0.75rem 1rem;
-		border-bottom: 1px solid var(--border);
-	}
-	header h2 {
-		margin: 0;
-		font-size: 1.05rem;
-		color: var(--accent);
-	}
-	.close {
-		padding: 0.1rem 0.4rem;
-	}
 	.body {
 		display: flex;
 		flex-direction: column;
 		gap: 0.6rem;
 		padding: 0.9rem 1rem;
-		overflow-y: auto;
 	}
 	h3 {
 		margin: 0;
@@ -466,7 +413,7 @@
 		max-height: 220px;
 		overflow-y: auto;
 		border: 1px solid var(--border);
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 		padding: 0.35rem;
 		background: var(--bg-deep);
 	}
@@ -477,7 +424,12 @@
 		padding: 0.05rem 0;
 	}
 	.twisty {
-		padding: 0 0.25rem;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 1.5rem;
+		min-height: 1.5rem;
+		padding: 0;
 		font-size: 0.7rem;
 		background: none;
 		border: none;
@@ -492,7 +444,7 @@
 		cursor: pointer;
 	}
 	.dir {
-		color: var(--warning);
+		color: var(--text);
 	}
 	.leaf {
 		color: var(--text);
@@ -501,7 +453,7 @@
 		position: relative;
 		height: 1.4rem;
 		border: 1px solid var(--border);
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 		background: var(--bg-deep);
 		overflow: hidden;
 	}
@@ -547,7 +499,7 @@
 		max-height: 340px;
 		overflow-y: auto;
 		border: 1px solid var(--border);
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 	}
 	.results-table {
 		width: 100%;
@@ -565,7 +517,7 @@
 		top: 0;
 		background: var(--bg-raised);
 		color: var(--text-muted);
-		z-index: 1;
+		z-index: var(--z-sticky);
 	}
 	.results-table .rank {
 		width: 2.5rem;
@@ -600,7 +552,7 @@
 		background: var(--bg-raised);
 		color: var(--text);
 		border: 1px solid var(--border);
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 		font: inherit;
 	}
 	.export-form .checks {
@@ -632,11 +584,6 @@
 		justify-content: flex-end;
 		padding: 0.6rem 1rem;
 		border-top: 1px solid var(--border);
-	}
-	.primary {
-		background: var(--accent);
-		color: var(--bg-deep);
-		border-color: var(--accent);
 	}
 	.ghost {
 		background: none;

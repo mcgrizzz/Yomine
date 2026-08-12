@@ -1,3 +1,4 @@
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { writable } from 'svelte/store';
 import type * as ipc from '$lib/ipc';
 
@@ -21,4 +22,12 @@ export function showNotice(text: string): void {
 	notice.set(text);
 	clearTimeout(noticeTimer);
 	noticeTimer = setTimeout(() => notice.set(null), 4000);
+}
+
+export async function openExternal(url: string): Promise<void> {
+	try {
+		await openUrl(url);
+	} catch (err) {
+		lastError.set({ title: 'Failed to open link', message: url, detail: String(err) });
+	}
 }

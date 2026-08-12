@@ -15,6 +15,10 @@
 		initProgress,
 		fileResult,
 		visibleTerms,
+		clearTableFilters,
+		posCatalog,
+		posEnabled,
+		openPosModal,
 		recentFiles,
 		dragHovering,
 		lastError,
@@ -22,6 +26,7 @@
 		ankiFilterActive,
 		refreshTerms,
 		refreshMinedState,
+		queuedCount,
 		settings
 	} from '$lib/stores';
 	import TopBar from '$lib/components/TopBar.svelte';
@@ -138,12 +143,13 @@
 			<p class="counts">
 				{$visibleTerms.length} shown
 				{#if known > 0}
-					/ <span
+					· <span
+						class="excluded"
 						title={`Ignore list: ${$fileResult.ignored_terms}\nAnki filtered: ${known - $fileResult.ignored_terms}`}
-						>{known} known</span
+						>{known} excluded</span
 					>
 				{/if}
-				/ {total} total
+				· {total} total
 			</p>
 				</div>
 				<KnowledgeSummary />
@@ -151,8 +157,38 @@
 			<TableControls />
 			<!-- The one scroll region in the file view: title/coverage/controls above
 			     stay put, the sticky column header sticks to this container's top. -->
-			<div class="table-scroll">
-				<TermTable terms={$visibleTerms} sentences={$fileResult.sentences} />
+			<div class="table-scroll" class:bulk-open={$queuedCount > 0}>
+				{#if $visibleTerms.length === 0}
+					{@const posNarrowed = $posCatalog.some((p) => $posEnabled[p.key] === false)}
+					<div class="landing empty">
+						{#if $fileResult.terms.length === 0}
+							<h1 class="landing-title">Nothing left to mine</h1>
+							<p class="landing-jp">[JP line]</p>
+							<p class="landing-hint">
+								Every term in this file is already in Anki or on your ignore list.
+							</p>
+							<div class="landing-actions">
+								<button class="landing-open" onclick={openAndProcessFile}>Open File…</button>
+							</div>
+						{:else}
+							<h1 class="landing-title">Your filters are hiding everything</h1>
+							<p class="landing-jp">ちょっと絞り込みすぎたみたいです。</p>
+							<p class="landing-hint">
+								{$fileResult.terms.length} terms in this file, none of them shown.
+							</p>
+							<div class="landing-actions">
+								<button class="landing-open" onclick={clearTableFilters}>Clear filters</button>
+								{#if posNarrowed}
+									<button class="landing-open" onclick={openPosModal}>
+										Part of Speech Filters…
+									</button>
+								{/if}
+							</div>
+						{/if}
+					</div>
+				{:else}
+					<TermTable terms={$visibleTerms} sentences={$fileResult.sentences} />
+				{/if}
 			</div>
 		{:else}
 			<div class="landing">
@@ -160,15 +196,11 @@
 				<p class="landing-jp">ファイルがまだ読み込まれていません</p>
 				<p class="landing-hint">ℹ You can drag and drop a file at any time to load it.</p>
 				<div class="landing-actions">
-					<button class="landing-open" disabled={toolsError !== null} onclick={openAndProcessFile}
-						>Open File…</button
-					>
+					<button class="landing-open" onclick={openAndProcessFile}>Open File…</button>
 					{#if $playerStatus.ws_clients > 0}
 						<!-- Only offered while asbplayer is actually connected (issue #105). -->
-						<button
-							class="landing-open asb"
-							disabled={toolsError !== null}
-							onclick={openAsbplayerModal}>▶ Load from asbplayer</button
+						<button class="landing-open asb" onclick={openAsbplayerModal}
+							>▶ Load from asbplayer</button
 						>
 					{/if}
 				</div>
@@ -210,6 +242,9 @@
 		{/if}
 	</main>
 
+	<!-- First: every backdrop shares --z-modal, so paint order is DOM order, and the
+	     checklist is the one modal that opens others on top of itself. -->
+	<SetupChecklistModal />
 	<IgnoreListModal />
 	<AsbplayerModal />
 	<WebsocketSettingsModal />
@@ -221,7 +256,6 @@
 	<TextFiltersModal />
 	<RecentFilesModal />
 	<EpubChapterPickerModal />
-	<SetupChecklistModal />
 	<FrequencyAnalyzerModal />
 
 	{#if $lastError}
@@ -287,6 +321,7 @@
 		cursor: help;
 	}
 	button.tab-chip {
+		border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
 		cursor: pointer;
 	}
 	button.tab-chip:hover {
@@ -296,17 +331,14 @@
 	.tab-chip.ok {
 		color: var(--success);
 		background: color-mix(in srgb, var(--success) 10%, transparent);
-		border: 1px solid color-mix(in srgb, var(--success) 35%, transparent);
 	}
 	.tab-chip.warn {
 		color: var(--warning);
 		background: color-mix(in srgb, var(--warning) 10%, transparent);
-		border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
 	}
 	.tab-chip.danger {
 		color: var(--danger);
 		background: color-mix(in srgb, var(--danger) 10%, transparent);
-		border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
 	}
 	.comprehension {
 		margin: 0 0 0.15rem;
@@ -318,10 +350,17 @@
 		font-size: 12px;
 		color: var(--text-muted);
 	}
+	.excluded {
+		cursor: help;
+	}
 	.table-scroll {
 		flex: 1 1 auto;
 		min-height: 0;
 		overflow-y: auto;
+	}
+	/* Must clear `.bulk-bar` (TermTable), which is fixed and out of flow. */
+	.table-scroll.bulk-open {
+		padding-bottom: 3.5rem;
 	}
 	.landing {
 		display: flex;
@@ -334,6 +373,10 @@
 		height: 100%;
 		min-height: 0;
 	}
+	.landing.empty {
+		padding-top: 3rem;
+		height: auto;
+	}
 	.landing-title {
 		margin: 0;
 		font-size: 2rem;
@@ -343,7 +386,7 @@
 	.landing-jp {
 		margin: 0.25rem 0 0;
 		font-size: 1.125rem;
-		color: var(--know-young);
+		color: var(--text-muted);
 	}
 	.landing-hint {
 		margin: 0.25rem 0 0;
@@ -420,10 +463,12 @@
 		color: var(--info);
 	}
 	.recent-creator {
-		color: var(--know-young);
+		color: var(--text-muted);
 	}
 	.error {
 		color: var(--danger);
+		overflow-y: auto;
+		overflow-wrap: anywhere;
 	}
 	.error-banner {
 		position: fixed;
@@ -433,15 +478,15 @@
 		display: flex;
 		align-items: center;
 		gap: 0.6rem;
-		max-width: 90vw;
+		max-width: 90%;
 		padding: 0.6rem 0.9rem;
 		background: var(--bg-raised);
 		border: 1px solid var(--danger);
 		border-radius: var(--radius);
 		color: var(--text);
-		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+		box-shadow: var(--shadow-overlay);
 		/* Above modal backdrops (z 50): errors from modal actions must stay visible. */
-		z-index: 60;
+		z-index: var(--z-toast);
 	}
 	.error-banner strong {
 		color: var(--danger);
@@ -452,16 +497,16 @@
 		top: 3.2rem;
 		left: 50%;
 		transform: translateX(-50%);
-		max-width: 80vw;
+		max-width: 80%;
 		padding: 0.45rem 0.9rem;
 		background: var(--bg-raised);
 		border: 1px solid var(--success);
 		border-radius: var(--radius);
 		color: var(--text);
 		font-size: 0.85rem;
-		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+		box-shadow: var(--shadow-overlay);
 		/* Above modal backdrops (z 50): follow-mode loads can land mid-modal. */
-		z-index: 60;
+		z-index: var(--z-toast);
 	}
 	.error-banner .detail {
 		color: var(--text-muted);
@@ -495,7 +540,7 @@
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+		box-shadow: var(--shadow-overlay);
 	}
 	.drop-overlay {
 		position: fixed;
@@ -506,7 +551,7 @@
 		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
 		/* Don't intercept the native OS drop. */
 		pointer-events: none;
-		z-index: 20;
+		z-index: var(--z-drop);
 	}
 	.drop-card {
 		padding: 2rem 3rem;

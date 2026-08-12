@@ -39,6 +39,8 @@ const SEEK_CONFIRM_POLL: Duration = Duration::from_millis(250);
 const RECORD_BUFFER: Duration = Duration::from_millis(1500);
 const MEDIA_VERIFY_TIMEOUT: Duration = Duration::from_secs(6);
 const MEDIA_VERIFY_POLL: Duration = Duration::from_millis(500);
+/// Cloze refinement is optional, so it must never hold up the mine.
+const MATCH_LOOKUP_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[tauri::command]
 pub async fn mine_term(
@@ -70,7 +72,13 @@ pub async fn mine_term(
             .ok_or_else(|| format!("Yomitan card format \"{}\" no longer exists", name))?,
         None => &formats[0],
     };
-    let markers = yomitan::collect_markers(format);
+    let format_markers = yomitan::collect_markers(format);
+    let mut markers = format_markers.clone();
+    for extra in ["expression", "reading"] {
+        if !markers.iter().any(|m| m == extra) {
+            markers.push(extra.to_string());
+        }
+    }
     let rendered =
         yomitan::render_fields(&yomitan_url, &term, &markers, entry_index as u32 + 1, true)
             .await
@@ -78,17 +86,33 @@ pub async fn mine_term(
 
     let empty = std::collections::HashMap::new();
     let marker_values = rendered.fields.get(entry_index).unwrap_or(&empty);
-    if marker_values.values().all(|v| v.trim().is_empty()) {
+    // Only the format's own markers: expression renders for every entry that exists.
+    if format_markers.iter().all(|m| marker_values.get(m).is_none_or(|v| v.trim().is_empty())) {
         return Err(format!("Yomitan has no dictionary entry for 「{}」", term));
     }
+    let key = mined::entry_key(
+        marker_values.get("expression").map(String::as_str).unwrap_or_default(),
+        marker_values.get("reading").map(String::as_str).unwrap_or_default(),
+    );
 
     // Cloze highlighting must match the text as it appears in the sentence: an
     // inflected occurrence (沈めて) never contains the lemma (沈める).
-    let cloze_term = if !surface.is_empty() && sentence.contains(&surface) {
-        surface.as_str()
-    } else {
-        term.as_str()
-    };
+    let matched = tokio::time::timeout(
+        MATCH_LOOKUP_TIMEOUT,
+        yomitan::matched_source(&yomitan_url, &term, entry_index),
+    )
+    .await
+    .ok()
+    .flatten();
+    let cloze_term = matched
+        .as_deref()
+        .filter(|m| sentence.contains(m) && (m.starts_with(&surface) || surface.starts_with(*m)))
+        .or(if !surface.is_empty() && sentence.contains(&surface) {
+            Some(surface.as_str())
+        } else {
+            None
+        })
+        .unwrap_or(term.as_str());
     let ctx = yomitan::SentenceContext { sentence: &sentence, term: cloze_term };
     let fields = yomitan::assemble_fields(format, marker_values, Some(ctx));
     if fields.is_empty() {
@@ -126,6 +150,7 @@ pub async fn mine_term(
                 warning: None,
                 note_id: None,
                 media_missing: false,
+                key,
             });
         }
         Some(err) => return Err(err),
@@ -166,7 +191,7 @@ pub async fn mine_term(
         }
     }
 
-    Ok(MineResultDto { status: "created".to_string(), via, warning, note_id, media_missing })
+    Ok(MineResultDto { status: "created".to_string(), via, warning, note_id, media_missing, key })
 }
 
 /// Re-run asbplayer enrichment on a note whose media never landed.
@@ -312,12 +337,12 @@ async fn wait_for_seek_confirmation(player: &PlayerHandle, secs: f32) {
 #[tauri::command]
 pub async fn get_mined_state(state: State<'_, Mutex<AppState>>) -> Result<MinedStateDto, String> {
     let mappings = { state.lock().unwrap().settings.anki_model_mappings.clone() };
-    let (added_terms, added_sentences) =
+    let (added_terms, added_keys, added_sentences) =
         mined::get_recently_added(&mappings).await.unwrap_or_default();
 
     let mut mined_sentences = mined::mined_sentences_pruned().await;
     mined_sentences.extend(added_sentences);
-    Ok(MinedStateDto { added_terms, mined_sentences })
+    Ok(MinedStateDto { added_terms, added_keys, mined_sentences })
 }
 
 /// The user's Yomitan term card formats, for the popover's per-format buttons.
@@ -352,6 +377,14 @@ pub async fn render_definition(
         yomitan::render_fields(&yomitan_url, &term, &markers, DEFINITION_MAX_ENTRIES, false)
             .await
             .map_err(|e| e.to_string())?;
+
+    let mut guard = state.lock().unwrap();
+    let mtime = mined::vocab_cache_mtime();
+    if guard.known_entry_keys.as_ref().map(|(seen, _)| *seen) != mtime {
+        guard.known_entry_keys = mtime.map(|t| (t, mined::known_entry_keys()));
+    }
+    let known = guard.known_entry_keys.as_ref().map(|(_, keys)| keys);
+
     Ok(rendered
         .fields
         .into_iter()
@@ -361,10 +394,15 @@ pub async fn render_definition(
             if glossary_html.trim().is_empty() {
                 return None;
             }
+            let expression = entry.remove("expression").unwrap_or_default();
+            let reading = entry.remove("reading").unwrap_or_default();
+            let key = mined::entry_key(&expression, &reading);
             Some(DefinitionEntryDto {
                 index,
-                expression: entry.remove("expression").unwrap_or_default(),
-                reading: entry.remove("reading").unwrap_or_default(),
+                known: known.is_some_and(|keys| keys.contains(&key)),
+                key,
+                expression,
+                reading,
                 furigana_html: entry.remove("furigana").unwrap_or_default(),
                 frequencies_html: entry.remove("frequencies").unwrap_or_default(),
                 glossary_html,

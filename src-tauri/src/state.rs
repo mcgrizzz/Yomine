@@ -9,6 +9,7 @@ use std::{
         atomic::AtomicBool,
         Arc,
     },
+    time::SystemTime,
 };
 
 use yomine::{
@@ -68,6 +69,9 @@ pub struct AppState {
     /// From the last catalog fetch; installs resolve their download URL here so
     /// the frontend only ever passes a title.
     pub recommended_catalog: Vec<crate::recommended::RecommendedEntry>,
+    /// Reading-keyed duplicate lookup for the popover, keyed on the vocab
+    /// cache's mtime: the pipeline rewrites it on a live Anki filter.
+    pub known_entry_keys: Option<(SystemTime, HashSet<String>)>,
 }
 
 impl AppState {
@@ -85,6 +89,7 @@ impl AppState {
                 (!cached.jlpt.is_empty() || !cached.frequency.is_empty()).then_some(cached)
             },
             recommended_catalog: Vec::new(),
+            known_entry_keys: None,
         }
     }
 }

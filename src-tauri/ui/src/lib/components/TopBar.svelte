@@ -1,8 +1,8 @@
 <script lang="ts">
 	// Menu grouping deviates from egui: Mining = what you tweak while working;
 	// Settings = configuration + the setup checklist.
-	import { openUrl } from '@tauri-apps/plugin-opener';
 	import {
+		openExternal,
 		settings,
 		ankiStatus,
 		asbContext,
@@ -63,19 +63,22 @@
 		openMenu = null;
 	}
 
-	const GREEN = 'var(--status-ok)';
-	const YELLOW = 'var(--status-warn)';
-	const BLUE = 'var(--status-busy)';
-	const RED = 'var(--status-error)';
-	const GREY = 'var(--status-off)';
-	const ANKI_RED = 'var(--status-error)';
+	type StatusKind = 'ok' | 'warn' | 'error' | 'busy' | 'off';
 
-	const asbplayer = $derived.by(() => {
+	const STATUS: Record<StatusKind, { glyph: string; color: string }> = {
+		ok: { glyph: '●', color: 'var(--status-ok)' },
+		warn: { glyph: '▲', color: 'var(--status-warn)' },
+		error: { glyph: '✕', color: 'var(--status-error)' },
+		busy: { glyph: '◐', color: 'var(--status-busy)' },
+		off: { glyph: '○', color: 'var(--status-off)' }
+	};
+
+	const asbplayer = $derived.by((): { kind: StatusKind; tip: string } => {
 		const s = $playerStatus;
 		if (s.server_state === 'running' && s.ws_clients > 0) {
 			if ($asbContext.loaded_from_asbplayer && !$asbContext.loaded_is_active)
 				return {
-					color: YELLOW,
+					kind: 'warn',
 					tip: 'asbplayer mode — the loaded video is in a background tab; switch to it before mining (screenshots capture the visible tab)'
 				};
 			const unboundSubs =
@@ -83,18 +86,18 @@
 				($fileResult?.source_file.file_type === 'SRT' ||
 					$fileResult?.source_file.file_type === 'SSA');
 			return {
-				color: GREEN,
+				kind: 'ok',
 				tip: unboundSubs
 					? 'asbplayer mode — mining captures from the active tab (subtitles not bound to a video)'
 					: 'asbplayer mode — seeking and card media capture while mining'
 			};
 		}
 		if (s.server_state === 'running')
-			return { color: YELLOW, tip: 'WebSocket server running - waiting for asbplayer' };
+			return { kind: 'warn', tip: 'WebSocket server running - waiting for asbplayer' };
 		if (s.server_state === 'error')
-			return { color: RED, tip: `WebSocket server error: ${s.server_error ?? ''}` };
-		if (s.server_state === 'starting') return { color: BLUE, tip: 'WebSocket server starting...' };
-		return { color: GREY, tip: 'WebSocket server stopped' };
+			return { kind: 'error', tip: `WebSocket server error: ${s.server_error ?? ''}` };
+		if (s.server_state === 'starting') return { kind: 'busy', tip: 'WebSocket server starting...' };
+		return { kind: 'off', tip: 'WebSocket server stopped' };
 	});
 
 	// Bound-media polling only runs for follow mode or an asbplayer session, so
@@ -105,13 +108,13 @@
 			$asbContext.loaded_from_asbplayer
 	);
 
-	const mpv = $derived(
+	const mpv: { kind: StatusKind; tip: string } = $derived(
 		$playerStatus.mpv_connected
 			? {
-					color: GREEN,
+					kind: 'ok',
 					tip: 'MPV mode — seeking works, but mined cards get no audio/screenshot (media capture needs asbplayer)'
 				}
-			: { color: GREY, tip: 'MPV not detected' }
+			: { kind: 'off', tip: 'MPV not detected' }
 	);
 
 	const ankiTip = $derived(
@@ -128,6 +131,10 @@
 	onclick={() => (openMenu = null)}
 	onkeydown={(e) => e.key === 'Escape' && (openMenu = null)}
 />
+
+{#snippet dot(kind: StatusKind)}
+	<span class="dot" style:color={STATUS[kind].color} aria-hidden="true">{STATUS[kind].glyph}</span>
+{/snippet}
 
 <header class="topbar">
 	<span class="brand">Yomine</span>
@@ -286,7 +293,7 @@
 			title={u.installable
 				? `Yomine ${u.latest} is available (you have v${u.current}) — click to download and install`
 				: `Yomine ${u.latest} is available (you have v${u.current}) — open the release page`}
-			onclick={() => (u.installable ? installUpdate() : openUrl(u.url))}
+			onclick={() => (u.installable ? installUpdate() : openExternal(u.url))}
 		>
 			⬆ {u.latest} available
 		</button>
@@ -302,7 +309,7 @@
 				onclick={(e) => toggleMenu('asb', e)}
 			>
 				<small>asbplayer</small>
-				<span class="dot" style:color={asbplayer.color}>●</span>
+				{@render dot(asbplayer.kind)}
 			</button>
 			{#if openMenu === 'asb'}
 				<!-- Toggling a follow checkbox keeps the menu open; Esc / clicking
@@ -366,7 +373,7 @@
 				onclick={(e) => toggleMenu('mpv', e)}
 			>
 				<small>mpv</small>
-				<span class="dot" style:color={mpv.color}>●</span>
+				{@render dot(mpv.kind)}
 			</button>
 			{#if openMenu === 'mpv'}
 				<div
@@ -404,7 +411,7 @@
 			{#if $ankiStatus.fetching}
 				<span class="spinner" aria-label="Syncing with Anki"></span>
 			{:else}
-				<span class="dot" style:color={$ankiStatus.connected ? GREEN : ANKI_RED}>●</span>
+				{@render dot($ankiStatus.connected ? 'ok' : 'error')}
 			{/if}
 		</span>
 		<!-- Optional (grey, not red, when absent) — gates the one-click mine buttons. -->
@@ -415,7 +422,7 @@
 				: 'Yomitan API not detected — one-click mining disabled'}
 		>
 			<small>Yomitan</small>
-			<span class="dot" style:color={$yomitanReachable ? GREEN : GREY}>●</span>
+			{@render dot($yomitanReachable ? 'ok' : 'off')}
 		</span>
 	</div>
 </header>
@@ -473,7 +480,7 @@
 		position: absolute;
 		top: 100%;
 		left: 0;
-		z-index: 30;
+		z-index: var(--z-menu);
 		margin-top: 0.2rem;
 		min-width: 220px;
 		display: flex;
@@ -482,7 +489,7 @@
 		background: var(--bg-raised);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
-		box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+		box-shadow: var(--shadow-overlay);
 	}
 	.menu-panel button {
 		text-align: left;
@@ -542,7 +549,7 @@
 		color: var(--success);
 		background: transparent;
 		border: 1px solid var(--success);
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		white-space: nowrap;
 	}
 	.update-pill:hover {
@@ -576,7 +583,8 @@
 		padding: 0.4rem 0.6rem;
 		font-size: 0.8rem;
 		color: var(--text-muted);
-		white-space: nowrap;
+		max-width: 320px;
+		overflow-wrap: anywhere;
 	}
 	.menu-note.warn {
 		color: var(--warning);
@@ -610,7 +618,11 @@
 		font-size: 0.7rem;
 		color: var(--text-muted);
 	}
+	/* Fixed box so the label beside it doesn't shift when the glyph changes. */
 	.dot {
+		display: inline-block;
+		width: 1.1em;
+		text-align: center;
 		font-size: 0.7rem;
 		line-height: 1;
 	}

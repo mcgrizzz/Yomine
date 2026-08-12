@@ -15,13 +15,13 @@
 		padding: 0.35rem 1rem;
 		border: none;
 		border-radius: 0;
-		background: color-mix(in srgb, var(--warning) 55%, var(--bg));
-		color: var(--text);
+		background: var(--warning);
+		color: var(--bg);
 		font-size: 0.875rem;
 		text-align: center;
 		cursor: pointer;
 	}
 	.banner:hover {
-		background: color-mix(in srgb, var(--warning) 70%, var(--bg));
+		background: color-mix(in srgb, var(--warning) 90%, var(--text));
 	}
 </style>

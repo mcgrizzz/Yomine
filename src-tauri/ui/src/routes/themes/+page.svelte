@@ -102,7 +102,8 @@
 						onclick={(e) => {
 							e.stopPropagation();
 							openEditor(theme.label);
-						}}>✎</button
+						}}
+						onkeydown={(e) => e.stopPropagation()}>✎</button
 					>
 				{/if}
 			</div>
@@ -139,6 +140,9 @@
 		border-radius: var(--radius);
 		cursor: pointer;
 		text-align: left;
+	}
+	.theme-card.current {
+		box-shadow: 0 0 0 2px var(--accent);
 	}
 	.strip {
 		display: flex;
@@ -181,7 +185,7 @@
 		bottom: 0.3rem;
 		right: 0.3rem;
 		padding: 0.1rem 0.4rem;
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		font-size: 0.6rem;
 		font-weight: 700;
 		letter-spacing: 0.05em;
@@ -191,6 +195,8 @@
 		top: 0.25rem;
 		right: 0.25rem;
 		padding: 0 0.3rem;
+		min-width: 24px;
+		min-height: 24px;
 		font-size: 0.75rem;
 		background: none;
 		border: none;
@@ -207,10 +213,5 @@
 		border: 2px dashed var(--border);
 		color: var(--text-muted);
 		font-size: 0.85rem;
-	}
-	.hint {
-		margin: 0;
-		font-size: 0.85rem;
-		color: var(--text-muted);
 	}
 </style>

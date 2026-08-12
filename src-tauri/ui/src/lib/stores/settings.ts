@@ -8,14 +8,20 @@ import { refreshMinedState } from './mining';
 
 export const settings = writable<ipc.SettingsData | null>(null);
 
-/** Returns false when settings haven't hydrated yet (nothing to patch against). */
+/** Returns false when settings haven't hydrated yet, or when the save failed. */
 async function patchSettings(patch: Partial<ipc.SettingsData>): Promise<boolean> {
 	const s = get(settings);
 	if (!s) return false;
 	const updated = { ...s, ...patch };
 	settings.set(updated);
-	await ipc.saveSettings(updated);
-	return true;
+	try {
+		await ipc.saveSettings(updated);
+		return true;
+	} catch (err) {
+		settings.set(s);
+		lastError.set({ title: 'Settings', message: 'Failed to save settings', detail: String(err) });
+		return false;
+	}
 }
 
 export async function toggleDarkMode(): Promise<void> {
@@ -41,19 +47,22 @@ export async function toggleSerifFont(): Promise<void> {
 	await patchSettings({ use_serif_font: !s.use_serif_font });
 }
 
-export const setFontScale = (scale: number) =>
-	patchSettings({ font_scale: Math.min(1.5, Math.max(0.75, scale)) });
-
-export const setDefinitionScale = (scale: number) =>
-	patchSettings({ definition_scale: Math.min(1.5, Math.max(0.5, scale)) });
+/** One write so a mid-sequence failure can't leave appearance half-applied. */
+export async function saveAppearance(
+	fontScale: number,
+	definitionScale: number,
+	coloring: ipc.SentenceColoring,
+	underlines: ipc.UnderlineToggles
+): Promise<boolean> {
+	return patchSettings({
+		font_scale: Math.min(1.5, Math.max(0.75, fontScale)),
+		definition_scale: Math.min(1.5, Math.max(0.5, definitionScale)),
+		sentence_coloring: coloring,
+		sentence_underlines: { ...underlines }
+	});
+}
 
 export const setMpvPath = (path: string) => patchSettings({ mpv_path: path });
-
-export const setSentenceColoring = (mode: ipc.SentenceColoring) =>
-	patchSettings({ sentence_coloring: mode });
-
-export const setSentenceUnderlines = (toggles: ipc.UnderlineToggles) =>
-	patchSettings({ sentence_underlines: { ...toggles } });
 
 export const setTableColumns = (columns: { id: string; visible: boolean }[]) =>
 	patchSettings({ table_columns: columns.map((c) => ({ ...c })) });

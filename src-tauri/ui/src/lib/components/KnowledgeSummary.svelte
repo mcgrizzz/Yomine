@@ -99,6 +99,7 @@
 	}
 	.mode-title {
 		padding: 0;
+		min-height: 24px;
 		background: none;
 		border: none;
 		font-size: 14px;
@@ -108,6 +109,8 @@
 	}
 	.swap {
 		padding: 0;
+		min-width: 24px;
+		min-height: 24px;
 		background: none;
 		border: none;
 		font-size: 13px;

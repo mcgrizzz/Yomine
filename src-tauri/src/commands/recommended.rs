@@ -133,8 +133,14 @@ pub async fn install_recommended_dictionary(
         let callback: Box<dyn Fn(String) + Send> = Box::new(move |message: String| {
             let _ = progress_dl.send(LoadingMessage::new(message));
         });
-        http::download_with_progress(&client, &entry.download_url, &tmp, Some(callback.as_ref()))
-            .map_err(|e| e.to_string())?;
+        http::download_with_progress(
+            &client,
+            &entry.download_url,
+            &tmp,
+            &entry.name,
+            Some(callback.as_ref()),
+        )
+        .map_err(|e| e.to_string())?;
 
         remove_dictionary_files(&entry.title)?;
         fs::rename(&tmp, &dest).map_err(|e| e.to_string())

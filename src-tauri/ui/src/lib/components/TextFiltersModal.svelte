@@ -2,6 +2,8 @@
 	// Staged edits; Save persists AND re-processes the loaded file so the new
 	// filters take effect immediately (issue #92).
 	import { untrack } from 'svelte';
+	import { dirtyGuard } from '$lib/dirtyGuard.svelte';
+	import Modal from './Modal.svelte';
 	import {
 		getTextFilterPresets,
 		testTextFilters,
@@ -28,6 +30,10 @@
 
 	const snapshot = () => JSON.stringify([stagedPresets, stagedFilters]);
 	const dirty = $derived(snapshot() !== original);
+	const guard = dirtyGuard(
+		() => dirty,
+		() => textFiltersModalOpen.set(false)
+	);
 
 	$effect(() => {
 		if ($textFiltersModalOpen) untrack(hydrate);
@@ -43,6 +49,7 @@
 		stagedPresets = { ...($settings?.text_filter_presets ?? {}) };
 		stagedFilters = ($settings?.text_filters ?? []).map((f) => ({ ...f }));
 		original = snapshot();
+		guard.disarm();
 	}
 
 	// Live preview + validation, debounced. Runs even with an empty sample —
@@ -98,150 +105,89 @@
 	}
 </script>
 
-<!-- Esc closes from anywhere: the backdrop's own keydown only fires once focus
-     is inside the modal, which it isn't right after opening from a menu. -->
-<svelte:window
-	onkeydown={(e) => $textFiltersModalOpen && e.key === 'Escape' && textFiltersModalOpen.set(false)}
-/>
+<Modal
+	open={$textFiltersModalOpen}
+	title="Text Filters"
+	width="min(600px, 92%)"
+	onclose={guard.request}
+	oninteract={guard.disarm}
+>
+	<p class="blurb">
+		Filters run on each line before terms and comprehension are computed. A line left empty is
+		dropped entirely.
+	</p>
 
-{#if $textFiltersModalOpen}
-	<div
-		class="backdrop"
-		role="button"
-		tabindex="-1"
-		onclick={() => textFiltersModalOpen.set(false)}
-		onkeydown={(e) => e.key === 'Escape' && textFiltersModalOpen.set(false)}
-	>
-		<!-- Stop backdrop clicks inside the dialog from closing it. -->
-		<div
-			class="dialog"
-			role="dialog"
-			aria-modal="true"
-			aria-label="Text filters"
-			tabindex="-1"
-			onclick={(e) => e.stopPropagation()}
-		>
-			<header>
-				<h2>Text Filters</h2>
-				<button class="close" aria-label="Close" onclick={() => textFiltersModalOpen.set(false)}
-					>✕</button
+	<section>
+		<h3>Presets</h3>
+		{#each presets as preset (preset.id)}
+			<label class="preset">
+				<input type="checkbox" bind:checked={stagedPresets[preset.id]} />
+				<span>
+					<span class="preset-label" lang="ja">{preset.label}</span>
+					<span class="preset-desc" lang="ja">{preset.description}</span>
+				</span>
+			</label>
+		{/each}
+	</section>
+
+	<section>
+		<h3>Custom filters <span class="dim">(regex, applied in order)</span></h3>
+		{#each stagedFilters as filter, i (i)}
+			<div class="rule">
+				<input
+					type="checkbox"
+					bind:checked={filter.enabled}
+					aria-label="Enable this filter"
+				/>
+				<input
+					class="mono"
+					type="text"
+					placeholder="pattern (regex)"
+					bind:value={filter.pattern}
+				/>
+				<input
+					class="mono"
+					type="text"
+					placeholder="replacement (empty = remove)"
+					bind:value={filter.replacement}
+				/>
+				<button
+					class="icon remove"
+					aria-label="Remove this filter"
+					onclick={() => stagedFilters.splice(i, 1)}>✕</button
 				>
-			</header>
-
-			<p class="blurb">
-				Filters run on each line before terms and comprehension are computed. A line left empty is
-				dropped entirely.
-			</p>
-
-			<section>
-				<h3>Presets</h3>
-				{#each presets as preset (preset.id)}
-					<label class="preset">
-						<input type="checkbox" bind:checked={stagedPresets[preset.id]} />
-						<span>
-							<span class="preset-label" lang="ja">{preset.label}</span>
-							<span class="preset-desc" lang="ja">{preset.description}</span>
-						</span>
-					</label>
-				{/each}
-			</section>
-
-			<section>
-				<h3>Custom filters <span class="dim">(regex, applied in order)</span></h3>
-				{#each stagedFilters as filter, i (i)}
-					<div class="rule">
-						<input
-							type="checkbox"
-							bind:checked={filter.enabled}
-							aria-label="Enable this filter"
-						/>
-						<input
-							class="mono"
-							type="text"
-							placeholder="pattern (regex)"
-							bind:value={filter.pattern}
-						/>
-						<input
-							class="mono"
-							type="text"
-							placeholder="replacement (empty = remove)"
-							bind:value={filter.replacement}
-						/>
-						<button
-							class="close"
-							aria-label="Remove this filter"
-							onclick={() => stagedFilters.splice(i, 1)}>✕</button
-						>
-					</div>
-				{/each}
-				<button class="add" onclick={addFilter}>+ Add filter</button>
-			</section>
-
-			<section>
-				<h3>Test</h3>
-				<input class="mono" type="text" lang="ja" placeholder="Sample line" bind:value={sample} />
-				{#if testError}
-					<p class="test-out error">{testError}</p>
-				{:else if testResult !== null}
-					<p class="test-out" lang="ja">
-						→ {testResult === '' ? '(line dropped)' : testResult}
-					</p>
-				{/if}
-			</section>
-
-			<div class="status">
-				{#if testError}⚠ Fix the invalid pattern to save{:else if dirty}⚠ Settings have been
-					modified{/if}
 			</div>
+		{/each}
+		<button class="add" onclick={addFilter}>+ Add filter</button>
+	</section>
 
-			<footer>
-				<button disabled={!dirty || saving || testError !== null} onclick={save}>
-					{saving ? 'Applying…' : $fileResult ? 'Save & Apply' : 'Save Settings'}
-				</button>
-				<button disabled={!dirty || saving} onclick={cancel}>Cancel</button>
-			</footer>
+	<section>
+		<h3>Test</h3>
+		<input class="mono" type="text" lang="ja" placeholder="Sample line" bind:value={sample} />
+		{#if testError}
+			<p class="test-out error">{testError}</p>
+		{:else if testResult !== null}
+			<p class="test-out" lang="ja">
+				→ {testResult === '' ? '(line dropped)' : testResult}
+			</p>
+		{/if}
+	</section>
+
+	{#snippet footer()}
+		<div class="status">
+			{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if testError}⚠ Fix the
+				invalid pattern to save{:else if dirty}⚠ Settings have been modified{/if}
 		</div>
-	</div>
-{/if}
+		<footer>
+			<button class="primary" disabled={!dirty || saving || testError !== null} onclick={save}>
+				{saving ? 'Applying…' : $fileResult ? 'Save & Apply' : 'Save Settings'}
+			</button>
+			<button disabled={!dirty || saving} onclick={cancel}>Cancel</button>
+		</footer>
+	{/snippet}
+</Modal>
 
 <style>
-	.backdrop {
-		position: fixed;
-		inset: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
-		z-index: 50;
-	}
-	.dialog {
-		display: flex;
-		flex-direction: column;
-		gap: 0.6rem;
-		width: min(600px, 92%);
-		max-height: 88vh;
-		overflow-y: auto;
-		padding-bottom: 0.75rem;
-		background: var(--bg-panel);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-	}
-	header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 0.75rem 1rem;
-		border-bottom: 1px solid var(--border);
-	}
-	header h2 {
-		margin: 0;
-		font-size: 1.05rem;
-		color: var(--accent);
-	}
-	.close {
-		padding: 0.1rem 0.4rem;
-	}
 	.blurb {
 		margin: 0;
 		padding: 0 1rem;
@@ -285,6 +231,16 @@
 		grid-template-columns: auto 1fr 1fr auto;
 		align-items: center;
 		gap: 0.4rem;
+	}
+	.icon {
+		padding: 0.1rem 0.4rem;
+		background: none;
+		border: none;
+		color: var(--text);
+		cursor: pointer;
+	}
+	.icon.remove {
+		color: var(--danger);
 	}
 	.mono {
 		font-family: monospace;

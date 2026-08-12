@@ -31,12 +31,12 @@
 	--bg-hover: #424550;
 
 	--text: #f8f8f2;
-	--text-muted: #6272a4;
+	--text-muted: #929ec9;
 	--selection: #44475a;
 	--border: #424550;
 
 	--accent: #8be9fd;
-	--term: #ff5555;
+	--term: #ff79c6;
 	--link: #62a0ea;
 	--info: #62a0ea;
 	--success: #50fa7b;
@@ -49,7 +49,7 @@
 	--status-warn: #f1fa8c;
 	--status-error: #ff5555;
 	--status-busy: #62a0ea;
-	--status-off: #6272a4;
+	--status-off: #7f818c;
 
 	/* Anki knowledge states (sentence underlines, state colors) */
 	--know-unknown: #ff5555;
@@ -58,6 +58,21 @@
 	--know-mature: #50fa7b;
 
 	--radius: 6px;
+	--radius-sm: 3px;
+	--radius-pill: 999px;
+
+	--shadow-overlay: 0 4px 16px rgba(0, 0, 0, 0.4);
+	--shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.5);
+
+	/* Popover and toast outrank modals deliberately: Escape peels the popover
+	 * first (TermTable.svelte), and a failed save must show over its own modal. */
+	--z-sticky: 1;
+	--z-drop: 20;
+	--z-menu: 30;
+	--z-bar: 40;
+	--z-modal: 50;
+	--z-toast: 60;
+	--z-popover: 100;
 
 	color-scheme: dark;
 }
@@ -108,6 +123,23 @@ button:disabled {
 	cursor: default;
 }
 
+/* Labels stay --text: neither accent nor danger reaches 4.5:1 under one across
+ * all 14 themes, and 12% is the strongest tint --text survives. */
+.primary {
+	background: color-mix(in srgb, var(--accent) 8%, var(--bg-raised));
+	border-color: var(--accent);
+}
+.primary:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--accent) 12%, var(--bg-raised));
+}
+.danger {
+	background: color-mix(in srgb, var(--danger) 8%, var(--bg-raised));
+	border-color: var(--danger);
+}
+.danger:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--danger) 12%, var(--bg-raised));
+}
+
 /* Text-like inputs share the themed surface everywhere (checkbox/radio/range
  * keep their native rendering). Component styles may tighten padding/width. */
 input:not([type='checkbox']):not([type='radio']):not([type='range']),
@@ -117,7 +149,7 @@ textarea {
 	color: var(--text);
 	background: var(--bg-raised);
 	border: 1px solid var(--border);
-	border-radius: 3px;
+	border-radius: var(--radius-sm);
 	padding: 0.3rem 0.5rem;
 }
 

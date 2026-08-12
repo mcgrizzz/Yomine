@@ -610,11 +610,15 @@ export interface MineResult {
 	warning: string | null;
 	note_id: number | null;
 	media_missing: boolean;
+	/** `anki::mined::entry_key` of the entry that was mined. */
+	key: string;
 }
 
 /** Already-mined state (issue #3); sentences are `normalizeSentence` keys. */
 export interface MinedState {
 	added_terms: string[];
+	/** `entry_key`s for the same notes — reading-keyed, for the popover. */
+	added_keys: string[];
 	mined_sentences: string[];
 }
 
@@ -700,6 +704,10 @@ export interface DefinitionEntry {
 	index: number;
 	expression: string;
 	reading: string;
+	/** `anki::mined::entry_key` of this entry. */
+	key: string;
+	/** This exact (expression, reading) is already in the vocab cache. */
+	known: boolean;
 	/** The expression as `<ruby>` markup for the header. */
 	furigana_html: string;
 	/** `<ul><li>Dict: rank</li>…</ul>`, restyled into chips. */

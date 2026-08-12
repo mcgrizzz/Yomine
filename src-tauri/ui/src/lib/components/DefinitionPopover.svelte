@@ -2,9 +2,6 @@
 	// Never write a literal style tag in this file (strings and comments count):
 	// Svelte's preprocess regex would parse it as the component's style block.
 
-	// Session-wide so reopening a term never refetches.
-	const cache = new Map<string, DefinitionEntry[]>();
-
 	const SIZE_KEY = 'yomine:definition-popover-size';
 	const FORMAT_KEY = 'yomine:mine-format';
 
@@ -83,19 +80,24 @@
 </script>
 
 <script lang="ts">
-	import { renderDefinition, type CardFormat, type DefinitionEntry } from '$lib/ipc';
+	import { cachedEntries, fetchEntries } from '$lib/definitions';
+	import { type CardFormat, type DefinitionEntry } from '$lib/ipc';
 
 	let {
 		text,
 		label = text,
 		anchor,
 		scale = 1,
-		showMine,
+		canMine = false,
+		canQueue,
+		isDuplicate,
 		mineDisabled,
-		mineTitle = 'Create an Anki card from the displayed sentence',
+		mineTitle,
 		formats = [],
+		pickedIndex,
 		onmine,
 		onqueue,
+		onpick,
 		onclose
 	}: {
 		/** What Yomitan scans (a lemma, or a sentence remainder to longest-match). */
@@ -103,13 +105,18 @@
 		label?: string;
 		anchor: DOMRect;
 		scale?: number;
-		showMine: boolean;
-		mineDisabled: boolean;
-		mineTitle?: string;
+		canMine?: boolean;
+		canQueue?: (entry: DefinitionEntry) => boolean;
+		isDuplicate?: (entry: DefinitionEntry) => boolean;
+		mineDisabled?: (entry: DefinitionEntry) => boolean;
+		mineTitle?: (entry: DefinitionEntry) => string;
 		/** Yomitan term card formats; >1 renders per-format buttons. */
 		formats?: CardFormat[];
-		onmine: (entryIndex: number, formatName?: string) => void;
-		onqueue: (entryIndex: number, formatName?: string) => void;
+		pickedIndex?: number;
+		onmine?: (entry: DefinitionEntry, formatName?: string) => void;
+		onqueue?: (entry: DefinitionEntry, formatName?: string) => void;
+		/** Set to pick an entry for an already-queued term instead of mining. */
+		onpick?: (entry: DefinitionEntry) => void;
 		onclose: () => void;
 	} = $props();
 
@@ -136,15 +143,14 @@
 	$effect(() => {
 		const lookup = text;
 		error = null;
-		const hit = cache.get(lookup);
+		const hit = cachedEntries(lookup);
 		if (hit) {
 			entries = hit;
 			return;
 		}
 		entries = null;
-		renderDefinition(lookup).then(
+		fetchEntries(lookup).then(
 			(result) => {
-				cache.set(lookup, result);
 				if (lookup === text) entries = result;
 			},
 			(e) => {
@@ -217,7 +223,7 @@
 		pos.anchored}
 	onclick={(e) => e.stopPropagation()}
 >
-	{#if showMine && multiFormat}
+	{#if canMine && multiFormat}
 		<div class="format-row">
 			<label for="popover-format">Card format</label>
 			<select
@@ -250,14 +256,35 @@
 								<span class="reading">【{entry.reading}】</span>
 							{/if}
 						{/if}
-						{#if showMine}
+						{#if onpick}
+							{@const current = entry.index === pickedIndex}
 							<span class="actions">
 								<button
 									class="mine-btn"
-									disabled={mineDisabled}
-									title={multiFormat ? `${mineTitle} — format: ${activeFormat}` : mineTitle}
+									class:primary={!current}
+									disabled={current}
+									title={current
+										? 'This entry is already selected for the queued term'
+										: 'Use this entry for the queued term'}
 									onclick={() => {
-										onmine(entry.index, multiFormat ? activeFormat : undefined);
+										onpick(entry);
+										onclose();
+									}}>{current ? 'Current' : 'Use this entry'}</button
+								>
+							</span>
+						{:else if canMine && onmine}
+							{@const dupe = isDuplicate?.(entry) ?? false}
+							<span class="actions">
+								<button
+									class="mine-btn"
+									class:primary={!dupe}
+									disabled={mineDisabled?.(entry) ?? false}
+									title={(dupe
+										? 'Already in Anki — mine again to add another card'
+										: (mineTitle?.(entry) ?? '')) +
+										(multiFormat ? ` — format: ${activeFormat}` : '')}
+									onclick={() => {
+										onmine(entry, multiFormat ? activeFormat : undefined);
 										onclose();
 									}}
 									><svg
@@ -271,17 +298,19 @@
 										>
 											<path d="M3 21 L13.5 10.5" />
 											<path d="M10 4 Q 17.8 6.2 20 14" />
-										</svg> Mine</button
+										</svg> {dupe ? 'Mine again' : 'Mine'}</button
 								>
-								<button
-									class="mine-btn"
-									title={'Select for batch mining using this definition' +
-										(multiFormat ? ` — format: ${activeFormat}` : '')}
-									onclick={() => {
-										onqueue(entry.index, multiFormat ? activeFormat : undefined);
-										onclose();
-									}}>Queue</button
-								>
+								{#if onqueue && canQueue?.(entry)}
+									<button
+										class="mine-btn"
+										title={'Select for batch mining using this definition' +
+											(multiFormat ? ` — format: ${activeFormat}` : '')}
+										onclick={() => {
+											onqueue(entry, multiFormat ? activeFormat : undefined);
+											onclose();
+										}}>Queue</button
+									>
+								{/if}
 							</span>
 						{/if}
 					</div>
@@ -318,19 +347,19 @@
 <style>
 	.popover {
 		position: fixed;
-		z-index: 100;
+		z-index: var(--z-popover);
 		display: flex;
 		flex-direction: column;
 		background: var(--bg-panel);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
-		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+		box-shadow: var(--shadow-overlay);
 		resize: both;
 		overflow: hidden;
 		min-width: 14rem;
 		min-height: 4rem;
-		max-width: calc(100vw - 1rem);
-		max-height: calc(100vh - 1rem);
+		max-width: calc(100% - 1rem);
+		max-height: calc(100% - 1rem);
 	}
 	/* Scale the content, not .popover itself: the position math and remembered
 	 * size (script above) work in unscaled px. */
@@ -466,18 +495,9 @@
 		margin-left: auto;
 	}
 	.mine-btn {
-		cursor: pointer;
 		padding: 0.1rem 0.45rem;
-		background: var(--bg-raised);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		color: var(--accent);
 		font-size: 0.75rem;
 		white-space: nowrap;
-	}
-	.mine-btn:hover:not(:disabled) {
-		background: var(--bg-hover);
-		border-color: var(--accent);
 	}
 	.mine-btn:disabled {
 		opacity: 0.5;

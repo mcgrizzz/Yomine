@@ -3,6 +3,8 @@
 	// Sample notes + field guesses are fetched lazily per notetype (the guessing
 	// heuristic runs engine-side).
 	import { untrack } from 'svelte';
+	import { dirtyGuard } from '$lib/dirtyGuard.svelte';
+	import Modal from './Modal.svelte';
 	import * as ipc from '$lib/ipc';
 	import { ankiStatus, ankiModalOpen, settings, saveAnkiSettings } from '$lib/stores';
 
@@ -64,6 +66,7 @@
 		tempYomitanUrl = s?.yomitan_url ?? DEFAULT_YOMITAN_URL;
 		originalYomitanUrl = tempYomitanUrl;
 		resetEditor();
+		guard.disarm();
 		void checkYomitan();
 		if (models.length === 0) fetchModels();
 		else fetchMappedSamples();
@@ -93,6 +96,10 @@
 		tempInterval !== originalInterval ||
 			tempYomitanUrl !== originalYomitanUrl ||
 			!mappingsEqual(tempMappings, originalMappings)
+	);
+	const guard = dirtyGuard(
+		() => dirty,
+		() => ankiModalOpen.set(false)
 	);
 
 	// ---- Connection status (egui ui_connection_status, colored by content; the
@@ -244,272 +251,210 @@
 	}
 </script>
 
-<!-- Esc closes from anywhere: the backdrop's own keydown only fires once focus
-     is inside the modal, which it isn't right after opening from a menu. -->
-<svelte:window onkeydown={(e) => $ankiModalOpen && e.key === 'Escape' && ankiModalOpen.set(false)} />
-
-{#if $ankiModalOpen}
-	<div
-		class="backdrop"
-		role="button"
-		tabindex="-1"
-		onclick={() => ankiModalOpen.set(false)}
-		onkeydown={(e) => e.key === 'Escape' && ankiModalOpen.set(false)}
-	>
-		<!-- Stop backdrop clicks inside the dialog from closing it. -->
-		<div
-			class="dialog"
-			role="dialog"
-			aria-modal="true"
-			aria-label="Anki settings"
-			tabindex="-1"
-			onclick={(e) => e.stopPropagation()}
-		>
-			<header>
-				<h2>Anki Settings</h2>
-				<button class="close" aria-label="Close" onclick={() => ankiModalOpen.set(false)}
-					>✕</button
+<Modal
+	open={$ankiModalOpen}
+	title="Anki Settings"
+	width="min(720px, 94%)"
+	onclose={guard.request}
+	oninteract={guard.disarm}
+>
+	<div class="body">
+		<!-- Known interval threshold. -->
+		<section>
+			<h3>
+				Known Interval Threshold
+				<span
+					class="info-icon"
+					title="Cards with an interval at or above this threshold will be considered 'known' for comprehensibility estimation."
+					>ℹ</span
 				>
-			</header>
+			</h3>
+			<div class="row">
+				<label for="anki-interval">Interval:</label>
+				<input
+					id="anki-interval"
+					type="number"
+					min="1"
+					max="365"
+					bind:value={tempInterval}
+					onchange={clampInterval}
+				/>
+				<span class="hint">days (Default: 30 days)</span>
+			</div>
+		</section>
 
-			<div class="body">
-				<!-- Known interval threshold. -->
-				<section>
-					<h3>
-						Known Interval Threshold
-						<span
-							class="info-icon"
-							title="Cards with an interval at or above this threshold will be considered 'known' for comprehensibility estimation."
-							>ℹ</span
-						>
-					</h3>
-					<div class="row">
-						<label for="anki-interval">Interval:</label>
-						<input
-							id="anki-interval"
-							type="number"
-							min="1"
-							max="365"
-							bind:value={tempInterval}
-							onchange={clampInterval}
-						/>
-						<span class="hint">days (Default: 30 days)</span>
+		<hr />
+
+		<!-- Current notetypes. -->
+		<section>
+			<h3>Current Notetypes</h3>
+			{#each Object.entries(tempMappings) as [name, mapping] (name)}
+				<div class="mapping-row">
+					<div class="mapping-text">
+						<strong class="model-name">{name}</strong>
+						<span class="mapping-fields">
+							Term: <code>{mapping.term_field}</code>
+							<span class="dot">·</span>
+							Reading: <code>{mapping.reading_field}</code>
+							{#if mapping.sentence_field}
+								<span class="dot">·</span>
+								Sentence: <code>{mapping.sentence_field}</code>
+							{/if}
+						</span>
 					</div>
-				</section>
-
-				<hr />
-
-				<!-- Current notetypes. -->
-				<section>
-					<h3>Current Notetypes</h3>
-					{#each Object.entries(tempMappings) as [name, mapping] (name)}
-						<div class="mapping-row">
-							<div class="mapping-text">
-								<strong class="model-name">{name}</strong>
-								<span class="mapping-fields">
-									Term: <code>{mapping.term_field}</code>
-									<span class="dot">·</span>
-									Reading: <code>{mapping.reading_field}</code>
-									{#if mapping.sentence_field}
-										<span class="dot">·</span>
-										Sentence: <code>{mapping.sentence_field}</code>
-									{/if}
-								</span>
-							</div>
-							<div class="mapping-actions">
-								<button onclick={() => editMapping(name)}>Edit</button>
-								<button onclick={() => deleteMapping(name)}>Delete</button>
-							</div>
-						</div>
-					{/each}
-				</section>
-
-				<hr />
-
-				<!-- Mapping editor. -->
-				<section>
-					<h3>{edEditing ? 'Edit Notetype' : 'Add Notetype'}</h3>
-
-					<div class="row">
-						<span class="lbl">Anki Connection Status:</span>
-						{#if loadingModels}
-							<span class="spinner" aria-label="Fetching models"></span>
-						{/if}
-						<span class="status {status.cls}">{status.text}</span>
-						<button disabled={loadingModels} onclick={fetchModels}>
-							{loadingModels ? 'Refreshing...' : 'Refresh Notetypes'}
-						</button>
+					<div class="mapping-actions">
+						<button onclick={() => editMapping(name)}>Edit</button>
+						<button class="danger" onclick={() => deleteMapping(name)}>Delete</button>
 					</div>
+				</div>
+			{/each}
+		</section>
 
-					<div class="row">
-						<label for="anki-model">Notetype:</label>
-						<select id="anki-model" bind:value={edModel} onchange={onModelSelect}>
-							<option value="" disabled hidden></option>
-							{#if edModel && !models.some((m) => m.name === edModel)}
-								<option value={edModel}>{edModel}</option>
-							{/if}
-							{#each models as model (model.name)}
-								<option value={model.name}>{model.name}</option>
-							{/each}
-						</select>
-					</div>
+		<hr />
 
-					{#if selectedModel}
-						{@const termExample = edTerm ? selectedModel.sample_note?.[edTerm] : undefined}
-						{@const readingExample = edReading
-							? selectedModel.sample_note?.[edReading]
-							: undefined}
-						{@const sentenceExample = edSentence
-							? selectedModel.sample_note?.[edSentence]
-							: undefined}
-						<div class="row">
-							<label for="anki-term-field">Term Field:</label>
-							{#if edTerm && selectedModel.sample_note}
-								<span class="guessed" title="This field was guessed based on its content">＊</span>
-							{/if}
-							<select id="anki-term-field" bind:value={edTerm}>
-								<option value="" disabled hidden></option>
-								{#each selectedModel.fields as f (f)}
-									<option value={f}>{f}</option>
-								{/each}
-							</select>
-							{#if termExample !== undefined}
-								<span class="vsep"></span>
-								<span class="lbl">Example:</span>
-								<span class="example">"{preview(termExample)}"</span>
-							{/if}
-						</div>
-						<div class="row">
-							<label for="anki-reading-field">Reading Field:</label>
-							{#if edReading && selectedModel.sample_note}
-								<span class="guessed" title="This field was guessed based on its content">＊</span>
-							{/if}
-							<select id="anki-reading-field" bind:value={edReading}>
-								<option value="" disabled hidden></option>
-								{#each selectedModel.fields as f (f)}
-									<option value={f}>{f}</option>
-								{/each}
-							</select>
-							{#if readingExample !== undefined}
-								<span class="vsep"></span>
-								<span class="lbl">Example:</span>
-								<span class="example reading">"{preview(readingExample)}"</span>
-							{/if}
-						</div>
-						<div class="row">
-							<label
-								for="anki-sentence-field"
-								title="Optional — marks sentences already mined into this notetype"
-								>Sentence Field:</label
-							>
-							{#if edSentence && selectedModel.sample_note}
-								<span class="guessed" title="This field was guessed based on its content">＊</span>
-							{/if}
-							<select id="anki-sentence-field" bind:value={edSentence}>
-								<option value="">(none)</option>
-								{#each selectedModel.fields as f (f)}
-									<option value={f}>{f}</option>
-								{/each}
-							</select>
-							{#if sentenceExample !== undefined}
-								<span class="vsep"></span>
-								<span class="lbl">Example:</span>
-								<span class="example">"{preview(sentenceExample)}"</span>
-							{/if}
-						</div>
+		<!-- Mapping editor. -->
+		<section>
+			<h3>{edEditing ? 'Edit Notetype' : 'Add Notetype'}</h3>
+
+			<div class="row">
+				<span class="lbl">Anki Connection Status:</span>
+				{#if loadingModels}
+					<span class="spinner" aria-label="Fetching models"></span>
+				{/if}
+				<span class="status {status.cls}">{status.text}</span>
+				<button disabled={loadingModels} onclick={fetchModels}>
+					{loadingModels ? 'Refreshing...' : 'Refresh Notetypes'}
+				</button>
+			</div>
+
+			<div class="row">
+				<label for="anki-model">Notetype:</label>
+				<select id="anki-model" bind:value={edModel} onchange={onModelSelect}>
+					<option value="" disabled hidden></option>
+					{#if edModel && !models.some((m) => m.name === edModel)}
+						<option value={edModel}>{edModel}</option>
 					{/if}
-
-					<div class="row">
-						<button disabled={!edModel || !edTerm || !edReading} onclick={addOrUpdate}>
-							{edEditing ? 'Update' : 'Add'}
-						</button>
-					</div>
-				</section>
-
-				<hr />
-
-				<!-- yomitan-api connection (one-click mining, issue #105). -->
-				<section>
-					<h3>
-						Yomitan API
-						<span
-							class="info-icon"
-							title="One-click mining renders card content with your own Yomitan templates via the yomitan-api companion (github.com/yomidevs/yomitan-api)."
-							>ℹ</span
-						>
-					</h3>
-					<div class="row">
-						<label for="yomitan-url">URL:</label>
-						<input id="yomitan-url" type="text" bind:value={tempYomitanUrl} />
-						{#if yomitanChecking}
-							<span class="spinner" aria-label="Checking Yomitan API"></span>
-						{:else if yomitanStatus?.reachable}
-							<span class="status ok">Connected (Yomitan {yomitanStatus.version})</span>
-						{:else if yomitanStatus}
-							<span class="status error">Unreachable</span>
-						{/if}
-						<button disabled={yomitanChecking} onclick={checkYomitan}>Check</button>
-					</div>
-				</section>
+					{#each models as model (model.name)}
+						<option value={model.name}>{model.name}</option>
+					{/each}
+				</select>
 			</div>
 
-			<hr />
+			{#if selectedModel}
+				{@const termExample = edTerm ? selectedModel.sample_note?.[edTerm] : undefined}
+				{@const readingExample = edReading
+					? selectedModel.sample_note?.[edReading]
+					: undefined}
+				{@const sentenceExample = edSentence
+					? selectedModel.sample_note?.[edSentence]
+					: undefined}
+				<div class="row">
+					<label for="anki-term-field">Term Field:</label>
+					{#if edTerm && selectedModel.sample_note}
+						<span class="guessed" title="This field was guessed based on its content">＊</span>
+					{/if}
+					<select id="anki-term-field" bind:value={edTerm}>
+						<option value="" disabled hidden></option>
+						{#each selectedModel.fields as f (f)}
+							<option value={f}>{f}</option>
+						{/each}
+					</select>
+					{#if termExample !== undefined}
+						<span class="vsep"></span>
+						<span class="lbl">Example:</span>
+						<span class="example">"{preview(termExample)}"</span>
+					{/if}
+				</div>
+				<div class="row">
+					<label for="anki-reading-field">Reading Field:</label>
+					{#if edReading && selectedModel.sample_note}
+						<span class="guessed" title="This field was guessed based on its content">＊</span>
+					{/if}
+					<select id="anki-reading-field" bind:value={edReading}>
+						<option value="" disabled hidden></option>
+						{#each selectedModel.fields as f (f)}
+							<option value={f}>{f}</option>
+						{/each}
+					</select>
+					{#if readingExample !== undefined}
+						<span class="vsep"></span>
+						<span class="lbl">Example:</span>
+						<span class="example reading">"{preview(readingExample)}"</span>
+					{/if}
+				</div>
+				<div class="row">
+					<label
+						for="anki-sentence-field"
+						title="Optional — marks sentences already mined into this notetype"
+						>Sentence Field:</label
+					>
+					{#if edSentence && selectedModel.sample_note}
+						<span class="guessed" title="This field was guessed based on its content">＊</span>
+					{/if}
+					<select id="anki-sentence-field" bind:value={edSentence}>
+						<option value="">(none)</option>
+						{#each selectedModel.fields as f (f)}
+							<option value={f}>{f}</option>
+						{/each}
+					</select>
+					{#if sentenceExample !== undefined}
+						<span class="vsep"></span>
+						<span class="lbl">Example:</span>
+						<span class="example">"{preview(sentenceExample)}"</span>
+					{/if}
+				</div>
+			{/if}
 
-			<div class="dirty">
-				{#if dirty}⚠ Settings have been modified{/if}
+			<div class="row">
+				<button disabled={!edModel || !edTerm || !edReading} onclick={addOrUpdate}>
+					{edEditing ? 'Update' : 'Add'}
+				</button>
 			</div>
+		</section>
 
-			<footer>
-				<button disabled={!dirty} onclick={save}>Save Settings</button>
-				<button disabled={!dirty} onclick={cancel}>Cancel</button>
-				<button class="right" onclick={restoreDefault}>Restore Default</button>
-			</footer>
-		</div>
+		<hr />
+
+		<!-- yomitan-api connection (one-click mining, issue #105). -->
+		<section>
+			<h3>
+				Yomitan API
+				<span
+					class="info-icon"
+					title="One-click mining renders card content with your own Yomitan templates via the yomitan-api companion (github.com/yomidevs/yomitan-api)."
+					>ℹ</span
+				>
+			</h3>
+			<div class="row">
+				<label for="yomitan-url">URL:</label>
+				<input id="yomitan-url" type="text" bind:value={tempYomitanUrl} />
+				{#if yomitanChecking}
+					<span class="spinner" aria-label="Checking Yomitan API"></span>
+				{:else if yomitanStatus?.reachable}
+					<span class="status ok">Connected (Yomitan {yomitanStatus.version})</span>
+				{:else if yomitanStatus}
+					<span class="status error">Unreachable</span>
+				{/if}
+				<button disabled={yomitanChecking} onclick={checkYomitan}>Check</button>
+			</div>
+		</section>
 	</div>
-{/if}
+
+	{#snippet footer()}
+		<hr />
+		<div class="dirty">
+			{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings
+				have been modified{/if}
+		</div>
+		<footer>
+			<button class="primary" disabled={!dirty} onclick={save}>Save Settings</button>
+			<button disabled={!dirty} onclick={cancel}>Cancel</button>
+			<button class="right" onclick={restoreDefault}>Restore Default</button>
+		</footer>
+	{/snippet}
+</Modal>
 
 <style>
-	.backdrop {
-		position: fixed;
-		inset: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
-		z-index: 50;
-	}
-	.dialog {
-		display: flex;
-		flex-direction: column;
-		gap: 0.6rem;
-		width: min(720px, 94%);
-		max-height: 86%;
-		padding-bottom: 0.75rem;
-		background: var(--bg-panel);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-	}
-	header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 0.75rem 1rem;
-		border-bottom: 1px solid var(--border);
-	}
-	header h2 {
-		margin: 0;
-		font-size: 1.05rem;
-		color: var(--accent);
-	}
-	.close {
-		padding: 0.1rem 0.4rem;
-	}
 	.body {
-		overflow-y: auto;
-		/* Flexbox: without this the body refuses to shrink, pushing the footer
-		   off-screen instead of scrolling. */
-		min-height: 0;
 		display: flex;
 		flex-direction: column;
 		gap: 0.6rem;
@@ -577,9 +522,6 @@
 	.model-name {
 		color: var(--info);
 	}
-	code.model-name {
-		font-family: monospace;
-	}
 	.guessed {
 		color: var(--accent);
 		cursor: help;
@@ -605,7 +547,7 @@
 		background: var(--bg-raised);
 		color: var(--text);
 		border: 1px solid var(--border);
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 	}
 	input[type='text'] {
 		width: 15rem;
@@ -613,7 +555,7 @@
 		background: var(--bg-raised);
 		color: var(--text);
 		border: 1px solid var(--border);
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 	}
 	select {
 		min-width: 11rem;
@@ -621,7 +563,7 @@
 		background: var(--bg-raised);
 		color: var(--text);
 		border: 1px solid var(--border);
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 	}
 	.hint {
 		font-size: 0.85rem;

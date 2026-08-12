@@ -52,7 +52,7 @@ use crate::{
     dictionary::frequency_manager::FrequencyManager,
 };
 
-const ANKI_VOCAB_CACHE: &str = "anki_vocab_cache.json";
+pub(crate) const ANKI_VOCAB_CACHE: &str = "anki_vocab_cache.json";
 
 pub struct AnkiState {
     vocab: Vec<Vocab>,

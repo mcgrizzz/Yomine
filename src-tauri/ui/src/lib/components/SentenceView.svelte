@@ -69,7 +69,8 @@
 		term,
 		currentIndex = $bindable(),
 		onlookup,
-		onhover
+		onhover,
+		onnavigate
 	}: {
 		occurrences: Occurrence[];
 		term: Term;
@@ -77,6 +78,8 @@
 		onlookup: (req: SegmentLookup) => void;
 		/** What to open if Shift is pressed while hovering; null = left. */
 		onhover: (open: (() => void) | null) => void;
+		/** Fires only for deliberate ⏮/⏭ presses — the search jump writes the binding directly. */
+		onnavigate?: (index: number) => void;
 	} = $props();
 
 	// Clamped in case a refresh shrinks the occurrence list.
@@ -92,10 +95,12 @@
 	const prev = () => {
 		holdHeight();
 		currentIndex = current === 0 ? count - 1 : current - 1;
+		onnavigate?.(currentIndex);
 	};
 	const next = () => {
 		holdHeight();
 		currentIndex = (current + 1) % count;
+		onnavigate?.(currentIndex);
 	};
 
 	// Timestamp is null for TXT sources; 👁 once the player acknowledges the seek.
@@ -410,7 +415,6 @@
 		line-height: 1;
 		color: var(--success);
 		background: color-mix(in srgb, var(--success) 12%, transparent);
-		border: 1px solid color-mix(in srgb, var(--success) 35%, transparent);
 		border-radius: var(--radius);
 		cursor: help;
 	}

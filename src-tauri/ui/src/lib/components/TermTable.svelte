@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { SentenceDto, Term } from '$lib/ipc';
+	import type { DefinitionEntry, SentenceDto, Term, TimeStampDto } from '$lib/ipc';
 	import {
 		defaultDir,
 		harmonic,
@@ -11,6 +11,7 @@
 	} from '$lib/table';
 	import {
 		addedTerms,
+		adhocQueue,
 		ankiStatus,
 		asbContext,
 		cancelQueue,
@@ -22,19 +23,23 @@
 		mineQueue,
 		mineQueueState,
 		mineTerm,
+		addedKeys,
+		minedKeys,
 		minedNoteIds,
 		minedTerms,
 		miningTerm,
 		normalizeSentence,
 		openInAnki,
+		pinOccurrence,
 		playerBusy,
 		playerStatus,
 		posCatalog,
+		queuedCount,
 		queuedMineOptions,
+		queueAdhoc,
 		queueWithEntry,
 		retryMedia,
 		selectedTerms,
-		setQueuedFormat,
 		setSelected,
 		setTableColumns,
 		settings,
@@ -43,12 +48,15 @@
 		toggleIgnore,
 		toggleSelected,
 		yomitanReachable,
+		type OccurrencePin,
 		type QueueItem
 	} from '$lib/stores';
+	import { untrack } from 'svelte';
 	import { Menu } from '@tauri-apps/api/menu';
 	import { furiganaText } from '$lib/furigana';
 	import DefinitionPopover from './DefinitionPopover.svelte';
 	import Furigana from './Furigana.svelte';
+	import MiningQueueModal from './MiningQueueModal.svelte';
 	import SentenceConflictModal, { type BatchEntry } from './SentenceConflictModal.svelte';
 	import SentenceView, {
 		termCoversSegment,
@@ -131,6 +139,8 @@
 		label: string;
 		anchor: DOMRect;
 		mineable: { term: Term; occs: Occurrence[] } | null;
+		/** The hovered span, so an entry with no table Term is still mineable. */
+		segment: { sentence: SentenceDto; surface: string } | null;
 	} | null>(null);
 	let hovered: (() => void) | null = null;
 
@@ -144,7 +154,8 @@
 				text: term.lemma_form,
 				label: term.lemma_form,
 				anchor: el.getBoundingClientRect(),
-				mineable: { term, occs: occurrencesOf(term) }
+				mineable: { term, occs: occurrencesOf(term) },
+				segment: null
 			};
 		};
 		hovered = open;
@@ -161,7 +172,13 @@
 				break outer;
 			}
 		}
-		defPopover = { text: req.text, label: req.label, anchor: req.anchor, mineable };
+		defPopover = {
+			text: req.text,
+			label: req.label,
+			anchor: req.anchor,
+			mineable,
+			segment: { sentence: req.sentence, surface: req.seg.surface }
+		};
 	}
 
 	// Ctrl (Win/Linux) or Cmd (macOS) + click toggles ignore; a plain click is left
@@ -200,9 +217,32 @@
 		return out;
 	}
 
-	// Each row's occurrence index, bound up so the mine button and the
-	// search-jump below target the sentence on display.
+	// Each row's displayed occurrence - a queued term mines its pin instead.
 	let occIdx = $state<Record<string, number>>({});
+
+	let userChosen = $state<Record<string, boolean>>({});
+
+	const pinFor = (key: string): OccurrencePin => ({
+		occIdx: occIdx[key] ?? 0,
+		userChosen: userChosen[key] ?? false
+	});
+
+	function navigated(key: string, index: number) {
+		userChosen[key] = true;
+		if ($selectedTerms.has(key)) pinOccurrence(key, { occIdx: index, userChosen: true });
+	}
+
+	// Must precede the search effect: on load this clears, then that repopulates.
+	let lastFile: unknown = null;
+	$effect(() => {
+		const file = $fileResult;
+		if (file === lastFile) return;
+		lastFile = file;
+		untrack(() => {
+			occIdx = {};
+			userChosen = {};
+		});
+	});
 
 	// A search matching inside a sentence jumps the row to that sentence.
 	$effect(() => {
@@ -223,7 +263,7 @@
 	let confirmMine = $state<{ term: Term; occs: Occurrence[] } | null>(null);
 
 	function mineClicked(term: Term, occs: Occurrence[]) {
-		if ($selectedTerms.size > 0) confirmMine = { term, occs };
+		if ($queuedCount > 0) confirmMine = { term, occs };
 		else mine(term, occs);
 	}
 
@@ -234,6 +274,12 @@
 		mine(term, occs);
 	}
 
+	// asbplayer enrichment needs asbplayer active (same rule as seeking) + a cue.
+	const viaFor = (ts: TimeStampDto | null): 'asbplayer' | 'direct' =>
+		$playerStatus.mode === 'asbplayer' && $playerStatus.ws_clients > 0 && ts !== null
+			? 'asbplayer'
+			: 'direct';
+
 	function mine(
 		term: Term,
 		occs: Occurrence[],
@@ -243,19 +289,52 @@
 	) {
 		const occ = occs[Math.min(occIdx[termKey(term)] ?? 0, occs.length - 1)];
 		const ts = occ?.sentence.timestamp ?? null;
-		// asbplayer enrichment needs asbplayer active (same rule as seeking) + a cue.
-		const via =
-			$playerStatus.mode === 'asbplayer' && $playerStatus.ws_clients > 0 && ts !== null
-				? 'asbplayer'
-				: 'direct';
 		const surface = occ ? termHighlightText(term, occ) : term.surface_form;
 		void mineTerm(
-			term,
+			term.lemma_form,
 			occ?.sentence.text ?? '',
 			ts,
-			via,
+			viaFor(ts),
 			surface,
 			entryIndex,
+			formatName,
+			scanText
+		);
+	}
+
+	/** Only the row whose term IS this entry — `termCoversSegment` merely overlaps. */
+	function rowFor(entry: DefinitionEntry): { term: Term; occs: Occurrence[] } | null {
+		const p = defPopover;
+		if (!p?.mineable) return null;
+		if (!p.segment) return p.mineable;
+		const t = p.mineable.term;
+		return entry.expression === t.lemma_form ||
+			entry.expression === t.surface_form ||
+			entry.expression === t.full_segment
+			? p.mineable
+			: null;
+	}
+
+	function queueable(entry: DefinitionEntry): boolean {
+		const row = rowFor(entry);
+		return row ? !isMined(row.term) : defPopover?.segment != null;
+	}
+
+	/** Mine a hovered span that no table row represents. */
+	function mineSegment(
+		segment: { sentence: SentenceDto; surface: string },
+		entry: DefinitionEntry,
+		formatName?: string,
+		scanText?: string
+	) {
+		const ts = segment.sentence.timestamp ?? null;
+		void mineTerm(
+			entry.expression,
+			segment.sentence.text,
+			ts,
+			viaFor(ts),
+			segment.surface,
+			entry.index,
 			formatName,
 			scanText
 		);
@@ -341,6 +420,13 @@
 
 	// Mining needs Yomitan (renders the card) + AnkiConnect (stores it).
 	const canMine = $derived($yomitanReachable && $ankiStatus.connected);
+	const busyReason = $derived(
+		$miningTerm !== null
+			? 'Mining in progress — wait for the current card to finish'
+			: $playerBusy
+				? 'Waiting for asbplayer to finish recording the mined line…'
+				: null
+	);
 	// Only asbplayer can record audio/screenshots onto the mined card, and it
 	// records from its ACTIVE tab.
 	const mediaNote = $derived.by(() => {
@@ -379,7 +465,8 @@
 		)
 			return;
 		if (window.getSelection()?.toString()) return;
-		toggleSelected(termKey(term));
+		const key = termKey(term);
+		toggleSelected(key, pinFor(key));
 	}
 
 	let batchEntries = $state<BatchEntry[] | null>(null);
@@ -391,24 +478,8 @@
 	);
 
 	let showQueueDetails = $state(false);
-	const queueDetails = $derived.by(() => {
-		const visible = new Set(terms.map(termKey));
-		return ($fileResult?.terms ?? terms)
-			.filter((t) => $selectedTerms.has(termKey(t)))
-			.map((t) => {
-				const key = termKey(t);
-				const opt = $queuedMineOptions[key];
-				return {
-					key,
-					lemma: t.lemma_form,
-					hidden: !visible.has(key),
-					formatName: opt?.formatName,
-					entryIndex: opt?.entryIndex
-				};
-			});
-	});
 	$effect(() => {
-		if ($selectedTerms.size === 0 || $mineQueueState !== null) showQueueDetails = false;
+		if ($queuedCount === 0 || $mineQueueState !== null) showQueueDetails = false;
 	});
 
 	$effect(() => {
@@ -419,12 +490,13 @@
 	});
 
 	function startBatch() {
-		const entries: BatchEntry[] = ($fileResult?.terms ?? terms)
+		const rows: BatchEntry[] = ($fileResult?.terms ?? terms)
 			.filter((t) => $selectedTerms.has(termKey(t)) && !isMined(t))
 			.map((t) => {
 				const key = termKey(t);
 				const occs = occurrencesOf(t);
-				const occ = occs[Math.min(occIdx[key] ?? 0, occs.length - 1)];
+				const pinned = $queuedMineOptions[key]?.occIdx ?? occIdx[key] ?? 0;
+				const occ = occs[Math.min(pinned, occs.length - 1)];
 				const seen = new Set([normalizeSentence(occ?.sentence.text ?? '')]);
 				const alternatives = occs.flatMap((o, idx) => {
 					const k = normalizeSentence(o.sentence.text);
@@ -441,6 +513,7 @@
 				});
 				return {
 					term: t,
+					lemma: t.lemma_form,
 					key,
 					surface: occ ? termHighlightText(t, occ) : t.surface_form,
 					sentence: occ?.sentence.text ?? '',
@@ -448,22 +521,39 @@
 					entryIndex: $queuedMineOptions[key]?.entryIndex,
 					formatName: $queuedMineOptions[key]?.formatName,
 					scanText: $queuedMineOptions[key]?.scanText,
-					explicit: occIdx[key] !== undefined,
+					explicit: $queuedMineOptions[key]?.userChosen ?? false,
 					alternatives
 				};
 			});
+		// explicit + no alternatives: the conflict modal keeps their sentence and moves the row.
+		const adhoc: BatchEntry[] = $adhocQueue.map((a) => ({
+			lemma: a.lemma,
+			key: a.key,
+			surface: a.surface,
+			sentence: a.sentence,
+			timestamp: a.timestamp,
+			entryIndex: a.entryIndex,
+			formatName: a.formatName,
+			scanText: a.scanText,
+			explicit: true,
+			alternatives: []
+		}));
+		const entries = [...rows, ...adhoc];
 		const keys = entries.map((e) => normalizeSentence(e.sentence)).filter((s) => s !== '');
 		if (new Set(keys).size === keys.length) {
 			void mineQueue(
-				entries.map(({ term, surface, sentence, timestamp, entryIndex, formatName, scanText }) => ({
-					term,
-					surface,
-					sentence,
-					timestamp,
-					entryIndex,
-					formatName,
-					scanText
-				}))
+				entries.map(
+					({ lemma, key, surface, sentence, timestamp, entryIndex, formatName, scanText }) => ({
+						lemma,
+						key,
+						surface,
+						sentence,
+						timestamp,
+						entryIndex,
+						formatName,
+						scanText
+					})
+				)
 			);
 			return;
 		}
@@ -472,7 +562,11 @@
 
 	function conflictsResolved(items: QueueItem[], occIdxPatch: Record<string, number>) {
 		// Sync the rows to any reassigned occurrences so display = mined.
-		for (const [key, idx] of Object.entries(occIdxPatch)) occIdx[key] = idx;
+		for (const [key, idx] of Object.entries(occIdxPatch)) {
+			occIdx[key] = idx;
+			// Not `true`: auto-swap reassigns without the user choosing.
+			pinOccurrence(key, { occIdx: idx, userChosen: userChosen[key] ?? false });
+		}
 		batchEntries = null;
 		void mineQueue(items);
 	}
@@ -490,7 +584,8 @@
 			}
 			batchEntries = null;
 		}}
-		onlookup={(req) => $yomitanReachable && (defPopover = { ...req, mineable: null })}
+		onlookup={(req) =>
+			$yomitanReachable && (defPopover = { ...req, mineable: null, segment: null })}
 		onhover={(fn) => (hovered = fn)}
 	/>
 {/if}
@@ -508,7 +603,7 @@
 			onclick={(e) => e.stopPropagation()}
 		>
 			<p class="dialog-body">
-				You have {$selectedTerms.size} term{$selectedTerms.size === 1 ? '' : 's'} selected for batch
+				You have {$queuedCount} term{$queuedCount === 1 ? '' : 's'} selected for batch
 				mining. Mine 「<span lang="ja">{confirmMine.term.lemma_form}</span>」 individually now?
 			</p>
 			<footer class="dialog-footer">
@@ -526,58 +621,27 @@
 		</span>
 		<button class="bulk-btn" onclick={cancelQueue}>Cancel</button>
 	</div>
-{:else if canMine && $selectedTerms.size > 0}
+{:else if canMine && $queuedCount > 0}
 	{#if showQueueDetails}
-		<div class="bulk-details">
-			<div class="detail-row detail-head">
-				<span>Term</span>
-				<span>Card format</span>
-			</div>
-			{#each queueDetails as d (d.key)}
-				<div class="detail-row">
-					<span lang="ja">
-						{d.lemma}{#if d.hidden}<span class="detail-dim"> (hidden)</span>{/if}
-					</span>
-					<span>
-						{#if $cardFormats.length > 1}
-							<select
-								class="detail-select"
-								value={d.formatName ?? $cardFormats[0].name}
-								aria-label={`Card format for ${d.lemma}`}
-								onchange={(e) => setQueuedFormat(d.key, e.currentTarget.value)}
-							>
-								{#each $cardFormats as f (f.name)}
-									<option value={f.name}>{f.name}</option>
-								{/each}
-							</select>
-						{:else}
-							{$cardFormats[0]?.name ?? '—'}
-						{/if}
-						{#if d.entryIndex !== undefined}<span class="detail-dim">· def #{d.entryIndex + 1}</span
-							>{/if}
-					</span>
-				</div>
-			{/each}
-		</div>
+		<MiningQueueModal {terms} onclose={() => (showQueueDetails = false)} />
 	{/if}
 	<div class="bulk-bar">
 		<span class="bulk-info">
-			{$selectedTerms.size} selected{hiddenSelected > 0
+			{$queuedCount} selected{hiddenSelected > 0
 				? ` · ${hiddenSelected} hidden by filters`
 				: ''}
 		</span>
 		<button
 			class="bulk-btn"
-			title="Show the queued terms and the card format each will use"
-			onclick={() => (showQueueDetails = !showQueueDetails)}
-			>Details {showQueueDetails ? '▾' : '▸'}</button
+			title="Review the queued terms — entry, card format, and what to drop"
+			onclick={() => (showQueueDetails = true)}>Details…</button
 		>
 		{#if canMine}
 			<button
 				class="bulk-btn primary"
 				disabled={$miningTerm !== null || $playerBusy}
-				title="Mine the selected terms one by one, in timestamp order"
-				onclick={startBatch}>Mine {$selectedTerms.size}</button
+				title={busyReason ?? 'Mine the selected terms one by one, in timestamp order'}
+				onclick={startBatch}>Mine {$queuedCount}</button
 			>
 		{/if}
 		<button class="bulk-btn" onclick={clearSelection}>Clear</button>
@@ -594,6 +658,7 @@
 				class:col-hidden={!col.visible}
 				class:dragging={dragId === col.id}
 				data-col={col.id}
+				title={col.id === 'term' ? 'The term column can’t be hidden' : undefined}
 				onpointerdown={(e) => pillDown(e, col.id)}
 				onpointermove={pillMove}
 				onpointerup={pillUp}
@@ -623,7 +688,7 @@
 					type="checkbox"
 					checked={allSelected}
 					indeterminate={someSelected && !allSelected}
-					onchange={() => setSelected(selectableKeys, !allSelected)}
+					onchange={() => setSelected(selectableKeys, !allSelected, pinFor)}
 					title="Select all visible terms"
 					aria-label="Select all visible terms"
 				/>
@@ -695,9 +760,6 @@
 			{/if}
 		{/each}
 	</div>
-	{#if terms.length === 0}
-		<p class="no-match">No terms match the current filters.</p>
-	{/if}
 	{#each terms as term (termKey(term))}
 		{@const occs = occurrencesOf(term)}
 		{@const key = termKey(term)}
@@ -715,7 +777,7 @@
 					<input
 						type="checkbox"
 						checked={$selectedTerms.has(key)}
-						onchange={() => toggleSelected(key)}
+						onchange={() => toggleSelected(key, pinFor(key))}
 						aria-label={`Select ${term.lemma_form}`}
 					/>
 				{/if}
@@ -749,7 +811,8 @@
 								<button
 									class="chip warn"
 									disabled={$miningTerm !== null || $playerBusy}
-									title="Card is in Anki, but asbplayer never added the audio/screenshot — click to retry"
+									title={busyReason ??
+										'Card is in Anki, but asbplayer never added the audio/screenshot — click to retry'}
 									onclick={() => retry(term, occs)}
 								>
 									{$miningTerm === term.lemma_form ? '…' : '⚠'}
@@ -767,9 +830,7 @@
 							<button
 								class="chip mine"
 								disabled={$miningTerm !== null || $playerBusy}
-								title={$playerBusy && $miningTerm === null
-									? 'Waiting for asbplayer to finish recording the mined line…'
-									: 'Create an Anki card from the displayed sentence' + mediaNote}
+								title={busyReason ?? 'Create an Anki card from the displayed sentence' + mediaNote}
 								onclick={() => mineClicked(term, occs)}
 							>
 								{#if $miningTerm === term.lemma_form}…{:else}
@@ -803,6 +864,7 @@
 								occurrences={occs}
 								{term}
 								bind:currentIndex={occIdx[key]}
+								onnavigate={(idx) => navigated(key, idx)}
 								onlookup={segmentLookup}
 								onhover={(fn) => (hovered = fn)}
 							/>
@@ -829,16 +891,40 @@
 		label={defPopover.label}
 		anchor={defPopover.anchor}
 		scale={$settings?.definition_scale ?? 1}
-		showMine={canMine && mineable !== null && !isMined(mineable.term)}
-		mineDisabled={$miningTerm !== null || $playerBusy || $selectedTerms.size > 0}
-		mineTitle={$selectedTerms.size > 0
-			? 'A batch selection is active — Queue this term instead, or clear the selection'
-			: 'Create an Anki card from the displayed sentence' + mediaNote}
+		canMine={canMine && (mineable !== null || defPopover.segment !== null)}
+		canQueue={queueable}
+		isDuplicate={(entry) => entry.known || $minedKeys.has(entry.key) || $addedKeys.has(entry.key)}
+		mineDisabled={(entry) =>
+			$miningTerm !== null || $playerBusy || ($queuedCount > 0 && queueable(entry))}
+		mineTitle={(entry) =>
+			$queuedCount > 0 && queueable(entry)
+				? 'A batch selection is active — Queue this term instead, or clear the selection'
+				: 'Create an Anki card from the displayed sentence' + mediaNote}
 		formats={$cardFormats}
-		onmine={(entryIndex, formatName) =>
-			mineable && mine(mineable.term, mineable.occs, entryIndex, formatName, defPopover?.text)}
-		onqueue={(entryIndex, formatName) =>
-			mineable && queueWithEntry(termKey(mineable.term), entryIndex, formatName, defPopover?.text)}
+		onmine={(entry, formatName) => {
+			const row = rowFor(entry);
+			if (row) mine(row.term, row.occs, entry.index, formatName, defPopover?.text);
+			else if (defPopover?.segment)
+				mineSegment(defPopover.segment, entry, formatName, defPopover.text);
+		}}
+		onqueue={(entry, formatName) => {
+			const row = rowFor(entry);
+			if (row) {
+				const key = termKey(row.term);
+				queueWithEntry(key, entry.index, formatName, defPopover?.text, pinFor(key));
+			} else if (defPopover?.segment) {
+				queueAdhoc({
+					key: `adhoc:${defPopover.segment.sentence.id}:${entry.expression}`,
+					lemma: entry.expression,
+					surface: defPopover.segment.surface,
+					sentence: defPopover.segment.sentence.text,
+					timestamp: defPopover.segment.sentence.timestamp ?? null,
+					entryIndex: entry.index,
+					formatName,
+					scanText: defPopover.text
+				});
+			}
+		}}
 		onclose={() => (defPopover = null)}
 	/>
 {/if}
@@ -868,7 +954,9 @@
 		padding: 0.5rem;
 		border-bottom: 1px solid var(--border);
 	}
-	.sel {
+	/* Box-centred, not baseline-centred: an inline child rides ~1px low on the strut. */
+	.sel,
+	.jlpt-cell:not(.head-cell) {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -890,12 +978,13 @@
 	}
 	/* The row the batch queue is currently mining. */
 	.row.mining {
-		outline: 2px solid var(--accent);
+		outline: 2px dashed var(--accent);
 		outline-offset: -2px;
 	}
 	.row.head {
 		position: sticky;
 		top: 0;
+		z-index: var(--z-sticky);
 		background: var(--bg-panel);
 		color: var(--text-muted);
 		font-size: 0.8rem;
@@ -918,7 +1007,7 @@
 		padding: 0.1rem 0.35rem;
 		background: transparent;
 		border: none;
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 		color: inherit;
 		font: inherit;
 		text-transform: inherit;
@@ -974,14 +1063,14 @@
 		align-items: center;
 		gap: 0.45rem;
 	}
-	.jlpt-cell {
-		text-align: center;
-	}
 	.term {
 		font-size: 1.5rem;
 		color: var(--term);
 		line-height: 1.1;
 		cursor: text;
+		/* The CJK ideographic em box (sTypo 880/-120) centres 0.38em above the baseline,
+		   0.056em below this line box's centre; pad twice that to cancel it. */
+		padding-bottom: 0.112em;
 	}
 	/* The furigana annotation only adds height ABOVE the base text; pad the same
 	   amount below (rt is 0.5em at line-height 1) so row-centering keeps the base
@@ -993,13 +1082,13 @@
 	.term.mined-term {
 		color: var(--success);
 	}
-	/* Mine (+) and mined (✓) share one footprint so the swap doesn't shift layout. */
+	/* Every chip state shares one footprint so a completed mine doesn't shift the row. */
 	.chip {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 1.5rem;
-		height: 1.5rem;
+		width: 1.75rem;
+		height: 1.75rem;
 		padding: 0;
 		font-size: 0.95rem;
 		line-height: 1;
@@ -1022,10 +1111,10 @@
 	.mined {
 		color: var(--success);
 		background: color-mix(in srgb, var(--success) 12%, transparent);
-		border: 1px solid color-mix(in srgb, var(--success) 35%, transparent);
 		cursor: help;
 	}
 	.mined.openable {
+		border: 1px solid color-mix(in srgb, var(--success) 35%, transparent);
 		cursor: pointer;
 	}
 	.mined.openable:hover {
@@ -1060,9 +1149,8 @@
 	.jlpt-chip {
 		padding: 0.05rem 0.3rem;
 		font-size: 0.7rem;
-		color: var(--accent);
-		background: color-mix(in srgb, var(--accent) 10%, transparent);
-		border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+		color: var(--text-muted);
+		background: var(--bg-raised);
 		border-radius: var(--radius);
 		white-space: nowrap;
 	}
@@ -1073,77 +1161,27 @@
 		bottom: 1.25rem;
 		left: 50%;
 		transform: translateX(-50%);
-		z-index: 40;
+		z-index: var(--z-bar);
 		display: flex;
 		align-items: center;
 		gap: 0.6rem;
-		max-width: 90vw;
+		max-width: 90%;
 		padding: 0.45rem 0.9rem;
 		background: var(--bg-panel);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
-		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+		box-shadow: var(--shadow-overlay);
 		font-size: 0.85rem;
 	}
 	.bulk-info {
 		color: var(--text);
 	}
 	.bulk-btn {
-		cursor: pointer;
 		padding: 0.25rem 0.6rem;
-		background: var(--bg-panel);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		color: var(--text);
-	}
-	.bulk-btn.primary {
-		color: var(--accent);
-		border-color: color-mix(in srgb, var(--accent) 35%, transparent);
 	}
 	.bulk-btn:disabled {
 		opacity: 0.5;
 		cursor: default;
-	}
-	/* Queue-details panel, stacked just above the fixed bulk-bar. */
-	.bulk-details {
-		position: fixed;
-		bottom: 4rem;
-		left: 50%;
-		transform: translateX(-50%);
-		z-index: 40;
-		min-width: 18rem;
-		max-width: 90vw;
-		max-height: 40vh;
-		overflow-y: auto;
-		padding: 0.45rem 0.9rem;
-		background: var(--bg-panel);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-		font-size: 0.85rem;
-	}
-	.detail-row {
-		display: grid;
-		grid-template-columns: minmax(6rem, auto) 1fr;
-		gap: 1rem;
-		padding: 0.15rem 0;
-	}
-	.detail-head {
-		color: var(--text-muted);
-		font-size: 0.75rem;
-		text-transform: uppercase;
-		letter-spacing: 0.03em;
-		border-bottom: 1px solid var(--border);
-		padding-bottom: 0.3rem;
-		margin-bottom: 0.2rem;
-	}
-	.detail-dim {
-		color: var(--text-muted);
-		font-size: 0.8em;
-	}
-	.detail-select {
-		max-width: 100%;
-		font-size: 0.8rem;
 	}
 	.backdrop {
 		position: fixed;
@@ -1152,7 +1190,7 @@
 		align-items: center;
 		justify-content: center;
 		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
-		z-index: 50;
+		z-index: var(--z-modal);
 	}
 	.dialog {
 		display: flex;
@@ -1163,7 +1201,7 @@
 		background: var(--bg-panel);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
-		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+		box-shadow: var(--shadow-modal);
 	}
 	.dialog-body {
 		margin: 0;
@@ -1176,13 +1214,6 @@
 	}
 	.empty {
 		color: var(--text-muted);
-	}
-	.no-match {
-		grid-column: 1 / -1;
-		margin: 0;
-		padding: 1.5rem 0.5rem;
-		color: var(--text-muted);
-		text-align: center;
 	}
 	.col-edit-bar {
 		display: flex;
