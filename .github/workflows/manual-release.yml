@@ -3,26 +3,8 @@ name: Manual Release
 on:
   workflow_dispatch:
     inputs:
-      release_type:
-        description: "Type of release"
-        required: true
-        type: choice
-        options:
-          - "stable"
-          - "beta"
-        default: "stable"
       create_release:
         description: "Create the release after validation"
-        required: false
-        type: boolean
-        default: false
-      build_only:
-        description: "Build binaries without creating release (for testing)"
-        required: false
-        type: boolean
-        default: false
-      skip_tests:
-        description: "Skip CI test validation (⚠️ Use with caution)"
         required: false
         type: boolean
         default: false
@@ -39,7 +21,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       computed_version: ${{ steps.compute_version.outputs.version }}
-      is_prerelease: ${{ steps.compute_version.outputs.is_prerelease }}
       release_name: ${{ steps.compute_version.outputs.release_name }}
     steps:
       - uses: actions/checkout@v4
@@ -49,21 +30,7 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Warning about skipped tests
-        if: ${{ inputs.skip_tests }}
-        run: |
-          echo "⚠️ WARNING: CI test validation has been skipped!"
-          echo "⚠️ This release may contain untested code."
-          echo "⚠️ Use this option only when you're confident the code is stable."
-
-      - name: Build-only mode notice
-        if: ${{ inputs.build_only }}
-        run: |
-          echo "🔨 BUILD-ONLY MODE: Binaries will be built but no release will be created"
-          echo "📦 Artifacts will be available for download from the workflow run"
-
       - name: Check CI status for current commit
-        if: ${{ !inputs.skip_tests }}
         uses: actions/github-script@v7
         with:
           script: |
@@ -80,47 +47,34 @@ jobs:
 
             const { computeVersion, buildReleaseName } = require('./.github/scripts/compute-version.js');
 
-            const releaseType = '${{ inputs.release_type }}';
-
             const cargoPath = path.join(process.env.GITHUB_WORKSPACE, 'Cargo.toml');
             const cargoToml = fs.readFileSync(cargoPath, 'utf8');
 
-            const { version, isPrerelease, baseVersion } = await computeVersion({
+            const { version, baseVersion } = await computeVersion({
               github,
               context,
               cargoToml,
-              releaseType,
+              releaseType: 'stable',
             });
 
             const releaseName = buildReleaseName({
               version,
               baseVersion,
-              isPrerelease,
+              isPrerelease: false,
             });
 
             core.setOutput('version', version);
-            core.setOutput('is_prerelease', String(isPrerelease));
             core.setOutput('release_name', releaseName);
 
       - name: Show computed version
         run: |
           echo "Computed version: ${{ steps.compute_version.outputs.version }}"
-          echo "Prerelease: ${{ steps.compute_version.outputs.is_prerelease }}"
           echo "Release name: ${{ steps.compute_version.outputs.release_name }}"
-
-  build-only:
-    needs: validate
-    if: ${{ inputs.build_only }}
-    uses: ./.github/workflows/release.yml
-    with:
-      tag_name: ${{ needs.validate.outputs.computed_version }}
-      build_only: true
-    secrets: inherit
 
   create-release:
     needs: validate
     runs-on: ubuntu-latest
-    if: ${{ inputs.create_release && !inputs.build_only }}
+    if: ${{ inputs.create_release }}
     steps:
       - uses: actions/checkout@v4
 
@@ -142,25 +96,13 @@ jobs:
           github-token: ${{ secrets.MY_PAT }}
           script: |
             const version = '${{ needs.validate.outputs.computed_version }}';
-            const isPrerelease =
-              '${{ needs.validate.outputs.is_prerelease }}' === 'true';
             const releaseName = '${{ needs.validate.outputs.release_name }}';
 
-            const releaseBody = isPrerelease
-              ? [
-                  '**This is a pre-release version for testing purposes.**',
-                  '',
-                  '⚠️ **Warning**: This beta release may contain bugs and is not recommended for production use.',
-                  '',
-                  'Please report any issues you encounter on GitHub Issues.',
-                  '',
-                  '*Release notes will be automatically generated once binaries are built.*',
-                ].join('\n')
-              : [
-                  `Release ${version} of yomine`,
-                  '',
-                  '*Release notes will be automatically generated once binaries are built.*',
-                ].join('\n');
+            const releaseBody = [
+              `Release ${version} of yomine`,
+              '',
+              '*Release notes will be automatically generated once binaries are built.*',
+            ].join('\n');
 
             // Draft until release.yml has uploaded every installer + checksums,
             // so users (and the in-app updater) never see a binary-less release.
@@ -171,18 +113,16 @@ jobs:
               name: releaseName,
               body: releaseBody,
               draft: true,
-              prerelease: isPrerelease,
+              prerelease: false,
             });
 
-            console.log(
-              `Created draft ${isPrerelease ? 'pre-' : ''}release: ${release.html_url}`
-            );
+            console.log(`Created draft release: ${release.html_url}`);
 
   # Drafts don't fire the `release: created` event, so the build is invoked
   # directly; release.yml publishes the draft once every asset is uploaded.
   build-release:
     needs: [validate, create-release]
-    if: ${{ inputs.create_release && !inputs.build_only }}
+    if: ${{ inputs.create_release }}
     uses: ./.github/workflows/release.yml
     with:
       tag_name: ${{ needs.validate.outputs.computed_version }}

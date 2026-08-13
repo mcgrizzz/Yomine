@@ -9,17 +9,8 @@ on:
         type: choice
         options:
           - 'list-releases'
-          - 'promote-beta-to-stable'
           - 'check-version-status'
         default: 'list-releases'
-      beta_version:
-        description: 'Beta version to promote (e.g., v1.0.0-beta.1) - only for promote action'
-        required: false
-        type: string
-      stable_version:
-        description: 'New stable version (e.g., v1.0.0) - only for promote action'
-        required: false
-        type: string
 
 permissions:
   contents: write
@@ -78,53 +69,3 @@ jobs:
         echo "📝 Recent commits:"
         git log --oneline -5
     
-    - name: Promote Beta to Stable
-      if: inputs.action == 'promote-beta-to-stable'
-      uses: actions/github-script@v7
-      with:
-        script: |
-          const betaVersion = '${{ inputs.beta_version }}';
-          const stableVersion = '${{ inputs.stable_version }}';
-          
-          if (!betaVersion || !stableVersion) {
-            throw new Error('Both beta_version and stable_version are required for promotion');
-          }
-          
-          console.log(`🔄 Promoting ${betaVersion} to ${stableVersion}`);
-          
-          // Get the beta release
-          const { data: releases } = await github.rest.repos.listReleases({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            per_page: 50
-          });
-          
-          const betaRelease = releases.find(r => r.tag_name === betaVersion);
-          if (!betaRelease) {
-            throw new Error(`Beta release ${betaVersion} not found`);
-          }
-          
-          if (!betaRelease.prerelease) {
-            throw new Error(`Release ${betaVersion} is not marked as prerelease`);
-          }
-          
-          console.log(`✅ Found beta release: ${betaRelease.name}`);
-          
-          // Check if stable version already exists
-          const stableExists = releases.find(r => r.tag_name === stableVersion);
-          if (stableExists) {
-            throw new Error(`Stable version ${stableVersion} already exists`);
-          }
-          
-          console.log('📋 Promotion Summary:');
-          console.log(`   Beta: ${betaRelease.tag_name} -> ${betaRelease.name}`);
-          console.log(`   New Stable: ${stableVersion}`);
-          console.log('');
-          console.log('⚠️  To complete the promotion:');
-          console.log(`   1. Update Cargo.toml version to match ${stableVersion.replace('v', '')}`);
-          console.log(`   2. Create a new stable release using the Manual Release workflow`);
-          console.log(`   3. The new release will reference the same commit as the beta`);
-          console.log('');
-          console.log(`🔗 Beta release URL: ${betaRelease.html_url}`);
-          console.log(`📝 Beta release body preview:`);
-          console.log(betaRelease.body.substring(0, 500) + (betaRelease.body.length > 500 ? '...' : ''));

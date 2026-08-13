@@ -22,6 +22,7 @@ jobs:
       workflow: ${{ steps.paths.outputs.workflow }}
       scripts: ${{ steps.paths.outputs.scripts }}
       is_push_to_main: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      version_only: ${{ steps.versiononly.outputs.result }}
     steps:
       - uses: actions/checkout@v4
 
@@ -48,14 +49,37 @@ jobs:
             scripts:
               - '.github/scripts/**/*.js'
 
+      # A push that only bumps the workspace version has nothing to test. Every
+      # commit must qualify: a push of [code, bump] is not a version-only push.
+      - name: Detect a version-only push
+        id: versiononly
+        if: github.event_name == 'push'
+        uses: actions/github-script@v7
+        with:
+          result-encoding: string
+          script: |
+            const { inspectVersionBump } = require('./.github/scripts/version-only.js');
+
+            const commits = context.payload.commits ?? [];
+            // `commits` is capped at 20; a push that long is never just bumps.
+            if (commits.length === 0 || commits.length >= 20) return 'false';
+
+            for (const { id } of commits) {
+              const { isVersionOnly } = await inspectVersionBump({ github, context, sha: id });
+              if (!isVersionOnly) return 'false';
+            }
+            console.log(`All ${commits.length} pushed commit(s) only bump the version.`);
+            return 'true';
+
   # 2) Lint workflows and JS
   # Run if: workflows/scripts changed OR it's a push to main
   workflow-lint:
     needs: filter
     if: >
-      needs.filter.outputs.workflow == 'true' ||
+      needs.filter.outputs.version_only != 'true' &&
+      (needs.filter.outputs.workflow == 'true' ||
       needs.filter.outputs.scripts == 'true' ||
-      needs.filter.outputs.is_push_to_main == 'true'
+      needs.filter.outputs.is_push_to_main == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -80,8 +104,9 @@ jobs:
   rust-tests:
     needs: filter
     if: >
-      needs.filter.outputs.code == 'true' ||
-      needs.filter.outputs.is_push_to_main == 'true'
+      needs.filter.outputs.version_only != 'true' &&
+      (needs.filter.outputs.code == 'true' ||
+      needs.filter.outputs.is_push_to_main == 'true')
     runs-on: ubuntu-latest
     env:
       CARGO_TERM_COLOR: always
@@ -131,8 +156,9 @@ jobs:
   tauri-check:
     needs: filter
     if: >
-      needs.filter.outputs.code == 'true' ||
-      needs.filter.outputs.is_push_to_main == 'true'
+      needs.filter.outputs.version_only != 'true' &&
+      (needs.filter.outputs.code == 'true' ||
+      needs.filter.outputs.is_push_to_main == 'true')
     runs-on: ubuntu-latest
     env:
       CARGO_TERM_COLOR: always
@@ -165,8 +191,9 @@ jobs:
   svelte-check:
     needs: filter
     if: >
-      needs.filter.outputs.frontend == 'true' ||
-      needs.filter.outputs.is_push_to_main == 'true'
+      needs.filter.outputs.version_only != 'true' &&
+      (needs.filter.outputs.frontend == 'true' ||
+      needs.filter.outputs.is_push_to_main == 'true')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -191,13 +218,19 @@ jobs:
       - name: svelte-check
         run: pnpm run check
 
-  # 5) Inform when Rust tests are skipped (only in PRs)
-  # Only run if: no code changed AND it's NOT a push to main
+  # 5) Say why the suite was skipped, so the run isn't a lone green `filter`.
+  # Run if: a version-only push, OR no code changed in a PR
   rust-skipped:
     needs: filter
     if: >
-      needs.filter.outputs.code == 'false' &&
-      needs.filter.outputs.is_push_to_main == 'false'
+      needs.filter.outputs.version_only == 'true' ||
+      (needs.filter.outputs.code == 'false' &&
+      needs.filter.outputs.is_push_to_main == 'false')
     runs-on: ubuntu-latest
     steps:
-      - run: echo "🔍 No Rust sources changed; tests skipped (PR only behavior)."
+      - run: |
+          if [ "${{ needs.filter.outputs.version_only }}" = "true" ]; then
+            echo "🔍 Version-only push; nothing to test. Releases gate on the parent commit."
+          else
+            echo "🔍 No Rust sources changed; tests skipped (PR only behavior)."
+          fi
