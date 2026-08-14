@@ -14,6 +14,7 @@ export const TOKENS = [
 	'text-muted',
 	'selection',
 	'border',
+	'border-control',
 	'accent',
 	'term',
 	'link',
@@ -29,7 +30,10 @@ export const TOKENS = [
 	'know-unknown',
 	'know-new',
 	'know-young',
-	'know-mature'
+	'know-mature',
+	'comp-low',
+	'comp-mid',
+	'comp-high'
 ] as const;
 
 export type TokenName = (typeof TOKENS)[number];
@@ -44,13 +48,14 @@ export interface Theme {
 
 export const TOKEN_GROUPS: { label: string; tokens: TokenName[] }[] = [
 	{ label: 'Surfaces', tokens: ['bg-deep', 'bg-panel', 'bg', 'bg-raised', 'bg-hover'] },
-	{ label: 'Text', tokens: ['text', 'text-muted', 'selection', 'border'] },
+	{ label: 'Text', tokens: ['text', 'text-muted', 'selection', 'border', 'border-control'] },
 	{ label: 'Accents', tokens: ['accent', 'term', 'link', 'info', 'success', 'warning', 'danger'] },
 	{
 		label: 'Status dots',
 		tokens: ['status-ok', 'status-warn', 'status-error', 'status-busy', 'status-off']
 	},
-	{ label: 'Anki states', tokens: ['know-unknown', 'know-new', 'know-young', 'know-mature'] }
+	{ label: 'Anki states', tokens: ['know-unknown', 'know-new', 'know-young', 'know-mature'] },
+	{ label: 'Comprehension', tokens: ['comp-low', 'comp-mid', 'comp-high'] }
 ];
 
 interface ThemeFile {

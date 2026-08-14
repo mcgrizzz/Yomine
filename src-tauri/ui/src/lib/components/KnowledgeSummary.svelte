@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { comprehensionColor } from '$lib/comprehension';
 	import { knowledge } from '$lib/stores';
 	import type { BandStats } from '$lib/ipc';
 
@@ -15,14 +16,6 @@
 	// coverage = raw Anki presence; estimate = graded comprehension.
 	const frac = (s: BandStats) =>
 		Math.min(Math.max(mode === 'coverage' ? s.coverage : s.comprehension, 0), 1);
-
-	// Red→yellow→green WITHOUT the gray blend the comprehension text uses —
-	// these bars read brighter by design.
-	function barColor(pct: number): string {
-		const [r, g, b] =
-			pct >= 50 ? [180 * (1 - (pct - 50) / 50), 180, 60] : [180, 180 * (pct / 50), 60];
-		return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
-	}
 
 	function tip(label: string | null, s: BandStats, f: number): string {
 		const got = Math.round(f * s.total);
@@ -52,7 +45,7 @@
 							<div
 								class="fill"
 								style:width={`${f * 100}%`}
-								style:background={barColor(f * 100)}
+								style:background={comprehensionColor(f * 100)}
 							></div>
 						</div>
 						<span class="band-label">{band.level}</span>
@@ -70,7 +63,7 @@
 							<div
 								class="fill"
 								style:width={`${f * 100}%`}
-								style:background={barColor(f * 100)}
+								style:background={comprehensionColor(f * 100)}
 							></div>
 						</div>
 						<span class="band-label">{band.label}</span>

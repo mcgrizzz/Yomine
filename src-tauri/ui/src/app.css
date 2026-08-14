@@ -34,11 +34,13 @@
 	--text-muted: #929ec9;
 	--selection: #44475a;
 	--border: #424550;
+	/* A control's fill clears its surface by only ~1.05:1, so its border carries the whole 3:1. */
+	--border-control: #7c7f8b;
 
 	--accent: #8be9fd;
 	--term: #ff79c6;
 	--link: #62a0ea;
-	--info: #62a0ea;
+	--info: #63a2ec;
 	--success: #50fa7b;
 	--warning: #f1fa8c;
 	--danger: #ff5555;
@@ -56,6 +58,11 @@
 	--know-new: #62a0ea;
 	--know-young: #ffb86c;
 	--know-mature: #50fa7b;
+
+	/* Comprehension ramp stops (lib/comprehension.ts mixes between them) */
+	--comp-low: #ff5555;
+	--comp-mid: #ffb86c;
+	--comp-high: #50fa7b;
 
 	--radius: 6px;
 	--radius-sm: 3px;
@@ -108,7 +115,7 @@ button {
 	font: inherit;
 	color: var(--text);
 	background: var(--bg-raised);
-	border: 1px solid var(--border);
+	border: 1px solid var(--border-control);
 	border-radius: var(--radius);
 	padding: 0.4rem 0.8rem;
 	cursor: pointer;
@@ -148,7 +155,7 @@ textarea {
 	font: inherit;
 	color: var(--text);
 	background: var(--bg-raised);
-	border: 1px solid var(--border);
+	border: 1px solid var(--border-control);
 	border-radius: var(--radius-sm);
 	padding: 0.3rem 0.5rem;
 }

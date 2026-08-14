@@ -12,6 +12,7 @@
 		"text-muted": "#908caa",
 		"selection": "#44415a",
 		"border": "#56526e",
+		"border-control": "#736f8c",
 		"accent": "#ea9a97",
 		"term": "#c4a7e7",
 		"link": "#9ccfd8",
@@ -27,6 +28,9 @@
 		"know-unknown": "#eb6f92",
 		"know-new": "#9ccfd8",
 		"know-young": "#e89a5b",
-		"know-mature": "#8bbf9f"
+		"know-mature": "#8bbf9f",
+		"comp-low": "#eb6f92",
+		"comp-mid": "#e89a5b",
+		"comp-high": "#8bbf9f"
 	}
 }
