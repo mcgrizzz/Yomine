@@ -301,7 +301,7 @@
 		width: 2rem;
 		height: 1.4rem;
 		padding: 0;
-		border: 1px solid var(--border);
+		border: 1px solid var(--border-control);
 		border-radius: var(--radius-sm);
 		background: none;
 		cursor: pointer;

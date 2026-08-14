@@ -12,10 +12,11 @@
 		"text-muted": "#929ec9",
 		"selection": "#44475a",
 		"border": "#424550",
+		"border-control": "#7c7f8b",
 		"accent": "#8be9fd",
 		"term": "#ff79c6",
 		"link": "#62a0ea",
-		"info": "#62a0ea",
+		"info": "#63a2ec",
 		"success": "#50fa7b",
 		"warning": "#f1fa8c",
 		"danger": "#ff5555",
@@ -27,6 +28,9 @@
 		"know-unknown": "#ff5555",
 		"know-new": "#62a0ea",
 		"know-young": "#ffb86c",
-		"know-mature": "#50fa7b"
+		"know-mature": "#50fa7b",
+		"comp-low": "#ff5555",
+		"comp-mid": "#ffb86c",
+		"comp-high": "#50fa7b"
 	}
 }

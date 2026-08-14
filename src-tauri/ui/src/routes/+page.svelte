@@ -480,7 +480,7 @@
 		gap: 0.6rem;
 		max-width: 90%;
 		padding: 0.6rem 0.9rem;
-		background: var(--bg-raised);
+		background: var(--bg-panel);
 		border: 1px solid var(--danger);
 		border-radius: var(--radius);
 		color: var(--text);
