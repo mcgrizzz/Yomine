@@ -10,7 +10,10 @@ use serde::{
 };
 
 use super::YomineError;
-use crate::persistence::get_app_data_dir;
+use crate::persistence::{
+    atomic_write,
+    get_app_data_dir,
+};
 
 pub const DEFAULT_IGNORED_TERMS: &[&str] = &[
     "の", "は", "に", "へ", "を", "て", "が", "だ", "た", "と", "から", "も", "で", "か", "です",
@@ -73,16 +76,10 @@ impl IgnoreList {
     }
 
     pub fn save(&self) -> Result<(), YomineError> {
-        if let Some(parent) = self.file_path.parent() {
-            fs::create_dir_all(parent).map_err(|e| {
-                YomineError::Custom(format!("Failed to create ignore list directory: {}", e))
-            })?;
-        }
-
         let content = serde_json::to_string_pretty(&self.data)
             .map_err(|e| YomineError::Custom(format!("Failed to serialize ignore list: {}", e)))?;
 
-        fs::write(&self.file_path, content)
+        atomic_write(&self.file_path, content.as_bytes())
             .map_err(|e| YomineError::Custom(format!("Failed to write ignore list: {}", e)))
     }
 
