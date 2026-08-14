@@ -15,7 +15,7 @@ use crate::state::AppState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Same `settings.json` as the egui app — the on-disk format is unchanged.
+    yomine::core::user_themes::migrate_from_settings();
     let settings = yomine::persistence::load_json_or_default::<SettingsData>("settings.json");
     let websocket_port = settings.websocket_settings.port;
 
@@ -30,6 +30,8 @@ pub fn run() {
             commands::lifecycle::get_pos_catalog,
             commands::lifecycle::get_settings,
             commands::lifecycle::save_settings,
+            commands::lifecycle::get_user_themes,
+            commands::lifecycle::save_user_themes,
             commands::lifecycle::get_text_filter_presets,
             commands::lifecycle::test_text_filters,
             commands::lifecycle::open_data_folder,

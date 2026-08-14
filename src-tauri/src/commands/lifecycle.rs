@@ -15,7 +15,11 @@ use tauri::{
 use tauri_plugin_opener::OpenerExt;
 use yomine::{
     core::{
-        settings::SettingsData,
+        settings::{
+            SettingsData,
+            UserTheme,
+        },
+        user_themes,
         IgnoreList,
         LanguageTools,
     },
@@ -230,6 +234,19 @@ pub fn test_text_filters(
         SettingsData { text_filters: filters, text_filter_presets: presets, ..Default::default() };
     let compiled = text_filter::compile_filters(&staged);
     Ok(text_filter::apply_to_text(&compiled, &sample))
+}
+
+#[tauri::command]
+pub fn get_user_themes() -> Vec<UserTheme> {
+    user_themes::load()
+}
+
+/// Emits `user-themes-changed` so every window (main + themes) sees the update.
+#[tauri::command]
+pub fn save_user_themes(app: AppHandle, themes: Vec<UserTheme>) -> Result<(), String> {
+    user_themes::save(&themes).map_err(|e| e.to_string())?;
+    let _ = app.emit(names::USER_THEMES_CHANGED, themes);
+    Ok(())
 }
 
 /// Persist + replace the in-memory copy, propagating the bits that affect the

@@ -8,6 +8,7 @@ pub mod pipeline;
 pub mod recent_files;
 pub mod settings;
 pub mod text_filter;
+pub mod user_themes;
 pub mod utils;
 
 pub use errors::YomineError;

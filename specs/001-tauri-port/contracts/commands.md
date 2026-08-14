@@ -16,6 +16,8 @@ events (see [events.md](./events.md)). Engine handles come from `tauri::State<Ap
 | `get_pos_catalog` | — | `array<PosInfo>` | `POS` static | Static POS key/label list for filters. |
 | `get_settings` | — | `SettingsData` | `load_json` | From `AppState` (loaded at start). |
 | `save_settings` | `settings: SettingsData` | `()` | `save_settings` | Persists via `persistence::save_json`; updates `AppState`; may trigger recompute (e.g. known-interval); emits `settings-changed` to all windows. |
+| `get_user_themes` | — | `array<UserTheme>` | — | The custom theme library, stored in `user_themes.json` rather than `settings.json` so it can be shared across profiles while `theme_dark`/`theme_light`/`dark_mode` stay per-settings. A pre-split `settings.json` is migrated on startup. |
+| `save_user_themes` | `themes: array<UserTheme>` | `()` | — | Persists the library; emits `user-themes-changed` to all windows. |
 | `open_themes_window` | — | `()` | — (new in Tauri) | Opens (or focuses) the floating `themes` window at `/themes` — undimmed, natively draggable, for live theme previewing. |
 | `export_theme_file` | `name: string`, `json: string` | `bool` | — (new in Tauri) | Save dialog + write for theme export; `false` = cancelled. |
 | `import_theme_file` | — | `string \| null` | — (new in Tauri) | Open dialog + read for theme import; `null` = cancelled; frontend validates. |

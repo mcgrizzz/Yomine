@@ -228,7 +228,6 @@ export interface SettingsData {
 	dark_mode: boolean;
 	theme_dark: string;
 	theme_light: string;
-	user_themes: UserTheme[];
 	/** Follow mode (issue #105): auto-load NEW subtitled videos asbplayer binds. */
 	asbplayer_follow_new_media: boolean;
 	/** Follow mode (issue #105): switch to asbplayer's active subtitled tab. */
@@ -363,6 +362,15 @@ export function getSettings(): Promise<SettingsData> {
 
 export function saveSettings(settings: SettingsData): Promise<void> {
 	return invoke('save_settings', { settings });
+}
+
+/** The theme library lives outside `settings.json`; the active slots stay in it. */
+export function getUserThemes(): Promise<UserTheme[]> {
+	return invoke('get_user_themes');
+}
+
+export function saveUserThemes(themes: UserTheme[]): Promise<void> {
+	return invoke('save_user_themes', { themes });
 }
 
 /** Native open dialog; resolves to the chosen path or `null`. */
