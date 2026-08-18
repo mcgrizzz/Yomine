@@ -9,16 +9,18 @@
 		settings,
 		frequencyModalOpen,
 		saveDictionaryStates,
-		recommendedDicts
+		recommendedDicts,
+		type DictionaryRow
 	} from '$lib/stores';
 	import * as ipc from '$lib/ipc';
 
 	const MIN_WEIGHT = 0.1;
 	const MAX_WEIGHT = 5.0;
 
-	let entries = $state<ipc.DictionaryState[]>([]);
-	let original = $state<ipc.DictionaryState[]>([]);
+	let entries = $state<DictionaryRow[]>([]);
+	let original = $state<DictionaryRow[]>([]);
 	let loaded = $state(false);
+	let hiddenCollapsed = $state(true);
 
 	// The recommended catalog is checked at launch + the manual button only (it
 	// hits the network). `busyTitle` serializes every mutating action.
@@ -36,6 +38,7 @@
 			untrack(() => {
 				confirmRemove = null;
 				opError = null;
+				hiddenCollapsed = true;
 				void hydrate();
 			});
 	});
@@ -120,18 +123,24 @@
 		original = [];
 		const dicts = await ipc.listDictionaries();
 		const weights = $settings?.frequency_weights ?? {};
-		let list: ipc.DictionaryState[];
+		let list: DictionaryRow[];
 		if (dicts.length > 0) {
 			// Live manager states, with any persisted setting taking precedence.
 			list = dicts.map((d) => ({
 				name: d.name,
 				weight: Math.max(weights[d.name]?.weight ?? d.weight, MIN_WEIGHT),
-				enabled: weights[d.name]?.enabled ?? d.enabled
+				enabled: weights[d.name]?.enabled ?? d.enabled,
+				hidden: weights[d.name]?.hidden ?? false
 			}));
 		} else {
 			// Tools not loaded yet: fall back to the persisted settings (egui parity).
 			list = Object.entries(weights)
-				.map(([name, w]) => ({ name, weight: Math.max(w.weight, MIN_WEIGHT), enabled: w.enabled }))
+				.map(([name, w]) => ({
+					name,
+					weight: Math.max(w.weight, MIN_WEIGHT),
+					enabled: w.enabled,
+					hidden: w.hidden ?? false
+				}))
 				.sort((a, b) => a.name.localeCompare(b.name));
 		}
 		entries = list;
@@ -140,11 +149,14 @@
 		guard.disarm();
 	}
 
-	const dirty = $derived(
-		entries.some(
-			(e, i) => e.weight !== original[i]?.weight || e.enabled !== original[i]?.enabled
-		)
-	);
+	const changedFromOriginal = (e: DictionaryRow, i: number) =>
+		e.weight !== original[i]?.weight ||
+		e.enabled !== original[i]?.enabled ||
+		e.hidden !== original[i]?.hidden;
+
+	const dirty = $derived(entries.some(changedFromOriginal));
+	const visibleRows = $derived(entries.filter((e) => !e.hidden));
+	const hiddenRows = $derived(entries.filter((e) => e.hidden));
 	const guard = dirtyGuard(
 		() => dirty,
 		() => frequencyModalOpen.set(false)
@@ -161,17 +173,21 @@
 		return Math.round(Math.min(Math.max(w, MIN_WEIGHT), MAX_WEIGHT) * 100) / 100;
 	}
 
-	function setEnabled(i: number, on: boolean) {
-		entries[i].enabled = on;
-		if (!on) entries[i].weight = Math.max(entries[i].weight, MIN_WEIGHT);
+	function setEnabled(entry: DictionaryRow, on: boolean) {
+		entry.enabled = on;
+		if (!on) entry.weight = Math.max(entry.weight, MIN_WEIGHT);
+	}
+
+	function setHidden(entry: DictionaryRow, on: boolean) {
+		entry.hidden = on;
+		if (on) entry.enabled = false;
+		confirmRemove = null;
 	}
 
 	async function save() {
 		// egui saves the whole map; the per-dictionary command makes the changed
 		// subset the minimal equivalent commit.
-		const changed = entries.filter(
-			(e, i) => e.weight !== original[i]?.weight || e.enabled !== original[i]?.enabled
-		);
+		const changed = entries.filter(changedFromOriginal);
 		if (await saveDictionaryStates(changed.map((e) => ({ ...e })))) {
 			original = entries.map((e) => ({ ...e }));
 			frequencyModalOpen.set(false);
@@ -187,9 +203,26 @@
 		for (const e of entries) {
 			e.enabled = true;
 			e.weight = 1.0;
+			e.hidden = false;
 		}
 	}
 </script>
+
+{#snippet delCell(entry: DictionaryRow)}
+	{#if confirmRemove === entry.name}
+		<button class="danger" disabled={busyTitle !== null} onclick={() => removeDict(entry.name)}
+			>Delete for all profiles?</button
+		>
+		<button aria-label="Keep dictionary" onclick={() => (confirmRemove = null)}>✕</button>
+	{:else}
+		<button
+			class="ghost"
+			title={`Remove ${entry.name}`}
+			disabled={busyTitle !== null}
+			onclick={() => (confirmRemove = entry.name)}>🗑</button
+		>
+	{/if}
+{/snippet}
 
 <Modal
 	open={$frequencyModalOpen}
@@ -251,12 +284,12 @@
 				<span>Value</span>
 				<span></span>
 			</div>
-			{#each entries as entry, i (entry.name)}
+			{#each visibleRows as entry (entry.name)}
 				<div class="row">
 					<input
 						type="checkbox"
 						checked={entry.enabled}
-						onchange={(e) => setEnabled(i, e.currentTarget.checked)}
+						onchange={(e) => setEnabled(entry, e.currentTarget.checked)}
 						aria-label={`Enable ${entry.name}`}
 					/>
 					<span class="name" class:off={!entry.enabled}>{entry.name}</span>
@@ -281,27 +314,45 @@
 						/>
 					</span>
 					<span class="del">
-						{#if confirmRemove === entry.name}
-							<button
-								class="danger"
-								disabled={busyTitle !== null}
-								onclick={() => removeDict(entry.name)}>Confirm</button
-							>
-							<button aria-label="Keep dictionary" onclick={() => (confirmRemove = null)}
-								>✕</button
-							>
-						{:else}
+						{#if confirmRemove !== entry.name}
 							<button
 								class="ghost"
-								title={`Remove ${entry.name}`}
+								title={`Hide ${entry.name}`}
 								disabled={busyTitle !== null}
-								onclick={() => (confirmRemove = entry.name)}>🗑</button
+								onclick={() => setHidden(entry, true)}>👁</button
 							>
 						{/if}
+						{@render delCell(entry)}
 					</span>
 				</div>
 			{/each}
+			{#if visibleRows.length === 0}
+				<p class="empty">Every dictionary is hidden.</p>
+			{/if}
 		</div>
+
+		{#if hiddenRows.length > 0}
+			<div class="hidden-section">
+				<button class="hidden-head" onclick={() => (hiddenCollapsed = !hiddenCollapsed)}>
+					<span class="twisty">{hiddenCollapsed ? '▸' : '▾'}</span>
+					Hidden ({hiddenRows.length})
+				</button>
+				{#if !hiddenCollapsed}
+					{#each hiddenRows as entry (entry.name)}
+						<div class="hidden-row">
+							<button
+								class="ghost"
+								title={`Show ${entry.name}`}
+								disabled={busyTitle !== null}
+								onclick={() => setHidden(entry, false)}>👁</button
+							>
+							<span class="name off">{entry.name}</span>
+							<span class="del">{@render delCell(entry)}</span>
+						</div>
+					{/each}
+				{/if}
+			</div>
+		{/if}
 	{/if}
 
 	{#snippet footer()}
@@ -459,6 +510,47 @@
 	}
 	.name.off {
 		color: var(--text-muted);
+	}
+	.hidden-section {
+		padding: 0 1rem;
+		margin-top: 0.5rem;
+	}
+	.hidden-head {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		width: 100%;
+		padding: 0.2rem 0;
+		background: none;
+		border: none;
+		color: var(--text-muted);
+		font-size: 0.85rem;
+		cursor: pointer;
+	}
+	.hidden-head:hover {
+		color: var(--text);
+		background: none;
+	}
+	.twisty {
+		font-size: 0.7rem;
+	}
+	.hidden-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		min-height: 1.9rem;
+	}
+	.hidden-row .name {
+		flex: 1;
+	}
+	.hidden-row .ghost {
+		padding: 0.1rem 0.3rem;
+		background: transparent;
+		border: none;
+		opacity: 0.6;
+	}
+	.hidden-row .ghost:hover:not(:disabled) {
+		opacity: 1;
 	}
 	.row input[type='range'] {
 		width: 100%;

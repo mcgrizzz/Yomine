@@ -16,6 +16,8 @@ events (see [events.md](./events.md)). Engine handles come from `tauri::State<Ap
 | `get_pos_catalog` | — | `array<PosInfo>` | `POS` static | Static POS key/label list for filters. |
 | `get_settings` | — | `SettingsData` | `load_json` | From `AppState` (loaded at start). |
 | `save_settings` | `settings: SettingsData` | `()` | `save_settings` | Persists via `persistence::save_json`; updates `AppState`; may trigger recompute (e.g. known-interval); emits `settings-changed` to all windows. |
+| `get_user_themes` | — | `array<UserTheme>` | — | The custom theme library, stored in `user_themes.json` rather than `settings.json` so it can be shared across profiles while `theme_dark`/`theme_light`/`dark_mode` stay per-settings. A pre-split `settings.json` is migrated on startup. |
+| `save_user_themes` | `themes: array<UserTheme>` | `()` | — | Persists the library; emits `user-themes-changed` to all windows. |
 | `open_themes_window` | — | `()` | — (new in Tauri) | Opens (or focuses) the floating `themes` window at `/themes` — undimmed, natively draggable, for live theme previewing. |
 | `export_theme_file` | `name: string`, `json: string` | `bool` | — (new in Tauri) | Save dialog + write for theme export; `false` = cancelled. |
 | `import_theme_file` | — | `string \| null` | — (new in Tauri) | Open dialog + read for theme import; `null` = cancelled; frontend validates. |
@@ -130,6 +132,23 @@ Settings additions: `SettingsData.yomitan_url` (default `http://127.0.0.1:19633`
 | Command | Args | Returns | Maps to | Notes |
 |---------|------|---------|---------|-------|
 | `get_knowledge_summary` | — | `KnowledgeSummary \| null` | `compute_knowledge_summary` | Null until an Anki cache exists; recomputed in background and pushed via `knowledge-summary` event. |
+
+## Profiles
+
+A profile owns `settings.json`, the ignore list, recent files, EPUB history and the three Anki
+caches. `dictionaries/` and `asbplayer_subtitles/` are **shared** and never duplicated. The data
+root is always a profile — the one an install starts with, and the only one until a second is
+created; additional profiles live in `profiles/<slug>/`, so nothing already on disk ever moves.
+Switching is a relaunch, so none of these commands touch `AppState`.
+
+| Command | Args | Returns | Notes |
+|---------|------|---------|-------|
+| `list_profiles` | — | `ProfileList` | `{ profiles: [{ slug, display_name, active }] }`, the root first under the reserved slug `default`. |
+| `create_profile` | `name: string` | `{ requires_relaunch }` | Creates an empty profile and switches to it. Always `true`. |
+| `copy_profile` | `slug: string`, `name: string` | `{ requires_relaunch }` | Copies a profile's state into a new one and switches. Nothing existing is touched. Always `true`. |
+| `switch_profile` | `slug: string` | `{ requires_relaunch }` | Writes the pointer only — deliberately does **not** re-point this process, so teardown writes stay in the outgoing profile. |
+| `rename_profile` | `slug: string`, `name: string` | `()` | Display name only (`profile.json` inside the profile); directory names are generated, never derived from the name, so any name is accepted and nothing moves. Refreshes the window title when it renames the active profile. |
+| `delete_profile` | `slug: string` | `{ requires_relaunch }` | Refuses the root profile. `true` iff the deleted profile was active. |
 
 ## Misc
 

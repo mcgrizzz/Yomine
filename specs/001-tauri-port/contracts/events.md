@@ -32,6 +32,7 @@ A `null` `message` clears the overlay (mirrors `MessageOverlay::clear_message`).
 | `analysis-cancelled` | `()` | analyzer cancelled | `FrequencyAnalysisUpdate::Cancelled` |
 | `export-complete` | `{ ok: bool, message: string }` | export finishes | `TaskResult::FrequencyExport` |
 | `settings-changed` | `SettingsData` | every `save_settings` | — (new in Tauri; syncs the settings mirror across the main + themes windows) |
+| `user-themes-changed` | `array<UserTheme>` | every `save_user_themes` | — (same rationale, for the theme library that no longer rides on `SettingsData`) |
 | `error` | `{ title: string, message: string, detail: string \| null }` | a backend op fails in a way the UI should modal | `ErrorModal` |
 
 ## Background task (single spawned loop, started at setup)

@@ -4,18 +4,24 @@ import { lastError } from './ui';
 import { languageToolsStatus } from './status';
 import { settings } from './settings';
 
+export type DictionaryRow = ipc.DictionaryState & { hidden: boolean };
+
 /** Commits each *changed* entry; the backend rebakes term frequencies and emits
  * `dictionaries-changed`, which re-fetches the table via the hydrate listener. */
-export async function saveDictionaryStates(entries: ipc.DictionaryState[]): Promise<boolean> {
+export async function saveDictionaryStates(entries: DictionaryRow[]): Promise<boolean> {
 	try {
 		for (const e of entries) {
-			await ipc.setDictionaryState(e.name, e.weight, e.enabled);
+			await ipc.setDictionaryState(e.name, e.weight, e.enabled, e.hidden);
 		}
 		const s = get(settings);
 		if (s) {
 			const frequency_weights = { ...s.frequency_weights };
 			for (const e of entries) {
-				frequency_weights[e.name] = { weight: e.weight, enabled: e.enabled };
+				frequency_weights[e.name] = {
+					weight: e.weight,
+					enabled: e.enabled && !e.hidden,
+					hidden: e.hidden
+				};
 			}
 			settings.set({ ...s, frequency_weights });
 		}

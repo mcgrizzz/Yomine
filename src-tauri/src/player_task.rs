@@ -33,6 +33,10 @@ use crate::events::{
 /// so this only bounds how fast a connect/disconnect is reflected in the UI.
 const UPDATE_INTERVAL: Duration = Duration::from_millis(250);
 
+// A failed bind still yields a server object, so `update`'s `is_some()` restart arm never fires.
+const REBIND_INTERVAL_TICKS: u32 = 4;
+const REBIND_MAX_ATTEMPTS: u32 = 5;
+
 pub enum PlayerCommand {
     Seek {
         seconds: f32,
@@ -182,11 +186,32 @@ async fn run(app: AppHandle, mut port: u16, mut rx: mpsc::UnboundedReceiver<Play
 
     let mut last_status: Option<PlayerStatus> = None;
     let mut tick = tokio::time::interval(UPDATE_INTERVAL);
+    let mut rebind_attempts = 0;
+    let mut ticks_since_rebind = 0;
 
     loop {
         tokio::select! {
             _ = tick.tick() => {
                 player.update(port);
+                match player.ws.get_server_state() {
+                    ServerState::Running => {
+                        rebind_attempts = 0;
+                        ticks_since_rebind = 0;
+                    }
+                    ServerState::Error(_) => {
+                        ticks_since_rebind += 1;
+                        if ticks_since_rebind >= REBIND_INTERVAL_TICKS
+                            && rebind_attempts < REBIND_MAX_ATTEMPTS
+                        {
+                            ticks_since_rebind = 0;
+                            rebind_attempts += 1;
+                            if let Err(e) = player.ws.restart_server(port) {
+                                eprintln!("[WS] Rebind attempt {rebind_attempts} failed: {e}");
+                            }
+                        }
+                    }
+                    _ => {}
+                }
                 let status = current_status(&player);
                 if last_status.as_ref() != Some(&status) {
                     let _ = app.emit(names::PLAYER_STATUS, status.clone());
@@ -240,6 +265,8 @@ async fn run(app: AppHandle, mut port: u16, mut rx: mpsc::UnboundedReceiver<Play
                 PlayerCommand::SetPort(new_port) => {
                     if port != new_port {
                         port = new_port;
+                        rebind_attempts = 0;
+                        ticks_since_rebind = 0;
                         // Move a running server to the new port now; if none is
                         // running, the next `update()` tick uses the new port.
                         if player.ws.server.is_some() {

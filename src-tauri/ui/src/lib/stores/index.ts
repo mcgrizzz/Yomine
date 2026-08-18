@@ -7,6 +7,7 @@ export * from './modals';
 export * from './file';
 export * from './controls';
 export * from './settings';
+export * from './userThemes';
 export * from './ignore';
 export * from './dictionaries';
 export * from './setup';

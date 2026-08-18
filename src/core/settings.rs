@@ -13,11 +13,13 @@ use crate::anki::FieldMapping;
 pub struct FrequencyDictionarySetting {
     pub weight: f32,
     pub enabled: bool,
+    #[serde(default)]
+    pub hidden: bool,
 }
 
 impl Default for FrequencyDictionarySetting {
     fn default() -> Self {
-        Self { weight: 1.0, enabled: true }
+        Self { weight: 1.0, enabled: true, hidden: false }
     }
 }
 
@@ -122,8 +124,6 @@ pub struct SettingsData {
     pub theme_dark: String,
     #[serde(default = "default_theme_light")]
     pub theme_light: String,
-    #[serde(default)]
-    pub user_themes: Vec<UserTheme>,
     /// Follow mode (issue #105): auto-load NEW subtitled videos asbplayer binds.
     #[serde(default)]
     pub asbplayer_follow_new_media: bool,
@@ -212,7 +212,6 @@ impl Default for SettingsData {
             dark_mode: true,
             theme_dark: default_theme_dark(),
             theme_light: default_theme_light(),
-            user_themes: Vec::new(),
             asbplayer_follow_new_media: false,
             asbplayer_follow_active_tab: true,
             asbplayer_poll_secs: default_asbplayer_poll_secs(),

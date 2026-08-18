@@ -4,7 +4,7 @@
 	// Picks are instant (like the top-bar toggle) — no staged Save.
 	import { onMount } from 'svelte';
 	import * as ipc from '$lib/ipc';
-	import { settings, setPreferredTheme } from '$lib/stores';
+	import { settings, setPreferredTheme, userThemes } from '$lib/stores';
 	import { allThemes, resolveTheme, type Theme, type TokenName } from '$lib/themes';
 	import ThemeEditorModal from '$lib/components/ThemeEditorModal.svelte';
 
@@ -12,8 +12,8 @@
 		settings.set(await ipc.getSettings());
 	});
 
-	const themes = $derived(allThemes($settings));
-	const activeThemeId = $derived(resolveTheme($settings).id);
+	const themes = $derived(allThemes($userThemes));
+	const activeThemeId = $derived(resolveTheme($settings, $userThemes).id);
 	const preferredDark = $derived($settings?.theme_dark ?? 'dracula');
 	const preferredLight = $derived($settings?.theme_light ?? 'paper');
 	const SURFACES: TokenName[] = [

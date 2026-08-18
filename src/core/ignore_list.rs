@@ -10,7 +10,10 @@ use serde::{
 };
 
 use super::YomineError;
-use crate::persistence::get_app_data_dir;
+use crate::persistence::{
+    atomic_write,
+    get_profile_dir,
+};
 
 pub const DEFAULT_IGNORED_TERMS: &[&str] = &[
     "の", "は", "に", "へ", "を", "て", "が", "だ", "た", "と", "から", "も", "で", "か", "です",
@@ -42,7 +45,6 @@ impl Default for IgnoreListData {
 #[derive(Debug)]
 pub struct IgnoreList {
     data: IgnoreListData,
-    file_path: PathBuf,
     cached_file_terms: Vec<String>,
 }
 
@@ -58,31 +60,21 @@ impl IgnoreList {
                 .map_err(|e| YomineError::Custom(format!("Failed to parse ignore list: {}", e)))?
         } else {
             let default_data = IgnoreListData::default();
-            let instance = Self {
-                data: default_data.clone(),
-                file_path: file_path.clone(),
-                cached_file_terms: Vec::new(),
-            };
+            let instance = Self { data: default_data.clone(), cached_file_terms: Vec::new() };
             instance.save()?;
             default_data
         };
 
-        let mut instance = Self { data, file_path, cached_file_terms: Vec::new() };
+        let mut instance = Self { data, cached_file_terms: Vec::new() };
         instance.reload_file_cache();
         Ok(instance)
     }
 
     pub fn save(&self) -> Result<(), YomineError> {
-        if let Some(parent) = self.file_path.parent() {
-            fs::create_dir_all(parent).map_err(|e| {
-                YomineError::Custom(format!("Failed to create ignore list directory: {}", e))
-            })?;
-        }
-
         let content = serde_json::to_string_pretty(&self.data)
             .map_err(|e| YomineError::Custom(format!("Failed to serialize ignore list: {}", e)))?;
 
-        fs::write(&self.file_path, content)
+        atomic_write(&Self::get_ignore_list_path(), content.as_bytes())
             .map_err(|e| YomineError::Custom(format!("Failed to write ignore list: {}", e)))
     }
 
@@ -173,6 +165,6 @@ impl IgnoreList {
     }
 
     fn get_ignore_list_path() -> PathBuf {
-        get_app_data_dir().join("ignore_list.json")
+        get_profile_dir().join("ignore_list.json")
     }
 }

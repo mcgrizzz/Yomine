@@ -45,8 +45,16 @@
 		};
 	});
 
+	// A click fires on the common ancestor of press and release, so a drag that
+	// starts inside the dialog and ends on the backdrop would otherwise dismiss it.
+	let pressedBackdrop = false;
+
+	function onmousedown(e: MouseEvent) {
+		pressedBackdrop = e.target === e.currentTarget;
+	}
+
 	function onclick(e: MouseEvent) {
-		if (e.target === e.currentTarget) onclose();
+		if (e.target === e.currentTarget && pressedBackdrop) onclose();
 		else oninteract?.();
 	}
 
@@ -110,7 +118,7 @@
 
 {#if open}
 	{#if dismissible}
-		<div class="backdrop" role="button" tabindex="-1" {onclick} {onkeydown}>
+		<div class="backdrop" role="button" tabindex="-1" {onmousedown} {onclick} {onkeydown}>
 			{@render dialogBox()}
 		</div>
 	{:else}
