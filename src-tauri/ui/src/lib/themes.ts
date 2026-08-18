@@ -106,15 +106,15 @@ export function themeFromUser(u: UserTheme): Theme {
 	return completeTheme({ id: userThemeId(u.name), label: u.name, dark: u.dark, colors: u.colors });
 }
 
-export function allThemes(s: SettingsData | null): Theme[] {
-	return [...BUILTIN_THEMES, ...(s?.user_themes ?? []).map(themeFromUser)];
+export function allThemes(user: UserTheme[] | null): Theme[] {
+	return [...BUILTIN_THEMES, ...(user ?? []).map(themeFromUser)];
 }
 
-export function resolveTheme(s: SettingsData | null): Theme {
+export function resolveTheme(s: SettingsData | null, user: UserTheme[] | null): Theme {
 	const dark = s?.dark_mode ?? true;
 	const id = dark ? s?.theme_dark || 'dracula' : s?.theme_light || 'paper';
 	return (
-		allThemes(s).find((t) => t.id === id) ??
+		allThemes(user).find((t) => t.id === id) ??
 		BUILTIN_THEMES.find((t) => t.id === (dark ? 'dracula' : 'paper'))!
 	);
 }

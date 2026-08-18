@@ -2,8 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    // The engine reads YOMINE_DATA_DIR in persistence::get_app_data_dir();
-    // the flag must become an env var before anything touches the data dir.
+    // get_app_data_dir() reads YOMINE_DATA_DIR, so the flag must land before the first read.
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         if arg == "--data-dir" {

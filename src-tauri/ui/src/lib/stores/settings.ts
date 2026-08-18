@@ -36,10 +36,9 @@ export const setPreferredTheme = (slot: 'dark' | 'light', id: string) =>
 		slot === 'dark' ? { theme_dark: id, dark_mode: true } : { theme_light: id, dark_mode: false }
 	);
 
-export const saveUserThemes = (
-	themes: ipc.UserTheme[],
-	slots?: { theme_dark?: string; theme_light?: string }
-) => patchSettings({ user_themes: themes.map((t) => ({ ...t, colors: { ...t.colors } })), ...slots });
+/** Repoints the slots that named a renamed or deleted user theme. */
+export const setThemeSlots = (slots: { theme_dark?: string; theme_light?: string }) =>
+	patchSettings(slots);
 
 export async function toggleSerifFont(): Promise<void> {
 	const s = get(settings);

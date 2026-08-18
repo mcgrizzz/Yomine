@@ -13,6 +13,7 @@ pub mod knowledge;
 pub mod lifecycle;
 pub mod mining;
 pub mod player;
+pub mod profiles;
 pub mod recommended;
 pub mod setup;
 pub mod update;
@@ -36,9 +37,11 @@ pub fn apply_frequency_weights(
             let setting = weights.get(&name).cloned().unwrap_or(FrequencyDictionarySetting {
                 weight: state.weight,
                 enabled: state.enabled,
+                hidden: false,
             });
             let weight = setting.weight.max(0.1);
-            if let Err(err) = manager.set_dictionary_state(&name, weight, setting.enabled) {
+            let enabled = setting.enabled && !setting.hidden;
+            if let Err(err) = manager.set_dictionary_state(&name, weight, enabled) {
                 eprintln!("Failed to update dictionary state '{}': {}", name, err);
             }
         }

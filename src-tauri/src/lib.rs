@@ -15,7 +15,7 @@ use crate::state::AppState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Same `settings.json` as the egui app — the on-disk format is unchanged.
+    yomine::core::user_themes::migrate_from_settings();
     let settings = yomine::persistence::load_json_or_default::<SettingsData>("settings.json");
     let websocket_port = settings.websocket_settings.port;
 
@@ -30,6 +30,8 @@ pub fn run() {
             commands::lifecycle::get_pos_catalog,
             commands::lifecycle::get_settings,
             commands::lifecycle::save_settings,
+            commands::lifecycle::get_user_themes,
+            commands::lifecycle::save_user_themes,
             commands::lifecycle::get_text_filter_presets,
             commands::lifecycle::test_text_filters,
             commands::lifecycle::open_data_folder,
@@ -82,6 +84,12 @@ pub fn run() {
             commands::mining::open_in_anki,
             commands::mining::open_notes_in_anki,
             commands::setup::get_setup_status,
+            commands::profiles::list_profiles,
+            commands::profiles::create_profile,
+            commands::profiles::copy_profile,
+            commands::profiles::switch_profile,
+            commands::profiles::rename_profile,
+            commands::profiles::delete_profile,
             commands::update::check_for_update,
             commands::knowledge::get_knowledge_summary,
         ])
@@ -93,6 +101,12 @@ pub fn run() {
             }
         })
         .setup(move |app| {
+            if let Some(name) = yomine::persistence::profiles::active_title_name() {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.set_title(&format!("Yomine - {name}"));
+                }
+            }
+
             // The player runs in its own task that solely owns `PlayerManager`;
             // commands reach it through this handle (no shared lock).
             let player = player_task::spawn(app.handle().clone(), websocket_port);

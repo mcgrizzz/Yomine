@@ -5,7 +5,7 @@
 	import { emit } from '@tauri-apps/api/event';
 	import Modal from './Modal.svelte';
 	import { exportThemeFile, importThemeFile, type UserTheme } from '$lib/ipc';
-	import { saveUserThemes, settings } from '$lib/stores';
+	import { saveUserThemes, setThemeSlots, settings, userThemes } from '$lib/stores';
 	import {
 		allThemes,
 		applyTheme,
@@ -36,6 +36,8 @@
 	let deleteArmed = $state(false);
 	let fileError = $state<string | null>(null);
 
+	const library = $derived($userThemes ?? []);
+
 	$effect(() => {
 		if (open) untrack(hydrate);
 	});
@@ -43,9 +45,7 @@
 	function hydrate() {
 		deleteArmed = false;
 		fileError = null;
-		const existing = initial
-			? ($settings?.user_themes ?? []).find((t) => t.name === initial)
-			: undefined;
+		const existing = initial ? library.find((t) => t.name === initial) : undefined;
 		if (existing) {
 			originalName = existing.name;
 			name = existing.name;
@@ -54,13 +54,13 @@
 		} else {
 			originalName = null;
 			name = '';
-			seedId = resolveTheme($settings).id;
+			seedId = resolveTheme($settings, library).id;
 			seed(seedId);
 		}
 	}
 
 	function seed(id: string) {
-		const from = allThemes($settings).find((t) => t.id === id) ?? BUILTIN_THEMES[0];
+		const from = allThemes(library).find((t) => t.id === id) ?? BUILTIN_THEMES[0];
 		dark = from.dark;
 		colors = { ...from.colors };
 	}
@@ -123,15 +123,13 @@
 	const trimmed = $derived(name.trim());
 	const taken = $derived(
 		BUILTIN_THEMES.some((t) => t.label.toLowerCase() === trimmed.toLowerCase()) ||
-			($settings?.user_themes ?? []).some(
-				(t) => t.name === trimmed && t.name !== originalName
-			)
+			library.some((t) => t.name === trimmed && t.name !== originalName)
 	);
 	const invalid = $derived(trimmed === '' || taken);
 
 	function close() {
 		open = false;
-		applyTheme(resolveTheme($settings));
+		applyTheme(resolveTheme($settings, library));
 		void emit('theme-preview', null);
 	}
 
@@ -141,8 +139,9 @@
 		if (!s) return;
 		const theme: UserTheme = { name: trimmed, dark, colors: { ...colors } };
 		const list = originalName
-			? s.user_themes.map((t) => (t.name === originalName ? theme : t))
-			: [...s.user_themes, theme];
+			? library.map((t) => (t.name === originalName ? theme : t))
+			: [...library, theme];
+		if (!(await saveUserThemes(list))) return;
 		// A rename must follow the theme into any preferred slot referencing it.
 		const slots: { theme_dark?: string; theme_light?: string } = {};
 		if (originalName && originalName !== trimmed) {
@@ -150,7 +149,7 @@
 			if (s.theme_dark === oldId) slots.theme_dark = userThemeId(trimmed);
 			if (s.theme_light === oldId) slots.theme_light = userThemeId(trimmed);
 		}
-		await saveUserThemes(list, slots);
+		if (slots.theme_dark || slots.theme_light) await setThemeSlots(slots);
 		close();
 	}
 
@@ -161,14 +160,12 @@
 		}
 		const s = $settings;
 		if (!s || !originalName) return;
+		if (!(await saveUserThemes(library.filter((t) => t.name !== originalName)))) return;
 		const id = userThemeId(originalName);
 		const slots: { theme_dark?: string; theme_light?: string } = {};
 		if (s.theme_dark === id) slots.theme_dark = 'dracula';
 		if (s.theme_light === id) slots.theme_light = 'paper';
-		await saveUserThemes(
-			s.user_themes.filter((t) => t.name !== originalName),
-			slots
-		);
+		if (slots.theme_dark || slots.theme_light) await setThemeSlots(slots);
 		close();
 	}
 </script>
@@ -198,7 +195,7 @@
 				bind:value={seedId}
 				onchange={() => seed(seedId)}
 			>
-				{#each allThemes($settings) as t (t.id)}
+				{#each allThemes(library) as t (t.id)}
 					<option value={t.id}>{t.label}</option>
 				{/each}
 			</select>

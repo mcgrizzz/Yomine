@@ -26,6 +26,7 @@
 		openFrequencyModal,
 		openPosModal,
 		openSetupModal,
+		openProfilesModal,
 		openAnalyzerModal,
 		openAboutModal,
 		openDataFolder,
@@ -267,6 +268,7 @@
 			<div class="menu-panel">
 				<button onclick={() => run(openAnkiModal)}>Anki</button>
 				<button onclick={() => run(openWebsocketModal)}>WebSocket Server</button>
+				<button onclick={() => run(openProfilesModal)}>Profiles…</button>
 				<div class="menu-sep"></div>
 				<button onclick={() => run(openSetupModal)}>Setup Checklist</button>
 			</div>
