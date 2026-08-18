@@ -364,6 +364,42 @@ export function saveSettings(settings: SettingsData): Promise<void> {
 	return invoke('save_settings', { settings });
 }
 
+export interface Profile {
+	slug: string;
+	display_name: string;
+	active: boolean;
+}
+
+export interface ProfileList {
+	profiles: Profile[];
+}
+
+export function listProfiles(): Promise<ProfileList> {
+	return invoke('list_profiles');
+}
+
+/** Creates the profile and makes it active. */
+export function createProfile(name: string): Promise<{ requires_relaunch: boolean }> {
+	return invoke('create_profile', { name });
+}
+
+/** Copies the source profile's state, then makes the copy active. */
+export function copyProfile(slug: string, name: string): Promise<{ requires_relaunch: boolean }> {
+	return invoke('copy_profile', { slug, name });
+}
+
+export function switchProfile(slug: string): Promise<{ requires_relaunch: boolean }> {
+	return invoke('switch_profile', { slug });
+}
+
+export function renameProfile(slug: string, name: string): Promise<void> {
+	return invoke('rename_profile', { slug, name });
+}
+
+export function deleteProfile(slug: string): Promise<{ requires_relaunch: boolean }> {
+	return invoke('delete_profile', { slug });
+}
+
 /** The theme library lives outside `settings.json`; the active slots stay in it. */
 export function getUserThemes(): Promise<UserTheme[]> {
 	return invoke('get_user_themes');

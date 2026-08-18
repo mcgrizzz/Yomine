@@ -41,6 +41,7 @@
 	import PosFiltersModal from '$lib/components/PosFiltersModal.svelte';
 	import SetupBanner from '$lib/components/SetupBanner.svelte';
 	import SetupChecklistModal from '$lib/components/SetupChecklistModal.svelte';
+	import ProfilesModal from '$lib/components/ProfilesModal.svelte';
 	import FrequencyAnalyzerModal from '$lib/components/FrequencyAnalyzerModal.svelte';
 	import AsbplayerModal from '$lib/components/AsbplayerModal.svelte';
 	import TextFiltersModal from '$lib/components/TextFiltersModal.svelte';
@@ -245,6 +246,7 @@
 	<!-- First: every backdrop shares --z-modal, so paint order is DOM order, and the
 	     checklist is the one modal that opens others on top of itself. -->
 	<SetupChecklistModal />
+<ProfilesModal />
 	<IgnoreListModal />
 	<AsbplayerModal />
 	<WebsocketSettingsModal />

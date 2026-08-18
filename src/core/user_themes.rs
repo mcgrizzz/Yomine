@@ -9,11 +9,14 @@ use crate::{
 pub const USER_THEMES_FILE: &str = "user_themes.json";
 
 pub fn load() -> Vec<UserTheme> {
-    persistence::load_json_or_default::<Vec<UserTheme>>(USER_THEMES_FILE)
+    persistence::load_json_at_or_default(&persistence::get_shared_file_path(USER_THEMES_FILE))
 }
 
 pub fn save(themes: &[UserTheme]) -> Result<(), Box<dyn std::error::Error>> {
-    persistence::save_json(&themes.to_vec(), USER_THEMES_FILE)
+    persistence::save_json_at(
+        &themes.to_vec(),
+        &persistence::get_shared_file_path(USER_THEMES_FILE),
+    )
 }
 
 /// Reads the raw JSON because `SettingsData` no longer carries the field.
@@ -25,7 +28,7 @@ fn themes_in_settings(raw: &str) -> Option<Vec<UserTheme>> {
 }
 
 pub fn migrate_from_settings() {
-    if persistence::data_file_exists(USER_THEMES_FILE) {
+    if persistence::get_shared_file_path(USER_THEMES_FILE).exists() {
         return;
     }
     let Ok(raw) = std::fs::read_to_string(persistence::get_data_file_path("settings.json")) else {

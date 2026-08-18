@@ -12,7 +12,7 @@ use serde::{
 use super::YomineError;
 use crate::persistence::{
     atomic_write,
-    get_app_data_dir,
+    get_profile_dir,
 };
 
 pub const DEFAULT_IGNORED_TERMS: &[&str] = &[
@@ -45,7 +45,6 @@ impl Default for IgnoreListData {
 #[derive(Debug)]
 pub struct IgnoreList {
     data: IgnoreListData,
-    file_path: PathBuf,
     cached_file_terms: Vec<String>,
 }
 
@@ -61,16 +60,12 @@ impl IgnoreList {
                 .map_err(|e| YomineError::Custom(format!("Failed to parse ignore list: {}", e)))?
         } else {
             let default_data = IgnoreListData::default();
-            let instance = Self {
-                data: default_data.clone(),
-                file_path: file_path.clone(),
-                cached_file_terms: Vec::new(),
-            };
+            let instance = Self { data: default_data.clone(), cached_file_terms: Vec::new() };
             instance.save()?;
             default_data
         };
 
-        let mut instance = Self { data, file_path, cached_file_terms: Vec::new() };
+        let mut instance = Self { data, cached_file_terms: Vec::new() };
         instance.reload_file_cache();
         Ok(instance)
     }
@@ -79,7 +74,7 @@ impl IgnoreList {
         let content = serde_json::to_string_pretty(&self.data)
             .map_err(|e| YomineError::Custom(format!("Failed to serialize ignore list: {}", e)))?;
 
-        atomic_write(&self.file_path, content.as_bytes())
+        atomic_write(&Self::get_ignore_list_path(), content.as_bytes())
             .map_err(|e| YomineError::Custom(format!("Failed to write ignore list: {}", e)))
     }
 
@@ -170,6 +165,6 @@ impl IgnoreList {
     }
 
     fn get_ignore_list_path() -> PathBuf {
-        get_app_data_dir().join("ignore_list.json")
+        get_profile_dir().join("ignore_list.json")
     }
 }

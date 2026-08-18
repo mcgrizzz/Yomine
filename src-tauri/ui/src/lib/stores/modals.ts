@@ -15,6 +15,7 @@ export const aboutModalOpen = writable(false);
 export const textFiltersModalOpen = writable(false);
 export const recentFilesModalOpen = writable(false);
 export const epubChapterModalOpen = writable(false);
+export const profilesModalOpen = writable(false);
 
 export const openIgnoreModal = (): void => ignoreModalOpen.set(true);
 export const openWebsocketModal = (): void => websocketModalOpen.set(true);
@@ -29,3 +30,4 @@ export const openAboutModal = (): void => aboutModalOpen.set(true);
 export const openTextFiltersModal = (): void => textFiltersModalOpen.set(true);
 export const openRecentFilesModal = (): void => recentFilesModalOpen.set(true);
 export const openEpubChapterModal = (): void => epubChapterModalOpen.set(true);
+export const openProfilesModal = (): void => profilesModalOpen.set(true);

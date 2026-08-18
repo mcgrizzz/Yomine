@@ -638,7 +638,7 @@ fn save_subtitles_srt(
     subtitles: &[yomine::websocket::RemoteSubtitle],
     title: &str,
 ) -> Option<String> {
-    let dir = yomine::persistence::get_app_data_dir().join("asbplayer_subtitles");
+    let dir = yomine::persistence::get_profile_dir().join("asbplayer_subtitles");
     if let Err(e) = std::fs::create_dir_all(&dir) {
         eprintln!("[asbplayer] Failed to create subtitle dir: {e}");
         return None;

@@ -299,6 +299,23 @@ pub struct AnalysisPreview {
     pub total: usize,
 }
 
+#[derive(Serialize, Clone)]
+pub struct ProfileDto {
+    pub slug: String,
+    pub display_name: String,
+    pub active: bool,
+}
+
+#[derive(Serialize, Clone)]
+pub struct ProfileListDto {
+    pub profiles: Vec<ProfileDto>,
+}
+
+#[derive(Serialize, Clone)]
+pub struct ProfileMutationDto {
+    pub requires_relaunch: bool,
+}
+
 /// Aggregated readiness for the setup checklist/banner (`get_setup_status`).
 /// Each field mirrors the matching egui `check_*` in `setup_checklist_modal.rs`.
 #[derive(Serialize, Deserialize, Clone)]

@@ -12,6 +12,8 @@ use serde::{
     Serialize,
 };
 
+pub mod profiles;
+
 const APP_NAME: &str = "yomine";
 
 pub fn get_app_data_dir() -> PathBuf {
@@ -29,7 +31,22 @@ pub fn get_app_data_dir() -> PathBuf {
     }
 }
 
+pub fn get_profile_dir() -> PathBuf {
+    match profiles::active() {
+        profiles::Active::Root => get_app_data_dir(),
+        profiles::Active::Named(slug) => {
+            let dir = get_app_data_dir().join(profiles::PROFILES_DIR).join(slug);
+            let _ = fs::create_dir_all(&dir);
+            dir
+        }
+    }
+}
+
 pub fn get_data_file_path(filename: &str) -> PathBuf {
+    get_profile_dir().join(filename)
+}
+
+pub fn get_shared_file_path(filename: &str) -> PathBuf {
     get_app_data_dir().join(filename)
 }
 
@@ -52,37 +69,51 @@ pub fn atomic_write(path: &Path, bytes: &[u8]) -> io::Result<()> {
     }
 }
 
-pub fn save_json<T: Serialize>(data: &T, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let file_path = get_data_file_path(filename);
+pub fn save_json_at<T: Serialize>(
+    data: &T,
+    file_path: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
     let json = serde_json::to_string_pretty(data)?;
-    atomic_write(&file_path, json.as_bytes())?;
+    atomic_write(file_path, json.as_bytes())?;
     println!("Data saved to: {}", file_path.display());
     Ok(())
 }
 
-pub fn load_json<T: for<'de> Deserialize<'de> + Default>(
-    filename: &str,
+pub fn load_json_at<T: for<'de> Deserialize<'de> + Default>(
+    file_path: &Path,
 ) -> Result<T, Box<dyn std::error::Error>> {
-    let file_path = get_data_file_path(filename);
-
     if !file_path.exists() {
         return Ok(T::default());
     }
 
-    let json = fs::read_to_string(&file_path)?;
+    let json = fs::read_to_string(file_path)?;
     let data: T = serde_json::from_str(&json)?;
     println!("Data loaded from: {}", file_path.display());
     Ok(data)
 }
 
-pub fn load_json_or_default<T: for<'de> Deserialize<'de> + Default>(filename: &str) -> T {
-    match load_json::<T>(filename) {
+pub fn load_json_at_or_default<T: for<'de> Deserialize<'de> + Default>(file_path: &Path) -> T {
+    match load_json_at::<T>(file_path) {
         Ok(data) => data,
         Err(e) => {
-            eprintln!("Failed to load {}: {}. Using defaults.", filename, e);
+            eprintln!("Failed to load {}: {}. Using defaults.", file_path.display(), e);
             T::default()
         }
     }
+}
+
+pub fn save_json<T: Serialize>(data: &T, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
+    save_json_at(data, &get_data_file_path(filename))
+}
+
+pub fn load_json<T: for<'de> Deserialize<'de> + Default>(
+    filename: &str,
+) -> Result<T, Box<dyn std::error::Error>> {
+    load_json_at(&get_data_file_path(filename))
+}
+
+pub fn load_json_or_default<T: for<'de> Deserialize<'de> + Default>(filename: &str) -> T {
+    load_json_at_or_default(&get_data_file_path(filename))
 }
 
 pub fn delete_data_file(filename: &str) -> Result<(), Box<dyn std::error::Error>> {

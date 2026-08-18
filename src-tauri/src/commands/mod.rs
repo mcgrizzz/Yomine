@@ -13,6 +13,7 @@ pub mod knowledge;
 pub mod lifecycle;
 pub mod mining;
 pub mod player;
+pub mod profiles;
 pub mod recommended;
 pub mod setup;
 pub mod update;
