@@ -50,7 +50,7 @@ pub fn list_dictionaries(state: State<'_, Mutex<AppState>>) -> Vec<DictionarySta
     dicts
 }
 
-/// Update one dictionary's weight/enabled and persist it. The manager gets
+/// Update one dictionary's weight/enabled/hidden and persist it. The manager gets
 /// `weight.max(0.1)`; settings keep the raw value (egui parity).
 #[tauri::command]
 pub fn set_dictionary_state(
@@ -59,14 +59,16 @@ pub fn set_dictionary_state(
     name: String,
     weight: f32,
     enabled: bool,
+    hidden: bool,
 ) -> Result<(), String> {
+    let enabled = enabled && !hidden;
     let (manager, settings_to_save) = {
         let mut guard = state.lock().unwrap();
         let manager = guard.language_tools.as_ref().map(|t| Arc::clone(&t.frequency_manager));
         guard
             .settings
             .frequency_weights
-            .insert(name.clone(), FrequencyDictionarySetting { weight, enabled });
+            .insert(name.clone(), FrequencyDictionarySetting { weight, enabled, hidden });
         guard.knowledge_dirty.store(true, Ordering::Relaxed);
         (manager, guard.settings.clone())
     };

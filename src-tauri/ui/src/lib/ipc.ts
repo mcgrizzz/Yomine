@@ -203,6 +203,7 @@ export interface SampleNote {
 export interface FrequencyDictionarySetting {
 	weight: number;
 	enabled: boolean;
+	hidden: boolean;
 }
 
 /** Mirrors `SentenceColoring` (core/settings.rs, serde lowercase). */
@@ -811,11 +812,16 @@ export function listDictionaries(): Promise<DictionaryState[]> {
 	return invoke('list_dictionaries');
 }
 
-/** Update one dictionary's weight/enabled: persists `settings.frequency_weights`,
+/** Update one dictionary's weight/enabled/hidden: persists `settings.frequency_weights`,
  * applies to the live manager, rebakes the stored terms' HARMONIC, and emits
  * `dictionaries-changed`. */
-export function setDictionaryState(name: string, weight: number, enabled: boolean): Promise<void> {
-	return invoke('set_dictionary_state', { name, weight, enabled });
+export function setDictionaryState(
+	name: string,
+	weight: number,
+	enabled: boolean,
+	hidden: boolean
+): Promise<void> {
+	return invoke('set_dictionary_state', { name, weight, enabled, hidden });
 }
 
 /** One row of the dictionary manager's "Recommended" section (issue #100). */

@@ -13,11 +13,13 @@ use crate::anki::FieldMapping;
 pub struct FrequencyDictionarySetting {
     pub weight: f32,
     pub enabled: bool,
+    #[serde(default)]
+    pub hidden: bool,
 }
 
 impl Default for FrequencyDictionarySetting {
     fn default() -> Self {
-        Self { weight: 1.0, enabled: true }
+        Self { weight: 1.0, enabled: true, hidden: false }
     }
 }
 
