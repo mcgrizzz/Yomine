@@ -270,6 +270,7 @@ pub fn save_settings(
     if let Some(tools) = guard.language_tools.as_mut() {
         tools.known_interval = anki_interval;
     }
+    guard.invalidate_anki_cache();
     if summary_inputs_changed {
         guard.knowledge_dirty.store(true, Ordering::Relaxed);
     }

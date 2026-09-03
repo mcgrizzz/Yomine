@@ -125,10 +125,6 @@ pub fn delete_data_file(filename: &str) -> Result<(), Box<dyn std::error::Error>
     Ok(())
 }
 
-pub fn data_file_exists(filename: &str) -> bool {
-    get_data_file_path(filename).exists()
-}
-
 #[cfg(test)]
 mod tests {
     use std::sync::atomic::{

@@ -45,12 +45,6 @@ pub fn entry_key(expression: &str, reading: &str) -> String {
     format!("{expression}\u{0}{reading}")
 }
 
-pub fn vocab_cache_mtime() -> Option<std::time::SystemTime> {
-    std::fs::metadata(crate::persistence::get_data_file_path(super::state::ANKI_VOCAB_CACHE))
-        .and_then(|m| m.modified())
-        .ok()
-}
-
 /// Every (term, reading) in the vocab cache as `entry_key`s; empty until one is harvested.
 pub fn known_entry_keys() -> HashSet<String> {
     let vocab: Vec<super::types::Vocab> =

@@ -9,10 +9,10 @@ use std::{
         atomic::AtomicBool,
         Arc,
     },
-    time::SystemTime,
 };
 
 use yomine::{
+    anki::AnkiState,
     core::{
         models::{
             Sentence,
@@ -69,9 +69,9 @@ pub struct AppState {
     /// From the last catalog fetch; installs resolve their download URL here so
     /// the frontend only ever passes a title.
     pub recommended_catalog: Vec<crate::recommended::RecommendedEntry>,
-    /// Reading-keyed duplicate lookup for the popover, keyed on the vocab
-    /// cache's mtime: the pipeline rewrites it on a live Anki filter.
-    pub known_entry_keys: Option<(SystemTime, HashSet<String>)>,
+    /// Reading-keyed duplicate lookup for the popover.
+    pub known_entry_keys: Option<HashSet<String>>,
+    cached_anki_state: Option<Arc<AnkiState>>,
 }
 
 impl AppState {
@@ -90,6 +90,28 @@ impl AppState {
             },
             recommended_catalog: Vec::new(),
             known_entry_keys: None,
+            cached_anki_state: None,
         }
+    }
+
+    pub fn anki_state(&mut self) -> Option<Arc<AnkiState>> {
+        if self.cached_anki_state.is_none() {
+            let tools = self.language_tools.as_ref()?;
+            self.cached_anki_state =
+                AnkiState::from_cache(tools.frequency_manager.clone(), tools.known_interval)
+                    .map(Arc::new);
+        }
+        self.cached_anki_state.clone()
+    }
+
+    pub fn set_anki_state(&mut self, state: Arc<AnkiState>) {
+        self.cached_anki_state = Some(state);
+        self.known_entry_keys = None;
+    }
+
+    /// The snapshot bakes in the vocab cache, `known_interval` and `frequency_manager`.
+    pub fn invalidate_anki_cache(&mut self) {
+        self.cached_anki_state = None;
+        self.known_entry_keys = None;
     }
 }

@@ -379,11 +379,7 @@ pub async fn render_definition(
             .map_err(|e| e.to_string())?;
 
     let mut guard = state.lock().unwrap();
-    let mtime = mined::vocab_cache_mtime();
-    if guard.known_entry_keys.as_ref().map(|(seen, _)| *seen) != mtime {
-        guard.known_entry_keys = mtime.map(|t| (t, mined::known_entry_keys()));
-    }
-    let known = guard.known_entry_keys.as_ref().map(|(_, keys)| keys);
+    let known = &*guard.known_entry_keys.get_or_insert_with(mined::known_entry_keys);
 
     Ok(rendered
         .fields
@@ -399,7 +395,7 @@ pub async fn render_definition(
             let key = mined::entry_key(&expression, &reading);
             Some(DefinitionEntryDto {
                 index,
-                known: known.is_some_and(|keys| keys.contains(&key)),
+                known: known.contains(&key),
                 key,
                 expression,
                 reading,

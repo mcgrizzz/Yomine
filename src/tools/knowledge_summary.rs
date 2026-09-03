@@ -79,17 +79,13 @@ fn band_for_rank(rank: u32) -> Option<usize> {
     FREQUENCY_BANDS.iter().position(|(lo, hi, _)| rank >= *lo && rank <= *hi)
 }
 
-/// Global JLPT / frequency comprehension, computed offline from the on-disk Anki vocab
-/// cache. Callers recompute after a live Anki refresh rewrites the cache.
+/// Global JLPT / frequency comprehension, computed offline from the Anki vocab
+/// snapshot. Callers recompute after a live Anki refresh rewrites the cache.
 pub fn compute_knowledge_summary(
+    anki: &AnkiState,
     frequency_manager: Arc<FrequencyManager>,
-    known_interval: u32,
 ) -> KnowledgeSummary {
     let mut summary = KnowledgeSummary::default();
-
-    let Some(anki) = AnkiState::from_cache(frequency_manager.clone(), known_interval) else {
-        return summary; // No Anki vocab cache yet; nothing to report against.
-    };
 
     {
         let db = JlptDatabase::load();
@@ -128,7 +124,7 @@ pub fn compute_knowledge_summary(
             {
                 if let Some(band) = band_for_rank(rank) {
                     coverage_sums[band] += 1.0;
-                    comprehension_sums[band] += comp_term(vocab.interval, known_interval);
+                    comprehension_sums[band] += comp_term(vocab.interval, anki.known_interval());
                 }
             }
         }

@@ -1,8 +1,6 @@
 use std::{
-    collections::{
-        HashMap,
-        HashSet,
-    },
+    collections::HashSet,
+    sync::Arc,
     time::Instant,
 };
 
@@ -19,10 +17,8 @@ pub struct FilterResult {
 
 /// Selects where the Anki "known terms" knowledge comes from when filtering.
 pub enum AnkiFilter {
-    /// Fetch live from Anki; also refreshes the on-disk vocab cache.
-    Live(HashMap<String, FieldMapping>),
-    /// Use the on-disk vocab snapshot (offline, fast).
-    Cached,
+    /// Score against a vocab snapshot; `None` leaves every term unknown.
+    Snapshot(Option<Arc<AnkiState>>),
     /// Partition by an explicit set of known lemma forms (ignore-list refresh).
     KnownLemmas(HashSet<String>),
 }
@@ -30,7 +26,6 @@ use crate::{
     anki::{
         comprehensibility::calculate_sentence_comprehension,
         AnkiState,
-        FieldMapping,
     },
     core::{
         text_filter::{
@@ -50,13 +45,14 @@ pub async fn process_source_file(
     source_file: &SourceFile,
     language_tools: &LanguageTools,
     text_filters: &[CompiledFilter],
+    anki_state: Option<Arc<AnkiState>>,
 ) -> Result<(Vec<Term>, FilterResult, Vec<Sentence>, f32), YomineError> {
     // Parse the source file
     let sentences =
         parser::read(source_file).map_err(|e| YomineError::FailedToLoadFile(e.to_string()))?;
     println!("Parsed {} sentences", sentences.len());
 
-    process_sentences(sentences, language_tools, text_filters).await
+    process_sentences(sentences, language_tools, text_filters, anki_state).await
 }
 
 /// The shared tail of file processing: tokenize/segment `sentences`, dedupe
@@ -67,6 +63,7 @@ pub async fn process_sentences(
     mut sentences: Vec<Sentence>,
     language_tools: &LanguageTools,
     text_filters: &[CompiledFilter],
+    anki_state: Option<Arc<AnkiState>>,
 ) -> Result<(Vec<Term>, FilterResult, Vec<Sentence>, f32), YomineError> {
     let total_start = Instant::now();
 
@@ -103,7 +100,8 @@ pub async fn process_sentences(
 
     // Apply filters using the cached Anki snapshot for a fast, offline-safe load.
     // The GUI refreshes against live Anki in the background when connected.
-    let filter_result = apply_filters(terms, language_tools, AnkiFilter::Cached).await?;
+    let filter_result =
+        apply_filters(terms, language_tools, AnkiFilter::Snapshot(anki_state)).await?;
 
     // Reconstruct base_terms from all three sets, gathering comprehension metrics from each
     let mut base_terms = Vec::new();
@@ -159,38 +157,8 @@ pub async fn apply_filters(
         AnkiFilter::KnownLemmas(known) => {
             not_ignored.into_iter().partition(|t| !known.contains(&t.lemma_form))
         }
-        AnkiFilter::Cached => {
-            match AnkiState::from_cache(
-                language_tools.frequency_manager.clone(),
-                language_tools.known_interval,
-            ) {
-                Some(state) => state.filter_existing_terms(not_ignored),
-                None => (not_ignored, Vec::new()),
-            }
-        }
-        AnkiFilter::Live(model_mapping) => {
-            match AnkiState::new(
-                model_mapping,
-                language_tools.frequency_manager.clone(),
-                language_tools.known_interval,
-            )
-            .await
-            {
-                Ok(state) => {
-                    let filter_anki_start = Instant::now();
-                    let (unknown, known) = state.filter_existing_terms(not_ignored);
-                    println!(
-                        "Anki filtering completed ({:.1}s)",
-                        filter_anki_start.elapsed().as_secs_f32()
-                    );
-                    (unknown, known)
-                }
-                Err(e) => {
-                    eprintln!("Failed to initialize AnkiState: {}", e);
-                    (not_ignored, Vec::new())
-                }
-            }
-        }
+        AnkiFilter::Snapshot(Some(state)) => state.filter_existing_terms(not_ignored),
+        AnkiFilter::Snapshot(None) => (not_ignored, Vec::new()),
     };
 
     Ok(FilterResult { terms: unknown_terms, anki_filtered, ignore_filtered })

@@ -45,7 +45,8 @@ impl Default for IgnoreListData {
 #[derive(Debug)]
 pub struct IgnoreList {
     data: IgnoreListData,
-    cached_file_terms: Vec<String>,
+    ignored_lookup: HashSet<String>,
+    cached_file_terms: HashSet<String>,
 }
 
 impl IgnoreList {
@@ -60,18 +61,25 @@ impl IgnoreList {
                 .map_err(|e| YomineError::Custom(format!("Failed to parse ignore list: {}", e)))?
         } else {
             let default_data = IgnoreListData::default();
-            let instance = Self { data: default_data.clone(), cached_file_terms: Vec::new() };
-            instance.save()?;
+            Self::write(&default_data)?;
             default_data
         };
 
-        let mut instance = Self { data, cached_file_terms: Vec::new() };
+        let mut instance = Self {
+            ignored_lookup: data.ignored_terms.iter().cloned().collect(),
+            data,
+            cached_file_terms: HashSet::new(),
+        };
         instance.reload_file_cache();
         Ok(instance)
     }
 
     pub fn save(&self) -> Result<(), YomineError> {
-        let content = serde_json::to_string_pretty(&self.data)
+        Self::write(&self.data)
+    }
+
+    fn write(data: &IgnoreListData) -> Result<(), YomineError> {
+        let content = serde_json::to_string_pretty(data)
             .map_err(|e| YomineError::Custom(format!("Failed to serialize ignore list: {}", e)))?;
 
         atomic_write(&Self::get_ignore_list_path(), content.as_bytes())
@@ -80,31 +88,27 @@ impl IgnoreList {
 
     pub fn add_term(&mut self, term: &str) -> Result<bool, YomineError> {
         let term_string = term.to_string();
-        if !self.data.ignored_terms.contains(&term_string) {
-            self.data.ignored_terms.insert(0, term_string);
-            self.save()?;
-            Ok(true)
-        } else {
-            Ok(false)
+        if !self.ignored_lookup.insert(term_string.clone()) {
+            return Ok(false);
         }
+
+        self.data.ignored_terms.insert(0, term_string);
+        self.save()?;
+        Ok(true)
     }
 
     pub fn remove_term(&mut self, term: &str) -> Result<bool, YomineError> {
-        if let Some(pos) = self.data.ignored_terms.iter().position(|x| x == term) {
-            self.data.ignored_terms.remove(pos);
-            self.save()?;
-            Ok(true)
-        } else {
-            Ok(false)
+        if !self.ignored_lookup.remove(term) {
+            return Ok(false);
         }
+
+        self.data.ignored_terms.retain(|x| x != term);
+        self.save()?;
+        Ok(true)
     }
 
     pub fn contains(&self, term: &str) -> bool {
-        if self.data.ignored_terms.iter().any(|t| t == term) {
-            return true;
-        }
-
-        self.cached_file_terms.iter().any(|t| t == term)
+        self.ignored_lookup.contains(term) || self.cached_file_terms.contains(term)
     }
 
     pub fn get_all_terms(&self) -> Vec<String> {
@@ -112,11 +116,11 @@ impl IgnoreList {
     }
 
     pub fn clear_all(&mut self) -> Result<(), YomineError> {
-        self.data.ignored_terms.clear();
-        self.save()
+        self.set_terms(Vec::new())
     }
 
     pub fn set_terms(&mut self, terms: Vec<String>) -> Result<(), YomineError> {
+        self.ignored_lookup = terms.iter().cloned().collect();
         self.data.ignored_terms = terms;
         self.save()
     }
@@ -149,16 +153,11 @@ impl IgnoreList {
 
     pub fn reload_file_cache(&mut self) {
         self.cached_file_terms.clear();
-        let mut seen = HashSet::new();
 
         for file in &self.data.files {
             if file.enabled {
                 if let Ok(terms) = Self::load_terms_from_file(&file.path) {
-                    for term in terms {
-                        if seen.insert(term.clone()) {
-                            self.cached_file_terms.push(term);
-                        }
-                    }
+                    self.cached_file_terms.extend(terms);
                 }
             }
         }

@@ -169,6 +169,7 @@ pub(crate) async fn reload_and_swap(
             term.frequencies =
                 manager.build_freq_map(&term.lemma_form, &term.lemma_reading, term.is_kana);
         }
+        guard.invalidate_anki_cache();
         guard.knowledge_dirty.store(true, Ordering::Relaxed);
     }
 

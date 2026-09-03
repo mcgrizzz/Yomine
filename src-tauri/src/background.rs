@@ -97,18 +97,15 @@ async fn poll_yomitan(app: AppHandle) {
 pub(crate) async fn refresh_knowledge_summary(app: &AppHandle) {
     let pending = {
         let state = app.state::<Mutex<AppState>>();
-        let guard = state.lock().unwrap();
-        guard.language_tools.as_ref().map(|tools| {
-            (tools.frequency_manager.clone(), tools.known_interval, guard.knowledge_dirty.clone())
-        })
+        let mut guard = state.lock().unwrap();
+        let anki_state = guard.anki_state();
+        let frequency_manager =
+            guard.language_tools.as_ref().map(|tools| tools.frequency_manager.clone());
+        anki_state.zip(frequency_manager).map(|(a, f)| (a, f, guard.knowledge_dirty.clone()))
     };
-    let Some((frequency_manager, known_interval, dirty)) = pending else { return };
-    // Reads the offline Anki vocab cache; only meaningful once it exists.
-    if !anki::has_cached_vocab() {
-        return;
-    }
+    let Some((anki_state, frequency_manager, dirty)) = pending else { return };
     if let Ok(summary) = tauri::async_runtime::spawn_blocking(move || {
-        compute_knowledge_summary(frequency_manager, known_interval)
+        compute_knowledge_summary(&anki_state, frequency_manager)
     })
     .await
     {

@@ -290,10 +290,10 @@ impl AnkiState {
     pub fn vocab(&self) -> &[Vocab] {
         &self.vocab
     }
-}
 
-pub fn has_cached_vocab() -> bool {
-    crate::persistence::data_file_exists(ANKI_VOCAB_CACHE)
+    pub fn known_interval(&self) -> u32 {
+        self.known_interval
+    }
 }
 
 pub async fn get_total_vocab(
