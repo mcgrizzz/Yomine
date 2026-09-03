@@ -106,10 +106,18 @@ pub struct BoundMedia {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RemoteSubtitle {
     pub text: String,
+    #[serde(deserialize_with = "deserialize_millis")]
     pub start: u64,
+    #[serde(deserialize_with = "deserialize_millis")]
     pub end: u64,
     #[serde(default)]
     pub track: u32,
+}
+
+/// asbplayer derives cue times from the video clock and applies the user's subtitle
+/// offset, so they arrive fractional and can go negative.
+fn deserialize_millis<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<u64, D::Error> {
+    Ok(f64::deserialize(deserializer)?.round().clamp(0.0, u64::MAX as f64) as u64)
 }
 
 impl RemoteSubtitle {
@@ -184,5 +192,31 @@ pub struct ConnectedClient {
 impl ConnectedClient {
     pub fn is_valid(&self) -> bool {
         !self.tx.is_closed() && self.tx.capacity() > 0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cue(start: &str, end: &str) -> RemoteSubtitle {
+        serde_json::from_str(&format!(r#"{{"text":"a","start":{start},"end":{end}}}"#)).unwrap()
+    }
+
+    #[test]
+    fn fractional_cue_times_round_to_milliseconds() {
+        let subtitle = cue("18958.5560000001", "20001.4");
+        assert_eq!(subtitle.start, 18959);
+        assert_eq!(subtitle.end, 20001);
+    }
+
+    #[test]
+    fn integer_cue_times_are_unchanged() {
+        assert_eq!(cue("18958", "20001").start, 18958);
+    }
+
+    #[test]
+    fn a_negative_offset_clamps_to_zero() {
+        assert_eq!(cue("-500.25", "1200").start, 0);
     }
 }
