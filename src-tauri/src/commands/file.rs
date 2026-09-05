@@ -227,14 +227,19 @@ pub async fn process_file(
     epub_label: Option<String>,
     progress: Channel<LoadingMessage>,
 ) -> Result<FileLoadResult, String> {
-    let (tools, filters, anki_state) = {
+    let (tools, filters, anki_state, input_revision) = {
         let mut guard = state.lock().unwrap();
         let tools = guard
             .language_tools
             .clone()
             .ok_or_else(|| "Language tools are still loading".to_string())?;
         let anki_state = guard.anki_state();
-        (tools, text_filter::compile_filters(&guard.settings), anki_state)
+        (
+            tools,
+            text_filter::compile_filters(&guard.settings),
+            anki_state,
+            guard.input_revision.clone(),
+        )
     };
 
     let _ = progress.send(LoadingMessage::new("Processing file..."));
@@ -260,7 +265,11 @@ pub async fn process_file(
         filter_result.anki_filtered.iter().map(|t| t.lemma_form.clone()).collect();
 
     let mut guard = state.lock().unwrap();
+    if !Arc::ptr_eq(&guard.input_revision, &input_revision) {
+        return Err("Dictionary or settings changed while loading; reopen the file".to_string());
+    }
     guard.file = FileData {
+        revision: Arc::new(()),
         source_file: Some(source_file),
         terms: filter_result.terms,
         base_terms,
@@ -334,14 +343,19 @@ pub(crate) async fn load_asbplayer_into_state(
     progress: Option<&Channel<LoadingMessage>>,
 ) -> Result<FileLoadResult, String> {
     let state = app.state::<Mutex<AppState>>();
-    let (tools, filters, anki_state) = {
+    let (tools, filters, anki_state, input_revision) = {
         let mut guard = state.lock().unwrap();
         let tools = guard
             .language_tools
             .clone()
             .ok_or_else(|| "Language tools are still loading".to_string())?;
         let anki_state = guard.anki_state();
-        (tools, text_filter::compile_filters(&guard.settings), anki_state)
+        (
+            tools,
+            text_filter::compile_filters(&guard.settings),
+            anki_state,
+            guard.input_revision.clone(),
+        )
     };
 
     let file_name = subtitle_file_name.filter(|n| !n.trim().is_empty());
@@ -430,7 +444,13 @@ pub(crate) async fn load_asbplayer_into_state(
     let anki_known_lemmas =
         filter_result.anki_filtered.iter().map(|t| t.lemma_form.clone()).collect();
     let mut guard = state.lock().unwrap();
+    if !Arc::ptr_eq(&guard.input_revision, &input_revision) {
+        return Err(
+            "Dictionary or settings changed while loading; reopen the subtitles".to_string()
+        );
+    }
     guard.file = FileData {
+        revision: Arc::new(()),
         source_file: Some(source_file),
         terms: filter_result.terms,
         base_terms,
@@ -480,14 +500,19 @@ pub(crate) enum RefreshOutcome {
 /// rewrote the vocab cache.
 pub(crate) async fn live_refresh(app: &AppHandle) -> Result<RefreshOutcome, String> {
     let state = app.state::<Mutex<AppState>>();
-    let (tools, base_terms, mut sentences, mappings) = {
+    let (tools, base_terms, mut sentences, mappings, file_revision, input_revision) = {
         let guard = state.lock().unwrap();
         let tools = guard
             .language_tools
             .clone()
             .ok_or_else(|| "Language tools are still loading".to_string())?;
         // Nothing loaded → nothing to refresh (egui's RequestRefresh no-ops too).
-        if guard.file.base_terms.is_empty() {
+        if guard.file.base_terms.is_empty()
+            || guard
+                .dictionary_refresh_pending
+                .as_ref()
+                .is_some_and(|revision| Arc::ptr_eq(revision, &guard.input_revision))
+        {
             return Ok(RefreshOutcome::Done);
         }
         (
@@ -495,6 +520,8 @@ pub(crate) async fn live_refresh(app: &AppHandle) -> Result<RefreshOutcome, Stri
             guard.file.base_terms.clone(),
             guard.file.sentences.clone(),
             guard.settings.anki_model_mappings.clone(),
+            guard.file.revision.clone(),
+            guard.input_revision.clone(),
         )
     };
 
@@ -519,7 +546,7 @@ pub(crate) async fn live_refresh(app: &AppHandle) -> Result<RefreshOutcome, Stri
             Ok(state) => Arc::new(state),
         };
 
-    let outcome: Result<FileLoadResult, String> = async {
+    let outcome: Result<(), String> = async {
         let filter_result =
             apply_filters(base_terms, &tools, AnkiFilter::Snapshot(Some(refreshed.clone())))
                 .await
@@ -540,6 +567,10 @@ pub(crate) async fn live_refresh(app: &AppHandle) -> Result<RefreshOutcome, Stri
         };
 
         let mut guard = state.lock().unwrap();
+        if !guard.file_update_is_current(&file_revision, &input_revision) {
+            return Ok(());
+        }
+        guard.file.revision = Arc::new(());
         guard.file.anki_known_lemmas =
             filter_result.anki_filtered.iter().map(|t| t.lemma_form.clone()).collect();
         guard.file.ignored_count = filter_result.ignore_filtered.len();
@@ -551,14 +582,16 @@ pub(crate) async fn live_refresh(app: &AppHandle) -> Result<RefreshOutcome, Stri
         // Recompute coverage from the fresh vocab cache (egui resets
         // `knowledge_summary_attempted`).
         guard.knowledge_dirty.store(true, Ordering::Relaxed);
-        Ok(load_result(&guard.file).expect("refreshed file has a source_file"))
+        if let Some(payload) = load_result(&guard.file) {
+            let _ = app.emit(names::TERMS_REFRESHED, payload);
+        }
+        Ok(())
     }
     .await;
 
     let _ =
         app.emit(names::ANKI_STATUS, AnkiStatus { connected: outcome.is_ok(), fetching: false });
-    let payload = outcome?;
-    let _ = app.emit(names::TERMS_REFRESHED, &payload);
+    outcome?;
     Ok(RefreshOutcome::Done)
 }
 
@@ -587,7 +620,7 @@ pub async fn reload_current_file(
     state: State<'_, Mutex<AppState>>,
     progress: Channel<LoadingMessage>,
 ) -> Result<FileLoadResult, String> {
-    let (tools, filters, source_file, media_id, subtitle_file, anki_state) = {
+    let (tools, filters, source_file, media_id, subtitle_file, anki_state, input_revision) = {
         let mut guard = state.lock().unwrap();
         let tools = guard
             .language_tools
@@ -603,6 +636,7 @@ pub async fn reload_current_file(
             guard.file.asbplayer_media_id.clone(),
             guard.file.asbplayer_subtitle_file.clone(),
             anki_state,
+            guard.input_revision.clone(),
         )
     };
     if !std::path::Path::new(&source_file.original_file).exists() {
@@ -620,7 +654,11 @@ pub async fn reload_current_file(
     let anki_known_lemmas =
         filter_result.anki_filtered.iter().map(|t| t.lemma_form.clone()).collect();
     let mut guard = state.lock().unwrap();
+    if !Arc::ptr_eq(&guard.input_revision, &input_revision) {
+        return Err("Dictionary or settings changed while loading; reload the file".to_string());
+    }
     guard.file = FileData {
+        revision: Arc::new(()),
         source_file: Some(source_file),
         terms: filter_result.terms,
         base_terms,

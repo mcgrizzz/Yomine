@@ -137,8 +137,10 @@ pub fn term_spans_by_sentence(
 ) -> HashMap<usize, Vec<TermSpan>> {
     let mut map: HashMap<usize, Vec<TermSpan>> = HashMap::new();
     for term in terms {
-        let knowledge =
-            SegmentKnowledge::classify(anki_lemmas.contains(&term.lemma_form), term.comprehension);
+        let knowledge = SegmentKnowledge::classify(
+            term.possible_known_match.is_none() && anki_lemmas.contains(&term.lemma_form),
+            term.comprehension,
+        );
         let len = match term.part_of_speech {
             POS::Expression | POS::NounExpression => term.full_segment.len(),
             _ => term.surface_form.len(),
@@ -514,5 +516,12 @@ mod tests {
                 Some(Young),
             ]
         );
+    }
+    #[test]
+    fn a_possible_match_is_not_colored_as_known_by_a_shared_lemma() {
+        let mut possible = term("はし", POS::Noun, 0.0, 0);
+        possible.possible_known_match = Some("橋".to_string());
+        let spans = term_spans_by_sentence(&[possible], &HashSet::from(["はし".to_string()]));
+        assert_eq!(spans[&1], vec![(0, 6, SegmentKnowledge::Unknown)]);
     }
 }

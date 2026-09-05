@@ -62,6 +62,37 @@ pub struct FrequencyManager {
 }
 
 impl FrequencyManager {
+    pub fn set_dictionary_states(
+        &self,
+        updates: &HashMap<String, DictionaryState>,
+    ) -> Result<bool, YomineError> {
+        let mut states = self.states.write().map_err(|_| {
+            YomineError::Custom("Frequency dictionary states unavailable".to_string())
+        })?;
+        for update in updates.values() {
+            if !update.weight.is_finite() || update.weight < 0.0 {
+                return Err(YomineError::Custom(
+                    "Dictionary weights must be finite and nonnegative".into(),
+                ));
+            }
+        }
+        for name in updates.keys() {
+            if !states.contains_key(name) {
+                return Err(YomineError::Custom(format!("Dictionary '{}' not found", name)));
+            }
+        }
+        let mut changed = false;
+        for (name, update) in updates {
+            let state = states.get_mut(name).expect("validated above under the same lock");
+            if (state.weight - update.weight).abs() > f32::EPSILON
+                || state.enabled != update.enabled
+            {
+                *state = update.clone();
+                changed = true;
+            }
+        }
+        Ok(changed)
+    }
     pub fn lexical_families(
         &self,
         reading: &str,
@@ -167,21 +198,10 @@ impl FrequencyManager {
         weight: f32,
         enabled: bool,
     ) -> Result<bool, YomineError> {
-        let mut states = self.states.write().map_err(|_| {
-            YomineError::Custom("Frequency dictionary states unavailable".to_string())
-        })?;
-
-        match states.get_mut(name) {
-            Some(state) => {
-                if (state.weight - weight).abs() > f32::EPSILON || state.enabled != enabled {
-                    *state = DictionaryState { weight, enabled };
-                    Ok(true)
-                } else {
-                    Ok(false)
-                }
-            }
-            None => Err(YomineError::Custom(format!("Dictionary '{}' not found", name))),
-        }
+        self.set_dictionary_states(&HashMap::from([(
+            name.to_string(),
+            DictionaryState { weight, enabled },
+        )]))
     }
 
     pub fn get_weighted_harmonic(&self, freq_map: &HashMap<String, u32>) -> u32 {
@@ -621,4 +641,25 @@ pub fn process_frequency_dictionaries(
     }
 
     Ok(manager)
+}
+
+#[cfg(test)]
+mod batch_tests {
+    use super::*;
+    #[test]
+    fn invalid_batch_changes_nothing() {
+        let manager = FrequencyManager::from_dictionaries(vec![FrequencyDictionary::new(
+            "test".into(),
+            "1".into(),
+            vec![],
+        )]);
+        let updates = HashMap::from([
+            ("test".into(), DictionaryState { weight: 2.0, enabled: false }),
+            ("missing".into(), DictionaryState { weight: 3.0, enabled: false }),
+        ]);
+        assert!(manager.set_dictionary_states(&updates).is_err());
+        assert_eq!(manager.get_dictionary_state("test").unwrap().weight, 1.0);
+        assert!(manager.get_dictionary_state("test").unwrap().enabled);
+        assert!(manager.set_dictionary_state("test", f32::NAN, true).is_err());
+    }
 }

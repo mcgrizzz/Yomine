@@ -256,31 +256,26 @@ pub fn save_user_themes(app: AppHandle, themes: Vec<UserTheme>) -> Result<(), St
 pub fn save_settings(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
-    settings: SettingsData,
+    mut settings: SettingsData,
 ) -> Result<(), String> {
-    persistence::save_json(&settings, "settings.json").map_err(|e| e.to_string())?;
-    let _ = app.emit(names::SETTINGS_CHANGED, settings.clone());
-
     let mut guard = state.lock().unwrap();
-
-    let summary_inputs_changed = guard.settings.anki_interval != settings.anki_interval
-        || guard.settings.frequency_weights != settings.frequency_weights;
-    guard.settings = settings;
-    let anki_interval = guard.settings.anki_interval;
+    // Dictionary settings belong to the atomic batch command. A preference save
+    // may have been started before that command returned its updated settings.
+    settings.frequency_weights = guard.settings.frequency_weights.clone();
+    let summary_changed = guard.settings.anki_interval != settings.anki_interval;
+    let matching_changed =
+        summary_changed || guard.settings.anki_model_mappings != settings.anki_model_mappings;
+    persistence::save_json(&settings, "settings.json").map_err(|e| e.to_string())?;
+    guard.settings = settings.clone();
     if let Some(tools) = guard.language_tools.as_mut() {
-        tools.known_interval = anki_interval;
+        tools.known_interval = settings.anki_interval;
     }
-    guard.invalidate_anki_cache();
-    if summary_inputs_changed {
+    if matching_changed {
+        guard.invalidate_anki_cache();
+    }
+    if summary_changed {
         guard.knowledge_dirty.store(true, Ordering::Relaxed);
     }
-    // `frequency_manager` is behind an `Arc` with interior mutability, so clone the
-    // handle to drop the borrow on `guard` before reapplying weights.
-    let manager = guard.language_tools.as_ref().map(|t| Arc::clone(&t.frequency_manager));
-    let weights = guard.settings.frequency_weights.clone();
-    drop(guard);
-    if let Some(manager) = manager {
-        apply_frequency_weights(&manager, &weights);
-    }
+    let _ = app.emit(names::SETTINGS_CHANGED, settings);
     Ok(())
 }

@@ -31,6 +31,7 @@ export async function hydrate(): Promise<void> {
 	let playerEventSeen = false;
 	let ankiEventSeen = false;
 	let knowledgeEventSeen = false;
+	let fileEventSeen = false;
 	ipc.onLanguageToolsStatus((s) => languageToolsStatus.set(s));
 	ipc.onAnkiStatus((s) => {
 		ankiEventSeen = true;
@@ -47,18 +48,15 @@ export async function hydrate(): Promise<void> {
 	// Backend probe (5s poll, change-only) — keeps the dot fresh even when no
 	// file is loaded and nothing calls refreshMinedState.
 	ipc.onYomitanStatus((s) => yomitanReachable.set(s.reachable));
-	ipc.onTermsRefreshed((r) => fileResult.set(r));
+	ipc.onTermsRefreshed((r) => { fileEventSeen = true; fileResult.set(r); });
 	ipc.onError((e) => lastError.set(e));
 	ipc.onAsbplayerMediaLoaded((r) => {
+		fileEventSeen = true;
 		fileResult.set(r);
 		showNotice(`Loaded from asbplayer: ${r.source_file.title}`);
 	});
 	ipc.onAsbplayerContext((c) => asbContext.set(c));
-	ipc.onDictionariesChanged(async () => {
-		const current = await ipc.getTerms();
-		if (current) fileResult.set(current);
-		refreshSetupStatus();
-	});
+	ipc.onDictionariesChanged(() => { refreshSetupStatus(); });
 
 	// Rows dropped by a refresh (mined/ignored) silently leave the selection.
 	// Wired here, not in selection.ts — see the note there.
@@ -98,7 +96,7 @@ export async function hydrate(): Promise<void> {
 
 	const [catalog, currentFile, player, anki, summary] = await batch;
 	posCatalog.set(catalog);
-	fileResult.set(currentFile);
+	if (!fileEventSeen) fileResult.set(currentFile);
 	await recentsPull;
 	if (!playerEventSeen) playerStatus.set(player);
 	if (!ankiEventSeen) ankiStatus.set(anki);

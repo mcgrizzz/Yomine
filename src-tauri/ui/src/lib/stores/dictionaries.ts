@@ -10,9 +10,9 @@ export type DictionaryRow = ipc.DictionaryState & { hidden: boolean };
  * `dictionaries-changed`, which re-fetches the table via the hydrate listener. */
 export async function saveDictionaryStates(entries: DictionaryRow[]): Promise<boolean> {
 	try {
-		for (const e of entries) {
-			await ipc.setDictionaryState(e.name, e.weight, e.enabled, e.hidden);
-		}
+		await ipc.setDictionaryStates(
+			Object.fromEntries(entries.map(({ name, ...setting }) => [name, setting]))
+		);
 		const s = get(settings);
 		if (s) {
 			const frequency_weights = { ...s.frequency_weights };

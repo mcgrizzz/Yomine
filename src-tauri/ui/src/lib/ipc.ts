@@ -992,3 +992,8 @@ export const onExportComplete = (cb: (p: ExportCompletePayload) => void) =>
 function listenTo<T>(event: string, cb: (payload: T) => void): Promise<UnlistenFn> {
 	return listen<T>(event, (e) => cb(e.payload));
 }
+
+/** Apply one complete dictionary-settings batch and refresh the loaded file. */
+export function setDictionaryStates(updates: Record<string, FrequencyDictionarySetting>): Promise<void> {
+    return invoke('set_dictionary_states', { updates });
+}

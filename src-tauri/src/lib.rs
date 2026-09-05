@@ -62,6 +62,7 @@ pub fn run() {
             commands::anki::get_anki_sample_note,
             commands::dictionary::list_dictionaries,
             commands::dictionary::set_dictionary_state,
+            commands::dictionary::set_dictionary_states,
             commands::dictionary::load_frequency_dictionaries,
             commands::recommended::get_recommended_dictionaries,
             commands::recommended::install_recommended_dictionary,
