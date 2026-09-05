@@ -177,7 +177,23 @@ impl POS {
 //     }
 // }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CitationProvenance {
+    Rule,
+    ValidatedDeinflection,
+    AuxiliaryHead,
+    LexicalException,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Citation {
+    pub form: String,
+    pub reading: String,
+    pub provenance: CitationProvenance,
+}
+
 pub struct Word {
+    pub citation: Option<Citation>,
     pub surface_form: String,
     pub surface_hatsuon: String, //hatsuon is easier to type than pronunciation...
     pub lemma_form: String,
@@ -188,6 +204,14 @@ pub struct Word {
 }
 
 impl Word {
+    pub fn has_rule_citation(&self) -> bool {
+        self.citation.as_ref().is_some_and(|c| c.provenance == CitationProvenance::Rule)
+    }
+
+    pub fn mining_span(&self) -> (usize, usize) {
+        self.main_word.as_ref().map_or_else(|| self.byte_span(), |m| (m.start_byte, m.end_byte))
+    }
+
     /// Byte span of the whole word in its source sentence.
     pub fn byte_span(&self) -> (usize, usize) {
         (
@@ -198,7 +222,11 @@ impl Word {
 }
 
 impl From<Word> for Term {
-    fn from(word: Word) -> Term {
+    fn from(mut word: Word) -> Term {
+        if let Some(citation) = &word.citation {
+            word.lemma_form = citation.form.clone();
+            word.lemma_hatsuon = citation.reading.clone();
+        }
         if let Some(main_word) = word.main_word {
             let is_kana = main_word.surface.as_str().is_kana();
             Term {

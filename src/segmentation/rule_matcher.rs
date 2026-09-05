@@ -3,6 +3,8 @@ use super::{
     unidic_tags::UnidicTag,
     word::{
         get_default_pos,
+        Citation,
+        CitationProvenance,
         Word,
         POS,
     },
@@ -118,6 +120,7 @@ pub enum RuleAction {
 
 #[derive(Clone)]
 pub enum MainWordPolicy {
+    MineCompleteCitation,
     UseFirstToken,  // Use first token's lemma as main word
     UseSecondToken, // Use second token's lemma as main word
 }
@@ -169,6 +172,7 @@ pub fn process_tokens(tokens: Vec<UnidicToken>, rules: &[Rule]) -> Result<Vec<Wo
                 match &rule.action {
                     RuleAction::CreateWord { eat_next, eat_next_lemma, pos, main_word_policy } => {
                         let mut word = Word {
+                            citation: None,
                             surface_form: current_token.surface.clone(),
                             surface_hatsuon: current_token.surface_hatsuon.clone(),
                             lemma_form: current_token.lemma_form.clone(),
@@ -193,7 +197,7 @@ pub fn process_tokens(tokens: Vec<UnidicToken>, rules: &[Rule]) -> Result<Vec<Wo
                                     Some(MainWordPolicy::UseSecondToken) => {
                                         word.main_word = Some(next.clone());
                                     }
-                                    None => {
+                                    Some(MainWordPolicy::MineCompleteCitation) | None => {
                                         // No main word policy
                                     }
                                 }
@@ -213,6 +217,13 @@ pub fn process_tokens(tokens: Vec<UnidicToken>, rules: &[Rule]) -> Result<Vec<Wo
                             prev_token = Some(current_token.clone());
                         }
 
+                        if matches!(main_word_policy, Some(MainWordPolicy::MineCompleteCitation)) {
+                            word.citation = Some(Citation {
+                                form: word.lemma_form.clone(),
+                                reading: normalize_reading(&word.lemma_form, &word.lemma_hatsuon),
+                                provenance: CitationProvenance::Rule,
+                            });
+                        }
                         words.push(word);
                     }
                     RuleAction::MergeWithPrevious {
@@ -227,12 +238,14 @@ pub fn process_tokens(tokens: Vec<UnidicToken>, rules: &[Rule]) -> Result<Vec<Wo
                                 match policy {
                                     MainWordPolicy::UseFirstToken => {
                                         // In a merge, the first token is from the previous word
-                                        if prev_word.main_word.is_none()
+                                        if prev_word.citation.is_none()
+                                            && prev_word.main_word.is_none()
                                             && !prev_word.tokens.is_empty()
                                         {
                                             prev_word.main_word = Some(prev_word.tokens[0].clone());
                                         }
                                     }
+                                    MainWordPolicy::MineCompleteCitation => {}
                                     MainWordPolicy::UseSecondToken => {
                                         // In a merge, the second token is the current token
                                         prev_word.main_word = Some(current_token.clone());
@@ -245,7 +258,10 @@ pub fn process_tokens(tokens: Vec<UnidicToken>, rules: &[Rule]) -> Result<Vec<Wo
                                 prev_word.surface_hatsuon.push_str(&current_token.surface_hatsuon);
                             }
 
-                            if *attach_prev_lemma {
+                            if *attach_prev_lemma
+                                && prev_word.citation.is_none()
+                                && current_token.pos1 != UnidicTag::Jodoushi
+                            {
                                 prev_word.lemma_form.push_str(&current_token.lemma_form);
                                 prev_word.lemma_hatsuon.push_str(&current_token.lemma_hatsuon);
                             }
@@ -278,6 +294,7 @@ pub fn process_tokens(tokens: Vec<UnidicToken>, rules: &[Rule]) -> Result<Vec<Wo
             let pos = get_default_pos(&current_token);
 
             let word = Word {
+                citation: None,
                 surface_form: current_token.surface.clone(),
                 surface_hatsuon: current_token.surface_hatsuon.clone(),
                 lemma_form: current_token.lemma_form.clone(),

@@ -248,6 +248,26 @@ pub fn create_default_rules() -> Vec<Rule> {
             },
         },
         Rule {
+            name: "Sahen suffix + suru",
+            current: TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Setsubiji]),
+                pos3: Matcher::Any(vec![UnidicTag::Sahenkanou]),
+                ..Default::default()
+            },
+            next: Some(TokenMatcher {
+                conjugation_type: Matcher::Any(vec![UnidicTag::Sagyouhenkaku]),
+                ..Default::default()
+            }),
+            prev: None,
+            prev_word: WordMatcher::None,
+            action: RuleAction::CreateWord {
+                eat_next: true,
+                eat_next_lemma: true,
+                pos: POS::Verb,
+                main_word_policy: Some(MainWordPolicy::MineCompleteCitation),
+            },
+        },
+        Rule {
             name: "Suffix to noun",
             current: TokenMatcher {
                 pos1: Matcher::Any(vec![UnidicTag::Setsubiji]),

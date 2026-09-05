@@ -12,6 +12,8 @@ use super::{
     token_models::UnidicToken,
     word::{
         get_default_pos,
+        Citation,
+        CitationProvenance,
         Word,
         POS,
     },
@@ -36,6 +38,73 @@ use crate::{
         },
     },
 };
+
+// Lexical exceptions are intentionally reading- and spelling-constrained.
+const LEXICAL_CITATIONS: &[(&str, &str)] = &[("つまらない", "つまらない")];
+
+pub(super) fn resolve_citation(word: &mut Word, manager: &FrequencyManager) {
+    if word.citation.is_some()
+        || word.main_word.is_some()
+        || !word.surface_form.as_str().is_japanese()
+    {
+        return;
+    }
+    if !matches!(
+        word.part_of_speech,
+        POS::Verb | POS::SuruVerb | POS::Adjective | POS::AdjectivalNoun | POS::Noun
+    ) {
+        return;
+    }
+    let deinflections = pairwise_deinflection(&word.surface_form, &word.surface_hatsuon);
+    let exception = deinflections
+        .iter()
+        .find(|(form, reading)| {
+            word.surface_form.as_str().is_kana()
+                && LEXICAL_CITATIONS.contains(&(form.as_str(), reading.as_str()))
+        })
+        .cloned();
+    let mut candidates: Vec<_> = deinflections
+        .into_iter()
+        .filter(|(form, reading)| manager.get_harmonic_frequency_for_pair(form, reading).is_some())
+        .collect();
+    candidates
+        .sort_by_key(|(form, reading)| manager.get_harmonic_frequency_for_pair(form, reading));
+    if word.part_of_speech == POS::Verb {
+        retain_verb_final_candidates(&mut candidates, &word.surface_form);
+    }
+    let lemma = (word.lemma_form.clone(), word.lemma_hatsuon.clone());
+    let selected = exception
+        .map(|pair| (pair, CitationProvenance::LexicalException))
+        .or_else(|| {
+            candidates
+                .iter()
+                .find(|pair| **pair == lemma)
+                .or(candidates.first())
+                .cloned()
+                .map(|pair| (pair, CitationProvenance::ValidatedDeinflection))
+        })
+        .or_else(|| {
+            let [head, tail @ ..] = word.tokens.as_slice() else {
+                return None;
+            };
+            (!tail.is_empty()
+                && tail.iter().all(|t| t.pos1 == super::unidic_tags::UnidicTag::Jodoushi))
+            .then(|| {
+                (
+                    (
+                        head.lemma_form.clone(),
+                        normalize_reading(&head.surface, &head.lemma_hatsuon),
+                    ),
+                    CitationProvenance::AuxiliaryHead,
+                )
+            })
+        });
+    if let Some(((form, reading), provenance)) = selected {
+        word.lemma_form = form.clone();
+        word.lemma_hatsuon = reading.clone();
+        word.citation = Some(Citation { form, reading, provenance });
+    }
+}
 
 pub fn extract_words(
     mut worker: Worker,
@@ -64,57 +133,14 @@ pub fn extract_words(
 
         let mut term_spans: Vec<(usize, usize)> = Vec::with_capacity(words.len());
         let mut sentence_terms: Vec<Term> = Vec::with_capacity(words.len());
+        let mut rule_citations = Vec::with_capacity(words.len());
         for word in words {
             let span = word.byte_span();
+            rule_citations.push(word.has_rule_citation());
             // The highlight span ends at start + surface_form.len(), so the
             // reference must point at the main word, not the segment.
-            let ref_start = word.main_word.as_ref().map_or(span.0, |m| m.start_byte);
+            let ref_start = word.mining_span().0;
             let mut term: Term = word.into();
-            if term.surface_form.as_str().is_japanese() {
-                match term.part_of_speech {
-                    POS::Verb
-                    | POS::SuruVerb
-                    | POS::AdjectivalNoun
-                    | POS::Adjective
-                    | POS::Noun => {
-                        let deinflections: Vec<(String, String)> =
-                            pairwise_deinflection(&term.surface_form, &term.surface_reading);
-
-                        let mut sorted_deinflections: Vec<(String, String)> = deinflections
-                            .into_iter()
-                            .filter(|(word, reading)| {
-                                frequency_manager
-                                    .get_harmonic_frequency_for_pair(word, reading)
-                                    .is_some()
-                            })
-                            .collect();
-
-                        sorted_deinflections.sort_by_key(|(word, reading)| {
-                            frequency_manager.get_harmonic_frequency_for_pair(word, reading)
-                        });
-
-                        if term.part_of_speech == POS::Verb {
-                            retain_verb_final_candidates(
-                                &mut sorted_deinflections,
-                                &term.surface_form,
-                            );
-                        }
-
-                        if sorted_deinflections.len() > 0 {
-                            let unidic_lemma =
-                                (term.lemma_form.clone(), term.lemma_reading.clone());
-                            let chosen = sorted_deinflections
-                                .iter()
-                                .find(|candidate| **candidate == unidic_lemma)
-                                .unwrap_or(&sorted_deinflections[0]);
-                            term.lemma_form = chosen.0.clone();
-                            term.lemma_reading = chosen.1.clone();
-                        }
-                    }
-                    _ => {}
-                }
-            }
-
             let freq_map: HashMap<String, u32> = frequency_manager.build_freq_map(
                 &term.lemma_form,
                 &term.lemma_reading,
@@ -274,7 +300,9 @@ pub fn extract_words(
                         phrase.frequencies = freq_map;
                         sentence_terms.push(phrase);
 
-                        if all_content_words {
+                        if all_content_words
+                            && !rule_citations[start..=end.min(base_len - 1)].iter().any(|v| *v)
+                        {
                             // The inner range re-reads the vec length, so `end` can index an already-pushed phrase.
                             for flag in suppressed[start..=end.min(base_len - 1)].iter_mut() {
                                 *flag = true;
@@ -586,6 +614,7 @@ fn split_unvalidated_compounds(
         };
         let first = &word.tokens[0];
         out.push(Word {
+            citation: None,
             surface_form: first.surface.clone(),
             surface_hatsuon: normalize_reading(&first.surface, &first.surface_hatsuon),
             lemma_form: first.lemma_form.clone(),

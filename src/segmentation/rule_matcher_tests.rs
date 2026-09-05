@@ -186,3 +186,105 @@ mod tests {
         assert!(true);
     }
 }
+
+/// Real UniDic feature strings, so these run without the dictionary installed.
+#[cfg(test)]
+mod sahen_suffix {
+    use crate::{
+        core::models::Term,
+        segmentation::{
+            rule_matcher::parse_into_words,
+            token_models::UnidicToken,
+            word::POS,
+        },
+    };
+
+    const KEITAI: &str = "名詞,普通名詞,一般,*,*,*,ケイタイ,形態,形態,ケータイ,形態,ケータイ,漢,*,*,*,*,*,*,体,ケイタイ,ケイタイ,ケイタイ,ケイタイ,0,C2,*,3024215389381120,11002";
+    const KA: &str = "接尾辞,名詞的,サ変可能,*,*,*,カ,化,化,カ,化,カ,漢,*,*,*,*,*,*,接尾体,カ,カ,カ,カ,*,C4,*,1533002710655488,5577";
+    const SA: &str = "動詞,非自立可能,*,*,サ行変格,未然形-サ,スル,為る,さ,サ,する,スル,和,*,*,*,*,*,*,用,サ,スル,サ,スル,0,C5,*,5370298291593794,19537";
+    const SE: &str = "助動詞,*,*,*,下一段-サ行,連用形-一般,セル,せる,せ,セ,せる,セル,和,*,*,*,*,*,*,助動,セ,セル,セ,セル,*,動詞%F3@1,M4@1,5595157009408641,20355";
+    const SERU: &str = "助動詞,*,*,*,下一段-サ行,終止形-一般,セル,せる,せる,セル,せる,セル,和,*,*,*,*,*,*,助動,セル,セル,セル,セル,*,動詞%F3@1,*,5595157009408683,20355";
+    const TE: &str = "助詞,接続助詞,*,*,*,*,テ,て,て,テ,て,テ,和,*,*,*,*,*,*,接助,テ,テ,テ,テ,*,動詞%F1,*,6837321680953856,24874";
+    const BENKYOU: &str = "名詞,普通名詞,サ変可能,*,*,*,ベンキョウ,勉強,勉強,ベンキョー,勉強,ベンキョー,漢,*,*,*,*,*,*,体,ベンキョウ,ベンキョウ,ベンキョウ,ベンキョウ,0,C2,*,9415126692274688,34252";
+    const JITSUYOU: &str = "名詞,普通名詞,サ変可能,*,*,*,ジツヨウ,実用,実用,ジツヨー,実用,ジツヨー,漢,*,*,*,*,*,*,体,ジツヨウ,ジツヨウ,ジツヨウ,ジツヨウ,0,C2,*,4944237535830528,17987";
+    const SHI: &str = "動詞,非自立可能,*,*,サ行変格,連用形-一般,スル,為る,し,シ,する,スル,和,*,*,*,*,*,*,用,シ,スル,シ,スル,0,C5,*,5370298291593857,19537";
+    const JIDOU: &str = "名詞,普通名詞,一般,*,*,*,ジドウ,自動,自動,ジドー,自動,ジドー,漢,*,*,*,*,*,*,体,ジドウ,ジドウ,ジドウ,ジドウ,0,C2,*,4948635582341632,18003";
+    const EIGA: &str = "名詞,普通名詞,一般,*,*,*,エイガ,映画,映画,エーガ,映画,エーガ,漢,*,*,*,*,*,*,体,エイガ,エイガ,エイガ,エイガ,0,C2,*,1000839082811904,3641";
+    const KAN: &str = "接尾辞,名詞的,一般,*,*,*,カン,館,館,カン,館,カン,漢,*,*,*,*,*,*,接尾体,カン,カン,カン,カン,*,C3,*,2056095367569920,7480";
+
+    fn terms(parts: &[(&str, &str)]) -> Vec<Term> {
+        let mut offset = 0;
+        let tokens: Vec<UnidicToken> = parts
+            .iter()
+            .map(|(surface, features)| {
+                let span = offset..offset + surface.len();
+                offset = span.end;
+                UnidicToken::from_parts(surface, features, span)
+            })
+            .collect();
+        parse_into_words(tokens)
+            .expect("rules must not error")
+            .into_iter()
+            .map(Term::from)
+            .collect()
+    }
+
+    fn assert_ka_suru(term: &Term, full_segment: &str) {
+        assert_eq!(term.surface_form, full_segment);
+        assert_eq!(term.lemma_form, "化する", "citation form must survive the auxiliaries");
+        assert_eq!(term.full_segment, full_segment, "deinflection needs the whole span");
+    }
+
+    #[test]
+    fn a_sahen_suffix_binds_forward_to_suru() {
+        let terms = terms(&[("形態", KEITAI), ("化", KA), ("さ", SA), ("せ", SE), ("て", TE)]);
+
+        assert_eq!(
+            terms.len(),
+            2,
+            "{:?}",
+            terms.iter().map(|t| &t.full_segment).collect::<Vec<_>>()
+        );
+        assert_eq!(terms[0].full_segment, "形態");
+        assert_eq!(terms[0].part_of_speech, POS::Noun);
+        assert_ka_suru(&terms[1], "化させて");
+    }
+
+    #[test]
+    fn it_binds_the_same_way_without_a_te_form() {
+        let terms = terms(&[("自動", JIDOU), ("化", KA), ("さ", SA), ("せる", SERU)]);
+
+        assert_eq!(terms.len(), 2);
+        assert_eq!(terms[0].full_segment, "自動");
+        assert_ka_suru(&terms[1], "化させる");
+    }
+
+    #[test]
+    fn it_binds_the_renyou_suru_stem_too() {
+        let terms = terms(&[("実用", JITSUYOU), ("化", KA), ("し", SHI), ("て", TE)]);
+
+        assert_eq!(terms.len(), 2);
+        assert_eq!(terms[0].full_segment, "実用");
+        assert_ka_suru(&terms[1], "化して");
+    }
+
+    #[test]
+    fn a_plain_sahen_noun_is_unchanged() {
+        let terms = terms(&[("勉強", BENKYOU), ("さ", SA), ("せ", SE), ("て", TE)]);
+
+        assert_eq!(terms.len(), 1);
+        assert_eq!(terms[0].part_of_speech, POS::SuruVerb);
+        assert_eq!(terms[0].lemma_form, "勉強");
+        assert_eq!(terms[0].full_segment, "勉強させて");
+    }
+
+    /// 館 is a suffix but not サ変可能, so it still merges backwards into the noun.
+    #[test]
+    fn a_non_sahen_suffix_does_not_bind_forward() {
+        let terms = terms(&[("映画", EIGA), ("館", KAN), ("し", SHI), ("て", TE)]);
+
+        assert_eq!(terms[0].full_segment, "映画館");
+        assert_eq!(terms[0].part_of_speech, POS::Noun);
+        assert!(terms.iter().all(|t| t.lemma_form != "館する"), "館 must not bind forward");
+    }
+}
