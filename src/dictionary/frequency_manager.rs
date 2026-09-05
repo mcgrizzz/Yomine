@@ -35,7 +35,7 @@ use crate::{
 
 /// カ→か etc.; everything else untouched (ケガ人 → けが人). Unlike wana_kana's
 /// `to_hiragana`, never transliterates romaji.
-fn fold_katakana(s: &str) -> String {
+pub(crate) fn fold_katakana(s: &str) -> String {
     s.chars()
         .map(|c| match c as u32 {
             0x30A1..=0x30F6 => char::from_u32(c as u32 - 0x60).unwrap(),
@@ -58,15 +58,29 @@ pub struct DictionaryState {
 pub struct FrequencyManager {
     dictionaries: HashMap<String, FrequencyDictionary>,
     states: RwLock<HashMap<String, DictionaryState>>,
+    lexical: super::lexical_evidence::LexicalEvidence,
 }
 
 impl FrequencyManager {
-    fn new(states: Option<HashMap<String, DictionaryState>>) -> Self {
-        let dict_states: HashMap<String, DictionaryState> = states.unwrap_or_default();
-        FrequencyManager { dictionaries: HashMap::new(), states: RwLock::new(dict_states) }
+    pub fn lexical_families(
+        &self,
+        reading: &str,
+    ) -> std::sync::Arc<super::lexical_evidence::ReadingEvidence> {
+        self.lexical.for_reading(self, reading)
     }
 
-    fn add_dictionary(&mut self, name: String, dictionary: FrequencyDictionary) {
+    fn new(states: Option<HashMap<String, DictionaryState>>) -> Self {
+        let dict_states: HashMap<String, DictionaryState> = states.unwrap_or_default();
+        FrequencyManager {
+            dictionaries: HashMap::new(),
+            states: RwLock::new(dict_states),
+            lexical: Default::default(),
+        }
+    }
+
+    fn add_dictionary(&mut self, name: String, mut dictionary: FrequencyDictionary) {
+        dictionary.index_readings();
+        self.lexical = Default::default();
         self.dictionaries.insert(name.clone(), dictionary);
 
         let mut states = self.states.write().expect("frequency states poisoned");
@@ -82,6 +96,19 @@ impl FrequencyManager {
             manager.add_dictionary(dict.title.clone(), dict);
         }
         manager
+    }
+
+    pub fn terms_with_reading_from_all_dictionaries(&self, reading: &str) -> Vec<&str> {
+        let normalized = crate::core::utils::normalize_japanese_text(reading);
+        let mut terms: Vec<&str> = Vec::new();
+        for dictionary in self.dictionaries.values() {
+            for term in dictionary.terms_with_reading(&normalized) {
+                if !terms.contains(&term.as_str()) {
+                    terms.push(term);
+                }
+            }
+        }
+        terms
     }
 
     pub fn get_enabled_dictionaries(&self) -> Vec<&FrequencyDictionary> {

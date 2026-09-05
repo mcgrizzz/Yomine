@@ -230,6 +230,7 @@ impl From<Word> for Term {
         if let Some(main_word) = word.main_word {
             let is_kana = main_word.surface.as_str().is_kana();
             Term {
+                lexical_family: None,
                 id: 0,
                 lemma_form: main_word.lemma_form,
                 lemma_reading: main_word.lemma_hatsuon,
@@ -247,6 +248,7 @@ impl From<Word> for Term {
         } else {
             let is_kana = word.surface_form.as_str().is_kana();
             Term {
+                lexical_family: None,
                 id: 0,
                 lemma_form: word.lemma_form,
                 lemma_reading: word.lemma_hatsuon,

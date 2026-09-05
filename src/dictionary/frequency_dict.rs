@@ -11,16 +11,47 @@ use super::{
     FrequencyData,
     TermMetaBankV3,
 };
-use crate::core::utils::NormalizeLongVowel;
+use crate::{
+    core::utils::NormalizeLongVowel,
+    dictionary::frequency_manager::fold_katakana,
+};
 
 #[derive(serde::Serialize, Deserialize, Clone, Debug)]
 pub struct FrequencyDictionary {
     pub title: String,
     pub revision: String,
     pub terms: HashMap<String, Vec<CacheFrequencyData>>, // Map term -> multiple frequency entries
+    /// Normalized reading → terms written with it. Rebuilt on load rather than cached,
+    /// so adding it does not invalidate every existing `cache.bin`.
+    #[serde(skip)]
+    readings: HashMap<String, Vec<String>>,
 }
 
 impl FrequencyDictionary {
+    /// Terms this dictionary writes with `reading`, which must already be normalized.
+    pub fn terms_with_reading(&self, reading: &str) -> &[String] {
+        self.readings.get(reading).map_or(&[], Vec::as_slice)
+    }
+
+    /// Call once per dictionary at load; `terms` is the only source, so it covers both
+    /// the freshly parsed and the cache-restored paths.
+    pub(crate) fn index_readings(&mut self) {
+        let mut readings: HashMap<String, Vec<String>> = HashMap::new();
+        for (term, entries) in &self.terms {
+            for entry in entries {
+                if let Some(reading) = entry.reading() {
+                    // `new` already long-vowel-normalized these, so only the script folds.
+                    let key = fold_katakana(reading);
+                    let terms = readings.entry(key).or_default();
+                    if !terms.iter().any(|t| t == term) {
+                        terms.push(term.clone());
+                    }
+                }
+            }
+        }
+        self.readings = readings;
+    }
+
     pub fn new(title: String, revision: String, term_meta_list: Vec<TermMetaBankV3>) -> Self {
         // Build HashMap<String, Vec<CacheFrequencyData>> in parallel.
         let terms: HashMap<String, Vec<CacheFrequencyData>> = term_meta_list
@@ -56,7 +87,9 @@ impl FrequencyDictionary {
                 },
             );
 
-        FrequencyDictionary { title, revision, terms }
+        let mut dict = FrequencyDictionary { title, revision, terms, readings: HashMap::new() };
+        dict.index_readings();
+        dict
     }
 
     //If dictionary form is in kana

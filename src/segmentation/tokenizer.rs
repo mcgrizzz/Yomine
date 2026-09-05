@@ -188,6 +188,15 @@ pub fn extract_words(
                 // promoted. A variant hit also corrects the phrase's own
                 // reading for display/furigana.
                 let mut freq = None;
+                for reading in phrase_reading_candidates(subrange) {
+                    if let Some(family) = frequency_manager
+                        .lexical_families(&reading)
+                        .phrase_family(&phrase.surface_form)
+                    {
+                        phrase.lexical_family = Some(family);
+                        break;
+                    }
+                }
                 for candidate in phrase_reading_candidates(subrange) {
                     if let Some(f) = frequency_manager.get_harmonic_frequency_for_pair(
                         &phrase.surface_form.normalize_long_vowel(),
@@ -198,6 +207,20 @@ pub fn extract_words(
                         phrase.full_segment_reading = candidate;
                         freq = Some(f);
                         break;
+                    }
+                }
+
+                if freq.is_none() {
+                    if let Some(family) = &phrase.lexical_family {
+                        for spelling in &family.spellings {
+                            if let Some(f) = frequency_manager
+                                .get_harmonic_frequency_for_pair(spelling, &phrase.lemma_reading)
+                            {
+                                phrase.lemma_form = spelling.clone();
+                                freq = Some(f);
+                                break;
+                            }
+                        }
                     }
                 }
 

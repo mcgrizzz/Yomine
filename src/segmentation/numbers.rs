@@ -51,6 +51,7 @@ fn flush_run(run: &mut Vec<UnidicToken>, out: &mut Vec<UnidicToken>) {
             let end_byte = run.last().unwrap().end_byte;
             let first = run.first().unwrap();
             out.push(UnidicToken {
+                lexeme: String::new(),
                 surface: surface.clone(),
                 pos1: first.pos1.clone(),
                 pos2: first.pos2.clone(),

@@ -448,6 +448,7 @@ mod tests {
 
     fn term(surface: &str, pos: POS, comprehension: f32, start: usize) -> Term {
         Term {
+            lexical_family: None,
             id: 1,
             lemma_form: surface.to_string(),
             lemma_reading: String::new(),
