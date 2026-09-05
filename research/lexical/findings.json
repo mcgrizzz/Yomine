@@ -1,0 +1,92 @@
+{
+  "entries": 218714,
+  "pairs": 389997,
+  "jitendex": 435448,
+  "frequencies": 2108727,
+  "readings": 225449,
+  "ambiguous_readings": 14181,
+  "ambiguous_with_one_kana_entry": 1169,
+  "ambiguous_with_multiple_kana_entries": 191,
+  "jitendex_redirect_rows": 138529,
+  "jitendex_redirect_validation": {
+    "target_and_reading_validated": 133640,
+    "unresolved_target_or_reading": 4889
+  },
+  "jitendex_rows_with_jmdict_entry": 296918,
+  "jitendex_rows_with_legal_pair": 293491,
+  "kana_metadata_disagreements": 48,
+  "frequency_distributions": {
+    "JPDBv2㋕": {
+      "linked_pairs": 59864,
+      "kana_more_common": 14798,
+      "kana_rank_over_three_times_better": 4635,
+      "kana_top_1000_written_outside": 354
+    },
+    "Jiten": {
+      "linked_pairs": 111209,
+      "kana_more_common": 28162,
+      "kana_rank_over_three_times_better": 8309,
+      "kana_top_1000_written_outside": 448
+    }
+  },
+  "shared_kana_rank_groups": 34348,
+  "source_versions": {
+    "JMdict": "2026-09-05",
+    "Jitendex": "2026.08.11.0"
+  },
+  "corpus": {
+    "files": 47,
+    "captions": 16087,
+    "file_splits": {
+      "corpus_holdout": 15,
+      "corpus_development": 32
+    },
+    "counts": {
+      "corpus_holdout": {
+        "analyzed_token_occurrences_with_entries": 20231,
+        "tag_only_hints": 5111,
+        "tag_and_lexeme_hints": 3750
+      },
+      "corpus_development": {
+        "analyzed_token_occurrences_with_entries": 54458,
+        "tag_only_hints": 13218,
+        "tag_and_lexeme_hints": 9666
+      },
+      "probe_development": {
+        "analyzed_token_occurrences_with_entries": 30,
+        "tag_only_hints": 9,
+        "tag_and_lexeme_hints": 8
+      },
+      "probe_holdout": {
+        "analyzed_token_occurrences_with_entries": 77,
+        "tag_only_hints": 20,
+        "tag_and_lexeme_hints": 13
+      }
+    }
+  },
+  "probe_counts": {
+    "development": {
+      "tag_only": {
+        "correct": 3
+      },
+      "tag_and_lexeme": {
+        "correct": 3
+      }
+    },
+    "holdout": {
+      "tag_only": {
+        "correct": 7,
+        "abstain": 6,
+        "incorrect": 2
+      },
+      "tag_and_lexeme": {
+        "correct": 7,
+        "abstain": 8
+      }
+    }
+  },
+  "missing_probes": [
+    18,
+    19
+  ]
+}

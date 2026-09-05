@@ -1,0 +1,351 @@
+{
+  "probes_sha256": "fd8f06e8f555342fbcf921669e6802d579b452569688afbb73f982e210fcda3b",
+  "results": [
+    {
+      "id": 0,
+      "split": "development",
+      "text": "事件は全て解決したということになった。",
+      "expected": "事",
+      "token": {
+        "lemma": "こと",
+        "lexeme": "事",
+        "pos": "名詞",
+        "pos2": "普通名詞",
+        "pronunciation": "コト",
+        "reading": "コト",
+        "surface": "こと",
+        "verb_class": "*"
+      },
+      "tag_only": "correct",
+      "tag_and_lexeme": "correct",
+      "selected_entry": 1313580
+    },
+    {
+      "id": 1,
+      "split": "development",
+      "text": "今までに算術ができなくて困ったことはありますか。",
+      "expected": "出来る",
+      "token": {
+        "lemma": "できる",
+        "lexeme": "出来る",
+        "pos": "動詞",
+        "pos2": "非自立可能",
+        "pronunciation": "デキル",
+        "reading": "デキル",
+        "surface": "でき",
+        "verb_class": "上一段-カ行"
+      },
+      "tag_only": "correct",
+      "tag_and_lexeme": "correct",
+      "selected_entry": 1340450
+    },
+    {
+      "id": 2,
+      "split": "development",
+      "text": "学校にいく。",
+      "expected": "行く",
+      "token": {
+        "lemma": "いく",
+        "lexeme": "行く",
+        "pos": "動詞",
+        "pos2": "非自立可能",
+        "pronunciation": "イク",
+        "reading": "イク",
+        "surface": "いく",
+        "verb_class": "五段-カ行"
+      },
+      "tag_only": "correct",
+      "tag_and_lexeme": "correct",
+      "selected_entry": 1578850
+    },
+    {
+      "id": 3,
+      "split": "holdout",
+      "text": "すぐに帰る。",
+      "expected": "直ぐ",
+      "token": {
+        "lemma": "すぐ",
+        "lexeme": "直ぐ",
+        "pos": "副詞",
+        "pos2": "*",
+        "pronunciation": "スグ",
+        "reading": "スグ",
+        "surface": "すぐ",
+        "verb_class": "*"
+      },
+      "tag_only": "correct",
+      "tag_and_lexeme": "correct",
+      "selected_entry": 1430610
+    },
+    {
+      "id": 4,
+      "split": "holdout",
+      "text": "もし雨なら帰る。",
+      "expected": "若し",
+      "token": {
+        "lemma": "もし",
+        "lexeme": "若し",
+        "pos": "副詞",
+        "pos2": "*",
+        "pronunciation": "モシ",
+        "reading": "モシ",
+        "surface": "もし",
+        "verb_class": "*"
+      },
+      "tag_only": "correct",
+      "tag_and_lexeme": "correct",
+      "selected_entry": 1012500
+    },
+    {
+      "id": 5,
+      "split": "holdout",
+      "text": "これはすべて私の物だ。",
+      "expected": "全て",
+      "token": {
+        "lemma": "すべて",
+        "lexeme": "全て",
+        "pos": "名詞",
+        "pos2": "普通名詞",
+        "pronunciation": "スベテ",
+        "reading": "スベテ",
+        "surface": "すべて",
+        "verb_class": "*"
+      },
+      "tag_only": "correct",
+      "tag_and_lexeme": "correct",
+      "selected_entry": 1595730
+    },
+    {
+      "id": 6,
+      "split": "holdout",
+      "text": "手伝ってくれてありがとう。",
+      "expected": "有難う",
+      "token": {
+        "lemma": "ありがとう",
+        "lexeme": "有り難う",
+        "pos": "感動詞",
+        "pos2": "一般",
+        "pronunciation": "アリガトー",
+        "reading": "アリガトウ",
+        "surface": "ありがとう",
+        "verb_class": "*"
+      },
+      "tag_only": "correct",
+      "tag_and_lexeme": "correct",
+      "selected_entry": 1586820
+    },
+    {
+      "id": 7,
+      "split": "holdout",
+      "text": "もちろん行きます。",
+      "expected": "勿論",
+      "token": {
+        "lemma": "もちろん",
+        "lexeme": "勿論",
+        "pos": "副詞",
+        "pos2": "*",
+        "pronunciation": "モチロン",
+        "reading": "モチロン",
+        "surface": "もちろん",
+        "verb_class": "*"
+      },
+      "tag_only": "correct",
+      "tag_and_lexeme": "correct",
+      "selected_entry": 1535780
+    },
+    {
+      "id": 8,
+      "split": "holdout",
+      "text": "なぜ来なかったのですか。",
+      "expected": "何故",
+      "token": {
+        "lemma": "なぜ",
+        "lexeme": "何故",
+        "pos": "副詞",
+        "pos2": "*",
+        "pronunciation": "ナゼ",
+        "reading": "ナゼ",
+        "surface": "なぜ",
+        "verb_class": "*"
+      },
+      "tag_only": "correct",
+      "tag_and_lexeme": "correct",
+      "selected_entry": 1577120
+    },
+    {
+      "id": 9,
+      "split": "holdout",
+      "text": "たぶん明日は晴れる。",
+      "expected": "多分",
+      "token": {
+        "lemma": "たぶん",
+        "lexeme": "多分",
+        "pos": "副詞",
+        "pos2": "*",
+        "pronunciation": "タブン",
+        "reading": "タブン",
+        "surface": "たぶん",
+        "verb_class": "*"
+      },
+      "tag_only": "abstain",
+      "tag_and_lexeme": "abstain",
+      "selected_entry": null
+    },
+    {
+      "id": 10,
+      "split": "holdout",
+      "text": "はしを使う。",
+      "expected": null,
+      "token": {
+        "lemma": "はし",
+        "lexeme": "橋",
+        "pos": "名詞",
+        "pos2": "普通名詞",
+        "pronunciation": "ハシ",
+        "reading": "ハシ",
+        "surface": "はし",
+        "verb_class": "*"
+      },
+      "tag_only": "incorrect",
+      "tag_and_lexeme": "abstain",
+      "selected_entry": null
+    },
+    {
+      "id": 11,
+      "split": "holdout",
+      "text": "川にはしを架けた。",
+      "expected": "橋",
+      "token": {
+        "lemma": "はし",
+        "lexeme": "橋",
+        "pos": "名詞",
+        "pos2": "普通名詞",
+        "pronunciation": "ハシ",
+        "reading": "ハシ",
+        "surface": "はし",
+        "verb_class": "*"
+      },
+      "tag_only": "incorrect",
+      "tag_and_lexeme": "abstain",
+      "selected_entry": null
+    },
+    {
+      "id": 12,
+      "split": "holdout",
+      "text": "かみを切った。",
+      "expected": null,
+      "token": {
+        "lemma": "かみ",
+        "lexeme": "紙",
+        "pos": "名詞",
+        "pos2": "普通名詞",
+        "pronunciation": "カミ",
+        "reading": "カミ",
+        "surface": "かみ",
+        "verb_class": "*"
+      },
+      "tag_only": "abstain",
+      "tag_and_lexeme": "abstain",
+      "selected_entry": null
+    },
+    {
+      "id": 13,
+      "split": "holdout",
+      "text": "あめが降っている。",
+      "expected": "雨",
+      "token": {
+        "lemma": "あめ",
+        "lexeme": "飴",
+        "pos": "名詞",
+        "pos2": "普通名詞",
+        "pronunciation": "アメ",
+        "reading": "アメ",
+        "surface": "あめ",
+        "verb_class": "*"
+      },
+      "tag_only": "abstain",
+      "tag_and_lexeme": "abstain",
+      "selected_entry": null
+    },
+    {
+      "id": 14,
+      "split": "holdout",
+      "text": "はなが咲いている。",
+      "expected": "花",
+      "token": {
+        "lemma": "はな",
+        "lexeme": "鼻鼻",
+        "pos": "名詞",
+        "pos2": "固有名詞",
+        "pronunciation": "ハナ",
+        "reading": "ハナ",
+        "surface": "はな",
+        "verb_class": "*"
+      },
+      "tag_only": "abstain",
+      "tag_and_lexeme": "abstain",
+      "selected_entry": null
+    },
+    {
+      "id": 15,
+      "split": "holdout",
+      "text": "そういうわけだ。",
+      "expected": "訳",
+      "token": {
+        "lemma": "わけ",
+        "lexeme": "訳",
+        "pos": "名詞",
+        "pos2": "普通名詞",
+        "pronunciation": "ワケ",
+        "reading": "ワケ",
+        "surface": "わけ",
+        "verb_class": "*"
+      },
+      "tag_only": "abstain",
+      "tag_and_lexeme": "abstain",
+      "selected_entry": null
+    },
+    {
+      "id": 16,
+      "split": "holdout",
+      "text": "あとで話そう。",
+      "expected": "後",
+      "token": {
+        "lemma": "あと",
+        "lexeme": "後",
+        "pos": "名詞",
+        "pos2": "普通名詞",
+        "pronunciation": "アト",
+        "reading": "アト",
+        "surface": "あと",
+        "verb_class": "*"
+      },
+      "tag_only": "abstain",
+      "tag_and_lexeme": "abstain",
+      "selected_entry": null
+    },
+    {
+      "id": 17,
+      "split": "holdout",
+      "text": "彼は歌がうまい。",
+      "expected": "上手い",
+      "token": {
+        "lemma": "うまい",
+        "lexeme": "旨い",
+        "pos": "形容詞",
+        "pos2": "一般",
+        "pronunciation": "ウマイ",
+        "reading": "ウマイ",
+        "surface": "うまい",
+        "verb_class": "形容詞"
+      },
+      "tag_only": "correct",
+      "tag_and_lexeme": "correct",
+      "selected_entry": 1310460
+    }
+  ],
+  "missing": [
+    18,
+    19
+  ]
+}
