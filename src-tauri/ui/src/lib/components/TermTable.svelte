@@ -805,7 +805,10 @@
 							onmouseleave={() => (hovered = null)}
 							><Furigana surface={term.lemma_form} reading={term.lemma_reading} /></span
 						>
-						{#if isMined(term)}
+						{#if term.possible_known_match}
+                            <span class="possible-match">Possible match: <span lang="ja">{term.possible_known_match}</span></span>
+                        {/if}
+                        {#if isMined(term)}
 							{@const noteId = $minedNoteIds[term.lemma_form]}
 							{#if noteId !== undefined && $mediaMissing.has(term.lemma_form)}
 								<button
@@ -937,6 +940,7 @@
 />
 
 <style>
+    .possible-match { max-width: 12rem; font-size: 0.75rem; line-height: 1.35; color: var(--text-muted); }
 	/* One shared track list (rows subgrid it) so the max-content term column is
 	   sized globally — per-row grids each size their own and misalign. The
 	   template itself is inline (built from the column config, issue #122). */

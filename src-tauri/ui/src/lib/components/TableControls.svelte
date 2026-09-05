@@ -1,4 +1,6 @@
 <script lang="ts">
+    import { showPossibleKnownMatches } from '$lib/stores/knowledgeView';
+    import { setShowPossibleKnownMatches } from '$lib/stores/settings';
 	// Sorting lives in the table's column headers; POS gets a single modal here
 	// (deliberate deviation from egui's per-header popovers).
 	import { get } from 'svelte/store';
@@ -152,6 +154,10 @@
 		<span class="no-freq">No frequency data</span>
 	{/if}
 
+    <label class="possible-matches">
+        <input type="checkbox" checked={$showPossibleKnownMatches} onchange={(e) => void setShowPossibleKnownMatches(e.currentTarget.checked)} />
+        Show possible known matches
+    </label>
 	<span class="spacer"></span>
 	<span class="count">{$visibleTerms.length} / {$fileResult?.terms.length ?? 0} shown</span>
 </div>

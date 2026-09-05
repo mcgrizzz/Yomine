@@ -1,3 +1,4 @@
+import { showPossibleKnownMatches } from './knowledgeView';
 import { derived, get, writable } from 'svelte/store';
 import type * as ipc from '$lib/ipc';
 import { applyControls, freqBounds, type SortDir, type SortField } from '$lib/table';
@@ -52,11 +53,12 @@ fileResult.subscribe((r) => {
 
 /** The filtered + sorted term list the table renders. */
 export const visibleTerms = derived(
-	[fileResult, tableSearch, tableSort, posEnabled, freqFilter, jlptEnabled],
-	([$file, $search, $sort, $pos, $freq, $jlpt]) =>
+	[fileResult, tableSearch, tableSort, posEnabled, freqFilter, jlptEnabled, showPossibleKnownMatches],
+	([$file, $search, $sort, $pos, $freq, $jlpt, $showPossible]) =>
 		$file
 			? applyControls($file.terms, $file.sentences, {
 					search: $search,
+				showPossibleKnownMatches: $showPossible,
 					sort: $sort,
 					pos: $pos,
 					freq: $freq,

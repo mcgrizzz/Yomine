@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import { build } from 'esbuild';
+const { outputFiles } = await build({ entryPoints: ['src/lib/table.ts'], bundle: true, write: false, format: 'esm', platform: 'node' });
+const { applyControls } = await import(`data:text/javascript;base64,${Buffer.from(outputFiles[0].text).toString('base64')}`);
+const controls = { search: '', sort: { field: 'frequency', dir: 'asc' }, pos: {}, freq: null, jlpt: {} };
+const terms = [{ lemma_form: 'はし', lemma_reading: 'はし', possible_known_match: '橋', comprehension: 0, frequencies: {}, sentence_references: [] }, { lemma_form: '猫', lemma_reading: 'ねこ', comprehension: 0, frequencies: {}, sentence_references: [] }];
+const before = structuredClone(terms);
+assert.equal(applyControls(terms, [], controls).length, 2);
+assert.equal(applyControls(terms, [], { ...controls, showPossibleKnownMatches: false }).length, 1);
+assert.equal(applyControls(terms, [], { ...controls, showPossibleKnownMatches: true }).length, 2);
+assert.deepEqual(terms, before, 'visibility must preserve labels and knowledge');
+console.log('Possible-match visibility is default-on, reversible, and preserves knowledge.');

@@ -16,6 +16,7 @@ export type Pos = string;
 export type JlptLevel = 'N5' | 'N4' | 'N3' | 'N2' | 'N1';
 
 export interface Term {
+	possible_known_match?: string | null;
 	id: number;
 	lemma_form: string;
 	lemma_reading: string;
@@ -218,6 +219,7 @@ export interface SettingsData {
 	websocket_settings: { port: number };
 	frequency_weights: Record<string, FrequencyDictionarySetting>;
 	pos_filters: Record<string, boolean>;
+	show_possible_known_matches: boolean;
 	/** JLPT chip key (N5..N1, 'none') → enabled; missing = enabled. */
 	jlpt_filters: Record<string, boolean>;
 	/** Absolute harmonic ranks; null = not narrowed (full range). */
