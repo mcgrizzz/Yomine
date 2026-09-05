@@ -83,3 +83,23 @@ higher. Unresolved dictionary interpretations retain the existing uncertainty be
 
 This adopts Yomitan's expression-before-duplicate-check ordering. It uses Yomine's
 installed lexical evidence and does not claim full Yomitan dictionary lookup parity.
+
+
+## Real dictionary いく regression (2026-09-05)
+
+`tests/fixtures/iku_frequency.json` contains the relevant records captured read-only
+from the six installed frequency dictionaries. The regression extracts 学校にいく。
+with installed UniDic and uses an isolated 行く/いく card fixture. It reproduced the
+incorrect uncertain label before the fix and now requires known-word filtering.
+
+Correction to the earlier rank policy: kana markers can repeat across homophones.
+JPDB's 65㋕ appears under both 行く and 逝く; it is not evidence that written 逝く has
+rank 65. Rival comparisons now use reading-specific written ranks. Coverage may
+come from different dictionaries, provided each comparison uses ranks from the same
+source. All rivals still require comparison evidence; any close written rival vetoes
+selection. No rank thresholds or spelling exceptions were added for this fix.
+
+Rebuild/restart the app from this worktree and reload the subtitle file. With 行く/いく
+in the isolated Anki snapshot, extracted いく should filter and contribute known
+comprehension. With only 逝く/いく, it must remain minable. Real dictionaries and card
+caches must remain untouched by verification.

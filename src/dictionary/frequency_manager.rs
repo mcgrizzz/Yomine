@@ -103,7 +103,8 @@ impl FrequencyManager {
     /// Rank evidence selects an occurrence among existing families; it never merges them.
     /// Compare only within one installed source, independently of display weights.
     /// A common written/kana pair must be explicitly linked by a kana marker. At
-    /// least one source must cover every rival, and no comparable source may disagree.
+    /// least one source must support that pair. Every rival needs a written-rank
+    /// comparison in some source, and no comparable source may disagree.
     pub(crate) fn frequency_favors_family(
         &self,
         evidence: &super::lexical_evidence::ReadingEvidence,
@@ -119,6 +120,7 @@ impl FrequencyManager {
             return false;
         }
         let mut supported = false;
+        let mut compared = vec![false; rivals.len()];
         for dictionary in self.dictionaries.values() {
             let rank = |family: &super::lexical_evidence::LexicalFamily, marker: bool| {
                 family
@@ -138,26 +140,23 @@ impl FrequencyManager {
             let Some(written) = rank(target, false) else { continue };
             let kana = rank(target, true);
             let pair_rank = written.max(kana.unwrap_or(written));
-            let rival_ranks: Vec<_> = rivals
-                .iter()
-                .map(|f| [rank(f, false), rank(f, true)].into_iter().flatten().min())
-                .collect();
-            // A close rival in any source vetoes automatic matching, even if that
-            // source lacks a kana marker. Missing ranks never count as rare.
-            if rival_ranks
-                .iter()
-                .flatten()
-                .any(|r| *r <= pair_rank.saturating_mul(RIVAL_SEPARATION))
-            {
-                return false;
+            // Kana ranks can be repeated under several homophones (JPDB puts
+            // 65㋕ under both 行く and 逝く). They describe the kana spelling,
+            // not the competing written expression's individual frequency.
+            for (i, rival) in rivals.iter().enumerate() {
+                if let Some(rival_rank) = rank(rival, false) {
+                    if rival_rank <= pair_rank.saturating_mul(RIVAL_SEPARATION) {
+                        return false;
+                    }
+                    compared[i] = true;
+                }
             }
             if let Some(kana) = kana {
                 supported |= pair_rank <= COMMON_RANK
-                    && pair_rank <= written.min(kana).saturating_mul(PAIR_SPREAD)
-                    && rival_ranks.iter().all(Option::is_some);
+                    && pair_rank <= written.min(kana).saturating_mul(PAIR_SPREAD);
             }
         }
-        supported
+        supported && compared.into_iter().all(|covered| covered)
     }
 
     fn new(states: Option<HashMap<String, DictionaryState>>) -> Self {

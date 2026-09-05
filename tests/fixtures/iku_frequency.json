@@ -1,0 +1,604 @@
+{
+  "Anilist Top 500": [
+    [
+      "行く",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": 55
+      }
+    ],
+    [
+      "いく",
+      "freq",
+      78
+    ],
+    [
+      "郁",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": 4654
+      }
+    ],
+    [
+      "逝く",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": 7189
+      }
+    ],
+    [
+      "行",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": 13417
+      }
+    ],
+    [
+      "育",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": 21694
+      }
+    ],
+    [
+      "幾",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": 22779
+      }
+    ],
+    [
+      "往く",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": 84198
+      }
+    ],
+    [
+      "行ク",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": 84198
+      }
+    ]
+  ],
+  "JPDBv2㋕": [
+    [
+      "行く",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": {
+          "value": 44,
+          "displayValue": "44"
+        }
+      }
+    ],
+    [
+      "行く",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": {
+          "value": 65,
+          "displayValue": "65㋕"
+        }
+      }
+    ],
+    [
+      "いく",
+      "freq",
+      {
+        "value": 65,
+        "displayValue": "65㋕"
+      }
+    ],
+    [
+      "幾",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": {
+          "value": 6358,
+          "displayValue": "6358"
+        }
+      }
+    ],
+    [
+      "幾",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": {
+          "value": 32801,
+          "displayValue": "32801㋕"
+        }
+      }
+    ],
+    [
+      "逝く",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": {
+          "value": 65,
+          "displayValue": "65㋕"
+        }
+      }
+    ],
+    [
+      "逝く",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": {
+          "value": 9328,
+          "displayValue": "9328"
+        }
+      }
+    ],
+    [
+      "往く",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": {
+          "value": 65,
+          "displayValue": "65㋕"
+        }
+      }
+    ],
+    [
+      "往く",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": {
+          "value": 18835,
+          "displayValue": "18835"
+        }
+      }
+    ],
+    [
+      "いく",
+      "freq",
+      {
+        "value": 32801,
+        "displayValue": "32801㋕"
+      }
+    ],
+    [
+      "依空",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": {
+          "value": 186477,
+          "displayValue": "186477"
+        }
+      }
+    ],
+    [
+      "畏懼",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": {
+          "value": 233385,
+          "displayValue": "233385"
+        }
+      }
+    ]
+  ],
+  "Jiten": [
+    [
+      "行く",
+      "freq",
+      {
+        "reading": "イク",
+        "frequency": {
+          "value": 48,
+          "displayValue": "48"
+        }
+      }
+    ],
+    [
+      "行く",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": {
+          "value": 48,
+          "displayValue": "48"
+        }
+      }
+    ],
+    [
+      "行く",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": {
+          "value": 141,
+          "displayValue": "141㋕"
+        }
+      }
+    ],
+    [
+      "往く",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": {
+          "value": 141,
+          "displayValue": "141㋕"
+        }
+      }
+    ],
+    [
+      "いく",
+      "freq",
+      {
+        "value": 141,
+        "displayValue": "141㋕"
+      }
+    ],
+    [
+      "逝く",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": {
+          "value": 6894,
+          "displayValue": "6894"
+        }
+      }
+    ],
+    [
+      "往く",
+      "freq",
+      {
+        "reading": "イク",
+        "frequency": {
+          "value": 9534,
+          "displayValue": "9534㋕"
+        }
+      }
+    ],
+    [
+      "行く",
+      "freq",
+      {
+        "reading": "イク",
+        "frequency": {
+          "value": 9534,
+          "displayValue": "9534㋕"
+        }
+      }
+    ],
+    [
+      "幾",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": {
+          "value": 12949,
+          "displayValue": "12949"
+        }
+      }
+    ],
+    [
+      "往く",
+      "freq",
+      {
+        "reading": "イク",
+        "frequency": {
+          "value": 30482,
+          "displayValue": "30482"
+        }
+      }
+    ],
+    [
+      "往く",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": {
+          "value": 30482,
+          "displayValue": "30482"
+        }
+      }
+    ],
+    [
+      "畏懼",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": {
+          "value": 43603,
+          "displayValue": "43603㋕"
+        }
+      }
+    ],
+    [
+      "生く",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": {
+          "value": 45927,
+          "displayValue": "45927"
+        }
+      }
+    ],
+    [
+      "五九",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": {
+          "value": 87883,
+          "displayValue": "87883"
+        }
+      }
+    ],
+    [
+      "幾",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": {
+          "value": 99871,
+          "displayValue": "99871㋕"
+        }
+      }
+    ],
+    [
+      "活く",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": {
+          "value": 116506,
+          "displayValue": "116506"
+        }
+      }
+    ],
+    [
+      "一宮",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": {
+          "value": 160854,
+          "displayValue": "160854"
+        }
+      }
+    ],
+    [
+      "孫",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": {
+          "value": 209052,
+          "displayValue": "209052"
+        }
+      }
+    ],
+    [
+      "畏懼",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": {
+          "value": 245673,
+          "displayValue": "245673"
+        }
+      }
+    ],
+    [
+      "邦",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": {
+          "value": 264135,
+          "displayValue": "264135"
+        }
+      }
+    ],
+    [
+      "伊玖",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": {
+          "value": 306019,
+          "displayValue": "306019"
+        }
+      }
+    ],
+    [
+      "唯空",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": {
+          "value": 321285,
+          "displayValue": "321285"
+        }
+      }
+    ],
+    [
+      "意空",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": {
+          "value": 332588,
+          "displayValue": "332588"
+        }
+      }
+    ],
+    [
+      "音空",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": {
+          "value": 343505,
+          "displayValue": "343505"
+        }
+      }
+    ]
+  ],
+  "[Freq] BCCWJ": [
+    [
+      "行く",
+      "freq",
+      58
+    ],
+    [
+      "逝く",
+      "freq",
+      10637
+    ],
+    [
+      "幾",
+      "freq",
+      72576
+    ]
+  ],
+  "[Freq] CC100": [
+    [
+      "行く",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": 38
+      }
+    ],
+    [
+      "逝く",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": 11419
+      }
+    ],
+    [
+      "幾",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": 14011
+      }
+    ],
+    [
+      "育",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": 23629
+      }
+    ],
+    [
+      "行く",
+      "freq",
+      50649
+    ],
+    [
+      "生く",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": 56419
+      }
+    ],
+    [
+      "往く",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": 67255
+      }
+    ],
+    [
+      "郁",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": 103896
+      }
+    ],
+    [
+      "活く",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": 132584
+      }
+    ],
+    [
+      "往く",
+      "freq",
+      133643
+    ],
+    [
+      "逝く",
+      "freq",
+      140120
+    ]
+  ],
+  "[Freq] VN Freq v2": [
+    [
+      "行く",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": 19
+      }
+    ],
+    [
+      "幾",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": 734
+      }
+    ],
+    [
+      "逝く",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": 5883
+      }
+    ],
+    [
+      "異口",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": 31496
+      }
+    ],
+    [
+      "生く",
+      "freq",
+      {
+        "reading": "いく",
+        "frequency": 33352
+      }
+    ]
+  ]
+}

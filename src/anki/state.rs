@@ -711,6 +711,59 @@ mod classification_tests {
         ));
     }
 
+    #[test]
+    fn installed_iku_entries_match_the_extracted_kana_to_iku_card() {
+        // Read-only snapshot of all six installed dictionaries' いく records.
+        // In particular, JPDB repeats 65㋕ under 行く AND 逝く.
+        let snapshot: HashMap<String, Vec<(String, String, JsonFrequencyData)>> =
+            serde_json::from_str(include_str!("../../tests/fixtures/iku_frequency.json")).unwrap();
+        let dictionaries = snapshot
+            .into_iter()
+            .map(|(name, rows)| {
+                FrequencyDictionary::new(
+                    name,
+                    "fixture".into(),
+                    rows.into_iter()
+                        .map(|(term, data_type, data)| TermMetaBankV3 {
+                            term,
+                            data_type,
+                            data: Some(data),
+                        })
+                        .collect(),
+                )
+            })
+            .collect();
+        let manager = Arc::new(FrequencyManager::from_dictionaries(dictionaries));
+        let Some(tokenizer) = crate::segmentation::lexeme_resolver::test_tokenizer() else {
+            return;
+        };
+        let mut sentences = vec![Sentence {
+            id: 0,
+            source_id: 0,
+            text: "学校にいく。".into(),
+            segments: vec![],
+            timestamp: None,
+            comprehension: 0.0,
+        }];
+        let terms = extract_words(tokenizer.new_worker(), &mut sentences, &manager);
+        let input = terms.into_iter().find(|t| t.surface_form == "いく").expect("extract いく");
+        let anki = state(manager.clone(), &[("行く", "いく")]);
+        let (unknown, known) = anki.filter_existing_terms(vec![input.clone()]);
+        assert!(unknown.is_empty(), "actual dictionary entries must match 行く: {unknown:?}");
+        assert_eq!(known.len(), 1);
+        assert!(known[0].comprehension > 0.0);
+        assert!(known[0].possible_known_match.is_none());
+        assert!(anki.word_stats("いく", "いく", &POS::Verb).0);
+        let rare = state(manager.clone(), &[("逝く", "いく")]);
+        let (unknown, known) = rare.filter_existing_terms(vec![input]);
+        assert!(known.is_empty());
+        assert!(unknown[0].possible_known_match.is_none());
+        assert_eq!(unknown[0].comprehension, 0.0);
+        let reverse = state(manager, &[("いく", "いく")]);
+        assert!(reverse.word_stats("行く", "いく", &POS::Verb).0);
+        assert!(!reverse.word_stats("逝く", "いく", &POS::Verb).0);
+    }
+
     fn promoted_nantonaku() -> Option<(Term, Arc<FrequencyManager>)> {
         let tokenizer = crate::segmentation::lexeme_resolver::test_tokenizer()?;
         let frequencies = FrequencyManager::from_dictionaries(vec![
