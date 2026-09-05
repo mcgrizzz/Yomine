@@ -95,6 +95,18 @@
 		POS ({posOn}/{posTotal})
 	</button>
 
+	<button
+		class="possible-toggle"
+		class:off={!$showPossibleKnownMatches}
+		aria-label="Show uncertain matches"
+		aria-pressed={$showPossibleKnownMatches}
+		title="Include words with an uncertain Anki match in the table"
+		onclick={() => void setShowPossibleKnownMatches(!$showPossibleKnownMatches)}
+	>
+		<span aria-hidden="true">{$showPossibleKnownMatches ? '✓' : '–'}</span> Show uncertain matches
+	</button>
+	<div class="filters">
+
 	{#if hasJlpt}
 		<div class="group">
 			<span class="lbl">JLPT</span>
@@ -154,18 +166,16 @@
 		<span class="no-freq">No frequency data</span>
 	{/if}
 
-    <label class="possible-matches">
-        <input type="checkbox" checked={$showPossibleKnownMatches} onchange={(e) => void setShowPossibleKnownMatches(e.currentTarget.checked)} />
-        Show possible known matches
-    </label>
-	<span class="spacer"></span>
+
+	</div>
+
 	<span class="count">{$visibleTerms.length} / {$fileResult?.terms.length ?? 0} shown</span>
 </div>
 
 <style>
 	.controls {
-		display: flex;
-		flex-wrap: wrap;
+		display: grid;
+		grid-template-columns: minmax(12rem, 1fr) auto auto auto;
 		align-items: center;
 		gap: 0.6rem 0.9rem;
 		margin-bottom: 0.75rem;
@@ -228,8 +238,41 @@
 	.no-freq {
 		color: var(--danger);
 	}
-	.spacer {
-		flex: 1;
+	.filters {
+		grid-column: 1 / -1;
+		grid-row: 2;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.6rem 1.25rem;
+	}
+	.possible-toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.3rem 0.6rem;
+		border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+		border-radius: var(--radius);
+		background: color-mix(in srgb, var(--accent) 8%, var(--bg-raised));
+		color: var(--text);
+		font-size: 0.8rem;
+		white-space: nowrap;
+		cursor: pointer;
+	}
+	.possible-toggle.off {
+		background: var(--bg-raised);
+		border-color: var(--border);
+		color: var(--text-muted);
+	}
+	.possible-toggle:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
+	}
+	@media (max-width: 720px) {
+		.controls { grid-template-columns: minmax(0, 1fr) auto; }
+		.search { grid-column: 1 / -1; }
+		.filters { grid-row: auto; }
+		.count { grid-column: 1 / -1; }
 	}
 	.count {
 		color: var(--text-muted);

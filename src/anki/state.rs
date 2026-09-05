@@ -225,6 +225,16 @@ impl AnkiState {
                 {
                     return MatchResult::Known { card, evidence: MatchEvidence::LexicalFamily };
                 }
+                for family in &written {
+                    if let Some(card) = cards.iter().copied().find(|card| belongs(family, card)) {
+                        if self.frequency_manager.frequency_favors_family(&evidence, family) {
+                            return MatchResult::Known {
+                                card,
+                                evidence: MatchEvidence::FrequencySupported,
+                            };
+                        }
+                    }
+                }
                 return MatchResult::Possible { card };
             }
             // A matching reading proposes a card, but no candidates establish identity.
@@ -236,6 +246,15 @@ impl AnkiState {
         {
             if let Some(card) = cards.iter().copied().find(|card| belongs(family, card)) {
                 return MatchResult::Known { card, evidence: MatchEvidence::LexicalFamily };
+            }
+            if self.frequency_manager.frequency_favors_family(&evidence, family) {
+                if let Some(card) = cards.iter().copied().find(|card| card.term.as_str().is_kana())
+                {
+                    return MatchResult::Known {
+                        card,
+                        evidence: MatchEvidence::FrequencySupported,
+                    };
+                }
             }
         }
         MatchResult::Unmatched
@@ -549,6 +568,82 @@ mod classification_tests {
             jlpt_level: None,
         }
     }
+    fn linked_dictionary(name: &str, rival: u32, kana: u32) -> FrequencyDictionary {
+        let mut dict = dictionary(name, &[("行く", "いく", 44), ("逝く", "いく", rival)]);
+        dict.terms.get_mut("行く").unwrap().push(crate::dictionary::CacheFrequencyData::Nested {
+            reading: "イク".into(),
+            frequency: crate::dictionary::CacheFrequency::Complex {
+                value: kana,
+                display_value: Some(format!("{kana}㋕")),
+            },
+        });
+        dict
+    }
+
+    #[test]
+    fn linked_common_pair_filters_in_both_directions_and_clears_stale_labels() {
+        let manager = Arc::new(FrequencyManager::from_dictionaries(vec![linked_dictionary(
+            "linked", 9328, 65,
+        )]));
+        manager.set_dictionary_state("linked", 0.0, false).unwrap();
+        let known = state(manager.clone(), &[("行く", "いく")]);
+        let mut input = term("いく", "いく");
+        input.possible_known_match = Some("old".into());
+        let (unknown, filtered) = known.filter_existing_terms(vec![input.clone()]);
+        assert!(unknown.is_empty());
+        assert_eq!(filtered.len(), 1);
+        assert!(filtered[0].possible_known_match.is_none());
+        assert!(filtered[0].comprehension > 0.0);
+        assert!(known.word_stats("いく", "いく", &POS::Verb).0);
+        assert!(matches!(
+            known.classify("いく", "いく", "いく", "いく", &POS::Verb, false),
+            MatchResult::Known { evidence: MatchEvidence::FrequencySupported, .. }
+        ));
+        let reverse = state(manager.clone(), &[("いく", "いく")]);
+        assert!(reverse.word_stats("行く", "いく", &POS::Verb).0);
+        assert!(!reverse.word_stats("逝く", "いく", &POS::Verb).0);
+        let removed = state(manager.clone(), &[]);
+        let (unknown, filtered) = removed.filter_existing_terms(vec![input]);
+        assert!(filtered.is_empty());
+        assert!(unknown[0].possible_known_match.is_none());
+        assert_eq!(unknown[0].comprehension, 0.0);
+        // Frequency chooses the common family, not whichever family has a card.
+        let rare = state(manager, &[("逝く", "いく")]);
+        assert!(!rare.word_stats("いく", "いく", &POS::Verb).0);
+    }
+
+    #[test]
+    fn linked_pair_requires_common_comparable_ranks_and_complete_uncontested_evidence() {
+        let cases = vec![
+            vec![linked_dictionary("close", 650, 65)],
+            vec![linked_dictionary("uneven", 9328, 200)],
+            vec![linked_dictionary("zero", 9328, 0)],
+            vec![
+                linked_dictionary("linked", 9328, 65),
+                dictionary("conflict", &[("行く", "いく", 44), ("逝く", "いく", 100)]),
+            ],
+            vec![
+                linked_dictionary("linked", 9328, 65),
+                dictionary("missing", &[("異口", "いく", 20000)]),
+            ],
+            vec![dictionary(
+                "unlinked",
+                &[("行く", "いく", 44), ("いく", "いく", 65), ("逝く", "いく", 9328)],
+            )],
+        ];
+        for dictionaries in cases {
+            let known = state(
+                Arc::new(FrequencyManager::from_dictionaries(dictionaries)),
+                &[("行く", "いく")],
+            );
+            let (unknown, filtered) = known.filter_existing_terms(vec![term("いく", "いく")]);
+            assert!(filtered.is_empty());
+            assert_eq!(unknown[0].possible_known_match.as_deref(), Some("行く"));
+            assert_eq!(unknown[0].comprehension, 0.0);
+            assert!(!known.word_stats("いく", "いく", &POS::Verb).0);
+        }
+    }
+
     fn promoted_nantonaku() -> Option<(Term, Arc<FrequencyManager>)> {
         let tokenizer = crate::segmentation::lexeme_resolver::test_tokenizer()?;
         let frequencies = FrequencyManager::from_dictionaries(vec![

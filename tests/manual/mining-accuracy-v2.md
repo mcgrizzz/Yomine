@@ -43,3 +43,25 @@ Use a disposable app profile/data copy for live card-change exercises; never rep
 6. Refresh an ignore list and verify possible matches are excluded from known highlighting and known counts.
 
 Keep UniDic/Vibrato at runtime. Ichiran may be used as a segmentation comparison only. Performance measurements are deferred until a controlled release benchmark uses the same subtitle file, dictionaries, and isolated Anki snapshots; this change makes no speed claim.
+
+
+## Frequency-supported matching adjustment
+
+This supersedes the earlier policy that frequency never affects matching. Lexical families
+still remain separate. A dictionary's reading-specific `㋕` entry explicitly links a kana
+form to its written family. For automatic matching, both ranks must be at most 1,000,
+within a factor of three, and every competing written family must rank more than ten
+times lower in the same source. At least one installed source must supply the complete
+comparison; any close competitor in another comparable source vetoes the match.
+These are conservative rank heuristics, not calibrated probabilities. Missing and zero
+ranks do not establish rarity. Weights and enabled flags do not alter this evidence.
+
+With an isolated card snapshot containing 行く/いく, test a dictionary fixture with
+行く rank 44, its ㋕ rank 65, and 逝く rank 9,328: kana いく should now filter and count
+as known. A kana いく card should likewise match written 行く, but not 逝く. Remove the
+card and confirm the term returns with zero known comprehension and no stale label.
+Close ranks, missing alternatives, or conflicting dictionaries should retain uncertainty.
+
+The visibility control now says “Show uncertain matches.” Rows display only “Uncertain”;
+the candidate is available in the label tooltip instead of cluttering the term column.
+Visibility still changes only which rows are shown, not comprehension or known counts.

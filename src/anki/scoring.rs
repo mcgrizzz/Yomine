@@ -5,6 +5,7 @@ pub enum MatchEvidence {
     ExactSurface,
     Citation,
     LexicalFamily,
+    FrequencySupported,
 }
 pub enum MatchResult<'a> {
     Known { card: &'a Vocab, evidence: MatchEvidence },

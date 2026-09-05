@@ -785,6 +785,7 @@
 			{#each renderCols as id (id)}
 				{#if id === 'term'}
 					<span class="term-cell">
+						<span class="term-copy">
 						<!-- svelte-ignore a11y_click_events_have_key_events -- Ctrl/Cmd+Click is a
 						     mouse-modifier ignore toggle (egui parity); no keyboard equivalent. -->
 						<span
@@ -806,9 +807,12 @@
 							><Furigana surface={term.lemma_form} reading={term.lemma_reading} /></span
 						>
 						{#if term.possible_known_match}
-                            <span class="possible-match">Possible match: <span lang="ja">{term.possible_known_match}</span></span>
+							<span class="possible-match" aria-label={`Uncertain match: ${term.possible_known_match}`} title={`Possible Anki match: ${term.possible_known_match}. This word is still available to mine.`}>
+								Uncertain
+							</span>
                         {/if}
-                        {#if isMined(term)}
+						</span>
+						{#if isMined(term)}
 							{@const noteId = $minedNoteIds[term.lemma_form]}
 							{#if noteId !== undefined && $mediaMissing.has(term.lemma_form)}
 								<button
@@ -940,7 +944,20 @@
 />
 
 <style>
-    .possible-match { max-width: 12rem; font-size: 0.75rem; line-height: 1.35; color: var(--text-muted); }
+	.term-copy {
+		display: inline-flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.35rem;
+	}
+	.possible-match {
+		display: inline-flex;
+		align-items: baseline;
+		gap: 0.3rem;
+		font-size: 0.75rem;
+		line-height: 1.2;
+		color: var(--text-muted);
+	}
 	/* One shared track list (rows subgrid it) so the max-content term column is
 	   sized globally — per-row grids each size their own and misalign. The
 	   template itself is inline (built from the column config, issue #122). */

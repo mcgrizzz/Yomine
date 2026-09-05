@@ -100,6 +100,66 @@ impl FrequencyManager {
         self.lexical.for_reading(self, reading)
     }
 
+    /// Rank evidence selects an occurrence among existing families; it never merges them.
+    /// Compare only within one installed source, independently of display weights.
+    /// A common written/kana pair must be explicitly linked by a kana marker. At
+    /// least one source must cover every rival, and no comparable source may disagree.
+    pub(crate) fn frequency_favors_family(
+        &self,
+        evidence: &super::lexical_evidence::ReadingEvidence,
+        target: &super::lexical_evidence::LexicalFamily,
+    ) -> bool {
+        use crate::core::utils::normalize_japanese_text;
+        // Deliberately conservative rank heuristics, not estimated probabilities.
+        const COMMON_RANK: u32 = 1_000;
+        const PAIR_SPREAD: u32 = 3;
+        const RIVAL_SEPARATION: u32 = 10;
+        let rivals: Vec<_> = evidence.written_families().filter(|f| *f != target).collect();
+        if rivals.is_empty() {
+            return false;
+        }
+        let mut supported = false;
+        for dictionary in self.dictionaries.values() {
+            let rank = |family: &super::lexical_evidence::LexicalFamily, marker: bool| {
+                family
+                    .spellings
+                    .iter()
+                    .flat_map(|s| dictionary.get_frequencies_by_key(s).into_iter().flatten())
+                    .filter(|entry| {
+                        entry.value() > 0
+                            && entry.has_special_marker() == marker
+                            && entry
+                                .reading()
+                                .is_some_and(|r| normalize_japanese_text(r) == evidence.reading)
+                    })
+                    .map(|entry| entry.value())
+                    .min()
+            };
+            let Some(written) = rank(target, false) else { continue };
+            let kana = rank(target, true);
+            let pair_rank = written.max(kana.unwrap_or(written));
+            let rival_ranks: Vec<_> = rivals
+                .iter()
+                .map(|f| [rank(f, false), rank(f, true)].into_iter().flatten().min())
+                .collect();
+            // A close rival in any source vetoes automatic matching, even if that
+            // source lacks a kana marker. Missing ranks never count as rare.
+            if rival_ranks
+                .iter()
+                .flatten()
+                .any(|r| *r <= pair_rank.saturating_mul(RIVAL_SEPARATION))
+            {
+                return false;
+            }
+            if let Some(kana) = kana {
+                supported |= pair_rank <= COMMON_RANK
+                    && pair_rank <= written.min(kana).saturating_mul(PAIR_SPREAD)
+                    && rival_ranks.iter().all(Option::is_some);
+            }
+        }
+        supported
+    }
+
     fn new(states: Option<HashMap<String, DictionaryState>>) -> Self {
         let dict_states: HashMap<String, DictionaryState> = states.unwrap_or_default();
         FrequencyManager {
