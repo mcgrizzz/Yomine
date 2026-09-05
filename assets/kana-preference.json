@@ -1,0 +1,19 @@
+{
+  "format": "KANAIDX1",
+  "records": 10560,
+  "bytes": 769332,
+  "sha256": "d7305861498d6339e4f76878843c2719f3c8ef0718906d303f3f2bea96bd647b",
+  "generator_sha256": "277380ce018de085f2c22fd3b6302c8787a672c1136e7cbf529dda24af179280",
+  "jmdict": {
+    "url": "https://www.edrdg.org/pub/Nihongo/JMdict_e.gz",
+    "sha256": "19990edcbac569575e9a555ce1d2e900c95c81bdb7096e3cc44c1b3970d7b6b5",
+    "created": "2026-09-05"
+  },
+  "jitendex": {
+    "url": "https://github.com/stephenmk/stephenmk.github.io/releases/latest/download/jitendex-yomitan.zip",
+    "sha256": "8364e69e7bd0881c42011e96af921a7399d7fe06e2bf4fff4da6d18affff74fc"
+  },
+  "jitendex_revision": "2026.08.11.0",
+  "license": "CC-BY-SA-4.0",
+  "attribution": "JMdict: EDRDG / James William Breen; Jitendex: Stephen Kraus and contributors"
+}

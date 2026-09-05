@@ -227,11 +227,19 @@ impl From<Word> for Term {
             word.lemma_form = citation.form.clone();
             word.lemma_hatsuon = citation.reading.clone();
         }
+        let head = word.main_word.as_ref().or_else(|| {
+            let (head, tail) = word.tokens.split_first()?;
+            (head.lemma_form == word.lemma_form
+                && tail.iter().all(|t| t.pos1 == UnidicTag::Jodoushi))
+            .then_some(head)
+        });
+        let contextual_lexeme = head.map(|head| (head.lexeme.clone(), head.lemma_hatsuon.clone()));
         if let Some(main_word) = word.main_word {
             let is_kana = main_word.surface.as_str().is_kana();
             Term {
                 possible_known_match: None,
                 lexical_family: None,
+                contextual_lexeme,
                 id: 0,
                 lemma_form: main_word.lemma_form,
                 lemma_reading: main_word.lemma_hatsuon,
@@ -251,6 +259,7 @@ impl From<Word> for Term {
             Term {
                 possible_known_match: None,
                 lexical_family: None,
+                contextual_lexeme,
                 id: 0,
                 lemma_form: word.lemma_form,
                 lemma_reading: word.lemma_hatsuon,

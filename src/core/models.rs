@@ -151,6 +151,9 @@ pub struct Term {
     pub possible_known_match: Option<String>,
     #[serde(skip)]
     pub lexical_family: Option<crate::dictionary::lexical_evidence::LexicalFamily>,
+    #[serde(skip)]
+    // Sentence-selected UniDic lexeme and citation reading; never inferred from cards.
+    pub contextual_lexeme: Option<(String, String)>,
     pub id: u32,
     pub lemma_form: String, // Base form of the term aka lemma form.. what is found in a dictionary
     pub lemma_reading: String, // Lemma form reading in hiragana (we will have convert from katakana)
@@ -181,6 +184,7 @@ impl Term {
         Term {
             possible_known_match: None,
             lexical_family: None,
+            contextual_lexeme: None,
             id: 1,
             surface_form,
             surface_reading,

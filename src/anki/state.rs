@@ -167,16 +167,36 @@ impl AnkiState {
         relevance_map
     }
 
-    fn classify<'a>(
-        &'a self,
+    fn classify(
+        &self,
         surface: &str,
         surface_reading: &str,
         citation: &str,
         reading: &str,
         pos: &crate::segmentation::word::POS,
         promoted: bool,
+    ) -> MatchResult<'_> {
+        self.classify_with_context(
+            surface,
+            surface_reading,
+            citation,
+            reading,
+            pos,
+            (promoted, None),
+        )
+    }
+
+    fn classify_with_context<'a>(
+        &'a self,
+        surface: &str,
+        surface_reading: &str,
+        citation: &str,
+        reading: &str,
+        pos: &crate::segmentation::word::POS,
+        interpretation: (bool, Option<&(String, String)>),
     ) -> MatchResult<'a> {
         use crate::segmentation::word::POS;
+        let (promoted, context) = interpretation;
         for (form, reading, evidence) in [
             (surface, surface_reading, MatchEvidence::ExactSurface),
             (citation, reading, MatchEvidence::Citation),
@@ -205,6 +225,23 @@ impl AnkiState {
         ) && !promoted
         {
             return MatchResult::Unmatched;
+        }
+        if citation.is_kana() {
+            if let Some((lexeme, context_reading)) = context {
+                if normalize_japanese_text(context_reading) == normalize_japanese_text(reading) {
+                    if let Some(preference) =
+                        crate::dictionary::kana_preference::preference(reading, lexeme, pos)
+                    {
+                        return self
+                            .cards_read_as(reading)
+                            .find(|card| preference.matches(&card.term))
+                            .map_or(MatchResult::Unmatched, |card| MatchResult::Known {
+                                card,
+                                evidence: MatchEvidence::KanaPreference,
+                            });
+                    }
+                }
+            }
         }
         use crate::dictionary::lexical_evidence::ExpressionSelection;
         let evidence = self.frequency_manager.lexical_families(reading);
@@ -289,20 +326,34 @@ impl AnkiState {
             .filter(move |card| normalize_japanese_text(&card.reading) == reading)
     }
 
+    fn classify_term(&self, term: &Term) -> MatchResult<'_> {
+        self.classify_with_context(
+            &term.surface_form,
+            &term.surface_reading,
+            &term.lemma_form,
+            &term.lemma_reading,
+            &term.part_of_speech,
+            (term.lexical_family.is_some(), term.contextual_lexeme.as_ref()),
+        )
+    }
+
+    /// Statistics for an extracted term retain the same contextual evidence as file filtering.
+    pub fn term_stats(&self, term: &Term) -> (bool, f32) {
+        match self.classify_term(term) {
+            MatchResult::Known { card, .. } => {
+                (true, comp_term(card.interval.or(Some(1.0)), self.known_interval))
+            }
+            _ => (false, 0.0),
+        }
+    }
+
     pub fn filter_existing_terms(&self, terms: Vec<Term>) -> (Vec<Term>, Vec<Term>) {
         let classified: Vec<_> = terms
             .into_par_iter()
             .map(|mut term| {
                 term.possible_known_match = None;
                 term.comprehension = 0.0;
-                let known = match self.classify(
-                    &term.surface_form,
-                    &term.surface_reading,
-                    &term.lemma_form,
-                    &term.lemma_reading,
-                    &term.part_of_speech,
-                    term.lexical_family.is_some(),
-                ) {
+                let known = match self.classify_term(&term) {
                     MatchResult::Known { card, evidence: _ } => {
                         term.comprehension =
                             comp_term(card.interval.or(Some(1.0)), self.known_interval);
@@ -572,6 +623,7 @@ mod classification_tests {
         Term {
             possible_known_match: None,
             lexical_family: None,
+            contextual_lexeme: None,
             id: 0,
             lemma_form: surface.into(),
             lemma_reading: reading.into(),
@@ -845,7 +897,7 @@ mod classification_tests {
         assert!(state.word_stats("はし", "ハシ", &POS::Noun).0);
     }
     #[test]
-    fn production_ambiguous_readings_offer_possible_cards_without_becoming_known() {
+    fn production_readings_use_dictionary_preferences_and_preserve_unresolved_matches() {
         let Some(tokenizer) = crate::segmentation::lexeme_resolver::test_tokenizer() else {
             return;
         };
@@ -997,10 +1049,21 @@ mod classification_tests {
 
             let known = state(frequencies.clone(), &[(card, surface)]);
             let (possible, established) = known.filter_existing_terms(vec![term.clone()]);
-            assert!(established.is_empty(), "{text}: ambiguous readings are not known");
-            assert_eq!(possible.len(), 1, "{text}: possible match must remain minable");
-            assert_eq!(possible[0].possible_known_match.as_deref(), Some(card), "{text}");
-            assert_eq!(possible[0].comprehension, 0.0, "{text}");
+            if matches!(surface, "うまい" | "こと" | "いく") {
+                assert!(
+                    possible.is_empty(),
+                    "{text}: dictionary-supported context should match: {term:?}"
+                );
+                assert_eq!(established.len(), 1);
+                assert!(established[0].comprehension > 0.0);
+                assert!(established[0].possible_known_match.is_none());
+                assert!(known.term_stats(&term).0);
+            } else {
+                assert!(established.is_empty(), "{text}: unresolved readings are not known");
+                assert_eq!(possible.len(), 1, "{text}: possible match must remain minable");
+                assert_eq!(possible[0].possible_known_match.as_deref(), Some(card), "{text}");
+                assert_eq!(possible[0].comprehension, 0.0, "{text}");
+            }
             let unknown = state(frequencies, &[]);
             let (unmatched, established) = unknown.filter_existing_terms(vec![term]);
             assert!(established.is_empty());
@@ -1008,5 +1071,71 @@ mod classification_tests {
             assert_eq!(unmatched[0].possible_known_match, None, "{text}");
             assert_eq!(unmatched[0].comprehension, 0.0, "{text}");
         }
+    }
+    #[test]
+    fn dictionary_preferences_match_extracted_koto_and_dekiru_and_refresh_cards() {
+        let Some(tokenizer) = crate::segmentation::lexeme_resolver::test_tokenizer() else {
+            return;
+        };
+        let manager = Arc::new(FrequencyManager::from_dictionaries(vec![]));
+        for (text, surface, reading, card, wrong_card) in [
+            ("大事なことだ。", "こと", "こと", "事", "琴"),
+            ("日本語ができる。", "できる", "できる", "出来る", "出切る"),
+            ("昨日はできなかった。", "できなかった", "できる", "出来る", "出切る"),
+        ] {
+            let mut sentences = vec![Sentence {
+                id: 0,
+                source_id: 0,
+                text: text.into(),
+                segments: vec![],
+                timestamp: None,
+                comprehension: 0.0,
+            }];
+            let terms = extract_words(tokenizer.new_worker(), &mut sentences, &manager);
+            let input = terms
+                .into_iter()
+                .find(|t| t.surface_form == surface)
+                .unwrap_or_else(|| panic!("missing {surface}"));
+            let matching = state(manager.clone(), &[(card, reading)]);
+            assert!(
+                matches!(
+                    matching.classify_term(&input),
+                    MatchResult::Known { evidence: MatchEvidence::KanaPreference, .. }
+                ),
+                "{input:?}"
+            );
+            let (unknown, known) = matching.filter_existing_terms(vec![input.clone()]);
+            assert!(unknown.is_empty());
+            assert!(matching.term_stats(&input).0);
+            assert!(known[0].comprehension > 0.0);
+            for cards in [vec![], vec![(wrong_card, reading)], vec![(card, "invalid")]] {
+                let changed = state(manager.clone(), &cards);
+                let (unknown, known) = changed.filter_existing_terms(known.clone());
+                assert!(known.is_empty());
+                assert_eq!(unknown[0].comprehension, 0.0);
+                assert!(unknown[0].possible_known_match.is_none());
+                assert!(!changed.term_stats(&input).0);
+                let (unknown, known) = matching.filter_existing_terms(unknown);
+                assert!(unknown.is_empty());
+                assert!(known[0].possible_known_match.is_none());
+            }
+        }
+    }
+
+    #[test]
+    fn dictionary_preference_does_not_guess_missing_or_disagreeing_context() {
+        let manager = Arc::new(FrequencyManager::from_dictionaries(vec![]));
+        let anki = state(manager, &[("事", "こと"), ("嘴", "はし")]);
+        for context in [None, Some(("琴".into(), "こと".into())), Some(("事".into(), "じ".into()))]
+        {
+            let mut input = term("こと", "こと");
+            input.contextual_lexeme = context;
+            assert!(!anki.term_stats(&input).0);
+        }
+        let mut input = term("はし", "はし");
+        input.contextual_lexeme = Some(("橋".into(), "はし".into()));
+        assert!(!anki.term_stats(&input).0);
+        input.contextual_lexeme = Some(("箸".into(), "はし".into()));
+        assert!(!anki.term_stats(&input).0);
     }
 }

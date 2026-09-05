@@ -361,9 +361,12 @@ pub fn extract_words(
         });
 
         for term in terms.iter_mut() {
-            if let Some(sentence_term) =
-                sentence_terms.iter().find(|st| st.lemma_form == term.lemma_form)
-            {
+            for sentence_term in sentence_terms.iter().filter(|st| {
+                st.lemma_form == term.lemma_form && st.lemma_reading == term.lemma_reading
+            }) {
+                if term.contextual_lexeme != sentence_term.contextual_lexeme {
+                    term.contextual_lexeme = None;
+                }
                 for sentence_ref in &sentence_term.sentence_references {
                     if !term.sentence_references.contains(sentence_ref) {
                         term.sentence_references.push(*sentence_ref);
@@ -382,7 +385,30 @@ pub fn extract_words(
         terms.append(&mut sentence_terms);
     }
 
+    clear_conflicting_contexts(&mut terms);
     terms
+}
+
+fn clear_conflicting_contexts(terms: &mut [Term]) {
+    // A merged kana row must not inherit just one occurrence's interpretation.
+    let mut contexts = std::collections::HashMap::new();
+    for term in terms.iter() {
+        contexts
+            .entry((&term.lemma_form, &term.lemma_reading))
+            .and_modify(|context| {
+                if *context != term.contextual_lexeme {
+                    *context = None;
+                }
+            })
+            .or_insert_with(|| term.contextual_lexeme.clone());
+    }
+    let agreed: Vec<_> = terms
+        .iter()
+        .map(|term| contexts[&(&term.lemma_form, &term.lemma_reading)].clone())
+        .collect();
+    for (term, context) in terms.iter_mut().zip(agreed) {
+        term.contextual_lexeme = context;
+    }
 }
 
 pub fn extract_words_for_frequency(
@@ -697,4 +723,27 @@ pub fn init_vibrato(
     let dict = load_dictionary(dict_type, progress_callback)?;
     let tokenizer = vibrato::Tokenizer::new(dict);
     Ok(tokenizer)
+}
+
+#[cfg(test)]
+mod contextual_evidence_tests {
+    use super::*;
+    fn term(lexeme: Option<&str>) -> Term {
+        let mut term = Term::from_slice(&[]);
+        term.lemma_form = "はし".into();
+        term.lemma_reading = "はし".into();
+        term.contextual_lexeme = lexeme.map(|s| (s.into(), "はし".into()));
+        term
+    }
+    #[test]
+    fn merged_rows_require_all_occurrences_to_agree() {
+        for second in [Some("箸"), None] {
+            let mut terms = vec![term(Some("橋")), term(second)];
+            clear_conflicting_contexts(&mut terms);
+            assert!(terms.iter().all(|t| t.contextual_lexeme.is_none()));
+        }
+        let mut terms = vec![term(Some("橋")), term(Some("橋"))];
+        clear_conflicting_contexts(&mut terms);
+        assert!(terms.iter().all(|t| t.contextual_lexeme.is_some()));
+    }
 }
