@@ -65,3 +65,21 @@ Close ranks, missing alternatives, or conflicting dictionaries should retain unc
 The visibility control now says “Show uncertain matches.” Rows display only “Uncertain”;
 the candidate is available in the label tooltip instead of cluttering the term column.
 Visibility still changes only which rows are shown, not comprehension or known counts.
+
+
+## Select the expression before checking Anki
+
+Dictionary interpretation now runs independently of card contents. A validated written
+citation takes priority; otherwise a unique lexical family or the existing linked-kana
+frequency heuristic may select an expression. Anki then checks that selected family.
+A card for a rejected homophone no longer produces an uncertain-match label. A kana
+card must independently select the same family to match a written expression.
+
+Verify 行く/いく with no cards, only 逝く, only 行く, and both cards in either order.
+The selected family must remain 行く in every case. Only the matching card should
+establish knowledge. With only 逝く, いく stays minable without a misleading label.
+A validated citation 逝く must remain 逝く even when the source is kana and 行く ranks
+higher. Unresolved dictionary interpretations retain the existing uncertainty behavior.
+
+This adopts Yomitan's expression-before-duplicate-check ordering. It uses Yomine's
+installed lexical evidence and does not claim full Yomitan dictionary lookup parity.

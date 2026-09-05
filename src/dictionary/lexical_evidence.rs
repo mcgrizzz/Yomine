@@ -38,7 +38,54 @@ pub struct ReadingEvidence {
     pub reading: String,
     pub families: Vec<LexicalFamily>,
 }
+/// Dictionary interpretation is selected before consulting the user's cards.
+#[derive(Debug)]
+pub(crate) enum ExpressionSelection<'a> {
+    Selected { family: &'a LexicalFamily, frequency_supported: bool },
+    Ambiguous(Vec<&'a LexicalFamily>),
+    Unresolved,
+}
+
 impl ReadingEvidence {
+    pub(crate) fn select_expression(
+        &self,
+        manager: &FrequencyManager,
+        surface: &str,
+        citation: &str,
+    ) -> ExpressionSelection<'_> {
+        // A validated written citation identifies the expression even when the
+        // source text is kana or inflected. Never choose a homophone over it.
+        for form in [citation, surface] {
+            if !form.is_empty() && !form.is_kana() {
+                return self.family_for(form).map_or(ExpressionSelection::Unresolved, |family| {
+                    ExpressionSelection::Selected { family, frequency_supported: false }
+                });
+            }
+        }
+        if surface.is_empty() || citation.is_empty() {
+            return ExpressionSelection::Unresolved;
+        }
+        let families: Vec<_> = self.written_families().collect();
+        if families.len() == 1 {
+            return ExpressionSelection::Selected {
+                family: families[0],
+                frequency_supported: false,
+            };
+        }
+        let mut favored =
+            families.iter().copied().filter(|f| manager.frequency_favors_family(self, f));
+        if let Some(family) = favored.next() {
+            if favored.next().is_none() {
+                return ExpressionSelection::Selected { family, frequency_supported: true };
+            }
+        }
+        if families.is_empty() {
+            ExpressionSelection::Unresolved
+        } else {
+            ExpressionSelection::Ambiguous(families)
+        }
+    }
+
     pub fn family_for(&self, spelling: &str) -> Option<&LexicalFamily> {
         let spelling = normalize_japanese_text(spelling);
         self.families

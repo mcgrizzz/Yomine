@@ -206,7 +206,9 @@ impl AnkiState {
         {
             return MatchResult::Unmatched;
         }
+        use crate::dictionary::lexical_evidence::ExpressionSelection;
         let evidence = self.frequency_manager.lexical_families(reading);
+        let selection = evidence.select_expression(&self.frequency_manager, surface, citation);
         let cards: Vec<_> = self.cards_read_as(reading).collect();
         let belongs = |family: &crate::dictionary::lexical_evidence::LexicalFamily,
                        card: &Vocab| {
@@ -215,45 +217,62 @@ impl AnkiState {
                 .iter()
                 .any(|s| normalize_japanese_text(s) == normalize_japanese_text(&card.term))
         };
-        let written: Vec<_> = evidence.written_families().collect();
-        if surface.is_kana() {
-            let supported =
-                cards.iter().copied().find(|card| written.iter().any(|f| belongs(f, card)));
-            if let Some(card) = supported {
-                if !written.is_empty()
-                    && written.iter().all(|f| cards.iter().any(|card| belongs(f, card)))
-                {
-                    return MatchResult::Known { card, evidence: MatchEvidence::LexicalFamily };
+        match selection {
+            ExpressionSelection::Selected { family, frequency_supported } => {
+                if let Some(card) = cards.iter().copied().find(|card| belongs(family, card)) {
+                    return MatchResult::Known {
+                        card,
+                        evidence: if frequency_supported {
+                            MatchEvidence::FrequencySupported
+                        } else {
+                            MatchEvidence::LexicalFamily
+                        },
+                    };
                 }
-                for family in &written {
-                    if let Some(card) = cards.iter().copied().find(|card| belongs(family, card)) {
-                        if self.frequency_manager.frequency_favors_family(&evidence, family) {
+                // A kana card must independently resolve to this same expression.
+                // Sharing its reading alone does not establish a duplicate.
+                for card in &cards {
+                    if !card.term.as_str().is_kana() {
+                        continue;
+                    }
+                    if let ExpressionSelection::Selected {
+                        family: card_family,
+                        frequency_supported,
+                    } =
+                        evidence.select_expression(&self.frequency_manager, &card.term, &card.term)
+                    {
+                        if card_family == family {
                             return MatchResult::Known {
                                 card,
-                                evidence: MatchEvidence::FrequencySupported,
+                                evidence: if frequency_supported {
+                                    MatchEvidence::FrequencySupported
+                                } else {
+                                    MatchEvidence::LexicalFamily
+                                },
                             };
                         }
                     }
                 }
-                return MatchResult::Possible { card };
+                // A card for a rejected interpretation is not a possible duplicate.
             }
-            // A matching reading proposes a card, but no candidates establish identity.
-            return cards
-                .first()
-                .map_or(MatchResult::Unmatched, |card| MatchResult::Possible { card });
-        }
-        if let Some(family) = evidence.family_for(citation).or_else(|| evidence.family_for(surface))
-        {
-            if let Some(card) = cards.iter().copied().find(|card| belongs(family, card)) {
-                return MatchResult::Known { card, evidence: MatchEvidence::LexicalFamily };
-            }
-            if self.frequency_manager.frequency_favors_family(&evidence, family) {
-                if let Some(card) = cards.iter().copied().find(|card| card.term.as_str().is_kana())
+            ExpressionSelection::Ambiguous(families) => {
+                if let Some(card) =
+                    cards.iter().copied().find(|card| families.iter().any(|f| belongs(f, card)))
                 {
-                    return MatchResult::Known {
-                        card,
-                        evidence: MatchEvidence::FrequencySupported,
-                    };
+                    if families.iter().all(|f| cards.iter().any(|card| belongs(f, card))) {
+                        return MatchResult::Known { card, evidence: MatchEvidence::LexicalFamily };
+                    }
+                    return MatchResult::Possible { card };
+                }
+                return cards
+                    .first()
+                    .map_or(MatchResult::Unmatched, |card| MatchResult::Possible { card });
+            }
+            ExpressionSelection::Unresolved => {
+                if surface.is_kana() {
+                    return cards
+                        .first()
+                        .map_or(MatchResult::Unmatched, |card| MatchResult::Possible { card });
                 }
             }
         }
@@ -642,6 +661,54 @@ mod classification_tests {
             assert_eq!(unknown[0].comprehension, 0.0);
             assert!(!known.word_stats("いく", "いく", &POS::Verb).0);
         }
+    }
+
+    #[test]
+    fn dictionary_selection_is_independent_of_cards_and_rejects_other_expressions() {
+        use crate::dictionary::lexical_evidence::ExpressionSelection;
+        let manager = Arc::new(FrequencyManager::from_dictionaries(vec![linked_dictionary(
+            "linked", 9328, 65,
+        )]));
+        let evidence = manager.lexical_families("いく");
+        let ExpressionSelection::Selected { family, .. } =
+            evidence.select_expression(&manager, "いく", "いく")
+        else {
+            panic!("linked kana should select an expression without any Anki cards");
+        };
+        assert!(family.spellings.iter().any(|s| s == "行く"));
+        for cards in [vec![], vec![("逝く", "いく")]] {
+            let anki = state(manager.clone(), &cards);
+            let mut input = term("いく", "いく");
+            input.possible_known_match = Some("逝く".into());
+            let (unknown, known) = anki.filter_existing_terms(vec![input]);
+            assert!(known.is_empty());
+            assert!(unknown[0].possible_known_match.is_none());
+            assert_eq!(unknown[0].comprehension, 0.0);
+        }
+        for cards in
+            [vec![("逝く", "いく"), ("行く", "いく")], vec![("行く", "いく"), ("逝く", "いく")]]
+        {
+            let anki = state(manager.clone(), &cards);
+            let MatchResult::Known { card, .. } =
+                anki.classify("いく", "いく", "いく", "いく", &POS::Verb, false)
+            else {
+                panic!("selected expression should match");
+            };
+            assert_eq!(card.term, "行く");
+        }
+    }
+
+    #[test]
+    fn written_citation_takes_priority_over_frequency_for_kana_source() {
+        let manager = Arc::new(FrequencyManager::from_dictionaries(vec![linked_dictionary(
+            "linked", 9328, 65,
+        )]));
+        let anki = state(manager, &[("行く", "いく")]);
+        // The validated citation says 逝く; the common homophone must not replace it.
+        assert!(matches!(
+            anki.classify("いった", "いった", "逝く", "いく", &POS::Verb, false),
+            MatchResult::Unmatched
+        ));
     }
 
     fn promoted_nantonaku() -> Option<(Term, Arc<FrequencyManager>)> {
