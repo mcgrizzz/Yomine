@@ -106,6 +106,98 @@ pub(super) fn resolve_citation(word: &mut Word, manager: &FrequencyManager) {
     }
 }
 
+fn analyze_sentence(worker: &mut Worker, text: &str, manager: &FrequencyManager) -> Vec<Word> {
+    worker.reset_sentence(text);
+    worker.tokenize();
+    let tokens = worker
+        .token_iter()
+        .map(|token| UnidicToken::from_parts(token.surface(), token.feature(), token.range_byte()))
+        .collect();
+    let words = parse_into_words(tokens).unwrap_or_default();
+    let words = rescue_words(worker, text, words, manager);
+    split_unvalidated_compounds(words, manager)
+}
+
+#[derive(Clone, Copy)]
+enum PhraseMode {
+    Production,
+    Corpus,
+}
+
+impl PhraseMode {
+    fn readings(self, terms: &[Term]) -> Vec<String> {
+        match self {
+            Self::Production => phrase_reading_candidates(terms),
+            // Corpus analysis keeps surface-first candidates and deinflects later.
+            Self::Corpus => vec![terms.iter().map(|t| t.full_segment_reading.as_str()).collect()],
+        }
+    }
+}
+
+fn phrase_frequency(manager: &FrequencyManager, form: &str, reading: &str) -> Option<u32> {
+    manager.get_harmonic_frequency_for_pair(
+        &form.normalize_long_vowel(),
+        &reading.normalize_long_vowel(),
+    )
+}
+
+/// Construct candidates independently of the caller's acceptance and suppression policy.
+fn phrase_candidate(
+    subrange: &[Term],
+    manager: &FrequencyManager,
+    mode: PhraseMode,
+) -> (Term, Option<u32>) {
+    let mut phrase = Term::from_slice(subrange);
+    let readings = mode.readings(subrange);
+    if matches!(mode, PhraseMode::Production) {
+        for reading in &readings {
+            let evidence = manager.lexical_families(reading);
+            if let Some(family) = evidence.phrase_family(&phrase.surface_form) {
+                phrase.lexical_family = Some(family);
+                break;
+            }
+        }
+    }
+    let mut frequency = None;
+    for reading in readings {
+        if let Some(rank) = phrase_frequency(manager, &phrase.surface_form, &reading) {
+            phrase.surface_reading = reading.clone();
+            phrase.lemma_reading = reading.clone();
+            phrase.full_segment_reading = reading;
+            frequency = Some(rank);
+            break;
+        }
+    }
+    if frequency.is_none() {
+        if let Some(family) = &phrase.lexical_family {
+            for spelling in &family.spellings {
+                if let Some(rank) =
+                    manager.get_harmonic_frequency_for_pair(spelling, &phrase.lemma_reading)
+                {
+                    phrase.lemma_form = spelling.clone();
+                    frequency = Some(rank);
+                    break;
+                }
+            }
+        }
+    }
+    // The full surface remains the highlight; only the citation takes the lemma.
+    if frequency.is_none() {
+        if let Some(citation) = citation_form_subrange(subrange) {
+            let form: String = citation.iter().map(|t| t.full_segment.as_str()).collect();
+            for reading in mode.readings(&citation) {
+                if let Some(rank) = phrase_frequency(manager, &form, &reading) {
+                    phrase.lemma_form = form.clone();
+                    phrase.lemma_reading = reading;
+                    frequency = Some(rank);
+                    break;
+                }
+            }
+        }
+    }
+    (phrase, frequency)
+}
+
 pub fn extract_words(
     mut worker: Worker,
     sentences: &mut [Sentence],
@@ -114,22 +206,7 @@ pub fn extract_words(
     let mut terms = Vec::<Term>::new();
 
     for (ord, sentence) in sentences.iter_mut().enumerate() {
-        worker.reset_sentence(&sentence.text);
-        worker.tokenize();
-
-        let tokens: Vec<UnidicToken> = worker
-            .token_iter()
-            .map(|token| {
-                UnidicToken::from_parts(token.surface(), token.feature(), token.range_byte())
-            })
-            .collect();
-
-        let words: Vec<Word> = match parse_into_words(tokens) {
-            Ok(parsed_words) => parsed_words,
-            Err(_) => Vec::new(),
-        };
-        let words = rescue_words(&mut worker, &sentence.text, words, frequency_manager);
-        let words = split_unvalidated_compounds(words, frequency_manager);
+        let words = analyze_sentence(&mut worker, &sentence.text, frequency_manager);
 
         let mut term_spans: Vec<(usize, usize)> = Vec::with_capacity(words.len());
         let mut sentence_terms: Vec<Term> = Vec::with_capacity(words.len());
@@ -177,71 +254,8 @@ pub fn extract_words(
                 {
                     continue;
                 }
-                let mut phrase: Term = Term::from_slice(subrange);
-
-                // Try the plain component-concat reading first, then rendaku
-                // variants (a non-initial component's first kana voiced:
-                // 土曜+日 → どようひ, どようび). Dictionaries store the true
-                // compound reading, and the pair lookup deliberately rejects a
-                // form whose entries all carry a *different* reading — so
-                // without the variants, no rendaku compound could ever be
-                // promoted. A variant hit also corrects the phrase's own
-                // reading for display/furigana.
-                let mut freq = None;
-                for reading in phrase_reading_candidates(subrange) {
-                    if let Some(family) = frequency_manager
-                        .lexical_families(&reading)
-                        .phrase_family(&phrase.surface_form)
-                    {
-                        phrase.lexical_family = Some(family);
-                        break;
-                    }
-                }
-                for candidate in phrase_reading_candidates(subrange) {
-                    if let Some(f) = frequency_manager.get_harmonic_frequency_for_pair(
-                        &phrase.surface_form.normalize_long_vowel(),
-                        &candidate.normalize_long_vowel(),
-                    ) {
-                        phrase.surface_reading = candidate.clone();
-                        phrase.lemma_reading = candidate.clone();
-                        phrase.full_segment_reading = candidate;
-                        freq = Some(f);
-                        break;
-                    }
-                }
-
-                if freq.is_none() {
-                    if let Some(family) = &phrase.lexical_family {
-                        for spelling in &family.spellings {
-                            if let Some(f) = frequency_manager
-                                .get_harmonic_frequency_for_pair(spelling, &phrase.lemma_reading)
-                            {
-                                phrase.lemma_form = spelling.clone();
-                                freq = Some(f);
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                // dto.rs highlights Expressions by full_segment, so only the lemma takes the citation form.
-                if freq.is_none() {
-                    if let Some(citation) = citation_form_subrange(subrange) {
-                        let surface: String =
-                            citation.iter().map(|t| t.full_segment.as_str()).collect();
-                        for candidate in phrase_reading_candidates(&citation) {
-                            if let Some(f) = frequency_manager.get_harmonic_frequency_for_pair(
-                                &surface.normalize_long_vowel(),
-                                &candidate.normalize_long_vowel(),
-                            ) {
-                                phrase.lemma_form = surface.clone();
-                                phrase.lemma_reading = candidate;
-                                freq = Some(f);
-                                break;
-                            }
-                        }
-                    }
-                }
+                let (mut phrase, freq) =
+                    phrase_candidate(subrange, frequency_manager, PhraseMode::Production);
 
                 if let Some(frequency) = freq {
                     let word_frequencies: Vec<(String, f32)> = subrange
@@ -333,9 +347,6 @@ pub fn extract_words(
                         }
 
                         // Largest phrase at this start position is accepted; move to next start.
-                        // (Was previously `break 'outer`, which stopped after the first phrase
-                        // in the sentence — preventing detection of e.g. 土曜日 when an earlier
-                        // 実は had already been accepted.)
                         break;
                     }
                 }
@@ -396,26 +407,7 @@ pub fn extract_words_for_frequency(
         .map_init(
             || tokenizer.new_worker(),
             |worker, sentence| {
-                worker.reset_sentence(&sentence.text);
-                worker.tokenize();
-
-                let tokens: Vec<UnidicToken> = worker
-                    .token_iter()
-                    .map(|token| {
-                        UnidicToken::from_parts(
-                            token.surface(),
-                            token.feature(),
-                            token.range_byte(),
-                        )
-                    })
-                    .collect();
-
-                let words: Vec<Word> = match parse_into_words(tokens) {
-                    Ok(parsed_words) => parsed_words,
-                    Err(_) => Vec::new(),
-                };
-                let words = rescue_words(worker, &sentence.text, words, frequency_manager);
-                let words = split_unvalidated_compounds(words, frequency_manager);
+                let words = analyze_sentence(worker, &sentence.text, frequency_manager);
 
                 let mut sentence_terms: Vec<Term> = words
                     .into_iter()
@@ -446,31 +438,8 @@ pub fn extract_words_for_frequency(
                         {
                             continue;
                         }
-                        let mut phrase: Term = Term::from_slice(subrange);
-
-                        let mut freq = frequency_manager.get_harmonic_frequency_for_pair(
-                            &phrase.surface_form.normalize_long_vowel(),
-                            &phrase.surface_reading.normalize_long_vowel(),
-                        );
-
-                        if freq.is_none() {
-                            if let Some(citation) = citation_form_subrange(subrange) {
-                                let surface: String =
-                                    citation.iter().map(|t| t.full_segment.as_str()).collect();
-                                let reading: String = citation
-                                    .iter()
-                                    .map(|t| t.full_segment_reading.as_str())
-                                    .collect();
-                                if let Some(f) = frequency_manager.get_harmonic_frequency_for_pair(
-                                    &surface.normalize_long_vowel(),
-                                    &reading.normalize_long_vowel(),
-                                ) {
-                                    phrase.lemma_form = surface;
-                                    phrase.lemma_reading = reading;
-                                    freq = Some(f);
-                                }
-                            }
-                        }
+                        let (mut phrase, freq) =
+                            phrase_candidate(subrange, frequency_manager, PhraseMode::Corpus);
 
                         if let Some(_frequency) = freq {
                             let char_count = phrase.lemma_form.chars().count();
@@ -495,7 +464,7 @@ pub fn extract_words_for_frequency(
                                 if all_nouns { POS::NounExpression } else { POS::Expression };
 
                             sentence_terms.push(phrase);
-                            // Move to next start position (was `break 'outer`).
+                            // Move to the next start position.
                             break;
                         }
                     }

@@ -1,0 +1,45 @@
+# Mining accuracy v2 verification
+
+Work in `/mnt/h/documents/dev/rust/japanese-mining/yomine-mining-accuracy-v2`, branch `feat/mining-accuracy-v2`, based on refreshed main `b363d64`. The original `yomine` worktree and `feat/mining-accuracy` branch remain the regression reference. Do not push or rewrite that branch.
+
+## Matching behavior
+
+- **Known**: an exact normalized surface/card pair, a validated citation, or supported lexical-family evidence establishes the card match. These terms filter normally and contribute their card-based comprehension.
+- **Possible**: a plausible card exists but competing or missing lexical evidence prevents establishing identity. The term stays unknown and minable, shows “Possible match: …”, and contributes zero known-word comprehension.
+- **Unmatched**: no supported card proposal exists. The term stays unknown without a possible-match label.
+
+“Show possible known matches” defaults to enabled for older settings and persists an explicit opt-out. Toggle it off and back on: only row visibility changes. Known counts, comprehension, labels, and source data must stay unchanged. Removing a card clears its previous possible-match label; adding an exact card or establishing all competing families clears the label and updates comprehension.
+
+Dictionary reading evidence includes disabled dictionaries and marker entries. Reading-less frequency records (including BCCWJ) add no reading candidates. Frequency ranks never establish lexical identity. 行く and 逝く retain separate identities. Documented spelling aliases are constrained to their stated reading.
+
+## Automated checks
+
+Use the same ignored `Cargo.lock` copied from the reference worktree for both this branch and the detached `yomine-mining-accuracy-main-check` worktree. Do not regenerate either dependency lock during the comparison.
+
+```sh
+cd /mnt/h/documents/dev/rust/japanese-mining/yomine-mining-accuracy-v2
+YOMINE_DATA_DIR=/mnt/c/Users/Andrew/AppData/Local/yomine YOMINE_REQUIRE_UNIDIC=1 cargo test --workspace --lib --test segmentation --test phrase_processing --locked -- --include-ignored
+cargo +nightly fmt --all -- --check
+YOMINE_DATA_DIR=/mnt/c/Users/Andrew/AppData/Local/yomine YOMINE_REQUIRE_UNIDIC=1 cargo clippy --workspace --all-targets --locked
+cd src-tauri/ui
+COREPACK_ENABLE_AUTO_PIN=0 pnpm check
+node tests/possible-matches.mjs
+COREPACK_ENABLE_AUTO_PIN=0 pnpm build
+```
+
+The card tests construct isolated in-memory snapshots. They do not fetch live Anki or modify the real cache or dictionaries. UniDic is required for segmentation, production matching, phrase snapshots, and the explicitly included Tauri refresh case. Ensure the installed dictionary is present before running commands against the real data directory.
+
+`tests/fixtures/phrase_processing.json` records production and corpus outputs from the fourth commit, before their shared helpers were extracted. The test compares full term data, highlights, expression families, corpus surface forms, and later batch deinflection. Do not regenerate it to accept a refactor regression.
+
+## Manual checks with isolated card snapshots
+
+Use a disposable app profile/data copy for live card-change exercises; never replace the real cache. Every command that reads installed real data must explicitly set `YOMINE_DATA_DIR=/mnt/c/Users/Andrew/AppData/Local/yomine`. Keep the card snapshot isolated and never invoke live Anki refresh against the real cache for these checks.
+
+1. Load 形態化させて. Expect segments 形態 / 化させて, citation 化する, and the full 化させて mining highlight. An enclosing 形態化する expression may coexist with both components.
+2. Check 要らないです, 食べないです, 行かないです, and 知らなかった. Expect 要る, 食べる, 行く, and 知る without a newly introduced standalone す. Check lexicalized つまらない and intact おばさん.
+3. Check なんとなく promotion with a surface frequency and a card written 何となく while its representative spelling is 何と無く. Verify empty expressions and pronoun なん gain no inferred identity.
+4. With only one relevant card, exercise ambiguous こと, くる, いく, わけ, うまい, あと, and はし. Confirm possible labels, zero comprehension, card removal, and later established matches.
+5. Save several dictionary weight/enabled/hidden changes together. Expect one complete refreshed file result. Repeat changes while a file is loaded: cleaned text and source metadata remain intact, derived segments do not accumulate, and old work cannot replace a newer result. Change a display preference during refresh and verify refresh still completes.
+6. Refresh an ignore list and verify possible matches are excluded from known highlighting and known counts.
+
+Keep UniDic/Vibrato at runtime. Ichiran may be used as a segmentation comparison only. Performance measurements are deferred until a controlled release benchmark uses the same subtitle file, dictionaries, and isolated Anki snapshots; this change makes no speed claim.
