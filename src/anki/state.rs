@@ -1138,4 +1138,45 @@ mod classification_tests {
         input.contextual_lexeme = Some(("箸".into(), "はし".into()));
         assert!(!anki.term_stats(&input).0);
     }
+    #[test]
+    fn mixed_dekiru_conjugations_keep_the_same_dictionary_identity() {
+        let Some(tokenizer) = crate::segmentation::lexeme_resolver::test_tokenizer() else {
+            return;
+        };
+        let manager = Arc::new(FrequencyManager::from_dictionaries(vec![]));
+        let mut sentences: Vec<_> = [
+            "今までに算術ができなくて困ったことはありますか？",
+            "できた",
+            "よくできていますよ",
+            "２人ともできるかな",
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(id, text)| Sentence {
+            id,
+            source_id: 0,
+            text: text.into(),
+            segments: vec![],
+            timestamp: None,
+            comprehension: 0.0,
+        })
+        .collect();
+        let terms = extract_words(tokenizer.new_worker(), &mut sentences, &manager);
+        let input = terms.into_iter().find(|t| t.lemma_form == "できる").expect("extract できる");
+        assert_eq!(input.sentence_references.len(), 4);
+        let anki = state(manager.clone(), &[("出来る", "できる")]);
+        assert!(
+            anki.term_stats(&input).0,
+            "equivalent kana scripts must not clear context: {input:?}"
+        );
+        let (unknown, known) = anki.filter_existing_terms(vec![input.clone()]);
+        assert!(unknown.is_empty());
+        assert!(known[0].possible_known_match.is_none());
+        assert!(known[0].comprehension > 0.0);
+        let wrong = state(manager, &[("出切る", "できる")]);
+        assert!(!wrong.term_stats(&input).0);
+        let (unknown, known) = wrong.filter_existing_terms(vec![input]);
+        assert!(known.is_empty());
+        assert!(unknown[0].possible_known_match.is_none());
+    }
 }

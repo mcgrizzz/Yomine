@@ -5,7 +5,10 @@ use serde::{
     Deserialize,
     Serialize,
 };
-use wana_kana::IsJapaneseStr;
+use wana_kana::{
+    ConvertJapanese,
+    IsJapaneseStr,
+};
 
 use super::{
     token_models::UnidicToken,
@@ -233,7 +236,10 @@ impl From<Word> for Term {
                 && tail.iter().all(|t| t.pos1 == UnidicTag::Jodoushi))
             .then_some(head)
         });
-        let contextual_lexeme = head.map(|head| (head.lexeme.clone(), head.lemma_hatsuon.clone()));
+        // Main-word rules normalize readings, while untouched UniDic heads retain katakana.
+        // Canonicalize before occurrence merging so the same lexeme does not conflict with itself.
+        let contextual_lexeme =
+            head.map(|head| (head.lexeme.clone(), head.lemma_hatsuon.to_hiragana()));
         if let Some(main_word) = word.main_word {
             let is_kana = main_word.surface.as_str().is_kana();
             Term {
