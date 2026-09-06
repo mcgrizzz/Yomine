@@ -1,4 +1,5 @@
 <script lang="ts">
+	import UncertainMatch from './UncertainMatch.svelte';
 	import type { DefinitionEntry, SentenceDto, Term, TimeStampDto } from '$lib/ipc';
 	import {
 		defaultDir,
@@ -807,10 +808,8 @@
 							><Furigana surface={term.lemma_form} reading={term.lemma_reading} /></span
 						>
 						{#if term.possible_known_match}
-							<span class="possible-match" aria-label={`Uncertain match: ${term.possible_known_match}`} title={`Possible Anki match: ${term.possible_known_match}. This word is still available to mine.`}>
-								Uncertain
-							</span>
-                        {/if}
+							<UncertainMatch match={term.possible_known_match} />
+						{/if}
 						</span>
 						{#if isMined(term)}
 							{@const noteId = $minedNoteIds[term.lemma_form]}
@@ -946,17 +945,8 @@
 <style>
 	.term-copy {
 		display: inline-flex;
-		flex-direction: column;
-		align-items: flex-start;
+		align-items: center;
 		gap: 0.35rem;
-	}
-	.possible-match {
-		display: inline-flex;
-		align-items: baseline;
-		gap: 0.3rem;
-		font-size: 0.75rem;
-		line-height: 1.2;
-		color: var(--text-muted);
 	}
 	/* One shared track list (rows subgrid it) so the max-content term column is
 	   sized globally — per-row grids each size their own and misalign. The

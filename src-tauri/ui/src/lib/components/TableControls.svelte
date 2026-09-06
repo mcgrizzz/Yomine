@@ -97,13 +97,14 @@
 
 	<button
 		class="possible-toggle"
-		class:off={!$showPossibleKnownMatches}
+		role="switch"
 		aria-label="Show uncertain matches"
-		aria-pressed={$showPossibleKnownMatches}
+		aria-checked={$showPossibleKnownMatches}
 		title="Include words with an uncertain Anki match in the table"
 		onclick={() => void setShowPossibleKnownMatches(!$showPossibleKnownMatches)}
 	>
-		<span aria-hidden="true">{$showPossibleKnownMatches ? '✓' : '–'}</span> Show uncertain matches
+		<span class="switch-track" class:on={$showPossibleKnownMatches} aria-hidden="true"><span class="switch-thumb"></span></span>
+		Show uncertain matches
 	</button>
 	<div class="filters">
 
@@ -249,24 +250,42 @@
 	.possible-toggle {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.4rem;
-		padding: 0.3rem 0.6rem;
-		border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
-		border-radius: var(--radius);
-		background: color-mix(in srgb, var(--accent) 8%, var(--bg-raised));
+		gap: 0.5rem;
+		padding: 0.35rem 0;
+		border: 0;
+		background: transparent;
 		color: var(--text);
 		font-size: 0.8rem;
 		white-space: nowrap;
 		cursor: pointer;
 	}
-	.possible-toggle.off {
-		background: var(--bg-raised);
-		border-color: var(--border);
-		color: var(--text-muted);
+	.switch-track {
+		width: 2rem;
+		height: 1.15rem;
+		padding: 0.125rem;
+		box-sizing: border-box;
+		border-radius: 999px;
+		background: var(--text-muted);
+		transition: background 120ms ease;
 	}
+	.switch-track.on { background: var(--accent); }
+	.switch-thumb {
+		display: block;
+		width: 0.9rem;
+		height: 0.9rem;
+		border-radius: 50%;
+		background: var(--bg);
+		box-shadow: 0 1px 2px #0004;
+		transition: transform 120ms ease;
+	}
+	.switch-track.on .switch-thumb { transform: translateX(0.85rem); }
 	.possible-toggle:focus-visible {
 		outline: 2px solid var(--accent);
-		outline-offset: 2px;
+		outline-offset: 3px;
+		border-radius: var(--radius);
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.switch-track, .switch-thumb { transition: none; }
 	}
 	@media (max-width: 720px) {
 		.controls { grid-template-columns: minmax(0, 1fr) auto; }
