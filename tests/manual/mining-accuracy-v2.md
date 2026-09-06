@@ -1,105 +1,85 @@
 # Mining accuracy v2 verification
 
-Work in `/mnt/h/documents/dev/rust/japanese-mining/yomine-mining-accuracy-v2`, branch `feat/mining-accuracy-v2`, based on refreshed main `b363d64`. The original `yomine` worktree and `feat/mining-accuracy` branch remain the regression reference. Do not push or rewrite that branch.
+Use branch `feat/mining-accuracy-v2` in the main worktree:
+`/mnt/h/documents/dev/rust/japanese-mining/yomine`. Open it with `code .` from WSL,
+or open `H:\Documents\Dev\rust\japanese-mining\yomine` in Windows VS Code.
+Rebuild/restart the app and reload the subtitle file after changing the backend.
 
 ## Matching behavior
 
-- **Known**: an exact normalized surface/card pair, a validated citation, or supported lexical-family evidence establishes the card match. These terms filter normally and contribute their card-based comprehension.
-- **Possible**: a plausible card exists but competing or missing lexical evidence prevents establishing identity. The term stays unknown and minable, shows “Possible match: …”, and contributes zero known-word comprehension.
-- **Unmatched**: no supported card proposal exists. The term stays unknown without a possible-match label.
+- **Known**: an exact normalized card, validated citation, precomputed kana preference,
+  or supported lexical family establishes the match. The term filters normally and
+  contributes comprehension based on the matched card.
+- **Possible**: a plausible card exists, but competing or missing lexical evidence
+  prevents establishing identity. The term stays unknown and minable with zero
+  known-word comprehension. Hover or focus its question-mark icon for the candidate.
+- **Unmatched**: no supported card proposal exists. The term stays unknown without
+  an uncertainty icon.
 
-“Show possible known matches” defaults to enabled for older settings and persists an explicit opt-out. Toggle it off and back on: only row visibility changes. Known counts, comprehension, labels, and source data must stay unchanged. Removing a card clears its previous possible-match label; adding an exact card or establishing all competing families clears the label and updates comprehension.
-
-Dictionary reading evidence includes disabled dictionaries and marker entries. Reading-less frequency records (including BCCWJ) add no reading candidates. Frequency ranks never establish lexical identity. 行く and 逝く retain separate identities. Documented spelling aliases are constrained to their stated reading.
+The precomputed policy uses JMdict, Jitendex and independent frequency sources.
+It selects a usual dictionary identity per reading and POS, not a sentence's meaning.
+See [the policy and reproduction instructions](../../research/lexical/RUNTIME.md).
+Anilist Top 500 must never be used as reference data or regression evidence.
+Installed dictionaries, including disabled dictionaries and marker entries, still
+supply the lexical fallback. Reading-less records supply no reading candidates.
+Written homophones remain separate; documented spelling aliases require their stated reading.
 
 ## Automated checks
 
-Use the same ignored `Cargo.lock` copied from the reference worktree for both this branch and the detached `yomine-mining-accuracy-main-check` worktree. Do not regenerate either dependency lock during the comparison.
+Keep the same Rust toolchain and ignored `Cargo.lock` for this branch and the main
+comparison worktree; use `--locked` instead of regenerating dependencies.
 
 ```sh
-cd /mnt/h/documents/dev/rust/japanese-mining/yomine-mining-accuracy-v2
+cd /mnt/h/documents/dev/rust/japanese-mining/yomine
 YOMINE_DATA_DIR=/mnt/c/Users/Andrew/AppData/Local/yomine YOMINE_REQUIRE_UNIDIC=1 cargo test --workspace --lib --test segmentation --test phrase_processing --locked -- --include-ignored
 cargo +nightly fmt --all -- --check
-YOMINE_DATA_DIR=/mnt/c/Users/Andrew/AppData/Local/yomine YOMINE_REQUIRE_UNIDIC=1 cargo clippy --workspace --all-targets --locked
-cd src-tauri/ui
-COREPACK_ENABLE_AUTO_PIN=0 pnpm check
-node tests/possible-matches.mjs
-COREPACK_ENABLE_AUTO_PIN=0 pnpm build
+YOMINE_DATA_DIR=/mnt/c/Users/Andrew/AppData/Local/yomine cargo clippy --workspace --all-targets --locked
+python3 -m unittest discover -s research/lexical -p 'test_*.py'
 ```
 
-The card tests construct isolated in-memory snapshots. They do not fetch live Anki or modify the real cache or dictionaries. UniDic is required for segmentation, production matching, phrase snapshots, and the explicitly included Tauri refresh case. Ensure the installed dictionary is present before running commands against the real data directory.
+From a terminal with Node and pnpm available, run in `src-tauri/ui`:
 
-`tests/fixtures/phrase_processing.json` records production and corpus outputs from the fourth commit, before their shared helpers were extracted. The test compares full term data, highlights, expression families, corpus surface forms, and later batch deinflection. Do not regenerate it to accept a refactor regression.
+```sh
+pnpm check
+node tests/possible-matches.mjs
+pnpm build
+```
 
-## Manual checks with isolated card snapshots
+The Rust tests require installed UniDic and use isolated in-memory card snapshots.
+They do not fetch live Anki or modify real caches or dictionaries. Every command
+reading installed real data must explicitly set `YOMINE_DATA_DIR` as above.
+The phrase fixture protects production/corpus differences, highlights and later
+batch deinflection; do not regenerate it to accept a refactor regression.
 
-Use a disposable app profile/data copy for live card-change exercises; never replace the real cache. Every command that reads installed real data must explicitly set `YOMINE_DATA_DIR=/mnt/c/Users/Andrew/AppData/Local/yomine`. Keep the card snapshot isolated and never invoke live Anki refresh against the real cache for these checks.
+## Manual checks
 
-1. Load 形態化させて. Expect segments 形態 / 化させて, citation 化する, and the full 化させて mining highlight. An enclosing 形態化する expression may coexist with both components.
-2. Check 要らないです, 食べないです, 行かないです, and 知らなかった. Expect 要る, 食べる, 行く, and 知る without a newly introduced standalone す. Check lexicalized つまらない and intact おばさん.
-3. Check なんとなく promotion with a surface frequency and a card written 何となく while its representative spelling is 何と無く. Verify empty expressions and pronoun なん gain no inferred identity.
-4. With only one relevant card, exercise ambiguous こと, くる, いく, わけ, うまい, あと, and はし. Confirm possible labels, zero comprehension, card removal, and later established matches.
-5. Save several dictionary weight/enabled/hidden changes together. Expect one complete refreshed file result. Repeat changes while a file is loaded: cleaned text and source metadata remain intact, derived segments do not accumulate, and old work cannot replace a newer result. Change a display preference during refresh and verify refresh still completes.
-6. Refresh an ignore list and verify possible matches are excluded from known highlighting and known counts.
+Use a disposable data/profile copy for interactive card changes. Never replace the
+real cache or refresh live Anki against it during these checks.
 
-Keep UniDic/Vibrato at runtime. Ichiran may be used as a segmentation comparison only. Performance measurements are deferred until a controlled release benchmark uses the same subtitle file, dictionaries, and isolated Anki snapshots; this change makes no speed claim.
+1. Load 形態化させて. Expect 形態 / 化させて, citation 化する and the full 化させて
+   mining highlight. An enclosing 形態化する expression may coexist with its components.
+   Check 要らないです, 食べないです, 行かないです and 知らなかった for citations
+   要る, 食べる, 行く and 知る. Preserve lexicalized つまらない and intact おばさん.
+2. Check なんとなく promotion and its existing surface frequency. A representative
+   何と無く should match a 何となく card. Promoted expressions must remain contiguous
+   source spans. Empty expressions and pronoun なん must gain no inferred identity.
+3. With matching cards, check なし → 無し, みせる → 見せる, まさに → 正に,
+   できる → 出来る, こと → 事 and いく → 行く. Include
+   今までに算術ができなくて困ったことはありますか？. Wrong-homophone cards must
+   not substitute: 見せる and 診せる remain separate; 行く and 往く retain their alias.
+4. Use 橋[はし] against ambiguous はし to check uncertainty. “Show uncertain matches”
+   defaults on for older settings. Turn the switch off, restart, then turn it back on:
+   visibility persists and reverses without changing known counts or comprehension.
+   The icon should show details on hover/focus and dismiss them when leaving it.
+   Clicking frequency should select the row without selecting the rank text.
+5. Remove the matching card and refresh: stale labels and comprehension must clear.
+   Add an exact card and refresh: the uncertainty icon clears and the term becomes known.
+   Repeat through ignore-list refresh; possible matches must never gain known highlighting.
+6. Save several dictionary changes together and repeat while a file is loaded. Expect
+   one complete refreshed result per batch, using cleaned text and preserving source
+   metadata. Derived segments must not accumulate. Older work must not replace a newer
+   result, and changing a display preference must not cancel dictionary refresh.
 
-
-## Frequency-supported matching adjustment
-
-This supersedes the earlier policy that frequency never affects matching. Lexical families
-still remain separate. A dictionary's reading-specific `㋕` entry explicitly links a kana
-form to its written family. For automatic matching, both ranks must be at most 1,000,
-within a factor of three, and every competing written family must rank more than ten
-times lower in the same source. At least one installed source must supply the complete
-comparison; any close competitor in another comparable source vetoes the match.
-These are conservative rank heuristics, not calibrated probabilities. Missing and zero
-ranks do not establish rarity. Weights and enabled flags do not alter this evidence.
-
-With an isolated card snapshot containing 行く/いく, test a dictionary fixture with
-行く rank 44, its ㋕ rank 65, and 逝く rank 9,328: kana いく should now filter and count
-as known. A kana いく card should likewise match written 行く, but not 逝く. Remove the
-card and confirm the term returns with zero known comprehension and no stale label.
-Close ranks, missing alternatives, or conflicting dictionaries should retain uncertainty.
-
-The visibility control now says “Show uncertain matches.” Rows display only “Uncertain”;
-the candidate is available in the label tooltip instead of cluttering the term column.
-Visibility still changes only which rows are shown, not comprehension or known counts.
-
-
-## Select the expression before checking Anki
-
-Dictionary interpretation now runs independently of card contents. A validated written
-citation takes priority; otherwise a unique lexical family or the existing linked-kana
-frequency heuristic may select an expression. Anki then checks that selected family.
-A card for a rejected homophone no longer produces an uncertain-match label. A kana
-card must independently select the same family to match a written expression.
-
-Verify 行く/いく with no cards, only 逝く, only 行く, and both cards in either order.
-The selected family must remain 行く in every case. Only the matching card should
-establish knowledge. With only 逝く, いく stays minable without a misleading label.
-A validated citation 逝く must remain 逝く even when the source is kana and 行く ranks
-higher. Unresolved dictionary interpretations retain the existing uncertainty behavior.
-
-This adopts Yomitan's expression-before-duplicate-check ordering. It uses Yomine's
-installed lexical evidence and does not claim full Yomitan dictionary lookup parity.
-
-
-## Real dictionary いく regression (2026-09-05)
-
-`tests/fixtures/iku_frequency.json` contains the relevant records captured read-only
-from the six installed frequency dictionaries. The regression extracts 学校にいく。
-with installed UniDic and uses an isolated 行く/いく card fixture. It reproduced the
-incorrect uncertain label before the fix and now requires known-word filtering.
-
-Correction to the earlier rank policy: kana markers can repeat across homophones.
-JPDB's 65㋕ appears under both 行く and 逝く; it is not evidence that written 逝く has
-rank 65. Rival comparisons now use reading-specific written ranks. Coverage may
-come from different dictionaries, provided each comparison uses ranks from the same
-source. All rivals still require comparison evidence; any close written rival vetoes
-selection. No rank thresholds or spelling exceptions were added for this fix.
-
-Rebuild/restart the app from this worktree and reload the subtitle file. With 行く/いく
-in the isolated Anki snapshot, extracted いく should filter and contribute known
-comprehension. With only 逝く/いく, it must remain minable. Real dictionaries and card
-caches must remain untouched by verification.
+UniDic/Vibrato remains the runtime tokenizer. Ichiran is a segmentation comparison
+only. Performance claims require a controlled release benchmark with identical
+subtitles, dictionaries and isolated Anki snapshots.

@@ -24,12 +24,17 @@ const SPELLING_ALIASES: &[(&str, &str, &str, &str)] = &[
     ("往く", "いく", "行く", "JMdict 1578850"),
 ];
 
+pub(crate) fn documented_alias(spelling: &str, normalized_reading: &str) -> Option<&'static str> {
+    SPELLING_ALIASES
+        .iter()
+        .find(|(form, reading, _, _)| *form == spelling && *reading == normalized_reading)
+        .map(|(_, _, canonical, _)| *canonical)
+}
+
 /// Enough paths to surface a spelling's minority readings; 甘い needs four to reach ウマイ.
 const NBEST_PATHS: usize = 12;
 
-/// 甘い is 甘い read あまい but 旨い read うまい, so candidate identity can never come from
-/// the spelling alone. Resolves lazily and caches, because a candidate bucket is tiny and
-/// tokenizing every dictionary headword up front is not.
+/// Resolves spelling and reading pairs lazily; 甘い at あまい and うまい are distinct.
 pub struct CandidateLexemeResolver {
     /// `None` only in tests that exercise the non-lexical evidence path.
     tokenizer: Option<Arc<Tokenizer>>,
@@ -53,19 +58,8 @@ impl CandidateLexemeResolver {
         // Preserve the spelling that is analyzed: folding the cache key alone
         // would make whichever script was queried first decide future answers.
         let key = (spelling.to_string(), normalize_japanese_text(reading));
-        // These reading-constrained spelling aliases are lexical dictionary
-        // evidence missing from UniDic, not identities inferred from rank ties.
-        // JMdict 1414190 lists all three spellings under おとなしい:
-        // https://www.edrdg.org/jmwsgi/entr.py?svc=jmdict&q=1414190
-        // 漢字ペディア defines 縡 read こと as 事:
-        // https://www.kanjipedia.jp/kanji/0002541200
-        // JMdict 1578850 lists 行く / 往く; 逝く is a separate restricted entry.
-        // https://www.edrdg.org/jmwsgi/entr.py?svc=jmdict&q=1578850
-        if let Some((_, _, canonical, _)) = SPELLING_ALIASES
-            .iter()
-            .find(|(form, reading, _, _)| *form == spelling && *reading == key.1)
-        {
-            return Some((*canonical).to_string());
+        if let Some(canonical) = documented_alias(spelling, &key.1) {
+            return Some(canonical.to_string());
         }
         if let Some(cached) = self.cache.lock().expect("resolver cache poisoned").get(&key) {
             return cached.clone();

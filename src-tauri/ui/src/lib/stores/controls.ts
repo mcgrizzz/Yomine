@@ -58,7 +58,7 @@ export const visibleTerms = derived(
 		$file
 			? applyControls($file.terms, $file.sentences, {
 					search: $search,
-				showPossibleKnownMatches: $showPossible,
+					showPossibleKnownMatches: $showPossible,
 					sort: $sort,
 					pos: $pos,
 					freq: $freq,

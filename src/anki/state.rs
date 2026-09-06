@@ -57,8 +57,8 @@ pub(crate) const ANKI_VOCAB_CACHE: &str = "anki_vocab_cache.json";
 pub struct AnkiState {
     vocab: Vec<Vocab>,
     frequency_manager: Arc<FrequencyManager>,
-    relevance_map: HashMap<String, Vec<usize>>, // Map to indices
-    known_interval: u32,                        // From settings, for calculating comprehension
+    cards_by_reading: HashMap<String, Vec<usize>>,
+    known_interval: u32, // From settings, for calculating comprehension
 }
 
 impl AnkiState {
@@ -129,8 +129,11 @@ impl AnkiState {
         frequency_manager: Arc<FrequencyManager>,
         known_interval: u32,
     ) -> Self {
-        let relevance_map = Self::build_relevance_map(&vocab);
-        Self { vocab, frequency_manager, relevance_map, known_interval }
+        let mut cards_by_reading: HashMap<String, Vec<usize>> = HashMap::new();
+        for (index, card) in vocab.iter().enumerate() {
+            cards_by_reading.entry(normalize_japanese_text(&card.reading)).or_default().push(index);
+        }
+        Self { vocab, frequency_manager, cards_by_reading, known_interval }
     }
 
     /// Build an `AnkiState` from the on-disk vocab cache, if one exists. Returns
@@ -145,26 +148,6 @@ impl AnkiState {
         }
         println!("Loaded {} vocab items from Anki cache", vocab.len());
         Some(Self::from_vocab(vocab, frequency_manager, known_interval))
-    }
-
-    /// One time map for the anki vocab to quickly find the potential matches by key
-    fn build_relevance_map(vocab: &[Vocab]) -> HashMap<String, Vec<usize>> {
-        let mut relevance_map: HashMap<String, Vec<usize>> = HashMap::new();
-
-        for (index, vocab_item) in vocab.iter().enumerate() {
-            relevance_map.entry(vocab_item.reading.clone()).or_insert_with(Vec::new).push(index);
-            relevance_map.entry(vocab_item.term.clone()).or_insert_with(Vec::new).push(index);
-            relevance_map
-                .entry(normalize_japanese_text(vocab_item.reading.as_str()))
-                .or_insert_with(Vec::new)
-                .push(index);
-            relevance_map
-                .entry(normalize_japanese_text(vocab_item.term.as_str()))
-                .or_insert_with(Vec::new)
-                .push(index);
-        }
-
-        relevance_map
     }
 
     fn classify(
@@ -207,19 +190,30 @@ impl AnkiState {
             return MatchResult::Unmatched;
         }
         let preference = crate::dictionary::kana_preference::preference(reading, pos);
-        if let Some(preference) = &preference {
+        let normalized_reading = normalize_japanese_text(reading);
+        let is_preferred_spelling = |spelling: &str| {
+            let spelling = crate::segmentation::lexeme_resolver::documented_alias(
+                spelling,
+                &normalized_reading,
+            )
+            .unwrap_or(spelling);
+            preference.as_ref().is_some_and(|preferred| preferred.matches(spelling))
+        };
+        let citation_is_preferred = is_preferred_spelling(citation);
+        if preference.is_some() {
             if citation.is_kana() && !citation.is_empty() {
                 return self
                     .cards_read_as(reading)
-                    .find(|card| preference.matches(&card.term))
+                    .find(|card| is_preferred_spelling(&card.term))
                     .map_or(MatchResult::Unmatched, |card| MatchResult::Known {
                         card,
                         evidence: MatchEvidence::KanaPreference,
                     });
             }
-            if preference.matches(citation) {
-                if let Some(card) =
-                    self.cards_read_as(reading).find(|card| card.term.as_str().is_kana())
+            if citation_is_preferred {
+                if let Some(card) = self
+                    .cards_read_as(reading)
+                    .find(|card| card.term.as_str().is_kana() || is_preferred_spelling(&card.term))
                 {
                     return MatchResult::Known { card, evidence: MatchEvidence::KanaPreference };
                 }
@@ -228,7 +222,15 @@ impl AnkiState {
         use crate::dictionary::lexical_evidence::ExpressionSelection;
         let evidence = self.frequency_manager.lexical_families(reading);
         let selection = evidence.select_expression(surface, citation);
-        let cards: Vec<_> = self.cards_read_as(reading).collect();
+        // The lexical fallback must respect the precomputed entry boundary.
+        let cards: Vec<_> = self
+            .cards_read_as(reading)
+            .filter(|card| {
+                preference.is_none()
+                    || (!card.term.as_str().is_kana()
+                        && citation_is_preferred == is_preferred_spelling(&card.term))
+            })
+            .collect();
         let belongs = |family: &crate::dictionary::lexical_evidence::LexicalFamily,
                        card: &Vocab| {
             family
@@ -238,15 +240,13 @@ impl AnkiState {
         };
         match selection {
             ExpressionSelection::Selected { family } => {
-                if let Some(card) = cards.iter().copied().find(|card| {
-                    belongs(family, card) && (preference.is_none() || !card.term.as_str().is_kana())
-                }) {
+                if let Some(card) = cards.iter().copied().find(|card| belongs(family, card)) {
                     return MatchResult::Known { card, evidence: MatchEvidence::LexicalFamily };
                 }
                 // A kana card must independently resolve to this same expression.
                 // Sharing its reading alone does not establish a duplicate.
                 for card in &cards {
-                    if preference.is_some() || !card.term.as_str().is_kana() {
+                    if !card.term.as_str().is_kana() {
                         continue;
                     }
                     if let ExpressionSelection::Selected { family: card_family } =
@@ -288,12 +288,7 @@ impl AnkiState {
 
     fn cards_read_as<'a>(&'a self, reading: &str) -> impl Iterator<Item = &'a Vocab> {
         let reading = normalize_japanese_text(reading);
-        self.relevance_map
-            .get(&reading)
-            .into_iter()
-            .flatten()
-            .map(|&i| &self.vocab[i])
-            .filter(move |card| normalize_japanese_text(&card.reading) == reading)
+        self.cards_by_reading.get(&reading).into_iter().flatten().map(|&i| &self.vocab[i])
     }
 
     fn classify_term(&self, term: &Term) -> MatchResult<'_> {
@@ -1059,6 +1054,32 @@ mod classification_tests {
     }
 
     #[test]
+    fn documented_aliases_remain_known_with_a_precomputed_preference() {
+        let manager = Arc::new(FrequencyManager::from_dictionaries(vec![dictionary(
+            "test",
+            &[("行く", "いく", 44), ("往く", "いく", 18835)],
+        )]));
+        for (word, card) in [("行く", "往く"), ("往く", "行く"), ("いく", "往く"), ("往く", "いく")]
+        {
+            assert!(
+                state(manager.clone(), &[(card, "いく")]).word_stats(word, "いく", &POS::Verb).0
+            );
+        }
+    }
+
+    #[test]
+    fn written_homophones_cannot_override_a_precomputed_identity() {
+        let manager = Arc::new(FrequencyManager::from_dictionaries(vec![dictionary(
+            "test",
+            &[("見せる", "みせる", 203), ("診せる", "みせる", 29095)],
+        )]));
+        for (word, card) in [("見せる", "診せる"), ("診せる", "見せる")] {
+            let anki = state(manager.clone(), &[(card, "みせる")]);
+            assert!(!anki.word_stats(word, "みせる", &POS::Verb).0, "{word} must not match {card}");
+        }
+    }
+
+    #[test]
     fn reverse_precomputed_matches_work_without_installed_frequency_entries() {
         let manager = Arc::new(FrequencyManager::from_dictionaries(vec![]));
         for (reading, written, rival, pos) in [
@@ -1117,7 +1138,7 @@ mod classification_tests {
         let anki = state(manager.clone(), &[("出来る", "できる")]);
         assert!(
             anki.term_stats(&input).0,
-            "equivalent kana scripts must not clear context: {input:?}"
+            "all できる conjugations should match 出来る: {input:?}"
         );
         let (unknown, known) = anki.filter_existing_terms(vec![input.clone()]);
         assert!(unknown.is_empty());

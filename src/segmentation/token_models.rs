@@ -101,8 +101,7 @@ pub struct UnidicToken {
     pub surface_hatsuon: String,
     pub lemma_form: String,
     pub lemma_hatsuon: String,
-    /// UniDic's 語彙素: the kanji lexeme even for a kana spelling (すごい → 凄い),
-    /// disambiguated from sentence context. `lemma_form` is the written base form.
+    /// UniDic lexical form (すごい → 凄い), distinct from the written base `lemma_form`.
     pub lexeme: String,
 
     /// Byte span in the source sentence; 0..0 for synthetic/test tokens.

@@ -171,12 +171,6 @@ impl POS {
     }
 }
 
-// impl fmt::Display for POS {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         write!(f, "{:?}", self) // Use Debug formatting as a placeholder
-//     }
-// }
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CitationProvenance {
     Rule,
@@ -195,7 +189,7 @@ pub struct Citation {
 pub struct Word {
     pub citation: Option<Citation>,
     pub surface_form: String,
-    pub surface_hatsuon: String, //hatsuon is easier to type than pronunciation...
+    pub surface_hatsuon: String,
     pub lemma_form: String,
     pub lemma_hatsuon: String,
     pub part_of_speech: POS,

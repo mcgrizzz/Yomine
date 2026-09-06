@@ -232,10 +232,7 @@ pub fn extract_words(
 
         sentence.segments.extend(sentence_terms.iter().zip(&term_spans).map(
             |(term, &(start_index, end_index))| {
-                // The span covers the FULL segment, so the reading must too:
-                // `surface_reading` is the main word's alone (勉強します → べんきょう,
-                // 8月 → がつ), which smeared a partial reading across the whole span
-                // in furigana displays (the 8月22日 bug's second half).
+                // Furigana needs the full segment reading, including attached auxiliaries.
                 (
                     term.full_segment_reading.clone(),
                     term.part_of_speech.clone(),
@@ -248,7 +245,7 @@ pub fn extract_words(
         let base_len = sentence_terms.len();
         let mut suppressed = vec![false; base_len];
         for start in 0..base_len {
-            for end in (start + 1..sentence_terms.len()).rev() {
+            for end in (start + 1..base_len).rev() {
                 let subrange = &sentence_terms[start..=end];
                 if !phrase_endpoint_ok(&subrange[0]) || !phrase_endpoint_ok(&subrange[end - start])
                 {
@@ -337,11 +334,8 @@ pub fn extract_words(
                         phrase.frequencies = freq_map;
                         sentence_terms.push(phrase);
 
-                        if all_content_words
-                            && !rule_citations[start..=end.min(base_len - 1)].iter().any(|v| *v)
-                        {
-                            // The inner range re-reads the vec length, so `end` can index an already-pushed phrase.
-                            for flag in suppressed[start..=end.min(base_len - 1)].iter_mut() {
+                        if all_content_words && !rule_citations[start..=end].iter().any(|v| *v) {
+                            for flag in suppressed[start..=end].iter_mut() {
                                 *flag = true;
                             }
                         }
@@ -430,8 +424,9 @@ pub fn extract_words_for_frequency(
 
                 // Phrase detection - check if phrase exists in loaded dictionaries
                 // Adds the largest matching phrase at each starting position.
-                for start in 0..sentence_terms.len() {
-                    for end in (start + 1..sentence_terms.len()).rev() {
+                let base_len = sentence_terms.len();
+                for start in 0..base_len {
+                    for end in (start + 1..base_len).rev() {
                         let subrange = &sentence_terms[start..=end];
                         if !phrase_endpoint_ok(&subrange[0])
                             || !phrase_endpoint_ok(&subrange[end - start])

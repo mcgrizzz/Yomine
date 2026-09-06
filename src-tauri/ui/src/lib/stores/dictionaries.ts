@@ -6,8 +6,7 @@ import { settings } from './settings';
 
 export type DictionaryRow = ipc.DictionaryState & { hidden: boolean };
 
-/** Commits each *changed* entry; the backend rebakes term frequencies and emits
- * `dictionaries-changed`, which re-fetches the table via the hydrate listener. */
+/** Saves the batch; the backend publishes the reprocessed file via `terms-refreshed`. */
 export async function saveDictionaryStates(entries: DictionaryRow[]): Promise<boolean> {
 	try {
 		await ipc.setDictionaryStates(

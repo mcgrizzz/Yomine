@@ -93,33 +93,30 @@ pub async fn set_dictionary_states(
     }
     {
         let mut guard = state.lock().unwrap();
-        let manager = guard.language_tools.as_ref().map(|t| Arc::clone(&t.frequency_manager));
-        if manager.is_none() {
-            return Err("Language tools are still loading".into());
-        }
+        let manager = guard
+            .language_tools
+            .as_ref()
+            .map(|tools| Arc::clone(&tools.frequency_manager))
+            .ok_or_else(|| "Language tools are still loading".to_string())?;
         let mut settings_to_save = guard.settings.clone();
         settings_to_save.frequency_weights.extend(updates.clone());
-        let previous_states = manager.as_ref().and_then(|manager| manager.dictionary_states());
-        if let Some(manager) = &manager {
-            let states = updates
-                .into_iter()
-                .map(|(name, setting)| {
-                    (
-                        name,
-                        frequency_manager::DictionaryState {
-                            weight: setting.weight.max(0.1),
-                            enabled: setting.enabled,
-                        },
-                    )
-                })
-                .collect();
-            manager.set_dictionary_states(&states).map_err(|e| e.to_string())?;
-        }
+        let previous_states = manager.dictionary_states().unwrap_or_default();
+        let states = updates
+            .into_iter()
+            .map(|(name, setting)| {
+                (
+                    name,
+                    frequency_manager::DictionaryState {
+                        weight: setting.weight.max(0.1),
+                        enabled: setting.enabled,
+                    },
+                )
+            })
+            .collect();
+        manager.set_dictionary_states(&states).map_err(|e| e.to_string())?;
         if let Err(error) = persistence::save_json(&settings_to_save, "settings.json") {
             // A failed write must not leave live settings different from disk.
-            if let (Some(manager), Some(previous)) = (&manager, previous_states) {
-                manager.set_dictionary_states(&previous).map_err(|e| e.to_string())?;
-            }
+            manager.set_dictionary_states(&previous_states).map_err(|e| e.to_string())?;
             guard.invalidate_anki_cache();
             return Err(error.to_string());
         }

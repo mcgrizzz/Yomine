@@ -86,3 +86,41 @@ fn production_and_corpus_keep_their_acceptance_policies() {
         serde_json::from_str(&std::fs::read_to_string(fixture).unwrap()).unwrap();
     assert_eq!(actual, expected);
 }
+
+#[test]
+fn promoted_phrases_cannot_be_reused_as_adjacent_source_tokens() {
+    let tokenizer = init_vibrato(&DictType::Unidic, None).expect("UniDic required");
+    let manager = FrequencyManager::from_dictionaries(vec![FrequencyDictionary::new(
+        "test".into(),
+        "1".into(),
+        [("なんとなく", "なんとなく"), ("元気だなんとなく", "げんきだなんとなく")]
+            .into_iter()
+            .map(|(term, reading)| TermMetaBankV3 {
+                term: term.into(),
+                data_type: "freq".into(),
+                data: Some(JsonFrequencyData::Nested {
+                    reading: reading.into(),
+                    frequency: if term == "なんとなく" {
+                        JsonFrequency::Complex { value: 1, display_value: Some("1㋕".into()) }
+                    } else {
+                        JsonFrequency::Number(1)
+                    },
+                }),
+            })
+            .collect(),
+    )]);
+    let mut sentences = vec![Sentence {
+        id: 0,
+        source_id: 0,
+        text: "なんとなく元気だ".into(),
+        segments: vec![],
+        timestamp: None,
+        comprehension: 0.0,
+    }];
+    let production = extract_words(tokenizer.new_worker(), &mut sentences, &manager);
+    let corpus = extract_words_for_frequency(&tokenizer, &mut sentences, &manager, None);
+    for terms in [production, corpus] {
+        assert!(terms.iter().any(|t| t.surface_form == "なんとなく"), "{terms:?}");
+        assert!(terms.iter().all(|t| sentences[0].text.contains(&t.full_segment)), "{terms:?}");
+    }
+}

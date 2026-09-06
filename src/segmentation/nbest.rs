@@ -206,7 +206,7 @@ fn try_rescue_at(
     }
     let introduces_unjudgeable_word = introduces_unjudgeable_word(&words[a..=b], &candidate);
     let all_content_words_validate =
-        candidate.iter().all(|w| !needs_validation(w) || validates(w, frequency_manager));
+        candidate.iter().all(|w| !rescue_eligible(w) || validates(w, frequency_manager));
     let flagged_span_now_validates = candidate.iter().any(|w| {
         let (ws, we) = word_span(w);
         ws < e && we > s && is_content(&w.part_of_speech) && validates(w, frequency_manager)
@@ -234,10 +234,6 @@ fn introduces_unjudgeable_word(original: &[Word], candidate: &[Word]) -> bool {
                     && words_equal(std::slice::from_ref(old), std::slice::from_ref(word))
             })
     })
-}
-
-fn needs_validation(word: &Word) -> bool {
-    rescue_eligible(word)
 }
 
 fn is_content(pos: &POS) -> bool {

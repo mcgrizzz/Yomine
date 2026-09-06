@@ -1,15 +1,6 @@
 //! Generated JMdict/Jitendex kana preferences. No startup deserialization or heap index.
+use super::frequency_manager::fold_katakana;
 use crate::segmentation::word::POS;
-
-// Match dictionary characters without inferring long vowels or converting romaji.
-fn normalize(text: &str) -> String {
-    text.chars()
-        .map(|c| match c {
-            '\u{30a1}'..='\u{30f6}' => char::from_u32(c as u32 - 0x60).unwrap(),
-            _ => c,
-        })
-        .collect()
-}
 
 const DATA: &[u8] = include_bytes!("../../assets/kana-preference.bin");
 
@@ -74,7 +65,7 @@ pub struct Preference<'a> {
 }
 impl Preference<'_> {
     pub fn matches(&self, spelling: &str) -> bool {
-        let spelling = normalize(spelling);
+        let spelling = fold_katakana(spelling);
         let Some(count) = self.value.get(4..6).map(|s| u16::from_le_bytes([s[0], s[1]])) else {
             return false;
         };
@@ -112,7 +103,7 @@ pub fn preference(reading: &str, pos: &POS) -> Option<Preference<'static>> {
         POS::Adverb => 16,
         _ => return None,
     };
-    let key = format!("{}\t{}", normalize(reading), pos);
+    let key = format!("{}\t{}", fold_katakana(reading), pos);
     Some(Preference { value: bundled().lookup(key.as_bytes())?, pos })
 }
 
