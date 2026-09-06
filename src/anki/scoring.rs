@@ -5,7 +5,6 @@ pub enum MatchEvidence {
     ExactSurface,
     Citation,
     LexicalFamily,
-    FrequencySupported,
     KanaPreference,
 }
 pub enum MatchResult<'a> {

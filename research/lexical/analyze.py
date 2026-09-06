@@ -11,11 +11,13 @@ import itertools
 import sqlite3
 from pathlib import Path
 from build import normalize, packed
+from source_policy import prepare_frequencies, source_manifest
 
 
 def open_reference(path):
     db = sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True)
     db.row_factory = sqlite3.Row
+    prepare_frequencies(db)
     return db
 
 
@@ -65,8 +67,9 @@ def card_result(entries, selected, card):
 
 
 def audit(db, output):
+    prepare_frequencies(db)
     output.mkdir(parents=True, exist_ok=True)
-    summary = {t: db.execute("SELECT count(*) FROM " + t).fetchone()[0] for t in ["entries", "pairs", "jitendex", "frequencies"]}
+    summary = {t: db.execute("SELECT count(*) FROM " + ("research_frequencies" if t == "frequencies" else t)).fetchone()[0] for t in ["entries", "pairs", "jitendex", "frequencies"]}
     by_reading = collections.defaultdict(list)
     for row in db.execute("SELECT reading, entry_id, max(kana_preferred) uk FROM pairs GROUP BY reading,entry_id"):
         by_reading[row["reading"]].append((row["entry_id"], row["uk"]))
@@ -104,7 +107,7 @@ def audit(db, output):
     for row in db.execute("""SELECT dictionary,term,reading,
             min(CASE WHEN kana_marker=0 THEN rank END) written,
             min(CASE WHEN kana_marker=1 THEN rank END) kana
-            FROM frequencies WHERE rank>0 AND reading IS NOT NULL
+            FROM research_frequencies WHERE rank>0 AND reading IS NOT NULL
             GROUP BY dictionary,term,reading HAVING written IS NOT NULL AND kana IS NOT NULL"""):
         d = distributions[row["dictionary"]]
         d["linked_pairs"] += 1
@@ -112,8 +115,8 @@ def audit(db, output):
         d["kana_rank_over_three_times_better"] += row["kana"] * 3 < row["written"]
         d["kana_top_1000_written_outside"] += row["kana"] <= 1000 < row["written"]
     summary["frequency_distributions"] = dict(distributions)
-    summary["shared_kana_rank_groups"] = db.execute("SELECT count(*) FROM (SELECT dictionary,reading,rank FROM frequencies WHERE reading IS NOT NULL AND kana_marker=1 GROUP BY dictionary,reading,rank HAVING count(DISTINCT term)>1)").fetchone()[0]
-    summary["sources"] = json.loads(db.execute("SELECT value FROM metadata WHERE key='manifest'").fetchone()[0])
+    summary["shared_kana_rank_groups"] = db.execute("SELECT count(*) FROM (SELECT dictionary,reading,rank FROM research_frequencies WHERE reading IS NOT NULL AND kana_marker=1 GROUP BY dictionary,reading,rank HAVING count(DISTINCT term)>1)").fetchone()[0]
+    summary["sources"] = source_manifest(db)
     (output / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({k:v for k,v in summary.items() if k != "sources"}, ensure_ascii=False, indent=2))
 
@@ -169,7 +172,7 @@ def evaluate(db, tokens_path, probes_path, output):
 def export_reference(db, output):
     if output.exists():
         raise FileExistsError(output)
-    manifest = json.loads(db.execute("SELECT value FROM metadata WHERE key='manifest'").fetchone()[0])
+    manifest = source_manifest(db)
     manifest.pop("frequency_sources", None)
     rows = db.execute("SELECT sequence,term,reading,definition_tags,word_classes,score,sense_metadata FROM jitendex ORDER BY abs(sequence),sequence,term,reading")
     groups = iter(itertools.groupby(rows, key=lambda r:abs(r["sequence"])))

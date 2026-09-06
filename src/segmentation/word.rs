@@ -5,10 +5,7 @@ use serde::{
     Deserialize,
     Serialize,
 };
-use wana_kana::{
-    ConvertJapanese,
-    IsJapaneseStr,
-};
+use wana_kana::IsJapaneseStr;
 
 use super::{
     token_models::UnidicToken,
@@ -230,22 +227,11 @@ impl From<Word> for Term {
             word.lemma_form = citation.form.clone();
             word.lemma_hatsuon = citation.reading.clone();
         }
-        let head = word.main_word.as_ref().or_else(|| {
-            let (head, tail) = word.tokens.split_first()?;
-            (head.lemma_form == word.lemma_form
-                && tail.iter().all(|t| t.pos1 == UnidicTag::Jodoushi))
-            .then_some(head)
-        });
-        // Main-word rules normalize readings, while untouched UniDic heads retain katakana.
-        // Canonicalize before occurrence merging so the same lexeme does not conflict with itself.
-        let contextual_lexeme =
-            head.map(|head| (head.lexeme.clone(), head.lemma_hatsuon.to_hiragana()));
         if let Some(main_word) = word.main_word {
             let is_kana = main_word.surface.as_str().is_kana();
             Term {
                 possible_known_match: None,
                 lexical_family: None,
-                contextual_lexeme,
                 id: 0,
                 lemma_form: main_word.lemma_form,
                 lemma_reading: main_word.lemma_hatsuon,
@@ -265,7 +251,6 @@ impl From<Word> for Term {
             Term {
                 possible_known_match: None,
                 lexical_family: None,
-                contextual_lexeme,
                 id: 0,
                 lemma_form: word.lemma_form,
                 lemma_reading: word.lemma_hatsuon,

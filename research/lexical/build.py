@@ -13,6 +13,8 @@ import zipfile
 from urllib.parse import parse_qs, urlsplit
 from pathlib import Path
 
+from source_policy import include_source, policy_manifest
+
 SCHEMA_VERSION = 2
 SOURCE_URLS = {
     "jmdict": "https://www.edrdg.org/pub/Nihongo/JMdict_e.gz",
@@ -164,6 +166,7 @@ def build(jmdict, jitendex, frequency_dir, output):
                 "jitendex": manifest_file(jitendex, SOURCE_URLS["jitendex"]), "frequency_sources": [],
                 "license": "CC-BY-SA-4.0", "attribution": "JMdict: EDRDG / James William Breen; Jitendex: Stephen Kraus and contributors",
                 "license_urls": ["https://www.edrdg.org/edrdg/licence.html", "https://jitendex.org/pages/legal.html"]}
+    manifest.update(policy_manifest())
     manifest["jmdict"].update(metadata)
     count = 0
     for record in records:
@@ -188,7 +191,7 @@ def build(jmdict, jitendex, frequency_dir, output):
         db.commit()
     print("Jitendex: complete export indexed", flush=True)
     for directory in sorted(frequency_dir.iterdir()):
-        if not directory.is_dir():
+        if not directory.is_dir() or not include_source(directory.name):
             continue
         source = {"dictionary": directory.name, "banks": []}
         for bank in sorted(directory.glob("term_meta_bank_*.json")):

@@ -23,7 +23,7 @@ fn u32_at(data: &[u8], offset: usize) -> Option<usize> {
 }
 impl<'a> KanaIndex<'a> {
     pub fn from_bytes(data: &'a [u8]) -> Option<Self> {
-        if data.get(..8)? != b"KANAIDX1" {
+        if data.get(..8)? != b"KANAIDX2" {
             return None;
         }
         let count = u32_at(data, 8)?;
@@ -102,8 +102,8 @@ impl Preference<'_> {
         false
     }
 }
-/// Requires a context-selected lexeme, never selects an interpretation from the user's cards.
-pub fn preference(reading: &str, lexeme: &str, pos: &POS) -> Option<Preference<'static>> {
+/// Offline preferred identity for this reading and POS, independent of the user's cards.
+pub fn preference(reading: &str, pos: &POS) -> Option<Preference<'static>> {
     let pos = match pos {
         POS::Noun => 1,
         POS::Verb | POS::SuruVerb => 2,
@@ -112,9 +112,8 @@ pub fn preference(reading: &str, lexeme: &str, pos: &POS) -> Option<Preference<'
         POS::Adverb => 16,
         _ => return None,
     };
-    let key = format!("{}\t{}", normalize(reading), normalize(lexeme));
-    let result = Preference { value: bundled().lookup(key.as_bytes())?, pos };
-    result.matches(lexeme).then_some(result)
+    let key = format!("{}\t{}", normalize(reading), pos);
+    Some(Preference { value: bundled().lookup(key.as_bytes())?, pos })
 }
 
 #[cfg(test)]
@@ -133,19 +132,26 @@ mod tests {
             previous = key;
         }
         assert!(index.lookup(b"absent").is_none());
-        assert!(KanaIndex::from_bytes(b"KANAIDX1").is_none());
-        assert!(KanaIndex::from_bytes(b"KANAIDX1\xff\xff\xff\xff").is_none());
+        assert!(KanaIndex::from_bytes(b"KANAIDX2").is_none());
+        assert!(KanaIndex::from_bytes(b"KANAIDX2\xff\xff\xff\xff").is_none());
     }
     #[test]
-    fn preferences_require_reading_lexeme_and_pos_agreement() {
-        assert!(preference("コト", "事", &POS::Noun).unwrap().matches("事"));
-        assert!(preference("できる", "出来る", &POS::Verb).unwrap().matches("出来る"));
-        assert!(preference("こと", "琴", &POS::Noun).is_none());
-        assert!(preference("できる", "出切る", &POS::Verb).is_none());
-        assert!(preference("はし", "橋", &POS::Noun).is_none());
-        assert!(preference("はし", "箸", &POS::Noun).is_none());
-        assert!(preference("こと", "事", &POS::Verb).is_none());
-        assert!(preference("じ", "事", &POS::Noun).is_none());
-        assert!(preference("", "", &POS::Noun).is_none());
+    fn preferences_require_reading_and_pos_and_keep_rivals_separate() {
+        for (reading, spelling, rival, pos) in [
+            ("コト", "事", "琴", POS::Noun),
+            ("できる", "出来る", "出切る", POS::Verb),
+            ("いく", "行く", "逝く", POS::Verb),
+            ("みせる", "見せる", "診せる", POS::Verb),
+            ("なし", "無し", "梨", POS::Noun),
+            ("まさに", "正に", "将に", POS::Adverb),
+        ] {
+            let selected = preference(reading, &pos).unwrap();
+            assert!(selected.matches(spelling));
+            assert!(!selected.matches(rival));
+        }
+        assert!(preference("はし", &POS::Noun).is_none());
+        assert!(preference("こと", &POS::Verb).is_none());
+        assert!(preference("みせる", &POS::Pronoun).is_none());
+        assert!(preference("", &POS::Noun).is_none());
     }
 }

@@ -6,13 +6,18 @@ A research-only hint combining kana preference, a legal dictionary spelling/read
 pair, Jitendex consistency, and the contextual UniDic lexeme handles the three reported
 examples. It abstains on the tested ambiguous はし cases. It is not wired into production.
 
+Source correction (2026-09-06): Anilist Top 500 is excluded because Yomine generated
+it. The frequency audit and totals below were regenerated from the five independent
+sources. The JMdict/Jitendex-only probe results are unaffected. See RUNTIME.md for
+the subsequently implemented matching policy.
+
 ## Sources and reproducibility
 
 | Source | Version | Records processed |
 | --- | --- | ---: |
 | Full JMdict English XML | 2026-09-05 | 218,714 entries |
 | Full Jitendex Yomitan export | 2026.08.11.0 | 435,448 rows |
-| Installed frequency dictionaries | six read-only snapshots | 2,108,727 records |
+| Installed frequency dictionaries | five independent read-only snapshots | 1,933,609 records |
 | Cached subtitle corpus | 47 files | 16,087 captions |
 
 JMdict supplies entry IDs, spelling/reading restrictions, per-sense restrictions,
@@ -27,7 +32,7 @@ attribution and builder hash are stored in the reference manifest. The portable
 export preserves all 218,714 JMdict entries and all 435,448 Jitendex rows; records
 without a current JMdict counterpart remain explicit rather than being dropped.
 The approximately 14.3 MB compressed export excludes glosses and example text.
-The approximately 544 MB SQLite research database additionally retains all frequency
+The approximately 518 MB SQLite research database additionally retains all frequency
 records and their source bank/row locations. Neither is loaded by the application.
 
 ## Full-vocabulary findings

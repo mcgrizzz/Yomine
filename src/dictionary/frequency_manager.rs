@@ -100,65 +100,6 @@ impl FrequencyManager {
         self.lexical.for_reading(self, reading)
     }
 
-    /// Rank evidence selects an occurrence among existing families; it never merges them.
-    /// Compare only within one installed source, independently of display weights.
-    /// A common written/kana pair must be explicitly linked by a kana marker. At
-    /// least one source must support that pair. Every rival needs a written-rank
-    /// comparison in some source, and no comparable source may disagree.
-    pub(crate) fn frequency_favors_family(
-        &self,
-        evidence: &super::lexical_evidence::ReadingEvidence,
-        target: &super::lexical_evidence::LexicalFamily,
-    ) -> bool {
-        use crate::core::utils::normalize_japanese_text;
-        // Deliberately conservative rank heuristics, not estimated probabilities.
-        const COMMON_RANK: u32 = 1_000;
-        const PAIR_SPREAD: u32 = 3;
-        const RIVAL_SEPARATION: u32 = 10;
-        let rivals: Vec<_> = evidence.written_families().filter(|f| *f != target).collect();
-        if rivals.is_empty() {
-            return false;
-        }
-        let mut supported = false;
-        let mut compared = vec![false; rivals.len()];
-        for dictionary in self.dictionaries.values() {
-            let rank = |family: &super::lexical_evidence::LexicalFamily, marker: bool| {
-                family
-                    .spellings
-                    .iter()
-                    .flat_map(|s| dictionary.get_frequencies_by_key(s).into_iter().flatten())
-                    .filter(|entry| {
-                        entry.value() > 0
-                            && entry.has_special_marker() == marker
-                            && entry
-                                .reading()
-                                .is_some_and(|r| normalize_japanese_text(r) == evidence.reading)
-                    })
-                    .map(|entry| entry.value())
-                    .min()
-            };
-            let Some(written) = rank(target, false) else { continue };
-            let kana = rank(target, true);
-            let pair_rank = written.max(kana.unwrap_or(written));
-            // Kana ranks can be repeated under several homophones (JPDB puts
-            // 65㋕ under both 行く and 逝く). They describe the kana spelling,
-            // not the competing written expression's individual frequency.
-            for (i, rival) in rivals.iter().enumerate() {
-                if let Some(rival_rank) = rank(rival, false) {
-                    if rival_rank <= pair_rank.saturating_mul(RIVAL_SEPARATION) {
-                        return false;
-                    }
-                    compared[i] = true;
-                }
-            }
-            if let Some(kana) = kana {
-                supported |= pair_rank <= COMMON_RANK
-                    && pair_rank <= written.min(kana).saturating_mul(PAIR_SPREAD);
-            }
-        }
-        supported && compared.into_iter().all(|covered| covered)
-    }
-
     fn new(states: Option<HashMap<String, DictionaryState>>) -> Self {
         let dict_states: HashMap<String, DictionaryState> = states.unwrap_or_default();
         FrequencyManager {
