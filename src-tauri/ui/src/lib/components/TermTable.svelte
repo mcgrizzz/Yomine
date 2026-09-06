@@ -457,13 +457,10 @@
 		if (defPopover) return;
 		if (!canMine || isMined(term)) return;
 		if (e.ctrlKey || e.metaKey) return;
-		// Only empty row space toggles — not cell content (copyable text, buttons).
-		// `.sentence`/`.meta` also match SentenceView's full-width blocks.
-		const target = e.target as HTMLElement;
-		if (
-			target !== e.currentTarget &&
-			!target.matches('.sel, .term-cell, .jlpt-cell, .sentence, .meta')
-		)
+		// Text wrappers and their padding belong to the row; only actual controls
+		// own their clicks. Dragging to select text is handled below.
+		const target = e.target as Element;
+		if (target.closest('button, input, select, textarea, a, summary, [contenteditable], [role="tooltip"]'))
 			return;
 		if (window.getSelection()?.toString()) return;
 		const key = termKey(term);
@@ -1068,6 +1065,7 @@
 	}
 	.num {
 		text-align: right;
+		user-select: none;
 	}
 	.term-cell {
 		display: inline-flex;
