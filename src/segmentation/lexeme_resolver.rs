@@ -1,12 +1,6 @@
 //! Which word a spelling denotes *at a given reading*.
 
-use std::{
-    collections::HashMap,
-    sync::{
-        Arc,
-        Mutex,
-    },
-};
+use std::sync::Arc;
 
 use vibrato::Tokenizer;
 
@@ -38,35 +32,27 @@ const NBEST_PATHS: usize = 12;
 pub struct CandidateLexemeResolver {
     /// `None` only in tests that exercise the non-lexical evidence path.
     tokenizer: Option<Arc<Tokenizer>>,
-    cache: Mutex<HashMap<(String, String), Option<String>>>,
 }
 
 impl CandidateLexemeResolver {
     pub fn new(tokenizer: Arc<Tokenizer>) -> Self {
-        Self { tokenizer: Some(tokenizer), cache: Mutex::new(HashMap::new()) }
+        Self { tokenizer: Some(tokenizer) }
     }
 
     #[cfg(test)]
     pub(crate) fn unresolving() -> Self {
-        Self { tokenizer: None, cache: Mutex::new(HashMap::new()) }
+        Self { tokenizer: None }
     }
 
     /// The unique lexeme in the inspected N-best paths, or `None` when those paths
     /// offer no such reading or conflicting words. This bounded search does not
     /// prove that every possible analysis has been inspected.
     pub fn resolve(&self, spelling: &str, reading: &str) -> Option<String> {
-        // Preserve the spelling that is analyzed: folding the cache key alone
-        // would make whichever script was queried first decide future answers.
-        let key = (spelling.to_string(), normalize_japanese_text(reading));
-        if let Some(canonical) = documented_alias(spelling, &key.1) {
+        let reading = normalize_japanese_text(reading);
+        if let Some(canonical) = documented_alias(spelling, &reading) {
             return Some(canonical.to_string());
         }
-        if let Some(cached) = self.cache.lock().expect("resolver cache poisoned").get(&key) {
-            return cached.clone();
-        }
-        let resolved = self.analyse(spelling, &key.1);
-        self.cache.lock().expect("resolver cache poisoned").insert(key, resolved.clone());
-        resolved
+        self.analyse(spelling, &reading)
     }
 
     fn analyse(&self, spelling: &str, reading: &str) -> Option<String> {
@@ -180,14 +166,5 @@ mod tests {
 
         assert_eq!(r.resolve("箸", "はし").as_deref(), Some("箸"));
         assert_ne!(r.resolve("箸", "はし"), r.resolve("甘い", "うまい"));
-    }
-
-    #[test]
-    fn the_answer_is_cached_per_spelling_and_reading() {
-        let Some(r) = resolver() else { return };
-
-        assert_eq!(r.resolve("甘い", "うまい"), r.resolve("甘い", "うまい"));
-        assert_ne!(r.resolve("甘い", "うまい"), r.resolve("甘い", "あまい"));
-        assert_eq!(r.cache.lock().unwrap().len(), 2, "one entry per (spelling, reading)");
     }
 }

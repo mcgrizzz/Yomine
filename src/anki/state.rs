@@ -603,24 +603,13 @@ mod classification_tests {
             jlpt_level: None,
         }
     }
-    fn linked_dictionary(name: &str, rival: u32, kana: u32) -> FrequencyDictionary {
-        let mut dict = dictionary(name, &[("行く", "いく", 44), ("逝く", "いく", rival)]);
-        dict.terms.get_mut("行く").unwrap().push(crate::dictionary::CacheFrequencyData::Nested {
-            reading: "イク".into(),
-            frequency: crate::dictionary::CacheFrequency::Complex {
-                value: kana,
-                display_value: Some(format!("{kana}㋕")),
-            },
-        });
-        dict
-    }
-
     #[test]
     fn precomputed_preference_ignores_display_weights_and_clears_stale_labels() {
-        let manager = Arc::new(FrequencyManager::from_dictionaries(vec![linked_dictionary(
-            "linked", 9328, 65,
+        let manager = Arc::new(FrequencyManager::from_dictionaries(vec![dictionary(
+            "display",
+            &[("逝く", "いく", 1)],
         )]));
-        manager.set_dictionary_state("linked", 0.0, false).unwrap();
+        manager.set_dictionary_state("display", 0.0, false).unwrap();
         let known = state(manager.clone(), &[("行く", "いく")]);
         let mut input = term("いく", "いく");
         input.part_of_speech = POS::Verb;
@@ -680,68 +669,13 @@ mod classification_tests {
 
     #[test]
     fn written_citation_takes_priority_over_preference_for_kana_source() {
-        let manager = Arc::new(FrequencyManager::from_dictionaries(vec![linked_dictionary(
-            "linked", 9328, 65,
-        )]));
+        let manager = Arc::new(FrequencyManager::from_dictionaries(vec![]));
         let anki = state(manager, &[("行く", "いく")]);
         // The validated citation says 逝く; the common homophone must not replace it.
         assert!(matches!(
             anki.classify("いった", "いった", "逝く", "いく", &POS::Verb, false),
             MatchResult::Unmatched
         ));
-    }
-
-    #[test]
-    fn installed_iku_entries_match_the_extracted_kana_to_iku_card() {
-        // Read-only snapshot of the independent installed dictionaries' いく records.
-        // In particular, JPDB repeats 65㋕ under 行く AND 逝く.
-        let snapshot: HashMap<String, Vec<(String, String, JsonFrequencyData)>> =
-            serde_json::from_str(include_str!("../../tests/fixtures/iku_frequency.json")).unwrap();
-        let dictionaries = snapshot
-            .into_iter()
-            .map(|(name, rows)| {
-                FrequencyDictionary::new(
-                    name,
-                    "fixture".into(),
-                    rows.into_iter()
-                        .map(|(term, data_type, data)| TermMetaBankV3 {
-                            term,
-                            data_type,
-                            data: Some(data),
-                        })
-                        .collect(),
-                )
-            })
-            .collect();
-        let manager = Arc::new(FrequencyManager::from_dictionaries(dictionaries));
-        let Some(tokenizer) = crate::segmentation::lexeme_resolver::test_tokenizer() else {
-            return;
-        };
-        let mut sentences = vec![Sentence {
-            id: 0,
-            source_id: 0,
-            text: "学校にいく。".into(),
-            segments: vec![],
-            timestamp: None,
-            comprehension: 0.0,
-        }];
-        let terms = extract_words(tokenizer.new_worker(), &mut sentences, &manager);
-        let input = terms.into_iter().find(|t| t.surface_form == "いく").expect("extract いく");
-        let anki = state(manager.clone(), &[("行く", "いく")]);
-        let (unknown, known) = anki.filter_existing_terms(vec![input.clone()]);
-        assert!(unknown.is_empty(), "actual dictionary entries must match 行く: {unknown:?}");
-        assert_eq!(known.len(), 1);
-        assert!(known[0].comprehension > 0.0);
-        assert!(known[0].possible_known_match.is_none());
-        assert!(anki.word_stats("いく", "いく", &POS::Verb).0);
-        let rare = state(manager.clone(), &[("逝く", "いく")]);
-        let (unknown, known) = rare.filter_existing_terms(vec![input]);
-        assert!(known.is_empty());
-        assert!(unknown[0].possible_known_match.is_none());
-        assert_eq!(unknown[0].comprehension, 0.0);
-        let reverse = state(manager, &[("いく", "いく")]);
-        assert!(reverse.word_stats("行く", "いく", &POS::Verb).0);
-        assert!(!reverse.word_stats("逝く", "いく", &POS::Verb).0);
     }
 
     fn promoted_nantonaku() -> Option<(Term, Arc<FrequencyManager>)> {
@@ -825,181 +759,26 @@ mod classification_tests {
         assert!(state.word_stats("はし", "ハシ", &POS::Noun).0);
     }
     #[test]
-    fn production_readings_use_dictionary_preferences_and_preserve_unresolved_matches() {
-        let Some(tokenizer) = crate::segmentation::lexeme_resolver::test_tokenizer() else {
-            return;
-        };
-        let cases = vec![
-            (
-                "うまい",
-                "うまい",
-                "上手い",
-                "旨い",
-                vec![
-                    dictionary(
-                        "JPDB",
-                        &[
-                            ("上手い", "うまい", 3055),
-                            ("旨い", "うまい", 15639),
-                            ("美い", "うまい", 62978),
-                            ("甘い", "うまい", 203801),
-                        ],
-                    ),
-                    dictionary(
-                        "Jiten",
-                        &[
-                            ("上手い", "うまい", 3267),
-                            ("旨い", "うまい", 14231),
-                            ("美い", "うまい", 33311),
-                            ("甘い", "うまい", 196331),
-                        ],
-                    ),
-                    dictionary("BCCWJ", &[("旨い", "", 375)]),
-                    dictionary("CC100", &[("右舞", "うまい", 127616)]),
-                ],
-            ),
-            (
-                "大事なことだ。",
-                "こと",
-                "事",
-                "事",
-                vec![
-                    dictionary(
-                        "JPDB",
-                        &[("事", "こと", 497), ("古都", "こと", 41264), ("縡", "こと", 208767)],
-                    ),
-                    dictionary(
-                        "Jiten",
-                        &[("事", "こと", 614), ("古都", "こと", 45881), ("縡", "こと", 380694)],
-                    ),
-                    dictionary("BCCWJ", &[("事", "", 15), ("言", "", 8490)]),
-                    dictionary("CC100", &[("湖都", "こと", 114543)]),
-                ],
-            ),
-            (
-                "明日くると思う。",
-                "くる",
-                "来る",
-                "来る",
-                vec![
-                    dictionary("JPDB", &[("来る", "くる", 53), ("繰る", "くる", 15253)]),
-                    dictionary("Jiten", &[("来る", "くる", 57), ("繰る", "くる", 22943)]),
-                    dictionary("BCCWJ", &[("来る", "", 56), ("繰る", "", 8195)]),
-                    dictionary("CC100", &[("刳る", "くる", 130946)]),
-                ],
-            ),
-            (
-                "学校にいく。",
-                "いく",
-                "行く",
-                "行く",
-                vec![
-                    dictionary(
-                        "JPDB",
-                        &[
-                            ("行く", "いく", 44),
-                            ("往く", "いく", 18835),
-                            ("逝く", "いく", 9328),
-                            ("幾", "いく", 6358),
-                        ],
-                    ),
-                    dictionary(
-                        "Jiten",
-                        &[
-                            ("行く", "いく", 48),
-                            ("往く", "いく", 30482),
-                            ("逝く", "いく", 6894),
-                            ("幾", "いく", 12949),
-                        ],
-                    ),
-                    dictionary(
-                        "BCCWJ",
-                        &[("行く", "", 58), ("逝く", "", 10637), ("幾", "", 72576)],
-                    ),
-                    dictionary("VN Freq", &[("異口", "いく", 31496)]),
-                ],
-            ),
-            (
-                "あとで話す。",
-                "あと",
-                "後",
-                "後",
-                vec![
-                    dictionary(
-                        "JPDB",
-                        &[("後", "あと", 235), ("跡", "あと", 2666), ("痕", "あと", 7039)],
-                    ),
-                    dictionary(
-                        "Jiten",
-                        &[("後", "あと", 574), ("跡", "あと", 3259), ("痕", "あと", 8137)],
-                    ),
-                    dictionary("BCCWJ", &[("後", "", 109), ("跡", "", 3219)]),
-                ],
-            ),
-            (
-                "そういうわけだ。",
-                "わけ",
-                "訳",
-                "訳",
-                vec![
-                    dictionary(
-                        "JPDB",
-                        &[("訳", "わけ", 1756), ("分け", "わけ", 14563), ("別け", "わけ", 136413)],
-                    ),
-                    dictionary(
-                        "Jiten",
-                        &[("訳", "わけ", 1929), ("分け", "わけ", 16847), ("別け", "わけ", 193222)],
-                    ),
-                    dictionary("BCCWJ", &[("訳", "", 92), ("分け", "", 88853), ("分", "", 1057)]),
-                ],
-            ),
-        ];
-        for (text, surface, card, _lexeme, dictionaries) in cases {
-            let frequencies = Arc::new(FrequencyManager::from_dictionaries(dictionaries));
-            for name in ["CC100", "VN Freq"] {
-                if frequencies.get_dictionary_state(name).is_some() {
-                    frequencies.set_dictionary_state(name, 0.0, false).unwrap();
-                }
-            }
-            let mut sentences = vec![Sentence {
-                id: 0,
-                source_id: 0,
-                text: text.to_string(),
-                segments: Vec::new(),
-                timestamp: None,
-                comprehension: 0.0,
-            }];
-            let terms = extract_words(tokenizer.new_worker(), &mut sentences, &frequencies);
-            let term = terms
-                .into_iter()
-                .find(|term| term.surface_form == surface)
-                .unwrap_or_else(|| panic!("production extraction lost {surface} in {text}"));
-
-            let known = state(frequencies.clone(), &[(card, surface)]);
-            let (possible, established) = known.filter_existing_terms(vec![term.clone()]);
-            if matches!(surface, "うまい" | "こと" | "いく" | "くる" | "あと") {
-                assert!(
-                    possible.is_empty(),
-                    "{text}: precomputed preference should match: {term:?}"
-                );
-                assert_eq!(established.len(), 1);
-                assert!(established[0].comprehension > 0.0);
-                assert!(established[0].possible_known_match.is_none());
-                assert!(known.term_stats(&term).0);
-            } else {
-                assert!(established.is_empty(), "{text}: unresolved readings are not known");
-                assert_eq!(possible.len(), 1, "{text}: possible match must remain minable");
-                assert_eq!(possible[0].possible_known_match.as_deref(), Some(card), "{text}");
-                assert_eq!(possible[0].comprehension, 0.0, "{text}");
-            }
-            let unknown = state(frequencies, &[]);
-            let (unmatched, established) = unknown.filter_existing_terms(vec![term]);
-            assert!(established.is_empty());
-            assert_eq!(unmatched.len(), 1, "{text}: no matching card must remain minable");
-            assert_eq!(unmatched[0].possible_known_match, None, "{text}");
-            assert_eq!(unmatched[0].comprehension, 0.0, "{text}");
-        }
+    fn unresolved_matches_include_disabled_dictionary_evidence() {
+        let frequencies = Arc::new(FrequencyManager::from_dictionaries(vec![
+            dictionary("enabled", &[("訳", "わけ", 1)]),
+            dictionary("disabled", &[("分け", "わけ", 2)]),
+        ]));
+        frequencies.set_dictionary_state("disabled", 0.0, false).unwrap();
+        let anki = state(frequencies.clone(), &[("訳", "わけ")]);
+        let input = term("わけ", "わけ");
+        let (possible, known) = anki.filter_existing_terms(vec![input.clone()]);
+        assert!(known.is_empty());
+        assert_eq!(possible[0].possible_known_match.as_deref(), Some("訳"));
+        assert_eq!(possible[0].comprehension, 0.0);
+        assert_eq!(anki.term_stats(&input), (false, 0.0));
+        let removed = state(frequencies, &[]);
+        let (unmatched, known) = removed.filter_existing_terms(possible);
+        assert!(known.is_empty());
+        assert!(unmatched[0].possible_known_match.is_none());
+        assert_eq!(unmatched[0].comprehension, 0.0);
     }
+
     #[test]
     fn dictionary_preferences_match_extracted_examples_and_refresh_cards() {
         let Some(tokenizer) = crate::segmentation::lexeme_resolver::test_tokenizer() else {
@@ -1008,6 +787,10 @@ mod classification_tests {
         let manager = Arc::new(FrequencyManager::from_dictionaries(vec![]));
         for (text, surface, reading, card, wrong_card) in [
             ("大事なことだ。", "こと", "こと", "事", "琴"),
+            ("学校にいく。", "いく", "いく", "行く", "逝く"),
+            ("明日くると思う。", "くる", "くる", "来る", "繰る"),
+            ("うまい", "うまい", "うまい", "上手い", "右舞"),
+            ("あとで話す。", "あと", "あと", "後", "跡"),
             ("日本語ができる。", "できる", "できる", "出来る", "出切る"),
             ("昨日はできなかった。", "できなかった", "できる", "出来る", "出切る"),
             ("おっきな花火を上げてみせるわ", "みせる", "みせる", "見せる", "診せる"),

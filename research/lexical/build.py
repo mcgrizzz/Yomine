@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build an offline research reference; never writes to installed dictionary data."""
+"""Import the dictionary evidence used by compile_runtime.py; installed data stays read-only."""
 import argparse
 import gzip
 import hashlib
@@ -10,12 +10,11 @@ import sqlite3
 import unicodedata
 import xml.etree.ElementTree as ET
 import zipfile
-from urllib.parse import parse_qs, urlsplit
 from pathlib import Path
 
 from source_policy import include_source, policy_manifest
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 SOURCE_URLS = {
     "jmdict": "https://www.edrdg.org/pub/Nihongo/JMdict_e.gz",
     "jitendex": "https://github.com/stephenmk/stephenmk.github.io/releases/latest/download/jitendex-yomitan.zip",
@@ -37,22 +36,17 @@ def values(node, tag):
 
 
 def entry_record(entry):
-    spellings = [{"text": k.findtext("keb"), "info": values(k, "ke_inf"),
-                  "priority": values(k, "ke_pri")} for k in entry.findall("k_ele")]
+    spellings = [{"text": k.findtext("keb"), "info": values(k, "ke_inf")}
+                 for k in entry.findall("k_ele")]
     readings = [{"text": r.findtext("reb"), "restrictions": values(r, "re_restr"),
-                 "no_kanji": r.find("re_nokanji") is not None,
-                 "info": values(r, "re_inf"), "priority": values(r, "re_pri")}
+                 "no_kanji": r.find("re_nokanji") is not None, "info": values(r, "re_inf")}
                 for r in entry.findall("r_ele")]
     senses = []
     inherited_pos = []
-    for number, sense in enumerate(entry.findall("sense"), 1):
-        explicit_pos = values(sense, "pos")
-        inherited_pos = explicit_pos or inherited_pos
-        senses.append({"number": number, "pos": inherited_pos, "pos_explicit": explicit_pos,
-                       "spellings": values(sense, "stagk"), "readings": values(sense, "stagr"),
-                       "misc": values(sense, "misc"), "field": values(sense, "field"),
-                       "dialect": values(sense, "dial"), "notes": values(sense, "s_inf"),
-                       "cross_references": values(sense, "xref")})
+    for sense in entry.findall("sense"):
+        inherited_pos = values(sense, "pos") or inherited_pos
+        senses.append({"pos": inherited_pos, "spellings": values(sense, "stagk"),
+                       "readings": values(sense, "stagr")})
     return {"id": int(entry.findtext("ent_seq")), "spellings": spellings,
             "readings": readings, "senses": senses}
 
@@ -63,7 +57,7 @@ def legal_pairs(record):
         candidates = [k for k in record["spellings"]
                       if not reading["restrictions"] or k["text"] in reading["restrictions"]]
         if reading["no_kanji"] or not record["spellings"]:
-            candidates = [{"text": reading["text"], "info": [], "priority": []}]
+            candidates = [{"text": reading["text"], "info": []}]
         for spelling in candidates:
             for sense in record["senses"]:
                 if sense["readings"] and reading["text"] not in sense["readings"]:
@@ -71,10 +65,8 @@ def legal_pairs(record):
                 if sense["spellings"] and spelling["text"] not in sense["spellings"]:
                     continue
                 yield (record["id"], normalize(reading["text"]), spelling["text"],
-                       sense["number"], packed(sense["pos"]), packed(sense["misc"]),
-                       int("uk" in sense["misc"]), int(reading["no_kanji"]),
-                       packed(spelling["info"]), packed(reading["info"]),
-                       packed(sorted(set(spelling["priority"] + reading["priority"]))))
+                       packed(sense["pos"]), packed(spelling["info"]),
+                       packed(reading["info"]), int(reading["no_kanji"]))
 
 
 def parse_jmdict(path):
@@ -97,49 +89,6 @@ def parse_jmdict(path):
     return metadata, records()
 
 
-def kana_paths(value, path=""):
-    """Record exact metadata paths; do not spread a sense-local tag to every sense."""
-    if isinstance(value, dict):
-        if value.get("title") == "word usually written using kana alone":
-            yield path
-        for key, child in value.items():
-            yield from kana_paths(child, path + "/" + key)
-    elif isinstance(value, list):
-        for index, child in enumerate(value):
-            yield from kana_paths(child, path + "/" + str(index))
-
-
-def lexical_structure(value):
-    """Preserve Jitendex sense-group inheritance without copying glosses/examples."""
-    if isinstance(value, list):
-        return [item for child in value for item in lexical_structure(child)]
-    if not isinstance(value, dict):
-        return []
-    data = value.get("data", {})
-    kind = data.get("content")
-    if kind in {"glossary", "extra-info", "attribution", "forms-table"}:
-        return []
-    if kind in {"misc-info", "part-of-speech-info", "field-info", "dialect-info"}:
-        return [{"kind": kind, "code": data.get("code"), "title": value.get("title")}]
-    if kind == "redirect-glossary":
-        def links(node):
-            if isinstance(node, dict):
-                if node.get("tag") == "a" and node.get("href", "").startswith("?query="):
-                    query = parse_qs(urlsplit(node["href"]).query)
-                    yield {"kind": "redirect", "target": query.get("query", [None])[0],
-                           "reading": query.get("primary_reading", [None])[0]}
-                for child in node.values():
-                    yield from links(child)
-            elif isinstance(node, list):
-                for child in node:
-                    yield from links(child)
-        return list(links(value))
-    children = lexical_structure(value.get("content", []))
-    if kind in {"sense-groups", "sense-group", "sense"}:
-        return [{"kind": kind, "children": children}]
-    return children
-
-
 def manifest_file(path, url=None):
     return {"file": path.name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
             "bytes": path.stat().st_size, "url": url}
@@ -152,12 +101,9 @@ def build(jmdict, jitendex, frequency_dir, output):
     db = sqlite3.connect(output)
     db.executescript("""
     CREATE TABLE metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
-    CREATE TABLE entries(id INTEGER PRIMARY KEY, data TEXT NOT NULL);
-    CREATE TABLE pairs(entry_id INTEGER, reading TEXT, spelling TEXT, sense INTEGER,
-        pos TEXT, misc TEXT, kana_preferred INTEGER, no_kanji INTEGER,
-        spelling_info TEXT, reading_info TEXT, priority TEXT);
-    CREATE TABLE jitendex(sequence INTEGER, term TEXT, reading TEXT, definition_tags TEXT,
-        word_classes TEXT, score REAL, kana_paths TEXT, sense_metadata TEXT, source_bank TEXT, source_row INTEGER);
+    CREATE TABLE pairs(entry_id INTEGER, reading TEXT, spelling TEXT, pos TEXT,
+        spelling_info TEXT, reading_info TEXT, no_kanji INTEGER);
+    CREATE TABLE jitendex(sequence INTEGER, term TEXT, reading TEXT);
     CREATE TABLE frequencies(dictionary TEXT, term TEXT, reading TEXT, rank INTEGER,
         kana_marker INTEGER, source_bank TEXT, source_row INTEGER);
     """)
@@ -170,8 +116,7 @@ def build(jmdict, jitendex, frequency_dir, output):
     manifest["jmdict"].update(metadata)
     count = 0
     for record in records:
-        db.execute("INSERT INTO entries VALUES (?,?)", (record["id"], packed(record)))
-        db.executemany("INSERT INTO pairs VALUES (?,?,?,?,?,?,?,?,?,?,?)", legal_pairs(record))
+        db.executemany("INSERT INTO pairs VALUES (?,?,?,?,?,?,?)", legal_pairs(record))
         count += 1
     db.commit()
     print(f"JMdict: {count} entries", flush=True)
@@ -181,15 +126,14 @@ def build(jmdict, jitendex, frequency_dir, output):
             if not re.fullmatch(r"term_bank_\d+\.json", bank):
                 continue
             batch = []
-            for number, row in enumerate(json.loads(archive.read(bank))):
+            for row in json.loads(archive.read(bank)):
                 if len(row) != 8:
-                    raise ValueError(f"Unexpected Jitendex term format: {bank}:{number}")
-                term, reading, tags, classes, score, glossary, sequence, _ = row
-                batch.append((sequence, term, normalize(reading), tags, classes, score,
-                              packed(list(kana_paths(glossary))), packed(lexical_structure(glossary)), bank, number))
-            db.executemany("INSERT INTO jitendex VALUES (?,?,?,?,?,?,?,?,?,?)", batch)
+                    raise ValueError(f"Unexpected Jitendex term format in {bank}")
+                term, reading, _tags, _classes, _score, _glossary, sequence, _ = row
+                batch.append((sequence, term, normalize(reading)))
+            db.executemany("INSERT INTO jitendex VALUES (?,?,?)", batch)
         db.commit()
-    print("Jitendex: complete export indexed", flush=True)
+    print("Jitendex: entry coverage imported", flush=True)
     for directory in sorted(frequency_dir.iterdir()):
         if not directory.is_dir() or not include_source(directory.name):
             continue
@@ -214,13 +158,6 @@ def build(jmdict, jitendex, frequency_dir, output):
             manifest["frequency_sources"].append(source)
         db.commit()
         print(f"Frequency: {directory.name}", flush=True)
-    db.executescript("""
-    CREATE INDEX pairs_reading ON pairs(reading, entry_id);
-    CREATE INDEX pairs_spelling ON pairs(spelling, reading);
-    CREATE INDEX jitendex_pair ON jitendex(sequence, reading, term);
-    CREATE INDEX frequency_pair ON frequencies(term, reading, dictionary);
-    CREATE INDEX frequency_reading ON frequencies(reading);
-    """)
     db.execute("INSERT INTO metadata VALUES ('manifest',?)", (packed(manifest),))
     db.commit()
     assert db.execute("PRAGMA integrity_check").fetchone()[0] == "ok"

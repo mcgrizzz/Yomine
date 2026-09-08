@@ -35,7 +35,6 @@ pub struct LexicalFamily {
 }
 #[derive(Clone, Debug, Default)]
 pub struct ReadingEvidence {
-    pub reading: String,
     pub families: Vec<LexicalFamily>,
 }
 /// Dictionary interpretation is selected before consulting the user's cards.
@@ -117,7 +116,7 @@ impl LexicalEvidence {
                 resolver.as_ref().and_then(|r| r.resolve(spelling, &reading))
             })
         };
-        let result = Arc::new(ReadingEvidence { reading: reading.clone(), families });
+        let result = Arc::new(ReadingEvidence { families });
         self.cache.lock().expect("lexical cache poisoned").insert(reading, result.clone());
         result
     }

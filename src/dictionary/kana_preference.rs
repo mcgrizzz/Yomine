@@ -5,7 +5,7 @@ use crate::segmentation::word::POS;
 const DATA: &[u8] = include_bytes!("../../assets/kana-preference.bin");
 
 #[derive(Clone, Copy)]
-pub struct KanaIndex<'a> {
+struct KanaIndex<'a> {
     data: &'a [u8],
     count: usize,
 }
@@ -13,7 +13,7 @@ fn u32_at(data: &[u8], offset: usize) -> Option<usize> {
     Some(u32::from_le_bytes(data.get(offset..offset.checked_add(4)?)?.try_into().ok()?) as usize)
 }
 impl<'a> KanaIndex<'a> {
-    pub fn from_bytes(data: &'a [u8]) -> Option<Self> {
+    fn from_bytes(data: &'a [u8]) -> Option<Self> {
         if data.get(..8)? != b"KANAIDX2" {
             return None;
         }
@@ -21,13 +21,7 @@ impl<'a> KanaIndex<'a> {
         data.get(..12usize.checked_add(count.checked_mul(16)?)?)?;
         Some(Self { data, count })
     }
-    pub fn len(&self) -> usize {
-        self.count
-    }
-    pub fn is_empty(&self) -> bool {
-        self.count == 0
-    }
-    pub fn record(&self, index: usize) -> Option<(&'a [u8], &'a [u8])> {
+    fn record(&self, index: usize) -> Option<(&'a [u8], &'a [u8])> {
         if index >= self.count {
             return None;
         }
@@ -41,7 +35,7 @@ impl<'a> KanaIndex<'a> {
             self.data.get(value..value.checked_add(value_len)?)?,
         ))
     }
-    pub fn lookup(&self, key: &[u8]) -> Option<&'a [u8]> {
+    fn lookup(&self, key: &[u8]) -> Option<&'a [u8]> {
         let (mut low, mut high) = (0, self.count);
         while low < high {
             let mid = low + (high - low) / 2;
@@ -55,16 +49,16 @@ impl<'a> KanaIndex<'a> {
         None
     }
 }
-pub fn bundled() -> KanaIndex<'static> {
+fn bundled() -> KanaIndex<'static> {
     KanaIndex::from_bytes(DATA).expect("validated bundled kana index")
 }
 
-pub struct Preference<'a> {
+pub(crate) struct Preference<'a> {
     value: &'a [u8],
     pos: u32,
 }
 impl Preference<'_> {
-    pub fn matches(&self, spelling: &str) -> bool {
+    pub(crate) fn matches(&self, spelling: &str) -> bool {
         let spelling = fold_katakana(spelling);
         let Some(count) = self.value.get(4..6).map(|s| u16::from_le_bytes([s[0], s[1]])) else {
             return false;
@@ -94,7 +88,7 @@ impl Preference<'_> {
     }
 }
 /// Offline preferred identity for this reading and POS, independent of the user's cards.
-pub fn preference(reading: &str, pos: &POS) -> Option<Preference<'static>> {
+pub(crate) fn preference(reading: &str, pos: &POS) -> Option<Preference<'static>> {
     let pos = match pos {
         POS::Noun => 1,
         POS::Verb | POS::SuruVerb => 2,
@@ -113,9 +107,9 @@ mod tests {
     #[test]
     fn complete_asset_is_sorted_and_searchable() {
         let index = bundled();
-        assert!(index.len() > 10_000);
+        assert!(index.count > 10_000);
         let mut previous = &[][..];
-        for i in 0..index.len() {
+        for i in 0..index.count {
             let (key, value) = index.record(i).unwrap();
             assert!(key > previous);
             assert_eq!(index.lookup(key), Some(value));

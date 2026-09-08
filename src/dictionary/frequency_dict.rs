@@ -29,7 +29,7 @@ pub struct FrequencyDictionary {
 
 impl FrequencyDictionary {
     /// Terms this dictionary writes with `reading`, which must already be normalized.
-    pub fn terms_with_reading(&self, reading: &str) -> &[String] {
+    pub(crate) fn terms_with_reading(&self, reading: &str) -> &[String] {
         self.readings.get(reading).map_or(&[], Vec::as_slice)
     }
 
@@ -87,9 +87,7 @@ impl FrequencyDictionary {
                 },
             );
 
-        let mut dict = FrequencyDictionary { title, revision, terms, readings: HashMap::new() };
-        dict.index_readings();
-        dict
+        FrequencyDictionary { title, revision, terms, readings: HashMap::new() }
     }
 
     //If dictionary form is in kana

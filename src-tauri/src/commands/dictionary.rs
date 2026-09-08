@@ -219,6 +219,7 @@ pub(crate) async fn reload_and_swap(
             return Err("Language tools are still loading".to_string());
         };
         tools.frequency_manager = Arc::clone(&manager);
+        guard.invalidate_dictionary_evidence();
         guard.knowledge_dirty.store(true, Ordering::Relaxed);
     }
 

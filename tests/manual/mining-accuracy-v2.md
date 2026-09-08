@@ -18,7 +18,7 @@ Rebuild/restart the app and reload the subtitle file after changing the backend.
 
 The precomputed policy uses JMdict, Jitendex and independent frequency sources.
 It selects a usual dictionary identity per reading and POS, not a sentence's meaning.
-See [the policy and reproduction instructions](../../research/lexical/RUNTIME.md).
+See [the policy and reproduction instructions](../../research/lexical/README.md).
 Anilist Top 500 must never be used as reference data or regression evidence.
 Installed dictionaries, including disabled dictionaries and marker entries, still
 supply the lexical fallback. Reading-less records supply no reading candidates.
