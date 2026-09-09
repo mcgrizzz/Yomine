@@ -129,6 +129,19 @@
 		catalogConnection = '';
 	}
 
+	function restoreDefault() {
+		draft = copyDraft(defaults);
+		expandedModel = null;
+		adding = false;
+		selectedNewModel = '';
+		removed = null;
+		showKey = false;
+		saveError = null;
+		editConnection();
+		editYomitan();
+		guard.disarm();
+	}
+
 	function editConnection() {
 		ankiGeneration++;
 		ankiPhase = 'idle';
@@ -442,14 +455,6 @@
 								</details>{:else}<p class="hint">
 									Tests use the values above. Save changes to apply them.
 								</p>{/if}
-							<button
-								type="button"
-								class="reset"
-								onclick={() => {
-									draft.anki_connection = { port: DEFAULT_PORT, api_key: '' };
-									editConnection();
-								}}>Reset to port 8765 with no key</button
-							>
 						</div>
 					{/if}
 				</div>
@@ -493,14 +498,7 @@
 									class="hint"
 								>
 									{yomitanVersion ? `Yomitan ${yomitanVersion}. ` : ''}Tests use the entered URL.
-								</p>{/if}<button
-								type="button"
-								class="reset"
-								onclick={() => {
-									draft.yomitan_url = DEFAULT_YOMITAN_URL;
-									editYomitan();
-								}}>Reset URL</button
-							>
+								</p>{/if}
 						</div>{/if}
 				</div>
 			</section>
@@ -643,38 +641,28 @@
 						step="1"
 						bind:value={draft.anki_interval}
 						aria-label="Review interval for full comprehension"
-					/><span class="hint">days</span><button
-						type="button"
-						class="reset"
-						onclick={() => (draft.anki_interval = DEFAULT_INTERVAL)}>Reset</button
-					>
+					/><span class="hint">days</span>
 				</div>
 			</section>
 		</fieldset>
 	</form>
 	{#snippet footer()}
-		<div class="footer">
-			{#if saveError}<p class="error" role="alert">{saveError}</p>{/if}
-			<div class="footer-row">
-				<span class="hint" role="status"
-					>{saving
-						? 'Saving…'
-						: guard.armed
-							? 'Unsaved changes — close again to discard'
-							: dirty
-								? 'Unsaved changes'
-								: 'No unsaved changes'}</span
-				>
-				<div class="footer-actions">
-					<button disabled={!dirty || saving} onclick={revert}>Revert changes</button><button
-						class="primary"
-						type="submit"
-						form="anki-settings-form"
-						disabled={!dirty || saving}>{saving ? 'Saving…' : 'Save changes'}</button
-					>
-				</div>
-			</div>
+		<hr />
+		{#if saveError}<p class="save-error error" role="alert">{saveError}</p>{/if}
+		<div class="dirty" role="status">
+			{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings have
+				been modified{/if}
 		</div>
+		<footer>
+			<button
+				class="primary"
+				type="submit"
+				form="anki-settings-form"
+				disabled={!dirty || !validPort || saving}>Save Settings</button
+			>
+			<button disabled={!dirty || saving} onclick={revert}>Cancel</button>
+			<button class="right" disabled={saving} onclick={restoreDefault}>Restore Default</button>
+		</footer>
 	{/snippet}
 </Modal>
 
@@ -711,8 +699,6 @@
 	.mapping-actions,
 	.catalog-status,
 	.removed,
-	.footer-row,
-	.footer-actions,
 	.input-row,
 	.add-row {
 		display: flex;
@@ -721,8 +707,7 @@
 	}
 	.section-heading,
 	.mapping-row,
-	.catalog-status,
-	.footer-row {
+	.catalog-status {
 		justify-content: space-between;
 	}
 	.connection,
@@ -841,9 +826,6 @@
 		font-size: 0.8rem;
 		padding: 0.25rem 0;
 	}
-	.panel > .reset {
-		margin-top: 0.4rem;
-	}
 	.danger {
 		color: var(--danger);
 	}
@@ -879,15 +861,28 @@
 	.estimate > div:first-child {
 		flex: 1;
 	}
-	.footer {
+	hr {
+		border: none;
 		border-top: 1px solid var(--border);
-		padding: 0.75rem 1rem 0;
+		margin: 0 1rem;
 	}
-	.footer > .error {
-		margin: 0 0 0.5rem;
+	.save-error {
+		margin: 0.5rem 1rem;
 	}
-	.footer-actions {
-		flex-shrink: 0;
+	.dirty {
+		min-height: 1.2rem;
+		padding: 0 1rem;
+		font-size: 0.85rem;
+		color: var(--warning);
+	}
+	footer {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0 1rem;
+	}
+	footer .right {
+		margin-left: auto;
 	}
 	button:disabled {
 		opacity: 0.5;
@@ -913,9 +908,6 @@
 			align-items: start;
 			flex-direction: column;
 			gap: 0.5rem;
-		}
-		.footer-row {
-			flex-wrap: wrap;
 		}
 		.input-row {
 			flex-wrap: wrap;
