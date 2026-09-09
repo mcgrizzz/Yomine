@@ -1,4 +1,10 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::{
+        LazyLock,
+        RwLock,
+    },
+};
 
 use reqwest::Client;
 use serde::{
@@ -6,7 +12,17 @@ use serde::{
     Serialize,
 };
 
-use crate::core::errors::YomineError;
+use crate::core::{
+    errors::YomineError,
+    settings::AnkiConnectionSettings,
+};
+
+static CONNECTION: LazyLock<RwLock<AnkiConnectionSettings>> =
+    LazyLock::new(|| RwLock::new(AnkiConnectionSettings::default()));
+
+pub fn configure_connection(settings: AnkiConnectionSettings) {
+    *CONNECTION.write().unwrap() = settings;
+}
 
 #[derive(Debug)]
 pub struct Deck {
@@ -77,6 +93,15 @@ async fn make_request<T: for<'de> Deserialize<'de>>(
     action: &str,
     params: Option<serde_json::Value>,
 ) -> Result<ApiResponse<T>, reqwest::Error> {
+    let request = build_request(&CONNECTION.read().unwrap(), action, params);
+    request.send().await?.json().await
+}
+
+fn build_request(
+    connection: &AnkiConnectionSettings,
+    action: &str,
+    params: Option<serde_json::Value>,
+) -> reqwest::RequestBuilder {
     let mut body = serde_json::Map::new();
     body.insert("action".to_string(), serde_json::Value::String(action.to_string()));
     body.insert("version".to_string(), serde_json::Value::Number((6).into()));
@@ -85,13 +110,12 @@ async fn make_request<T: for<'de> Deserialize<'de>>(
         body.insert("params".to_string(), params);
     }
 
-    let response: ApiResponse<T> =
-        Client::new().post("http://localhost:8765/").json(&body).send().await?.json().await?;
-
-    Ok(response)
+    if !connection.api_key.is_empty() {
+        body.insert("key".to_string(), serde_json::Value::String(connection.api_key.clone()));
+    }
+    Client::new().post(format!("http://localhost:{}/", connection.port)).json(&body)
 }
 
-//Will just use to check if ankiconnect is online
 pub async fn get_version() -> Result<u32, YomineError> {
     let response: ApiResponse<u32> = make_request("version", None).await?;
     match (response.result, response.error) {
@@ -208,5 +232,43 @@ pub async fn get_sample_note_for_model(model_name: &str) -> Result<Option<Note>,
         Ok(notes.into_iter().next())
     } else {
         Ok(None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn default_requests_keep_the_unauthenticated_protocol() {
+        let request =
+            build_request(&AnkiConnectionSettings::default(), "version", None).build().unwrap();
+        assert_eq!(request.url().as_str(), "http://localhost:8765/");
+        assert_eq!(request.method(), reqwest::Method::POST);
+        let body: serde_json::Value =
+            serde_json::from_slice(request.body().unwrap().as_bytes().unwrap()).unwrap();
+        assert_eq!(body, json!({ "action": "version", "version": 6 }));
+    }
+
+    #[test]
+    fn custom_connection_sends_key_at_the_top_level() {
+        let connection = AnkiConnectionSettings {
+            port: std::num::NonZeroU16::new(18765).unwrap(),
+            api_key: " key-\"with\\escapes ".into(),
+        };
+        for (action, params) in
+            [("version", None), ("findNotes", Some(json!({ "query": "deck:Default" })))]
+        {
+            let request = build_request(&connection, action, params.clone()).build().unwrap();
+            assert_eq!(request.url().as_str(), "http://localhost:18765/");
+            let body: serde_json::Value =
+                serde_json::from_slice(request.body().unwrap().as_bytes().unwrap()).unwrap();
+            assert_eq!(body["action"], action);
+            assert_eq!(body["version"], 6);
+            assert_eq!(body["key"], connection.api_key);
+            assert_eq!(body.get("params"), params.as_ref());
+        }
     }
 }

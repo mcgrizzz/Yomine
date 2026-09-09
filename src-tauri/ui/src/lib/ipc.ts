@@ -213,8 +213,14 @@ export type SentenceColoring = 'knowledge' | 'none';
 /** Mirrors `UnderlineToggles` (core/settings.rs): per-state underline visibility. */
 export type UnderlineToggles = Record<SegmentKnowledge, boolean>;
 
+export interface AnkiConnectionSettings {
+	port: number;
+	api_key: string;
+}
+
 export interface SettingsData {
 	anki_model_mappings: Record<string, FieldMapping>;
+	anki_connection: AnkiConnectionSettings;
 	anki_interval: number;
 	websocket_settings: { port: number };
 	frequency_weights: Record<string, FrequencyDictionarySetting>;

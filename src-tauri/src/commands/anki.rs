@@ -20,7 +20,7 @@ pub async fn get_anki_status() -> AnkiStatus {
 /// offline so the UI can say so.
 #[tauri::command]
 pub async fn list_anki_models() -> Result<Vec<AnkiModelInfo>, String> {
-    anki::api::get_version().await.map_err(|_| "Anki Offline".to_string())?;
+    anki::api::get_version().await.map_err(|e| e.to_string())?;
 
     let models = anki::get_models().await.map_err(|e| format!("Failed to fetch models: {}", e))?;
 

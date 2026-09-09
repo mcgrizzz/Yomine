@@ -263,9 +263,14 @@ pub fn save_settings(
     // may have been started before that command returned its updated settings.
     settings.frequency_weights = guard.settings.frequency_weights.clone();
     let summary_changed = guard.settings.anki_interval != settings.anki_interval;
-    let matching_changed =
-        summary_changed || guard.settings.anki_model_mappings != settings.anki_model_mappings;
+    let connection_changed = guard.settings.anki_connection != settings.anki_connection;
+    let matching_changed = summary_changed
+        || connection_changed
+        || guard.settings.anki_model_mappings != settings.anki_model_mappings;
     persistence::save_json(&settings, "settings.json").map_err(|e| e.to_string())?;
+    if connection_changed {
+        yomine::anki::api::configure_connection(settings.anki_connection.clone());
+    }
     guard.settings = settings.clone();
     if let Some(tools) = guard.language_tools.as_mut() {
         tools.known_interval = settings.anki_interval;

@@ -5,7 +5,10 @@
 //! derive serde (Constitution III). The on-disk format (`settings.json`) is
 //! unchanged, so existing users' settings load in both apps.
 
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    num::NonZeroU16,
+};
 
 use crate::anki::FieldMapping;
 
@@ -31,6 +34,19 @@ pub struct WebSocketSettings {
 impl Default for WebSocketSettings {
     fn default() -> Self {
         Self { port: 8766 }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct AnkiConnectionSettings {
+    pub port: NonZeroU16,
+    pub api_key: String,
+}
+
+impl Default for AnkiConnectionSettings {
+    fn default() -> Self {
+        Self { port: NonZeroU16::new(8765).unwrap(), api_key: String::new() }
     }
 }
 
@@ -97,6 +113,8 @@ pub struct TextFilterSetting {
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct SettingsData {
     pub anki_model_mappings: HashMap<String, FieldMapping>,
+    #[serde(default)]
+    pub anki_connection: AnkiConnectionSettings,
     #[serde(default = "default_interval")]
     pub anki_interval: u32,
     #[serde(default)]
@@ -202,6 +220,7 @@ impl Default for SettingsData {
     fn default() -> Self {
         Self {
             anki_model_mappings: HashMap::new(),
+            anki_connection: AnkiConnectionSettings::default(),
             anki_interval: default_interval(),
             websocket_settings: WebSocketSettings::default(),
             frequency_weights: HashMap::new(),
@@ -240,8 +259,40 @@ pub struct AnkiModelInfo {
 }
 
 #[cfg(test)]
-mod possible_visibility_tests {
+mod tests {
     use super::*;
+
+    #[test]
+    fn anki_connection_defaults_and_credentials_round_trip() {
+        let mut settings: SettingsData =
+            serde_json::from_str(r#"{"anki_model_mappings":{}}"#).unwrap();
+        assert_eq!(settings.anki_connection.port.get(), 8765);
+        assert!(settings.anki_connection.api_key.is_empty());
+
+        settings.anki_connection.port = NonZeroU16::new(18765).unwrap();
+        settings.anki_connection.api_key = "test-key".into();
+        let restored: SettingsData =
+            serde_json::from_value(serde_json::to_value(settings).unwrap()).unwrap();
+        assert_eq!(restored.anki_connection.port.get(), 18765);
+        assert_eq!(restored.anki_connection.api_key, "test-key");
+    }
+
+    #[test]
+    fn anki_connection_rejects_invalid_ports() {
+        for port in ["0", "-1", "65536", "8765.5", "null"] {
+            assert!(serde_json::from_str::<AnkiConnectionSettings>(&format!(
+                r#"{{"port":{port}}}"#
+            ))
+            .is_err());
+        }
+        for port in [1, 65535] {
+            let connection: AnkiConnectionSettings =
+                serde_json::from_value(serde_json::json!({ "port": port })).unwrap();
+            assert_eq!(connection.port.get(), port);
+            assert!(connection.api_key.is_empty());
+        }
+    }
+
     #[test]
     fn legacy_defaults_and_explicit_preference_round_trip() {
         let mut value = serde_json::to_value(SettingsData::default()).unwrap();

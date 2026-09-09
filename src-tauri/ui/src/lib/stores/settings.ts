@@ -97,12 +97,14 @@ export async function saveWebsocketPort(port: number): Promise<boolean> {
 export async function saveAnkiSettings(
 	mappings: Record<string, ipc.FieldMapping>,
 	interval: number,
-	yomitanUrl: string
+	yomitanUrl: string,
+	connection: ipc.AnkiConnectionSettings
 ): Promise<boolean> {
 	try {
 		const saved = await patchSettings({
 			anki_model_mappings: mappings,
 			anki_interval: interval,
+			anki_connection: { ...connection },
 			yomitan_url: yomitanUrl
 		});
 		// Re-probe: the Yomitan URL / sentence mappings may have changed.

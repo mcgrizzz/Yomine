@@ -10,6 +10,7 @@
 
 	/** `SettingsData::default().anki_interval` (core/settings.rs). */
 	const DEFAULT_INTERVAL = 30;
+	const DEFAULT_ANKI_PORT = 8765;
 	/** `SettingsData::default().yomitan_url` (core/settings.rs). */
 	const DEFAULT_YOMITAN_URL = 'http://127.0.0.1:19633';
 
@@ -18,6 +19,12 @@
 	let originalMappings = $state<Record<string, ipc.FieldMapping>>({});
 	let tempInterval = $state(DEFAULT_INTERVAL);
 	let originalInterval = $state(DEFAULT_INTERVAL);
+	let tempPort = $state<number | undefined>(DEFAULT_ANKI_PORT);
+	let tempApiKey = $state('');
+	let originalConnection = $state<ipc.AnkiConnectionSettings>({
+		port: DEFAULT_ANKI_PORT,
+		api_key: ''
+	});
 	let tempYomitanUrl = $state(DEFAULT_YOMITAN_URL);
 	let originalYomitanUrl = $state(DEFAULT_YOMITAN_URL);
 
@@ -63,13 +70,17 @@
 		originalMappings = cloneMappings(s?.anki_model_mappings ?? {});
 		tempInterval = s?.anki_interval ?? DEFAULT_INTERVAL;
 		originalInterval = tempInterval;
+		originalConnection = { ...(s?.anki_connection ?? { port: DEFAULT_ANKI_PORT, api_key: '' }) };
+		tempPort = originalConnection.port;
+		tempApiKey = originalConnection.api_key;
 		tempYomitanUrl = s?.yomitan_url ?? DEFAULT_YOMITAN_URL;
 		originalYomitanUrl = tempYomitanUrl;
 		resetEditor();
 		guard.disarm();
 		void checkYomitan();
-		if (models.length === 0) fetchModels();
-		else fetchMappedSamples();
+		models = [];
+		guesses = {};
+		fetchModels();
 	}
 
 	function cloneMappings(m: Record<string, ipc.FieldMapping>): Record<string, ipc.FieldMapping> {
@@ -92,8 +103,15 @@
 		);
 	}
 
+	const connectionDirty = $derived(
+		tempPort !== originalConnection.port || tempApiKey !== originalConnection.api_key
+	);
+	const validPort = $derived(
+		tempPort !== undefined && Number.isInteger(tempPort) && tempPort >= 1 && tempPort <= 65535
+	);
 	const dirty = $derived(
 		tempInterval !== originalInterval ||
+			connectionDirty ||
 			tempYomitanUrl !== originalYomitanUrl ||
 			!mappingsEqual(tempMappings, originalMappings)
 	);
@@ -105,6 +123,8 @@
 	// ---- Connection status (egui ui_connection_status, colored by content; the
 	// resting Connected/offline state is live from the ambient `anki-status` event). ----
 	const status = $derived.by(() => {
+		if (connectionDirty)
+			return { text: 'Save settings to apply connection changes', cls: 'pending' };
 		if (loadingModels) return { text: 'Fetching models...', cls: 'pending' };
 		if (fetchError) return { text: `Error: ${fetchError}`, cls: 'error' };
 		if ($ankiStatus.connected) return { text: 'Connected', cls: 'ok' };
@@ -231,7 +251,13 @@
 	}
 
 	async function save() {
-		if (await saveAnkiSettings(cloneMappings(tempMappings), tempInterval, tempYomitanUrl.trim())) {
+		if (!validPort || tempPort === undefined) return;
+		if (
+			await saveAnkiSettings(cloneMappings(tempMappings), tempInterval, tempYomitanUrl.trim(), {
+				port: tempPort,
+				api_key: tempApiKey
+			})
+		) {
 			ankiModalOpen.set(false);
 		}
 		// On failure the lastError banner shows; staged state stays for a retry.
@@ -240,6 +266,8 @@
 	function cancel() {
 		tempMappings = cloneMappings(originalMappings);
 		tempInterval = originalInterval;
+		tempPort = originalConnection.port;
+		tempApiKey = originalConnection.api_key;
 		tempYomitanUrl = originalYomitanUrl;
 	}
 
@@ -247,6 +275,8 @@
 	function restoreDefault() {
 		tempMappings = {};
 		tempInterval = DEFAULT_INTERVAL;
+		tempPort = DEFAULT_ANKI_PORT;
+		tempApiKey = '';
 		tempYomitanUrl = DEFAULT_YOMITAN_URL;
 	}
 </script>
@@ -259,6 +289,49 @@
 	oninteract={guard.disarm}
 >
 	<div class="body">
+		<section>
+			<h3>AnkiConnect / Tsunagi</h3>
+			<div class="row">
+				<label for="anki-port">Port:</label>
+				<input
+					id="anki-port"
+					type="number"
+					min="1"
+					max="65535"
+					step="1"
+					bind:value={tempPort}
+					aria-invalid={!validPort}
+					aria-describedby="anki-port-help"
+				/>
+				<span id="anki-port-help" class="hint">
+					{validPort ? 'localhost · Default: 8765' : 'Enter a whole number from 1 to 65535'}
+				</span>
+			</div>
+			<div class="row">
+				<label for="anki-api-key">API key:</label>
+				<input
+					id="anki-api-key"
+					type="password"
+					bind:value={tempApiKey}
+					autocomplete="off"
+					spellcheck="false"
+					aria-describedby="anki-api-key-help"
+				/>
+				<span id="anki-api-key-help" class="hint">Optional · Leave blank if no key is configured</span>
+			</div>
+			<div class="row">
+				{#if loadingModels}
+					<span class="spinner" aria-label="Fetching models"></span>
+				{/if}
+				<span class="status {status.cls}" role="status">{status.text}</span>
+				<button disabled={loadingModels || connectionDirty} onclick={fetchModels}>
+					{loadingModels ? 'Refreshing...' : 'Refresh Notetypes'}
+				</button>
+			</div>
+		</section>
+
+		<hr />
+
 		<!-- Known interval threshold. -->
 		<section>
 			<h3>
@@ -315,17 +388,6 @@
 		<!-- Mapping editor. -->
 		<section>
 			<h3>{edEditing ? 'Edit Notetype' : 'Add Notetype'}</h3>
-
-			<div class="row">
-				<span class="lbl">Anki Connection Status:</span>
-				{#if loadingModels}
-					<span class="spinner" aria-label="Fetching models"></span>
-				{/if}
-				<span class="status {status.cls}">{status.text}</span>
-				<button disabled={loadingModels} onclick={fetchModels}>
-					{loadingModels ? 'Refreshing...' : 'Refresh Notetypes'}
-				</button>
-			</div>
 
 			<div class="row">
 				<label for="anki-model">Notetype:</label>
@@ -446,7 +508,7 @@
 				have been modified{/if}
 		</div>
 		<footer>
-			<button class="primary" disabled={!dirty} onclick={save}>Save Settings</button>
+			<button class="primary" disabled={!dirty || !validPort} onclick={save}>Save Settings</button>
 			<button disabled={!dirty} onclick={cancel}>Cancel</button>
 			<button class="right" onclick={restoreDefault}>Restore Default</button>
 		</footer>
@@ -549,7 +611,8 @@
 		border: 1px solid var(--border);
 		border-radius: var(--radius-sm);
 	}
-	input[type='text'] {
+	input[type='text'],
+	input[type='password'] {
 		width: 15rem;
 		padding: 0.3rem 0.5rem;
 		background: var(--bg-raised);
