@@ -59,6 +59,7 @@ pub fn run() {
             commands::ignore::get_default_ignored_terms,
             commands::ignore::export_ignore_list,
             commands::anki::get_anki_status,
+            commands::anki::test_anki_connection,
             commands::anki::list_anki_models,
             commands::anki::get_anki_sample_note,
             commands::dictionary::list_dictionaries,
