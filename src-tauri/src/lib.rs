@@ -17,6 +17,7 @@ use crate::state::AppState;
 pub fn run() {
     yomine::core::user_themes::migrate_from_settings();
     let settings = yomine::persistence::load_json_or_default::<SettingsData>("settings.json");
+    yomine::anki::api::configure_connection(settings.anki_connection.clone());
     let websocket_port = settings.websocket_settings.port;
 
     tauri::Builder::default()
@@ -58,6 +59,7 @@ pub fn run() {
             commands::ignore::get_default_ignored_terms,
             commands::ignore::export_ignore_list,
             commands::anki::get_anki_status,
+            commands::anki::test_anki_connection,
             commands::anki::list_anki_models,
             commands::anki::get_anki_sample_note,
             commands::dictionary::list_dictionaries,

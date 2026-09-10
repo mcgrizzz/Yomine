@@ -1,4 +1,10 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::{
+        LazyLock,
+        RwLock,
+    },
+};
 
 use reqwest::Client;
 use serde::{
@@ -6,7 +12,17 @@ use serde::{
     Serialize,
 };
 
-use crate::core::errors::YomineError;
+use crate::core::{
+    errors::YomineError,
+    settings::AnkiConnectionSettings,
+};
+
+static CONNECTION: LazyLock<RwLock<AnkiConnectionSettings>> =
+    LazyLock::new(|| RwLock::new(AnkiConnectionSettings::default()));
+
+pub fn configure_connection(settings: AnkiConnectionSettings) {
+    *CONNECTION.write().unwrap() = settings;
+}
 
 #[derive(Debug)]
 pub struct Deck {
@@ -77,6 +93,15 @@ async fn make_request<T: for<'de> Deserialize<'de>>(
     action: &str,
     params: Option<serde_json::Value>,
 ) -> Result<ApiResponse<T>, reqwest::Error> {
+    let request = build_request(&CONNECTION.read().unwrap(), action, params);
+    request.send().await?.json().await
+}
+
+fn build_request(
+    connection: &AnkiConnectionSettings,
+    action: &str,
+    params: Option<serde_json::Value>,
+) -> reqwest::RequestBuilder {
     let mut body = serde_json::Map::new();
     body.insert("action".to_string(), serde_json::Value::String(action.to_string()));
     body.insert("version".to_string(), serde_json::Value::Number((6).into()));
@@ -85,21 +110,21 @@ async fn make_request<T: for<'de> Deserialize<'de>>(
         body.insert("params".to_string(), params);
     }
 
-    let response: ApiResponse<T> =
-        Client::new().post("http://localhost:8765/").json(&body).send().await?.json().await?;
-
-    Ok(response)
+    if !connection.api_key.is_empty() {
+        body.insert("key".to_string(), serde_json::Value::String(connection.api_key.clone()));
+    }
+    let host = connection.host.trim();
+    let host = if host.parse::<std::net::Ipv6Addr>().is_ok() {
+        format!("[{host}]")
+    } else {
+        host.to_owned()
+    };
+    Client::new().post(format!("http://{host}:{}/", connection.port)).json(&body)
 }
 
-//Will just use to check if ankiconnect is online
 pub async fn get_version() -> Result<u32, YomineError> {
-    let response: ApiResponse<u32> = make_request("version", None).await?;
-    match (response.result, response.error) {
-        (Some(version), None) => Ok(version),
-        (_, error) => {
-            Err(YomineError::Custom(format!("Not an AnkiConnect version response: {error:?}")))
-        }
-    }
+    let client = AnkiClient::new(CONNECTION.read().unwrap().clone());
+    client.get_version().await
 }
 
 pub async fn get_deck_ids() -> Result<Vec<Deck>, reqwest::Error> {
@@ -180,33 +205,188 @@ pub async fn store_media_file(
     make_request("storeMediaFile", Some(params)).await
 }
 
-pub async fn get_model_ids() -> Result<HashMap<String, u64>, reqwest::Error> {
-    let response: ApiResponse<HashMap<String, u64>> =
-        make_request("modelNamesAndIds", None).await?;
-    Ok(response.unwrap_result().unwrap_or_default())
+pub struct AnkiClient {
+    connection: AnkiConnectionSettings,
 }
 
-pub async fn get_field_names(model_name: &str) -> Result<Vec<String>, reqwest::Error> {
-    let params = serde_json::json!({ "modelName": model_name });
-    let response: ApiResponse<Vec<String>> = make_request("modelFieldNames", Some(params)).await?;
-    Ok(response.unwrap_result().unwrap_or_default())
-}
+impl AnkiClient {
+    pub fn new(connection: AnkiConnectionSettings) -> Self {
+        Self { connection }
+    }
 
-pub async fn get_sample_note_for_model(model_name: &str) -> Result<Option<Note>, reqwest::Error> {
-    let query = if model_name.contains(' ') || model_name.contains(':') || model_name.contains('"')
-    {
-        format!("note:\"{}\"", model_name.replace('"', "\\\""))
-    } else {
-        format!("note:{}", model_name)
-    };
-    let note_ids = get_note_ids(&query).await?;
+    async fn request<T: for<'de> Deserialize<'de>>(
+        &self,
+        action: &str,
+        params: Option<serde_json::Value>,
+    ) -> Result<T, YomineError> {
+        let response: ApiResponse<T> = build_request(&self.connection, action, params)
+            .timeout(std::time::Duration::from_secs(5))
+            .send()
+            .await?
+            .json()
+            .await?;
+        if let Some(mut error) = response.error {
+            if !self.connection.api_key.is_empty() {
+                error = error.replace(&self.connection.api_key, "[redacted]");
+            }
+            return Err(YomineError::Custom(error));
+        }
+        response.result.ok_or_else(|| YomineError::Custom("Anki returned no result".into()))
+    }
 
-    if !note_ids.is_empty() {
-        let mid_index = note_ids.len() / 2;
-        let mid_note_id = note_ids[mid_index];
-        let notes = get_notes(vec![mid_note_id]).await?;
+    pub async fn get_version(&self) -> Result<u32, YomineError> {
+        self.request("version", None).await
+    }
+
+    pub async fn get_model_ids(&self) -> Result<HashMap<String, u64>, YomineError> {
+        self.request("modelNamesAndIds", None).await
+    }
+
+    pub async fn get_field_names(&self, model_name: &str) -> Result<Vec<String>, YomineError> {
+        self.request("modelFieldNames", Some(serde_json::json!({ "modelName": model_name }))).await
+    }
+
+    pub async fn get_model_note_ids(&self, model_name: &str) -> Result<Vec<u64>, YomineError> {
+        let query = format!("note:\"{}\"", model_name.replace('"', "\\\""));
+        self.request("findNotes", Some(serde_json::json!({ "query": query }))).await
+    }
+
+    pub async fn get_sample_note_for_model(
+        &self,
+        model_name: &str,
+    ) -> Result<Option<Note>, YomineError> {
+        let ids = self.get_model_note_ids(model_name).await?;
+        let Some(id) = ids.get(ids.len() / 2) else { return Ok(None) };
+        let notes: Vec<Note> =
+            self.request("notesInfo", Some(serde_json::json!({ "notes": [id] }))).await?;
         Ok(notes.into_iter().next())
-    } else {
-        Ok(None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    async fn server(
+        response: serde_json::Value,
+    ) -> (AnkiClient, tokio::task::JoinHandle<serde_json::Value>) {
+        use tokio::io::{
+            AsyncBufReadExt,
+            AsyncReadExt,
+            AsyncWriteExt,
+            BufReader,
+        };
+        let listener = tokio::net::TcpListener::bind("127.0.0.2:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let task = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let mut stream = BufReader::new(stream);
+            let mut length = 0;
+            loop {
+                let mut line = String::new();
+                assert!(stream.read_line(&mut line).await.unwrap() > 0);
+                if line == "\r\n" {
+                    break;
+                }
+                if let Some(value) = line.to_lowercase().strip_prefix("content-length:") {
+                    length = value.trim().parse().unwrap();
+                }
+            }
+            let mut body = vec![0; length];
+            stream.read_exact(&mut body).await.unwrap();
+            let body = serde_json::from_slice(&body).unwrap();
+            let response = response.to_string();
+            stream.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", response.len(), response).as_bytes()).await.unwrap();
+            body
+        });
+        (
+            AnkiClient::new(AnkiConnectionSettings {
+                host: "127.0.0.2".into(),
+                port: std::num::NonZeroU16::new(port).unwrap(),
+                api_key: "draft-key".into(),
+            }),
+            task,
+        )
+    }
+
+    #[tokio::test]
+    async fn draft_probe_uses_its_own_connection_without_changing_the_active_one() {
+        let original = CONNECTION.read().unwrap().clone();
+        let (client, request) = server(json!({ "result": 6, "error": null })).await;
+        assert_eq!(client.get_version().await.unwrap(), 6);
+        assert_eq!(
+            request.await.unwrap(),
+            json!({ "action": "version", "version": 6, "key": "draft-key" })
+        );
+        assert!(original == *CONNECTION.read().unwrap());
+    }
+
+    #[tokio::test]
+    async fn authentication_and_missing_results_fail_without_exposing_the_key() {
+        for response in [
+            json!({ "result": null, "error": "invalid key: draft-key" }),
+            json!({ "result": null, "error": null }),
+        ] {
+            let (client, request) = server(response).await;
+            let error = client.get_version().await.unwrap_err().to_string();
+            assert!(!error.contains("draft-key"));
+            request.await.unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn draft_model_lookup_escapes_the_note_type_name() {
+        let (client, request) = server(json!({ "result": [], "error": null })).await;
+        assert!(client.get_model_note_ids("Model \"A\"").await.unwrap().is_empty());
+        let request = request.await.unwrap();
+        assert_eq!(request["action"], "findNotes");
+        assert_eq!(request["params"]["query"], "note:\"Model \\\"A\\\"\"");
+    }
+
+    #[test]
+    fn default_requests_keep_the_unauthenticated_protocol() {
+        let request =
+            build_request(&AnkiConnectionSettings::default(), "version", None).build().unwrap();
+        assert_eq!(request.url().as_str(), "http://localhost:8765/");
+        assert_eq!(request.method(), reqwest::Method::POST);
+        let body: serde_json::Value =
+            serde_json::from_slice(request.body().unwrap().as_bytes().unwrap()).unwrap();
+        assert_eq!(body, json!({ "action": "version", "version": 6 }));
+    }
+
+    #[test]
+    fn custom_connection_sends_key_at_the_top_level() {
+        let connection = AnkiConnectionSettings {
+            host: "192.168.1.20".into(),
+            port: std::num::NonZeroU16::new(18765).unwrap(),
+            api_key: " key-\"with\\escapes ".into(),
+        };
+        for (action, params) in
+            [("version", None), ("findNotes", Some(json!({ "query": "deck:Default" })))]
+        {
+            let request = build_request(&connection, action, params.clone()).build().unwrap();
+            assert_eq!(request.url().as_str(), "http://192.168.1.20:18765/");
+            let body: serde_json::Value =
+                serde_json::from_slice(request.body().unwrap().as_bytes().unwrap()).unwrap();
+            assert_eq!(body["action"], action);
+            assert_eq!(body["version"], 6);
+            assert_eq!(body["key"], connection.api_key);
+            assert_eq!(body.get("params"), params.as_ref());
+        }
+    }
+
+    #[test]
+    fn requests_support_hostnames_and_ipv6() {
+        for (host, expected) in [
+            ("anki.local", "http://anki.local:8765/"),
+            ("::1", "http://[::1]:8765/"),
+            ("[2001:db8::1]", "http://[2001:db8::1]:8765/"),
+        ] {
+            let connection = AnkiConnectionSettings { host: host.into(), ..Default::default() };
+            let request = build_request(&connection, "version", None).build().unwrap();
+            assert_eq!(request.url().as_str(), expected);
+        }
     }
 }

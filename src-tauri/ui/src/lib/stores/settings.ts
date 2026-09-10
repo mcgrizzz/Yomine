@@ -97,25 +97,20 @@ export async function saveWebsocketPort(port: number): Promise<boolean> {
 export async function saveAnkiSettings(
 	mappings: Record<string, ipc.FieldMapping>,
 	interval: number,
-	yomitanUrl: string
-): Promise<boolean> {
-	try {
-		const saved = await patchSettings({
-			anki_model_mappings: mappings,
-			anki_interval: interval,
-			yomitan_url: yomitanUrl
-		});
-		// Re-probe: the Yomitan URL / sentence mappings may have changed.
-		if (saved) void refreshMinedState(true);
-		return saved;
-	} catch (err) {
-		lastError.set({
-			title: 'Anki Settings',
-			message: 'Failed to save settings',
-			detail: String(err)
-		});
-		return false;
-	}
+	yomitanUrl: string,
+	connection: ipc.AnkiConnectionSettings
+): Promise<void> {
+	const current = get(settings);
+	if (!current) throw new Error('Settings are still loading');
+	const patch = {
+		anki_model_mappings: mappings,
+		anki_interval: interval,
+		yomitan_url: yomitanUrl,
+		anki_connection: { ...connection }
+	};
+	await ipc.saveSettings({ ...current, ...patch });
+	settings.update((s) => s ? { ...s, ...patch } : s);
+	void refreshMinedState(true);
 }
 
 export const saveJlptFilters = (filters: Record<string, boolean>) =>

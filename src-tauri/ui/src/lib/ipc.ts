@@ -213,8 +213,15 @@ export type SentenceColoring = 'knowledge' | 'none';
 /** Mirrors `UnderlineToggles` (core/settings.rs): per-state underline visibility. */
 export type UnderlineToggles = Record<SegmentKnowledge, boolean>;
 
+export interface AnkiConnectionSettings {
+	host: string;
+	port: number;
+	api_key: string;
+}
+
 export interface SettingsData {
 	anki_model_mappings: Record<string, FieldMapping>;
+	anki_connection: AnkiConnectionSettings;
 	anki_interval: number;
 	websocket_settings: { port: number };
 	frequency_weights: Record<string, FrequencyDictionarySetting>;
@@ -789,16 +796,26 @@ export function getKnowledgeSummary(): Promise<KnowledgeSummary | null> {
 	return invoke('get_knowledge_summary');
 }
 
-/** Note types (with fields) that have at least one note, for the Anki settings
- * modal's mapping UI. Rejects with "Anki Offline" when disconnected. */
-export function listAnkiModels(): Promise<AnkiModelInfo[]> {
-	return invoke('list_anki_models');
+export interface ConnectionError {
+	message: string;
+	detail: string;
 }
 
-/** Fetch a model's sample note + the engine-side field guesses.
- * Never rejects — fetch failures come back as a `null` sample (egui parity). */
-export function getAnkiSampleNote(modelName: string, fields: string[]): Promise<SampleNote> {
-	return invoke('get_anki_sample_note', { modelName, fields });
+export function testAnkiConnection(connection: AnkiConnectionSettings): Promise<number> {
+	return invoke('test_anki_connection', { connection });
+}
+
+/** Note types with at least one note, using the supplied connection. */
+export function listAnkiModels(connection: AnkiConnectionSettings): Promise<AnkiModelInfo[]> {
+	return invoke('list_anki_models', { connection });
+}
+
+export function getAnkiSampleNote(
+	modelName: string,
+	fields: string[],
+	connection: AnkiConnectionSettings
+): Promise<SampleNote> {
+	return invoke('get_anki_sample_note', { modelName, fields, connection });
 }
 
 /** One row of the frequency-dictionary list (`DictionaryStateDto`). */

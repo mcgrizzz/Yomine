@@ -14,17 +14,12 @@ use rayon::iter::{
     IntoParallelIterator,
     ParallelIterator,
 };
-use tokio::{
-    task,
-    time::sleep,
-};
+use tokio::time::sleep;
 use wana_kana::IsJapaneseStr;
 
 use super::{
     api::{
-        get_field_names,
         get_intervals,
-        get_model_ids,
         get_note_ids,
         get_notes,
         get_version,
@@ -445,55 +440,24 @@ pub async fn get_total_vocab(
     Ok(vocab)
 }
 
-pub async fn get_models() -> Result<Vec<Model>, reqwest::Error> {
-    let model_ids = get_model_ids().await?;
-
-    let handles: Vec<_> = model_ids
-        .into_iter()
-        .map(|(model_name, id)| {
-            task::spawn(async move {
-                let fields = get_field_names(&model_name).await?;
-
-                // Get note count for this model
-                let query = if model_name.contains(' ')
-                    || model_name.contains(':')
-                    || model_name.contains('"')
-                {
-                    format!("note:\"{}\"", model_name.replace('"', "\\\""))
-                } else {
-                    format!("note:{}", model_name)
-                };
-
-                let note_count = match get_note_ids(&query).await {
-                    Ok(note_ids) => note_ids.len(),
-                    Err(_) => 0,
-                };
-
-                // Skip models with no notes
-                if note_count == 0 {
-                    return Ok(None); // Return None to filter out later
-                }
-
-                Ok::<Option<Model>, reqwest::Error>(Some(Model {
-                    name: model_name,
-                    id,
-                    fields,
-                    note_count,
-                    sample_note: None, // Will be loaded separately
-                }))
-            })
-        })
-        .collect();
-
-    let models: Vec<Model> = futures::future::join_all(handles)
-        .await
-        .into_iter()
-        .filter_map(|result| result.ok())
-        .filter_map(|inner_result| inner_result.ok())
-        .flatten()
-        .collect();
-
-    Ok(models)
+pub async fn get_models(
+    client: &super::api::AnkiClient,
+) -> Result<Vec<Model>, crate::core::errors::YomineError> {
+    let model_ids = client.get_model_ids().await?;
+    let models =
+        futures::future::try_join_all(model_ids.into_iter().map(|(name, id)| async move {
+            let fields = client.get_field_names(&name).await?;
+            let note_count = client.get_model_note_ids(&name).await?.len();
+            Ok::<_, crate::core::errors::YomineError>((note_count > 0).then_some(Model {
+                name,
+                id,
+                fields,
+                note_count,
+                sample_note: None,
+            }))
+        }))
+        .await?;
+    Ok(models.into_iter().flatten().collect())
 }
 
 pub async fn wait_awake(wait_time: u64, max_attempts: u32) -> Result<bool, reqwest::Error> {
@@ -518,11 +482,10 @@ pub async fn wait_awake(wait_time: u64, max_attempts: u32) -> Result<bool, reqwe
 }
 
 pub async fn get_sample_note_for_model(
+    client: &super::api::AnkiClient,
     model_name: &str,
-) -> Result<Option<HashMap<String, String>>, reqwest::Error> {
-    use super::api::get_sample_note_for_model;
-
-    match get_sample_note_for_model(model_name).await? {
+) -> Result<Option<HashMap<String, String>>, crate::core::errors::YomineError> {
+    match client.get_sample_note_for_model(model_name).await? {
         Some(note) => {
             let mut sample_fields = HashMap::new();
             for (field_name, field) in note.fields {
