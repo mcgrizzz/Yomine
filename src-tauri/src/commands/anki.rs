@@ -55,8 +55,8 @@ pub async fn test_anki_connection(
     anki::api::AnkiClient::new(connection.clone()).get_version().await.map_err(|error| {
         let message = match &error {
             YomineError::Reqwest(e) if e.is_connect() || e.is_timeout() => format!(
-                "Cannot reach Anki on port {}. Open Anki and check that the add-on is running.",
-                connection.port
+                "Cannot reach Anki at {} on port {}. Check the address and that the add-on is running.",
+                connection.host, connection.port
             ),
             YomineError::Custom(message)
                 if message.to_lowercase().contains("key")
@@ -67,7 +67,7 @@ pub async fn test_anki_connection(
             YomineError::Custom(_) => {
                 "Anki rejected the request. Check the add-on configuration.".into()
             }
-            _ => "Anki returned an unexpected response. Check the port and add-on configuration."
+            _ => "Anki returned an unexpected response. Check the host, port and add-on configuration."
                 .into(),
         };
         let mut detail = error.to_string();

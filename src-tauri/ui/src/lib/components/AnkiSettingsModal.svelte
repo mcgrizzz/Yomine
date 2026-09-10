@@ -14,7 +14,7 @@
 	const DEFAULT_INTERVAL = 30;
 	const DEFAULT_YOMITAN_URL = 'http://127.0.0.1:19633';
 	const defaults: Draft = {
-		anki_connection: { port: DEFAULT_PORT, api_key: '' },
+		anki_connection: { host: 'localhost', port: DEFAULT_PORT, api_key: '' },
 		anki_model_mappings: {},
 		anki_interval: DEFAULT_INTERVAL,
 		yomitan_url: DEFAULT_YOMITAN_URL
@@ -70,7 +70,8 @@
 		);
 	}
 	const dirty = $derived(
-		draft.anki_connection.port !== original.anki_connection.port ||
+		draft.anki_connection.host !== original.anki_connection.host ||
+			draft.anki_connection.port !== original.anki_connection.port ||
 			draft.anki_connection.api_key !== original.anki_connection.api_key ||
 			draft.anki_interval !== original.anki_interval ||
 			draft.yomitan_url !== original.yomitan_url ||
@@ -81,6 +82,19 @@
 			draft.anki_connection.port >= 1 &&
 			draft.anki_connection.port <= 65535
 	);
+	const validHost = $derived(isValidHost(draft.anki_connection.host));
+	function isValidHost(value: string) {
+		const host = value.trim();
+		if (!host || /[\s/\\@?#]/.test(host) || (host.startsWith('[') && !host.endsWith(']')))
+			return false;
+		try {
+			const authority = host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
+			const url = new URL(`http://${authority}/`);
+			return !url.port && url.host === url.hostname;
+		} catch {
+			return false;
+		}
+	}
 	const availableModels = $derived(
 		models.filter((model) => !draft.anki_model_mappings[model.name])
 	);
@@ -157,7 +171,7 @@
 	}
 
 	async function testAnki() {
-		if (!validPort) return;
+		if (!validHost || !validPort) return;
 		const generation = ankiGeneration;
 		ankiPhase = 'loading';
 		ankiError = null;
@@ -300,7 +314,11 @@
 		if (saving || !dirty) return;
 		saveError = null;
 		let invalidField: string | null = null;
-		if (!validPort) {
+		if (!validHost) {
+			ankiExpanded = true;
+			invalidField = 'anki-host';
+			saveError = 'Enter a hostname or IP address without a URL or port.';
+		} else if (!validPort) {
 			ankiExpanded = true;
 			invalidField = 'anki-port';
 			saveError = 'Enter a port from 1 to 65535.';
@@ -333,6 +351,7 @@
 		saving = true;
 		try {
 			const snapshot = copyDraft(draft);
+			snapshot.anki_connection.host = snapshot.anki_connection.host.trim();
 			await saveAnkiSettings(
 				snapshot.anki_model_mappings,
 				snapshot.anki_interval,
@@ -399,6 +418,20 @@
 					{#if ankiExpanded}
 						<div id="anki-connection-panel" class="panel">
 							<div class="connection-fields">
+								<label for="anki-host">Host / IP</label>
+								<div class="input-row">
+									<input
+										id="anki-host"
+										type="text"
+										spellcheck="false"
+										autocapitalize="none"
+										placeholder="localhost"
+										bind:value={draft.anki_connection.host}
+										oninput={editConnection}
+										aria-invalid={!validHost}
+										aria-describedby="anki-host-help"
+									/>
+								</div>
 								<label for="anki-port">Port</label>
 								<div class="input-row">
 									<input
@@ -410,14 +443,20 @@
 										bind:value={draft.anki_connection.port}
 										oninput={editConnection}
 										aria-invalid={!validPort}
-									/><span class="hint">localhost</span><button
+									/><button
 										type="button"
 										class="test"
-										disabled={!validPort || ankiPhase === 'loading'}
+										disabled={!validHost || !validPort || ankiPhase === 'loading'}
 										onclick={testAnki}>Test connection</button
 									>
 								</div>
 							</div>
+							<p id="anki-host-help" class="hint">
+								Use localhost for this computer, or the address of the computer running Anki.
+							</p>
+							{#if !validHost}<p class="error">
+									Enter a hostname or IP address without a URL or port.
+								</p>{/if}
 							{#if !validPort}<p class="error">Enter a whole number from 1 to 65535.</p>{/if}
 							<details class="authentication">
 								<summary
@@ -527,7 +566,10 @@
 					><button
 						type="button"
 						class="reset"
-						disabled={!validPort || ankiPhase !== 'ready' || catalogPhase === 'loading'}
+						disabled={!validHost ||
+							!validPort ||
+							ankiPhase !== 'ready' ||
+							catalogPhase === 'loading'}
 						onclick={fetchModels}>Refresh</button
 					>
 				</div>

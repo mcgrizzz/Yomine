@@ -113,7 +113,13 @@ fn build_request(
     if !connection.api_key.is_empty() {
         body.insert("key".to_string(), serde_json::Value::String(connection.api_key.clone()));
     }
-    Client::new().post(format!("http://localhost:{}/", connection.port)).json(&body)
+    let host = connection.host.trim();
+    let host = if host.parse::<std::net::Ipv6Addr>().is_ok() {
+        format!("[{host}]")
+    } else {
+        host.to_owned()
+    };
+    Client::new().post(format!("http://{host}:{}/", connection.port)).json(&body)
 }
 
 pub async fn get_version() -> Result<u32, YomineError> {
@@ -272,7 +278,7 @@ mod tests {
             AsyncWriteExt,
             BufReader,
         };
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let listener = tokio::net::TcpListener::bind("127.0.0.2:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
         let task = tokio::spawn(async move {
             let (stream, _) = listener.accept().await.unwrap();
@@ -297,6 +303,7 @@ mod tests {
         });
         (
             AnkiClient::new(AnkiConnectionSettings {
+                host: "127.0.0.2".into(),
                 port: std::num::NonZeroU16::new(port).unwrap(),
                 api_key: "draft-key".into(),
             }),
@@ -352,6 +359,7 @@ mod tests {
     #[test]
     fn custom_connection_sends_key_at_the_top_level() {
         let connection = AnkiConnectionSettings {
+            host: "192.168.1.20".into(),
             port: std::num::NonZeroU16::new(18765).unwrap(),
             api_key: " key-\"with\\escapes ".into(),
         };
@@ -359,13 +367,26 @@ mod tests {
             [("version", None), ("findNotes", Some(json!({ "query": "deck:Default" })))]
         {
             let request = build_request(&connection, action, params.clone()).build().unwrap();
-            assert_eq!(request.url().as_str(), "http://localhost:18765/");
+            assert_eq!(request.url().as_str(), "http://192.168.1.20:18765/");
             let body: serde_json::Value =
                 serde_json::from_slice(request.body().unwrap().as_bytes().unwrap()).unwrap();
             assert_eq!(body["action"], action);
             assert_eq!(body["version"], 6);
             assert_eq!(body["key"], connection.api_key);
             assert_eq!(body.get("params"), params.as_ref());
+        }
+    }
+
+    #[test]
+    fn requests_support_hostnames_and_ipv6() {
+        for (host, expected) in [
+            ("anki.local", "http://anki.local:8765/"),
+            ("::1", "http://[::1]:8765/"),
+            ("[2001:db8::1]", "http://[2001:db8::1]:8765/"),
+        ] {
+            let connection = AnkiConnectionSettings { host: host.into(), ..Default::default() };
+            let request = build_request(&connection, "version", None).build().unwrap();
+            assert_eq!(request.url().as_str(), expected);
         }
     }
 }

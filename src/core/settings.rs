@@ -40,14 +40,40 @@ impl Default for WebSocketSettings {
 #[derive(Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct AnkiConnectionSettings {
+    #[serde(deserialize_with = "deserialize_anki_host")]
+    pub host: String,
     pub port: NonZeroU16,
     pub api_key: String,
 }
 
 impl Default for AnkiConnectionSettings {
     fn default() -> Self {
-        Self { port: NonZeroU16::new(8765).unwrap(), api_key: String::new() }
+        Self {
+            host: "localhost".into(),
+            port: NonZeroU16::new(8765).unwrap(),
+            api_key: String::new(),
+        }
     }
+}
+
+fn deserialize_anki_host<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<String, D::Error> {
+    let host = <String as serde::Deserialize>::deserialize(deserializer)?.trim().to_owned();
+    if host.is_empty()
+        || host.chars().any(char::is_whitespace)
+        || host.contains(['/', '\\', '@', '?', '#'])
+        || (host.starts_with('[') && !host.ends_with(']'))
+    {
+        return Err(serde::de::Error::custom("Anki host must be a hostname or IP address"));
+    }
+    let authority = if host.contains(':') && !host.starts_with('[') {
+        format!("[{host}]")
+    } else {
+        host.clone()
+    };
+    reqwest::Url::parse(&format!("http://{authority}/")).map_err(serde::de::Error::custom)?;
+    Ok(host)
 }
 
 /// How sentence segments are marked in the term table (issue #94).
@@ -267,14 +293,50 @@ mod tests {
         let mut settings: SettingsData =
             serde_json::from_str(r#"{"anki_model_mappings":{}}"#).unwrap();
         assert_eq!(settings.anki_connection.port.get(), 8765);
+        assert_eq!(settings.anki_connection.host, "localhost");
         assert!(settings.anki_connection.api_key.is_empty());
 
         settings.anki_connection.port = NonZeroU16::new(18765).unwrap();
+        settings.anki_connection.host = "192.168.1.20".into();
         settings.anki_connection.api_key = "test-key".into();
         let restored: SettingsData =
             serde_json::from_value(serde_json::to_value(settings).unwrap()).unwrap();
         assert_eq!(restored.anki_connection.port.get(), 18765);
+        assert_eq!(restored.anki_connection.host, "192.168.1.20");
         assert_eq!(restored.anki_connection.api_key, "test-key");
+    }
+
+    #[test]
+    fn anki_connection_accepts_hosts_and_rejects_urls() {
+        let legacy: AnkiConnectionSettings =
+            serde_json::from_str(r#"{"port":18765,"api_key":"existing-key"}"#).unwrap();
+        assert_eq!(legacy.host, "localhost");
+        assert_eq!(legacy.port.get(), 18765);
+        assert_eq!(legacy.api_key, "existing-key");
+        for host in ["localhost", "anki.local", "192.168.1.20", "::1", "[2001:db8::1]"] {
+            let connection: AnkiConnectionSettings =
+                serde_json::from_value(serde_json::json!({ "host": format!(" {host} ") })).unwrap();
+            assert_eq!(connection.host, host);
+        }
+        for host in [
+            "",
+            " ",
+            "http://anki.local",
+            "anki.local:80",
+            "anki.local/path",
+            "user@anki.local",
+            "anki.local?query",
+            "anki.local#fragment",
+            "bad host",
+        ] {
+            assert!(
+                serde_json::from_value::<AnkiConnectionSettings>(
+                    serde_json::json!({ "host": host })
+                )
+                .is_err(),
+                "{host}"
+            );
+        }
     }
 
     #[test]

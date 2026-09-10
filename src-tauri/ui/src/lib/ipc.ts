@@ -214,6 +214,7 @@ export type SentenceColoring = 'knowledge' | 'none';
 export type UnderlineToggles = Record<SegmentKnowledge, boolean>;
 
 export interface AnkiConnectionSettings {
+	host: string;
 	port: number;
 	api_key: string;
 }
