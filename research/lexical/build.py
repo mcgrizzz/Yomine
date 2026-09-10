@@ -1,0 +1,180 @@
+#!/usr/bin/env python3
+"""Import the dictionary evidence used by compile_runtime.py; installed data stays read-only."""
+import argparse
+import gzip
+import hashlib
+import io
+import json
+import re
+import sqlite3
+import unicodedata
+import xml.etree.ElementTree as ET
+import zipfile
+from pathlib import Path
+
+from source_policy import include_source, policy_manifest
+
+SCHEMA_VERSION = 3
+SOURCE_URLS = {
+    "jmdict": "https://www.edrdg.org/pub/Nihongo/JMdict_e.gz",
+    "jitendex": "https://github.com/stephenmk/stephenmk.github.io/releases/latest/download/jitendex-yomitan.zip",
+}
+
+
+def normalize(text):
+    # NFKC and katakana folding only: no prolonged-vowel guesses or homophone merging.
+    text = unicodedata.normalize("NFKC", text)
+    return "".join(chr(ord(c) - 0x60) if "ァ" <= c <= "ヶ" else c for c in text)
+
+
+def packed(value):
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+
+
+def values(node, tag):
+    return [x.text or "" for x in node.findall(tag)]
+
+
+def entry_record(entry):
+    spellings = [{"text": k.findtext("keb"), "info": values(k, "ke_inf")}
+                 for k in entry.findall("k_ele")]
+    readings = [{"text": r.findtext("reb"), "restrictions": values(r, "re_restr"),
+                 "no_kanji": r.find("re_nokanji") is not None, "info": values(r, "re_inf")}
+                for r in entry.findall("r_ele")]
+    senses = []
+    inherited_pos = []
+    for sense in entry.findall("sense"):
+        inherited_pos = values(sense, "pos") or inherited_pos
+        senses.append({"pos": inherited_pos, "spellings": values(sense, "stagk"),
+                       "readings": values(sense, "stagr")})
+    return {"id": int(entry.findtext("ent_seq")), "spellings": spellings,
+            "readings": readings, "senses": senses}
+
+
+def legal_pairs(record):
+    """Keep entry, reading, spelling AND sense restrictions; never form global aliases."""
+    for reading in record["readings"]:
+        candidates = [k for k in record["spellings"]
+                      if not reading["restrictions"] or k["text"] in reading["restrictions"]]
+        if reading["no_kanji"] or not record["spellings"]:
+            candidates = [{"text": reading["text"], "info": []}]
+        for spelling in candidates:
+            for sense in record["senses"]:
+                if sense["readings"] and reading["text"] not in sense["readings"]:
+                    continue
+                if sense["spellings"] and spelling["text"] not in sense["spellings"]:
+                    continue
+                yield (record["id"], normalize(reading["text"]), spelling["text"],
+                       packed(sense["pos"]), packed(spelling["info"]),
+                       packed(reading["info"]), int(reading["no_kanji"]))
+
+
+def parse_jmdict(path):
+    raw = gzip.decompress(path.read_bytes())
+    header = raw[:raw.index(b"<entry>")]
+    entities = dict(re.findall(rb'<!ENTITY\s+([\w-]+)\s+"([^"]*)"\s*>', header))
+    # Keep stable entity codes instead of translated descriptions. No external entities.
+    raw = re.sub(rb'<!ENTITY\s+([\w-]+)\s+"[^"]*"\s*>',
+                 lambda m: b'<!ENTITY ' + m[1] + b' "' + m[1] + b'">', raw)
+    date = re.search(rb"JMdict created: ([0-9-]+)", header)
+    metadata = {"created": date[1].decode() if date else None,
+                "entities": {k.decode(): v.decode() for k, v in entities.items()}}
+    def records():
+        events = ET.iterparse(io.BytesIO(raw), events=("start", "end"))
+        _, root = next(events)
+        for event, node in events:
+            if event == "end" and node.tag == "entry":
+                yield entry_record(node)
+                root.clear()
+    return metadata, records()
+
+
+def manifest_file(path, url=None):
+    return {"file": path.name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            "bytes": path.stat().st_size, "url": url}
+
+
+def build(jmdict, jitendex, frequency_dir, output):
+    if output.exists():
+        raise FileExistsError(f"Refusing to overwrite {output}; use a new output path")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    db = sqlite3.connect(output)
+    db.executescript("""
+    CREATE TABLE metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    CREATE TABLE pairs(entry_id INTEGER, reading TEXT, spelling TEXT, pos TEXT,
+        spelling_info TEXT, reading_info TEXT, no_kanji INTEGER);
+    CREATE TABLE jitendex(sequence INTEGER, term TEXT, reading TEXT);
+    CREATE TABLE frequencies(dictionary TEXT, term TEXT, reading TEXT, rank INTEGER,
+        kana_marker INTEGER, source_bank TEXT, source_row INTEGER);
+    """)
+    metadata, records = parse_jmdict(jmdict)
+    manifest = {"schema_version": SCHEMA_VERSION, "builder_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(), "jmdict": manifest_file(jmdict, SOURCE_URLS["jmdict"]),
+                "jitendex": manifest_file(jitendex, SOURCE_URLS["jitendex"]), "frequency_sources": [],
+                "license": "CC-BY-SA-4.0", "attribution": "JMdict: EDRDG / James William Breen; Jitendex: Stephen Kraus and contributors",
+                "license_urls": ["https://www.edrdg.org/edrdg/licence.html", "https://jitendex.org/pages/legal.html"]}
+    manifest.update(policy_manifest())
+    manifest["jmdict"].update(metadata)
+    count = 0
+    for record in records:
+        db.executemany("INSERT INTO pairs VALUES (?,?,?,?,?,?,?)", legal_pairs(record))
+        count += 1
+    db.commit()
+    print(f"JMdict: {count} entries", flush=True)
+    with zipfile.ZipFile(jitendex) as archive:
+        manifest["jitendex"]["index"] = json.loads(archive.read("index.json"))
+        for bank in sorted(archive.namelist()):
+            if not re.fullmatch(r"term_bank_\d+\.json", bank):
+                continue
+            batch = []
+            for row in json.loads(archive.read(bank)):
+                if len(row) != 8:
+                    raise ValueError(f"Unexpected Jitendex term format in {bank}")
+                term, reading, _tags, _classes, _score, _glossary, sequence, _ = row
+                batch.append((sequence, term, normalize(reading)))
+            db.executemany("INSERT INTO jitendex VALUES (?,?,?)", batch)
+        db.commit()
+    print("Jitendex: entry coverage imported", flush=True)
+    for directory in sorted(frequency_dir.iterdir()):
+        if not directory.is_dir() or not include_source(directory.name):
+            continue
+        source = {"dictionary": directory.name, "banks": []}
+        for bank in sorted(directory.glob("term_meta_bank_*.json")):
+            source["banks"].append(manifest_file(bank))
+            rows = []
+            for number, (term, kind, data) in enumerate(json.loads(bank.read_text(encoding="utf-8"))):
+                if kind != "freq" or data is None:
+                    continue
+                reading = normalize(data["reading"]) if isinstance(data, dict) and "reading" in data else None
+                frequency = data.get("frequency", data) if isinstance(data, dict) else data
+                rank = frequency.get("value") if isinstance(frequency, dict) else frequency
+                display = frequency.get("displayValue") or "" if isinstance(frequency, dict) else ""
+                try:
+                    rank = int(rank)
+                except (ValueError, TypeError):
+                    raise ValueError(f"Non-numeric frequency: {bank}:{number}") from None
+                rows.append((directory.name, term, reading, rank, int("㋕" in str(display)), bank.name, number))
+            db.executemany("INSERT INTO frequencies VALUES (?,?,?,?,?,?,?)", rows)
+        if source["banks"]:
+            manifest["frequency_sources"].append(source)
+        db.commit()
+        print(f"Frequency: {directory.name}", flush=True)
+    db.execute("INSERT INTO metadata VALUES ('manifest',?)", (packed(manifest),))
+    db.commit()
+    assert db.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    db.close()
+    output.with_suffix(".manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+    print(f"Reference: {output} ({output.stat().st_size:,} bytes)", flush=True)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--jmdict", type=Path, required=True)
+    parser.add_argument("--jitendex", type=Path, required=True)
+    parser.add_argument("--frequency-dir", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args()
+    build(args.jmdict, args.jitendex, args.frequency_dir, args.output)
+
+
+if __name__ == "__main__":
+    main()

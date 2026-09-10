@@ -1,4 +1,6 @@
 <script lang="ts">
+    import { showPossibleKnownMatches } from '$lib/stores/knowledgeView';
+    import { setShowPossibleKnownMatches } from '$lib/stores/settings';
 	// Sorting lives in the table's column headers; POS gets a single modal here
 	// (deliberate deviation from egui's per-header popovers).
 	import { get } from 'svelte/store';
@@ -93,6 +95,19 @@
 		POS ({posOn}/{posTotal})
 	</button>
 
+	<button
+		class="possible-toggle"
+		role="switch"
+		aria-label="Show uncertain matches"
+		aria-checked={$showPossibleKnownMatches}
+		title="Include words with an uncertain Anki match in the table"
+		onclick={() => void setShowPossibleKnownMatches(!$showPossibleKnownMatches)}
+	>
+		<span class="switch-track" class:on={$showPossibleKnownMatches} aria-hidden="true"><span class="switch-thumb"></span></span>
+		Show uncertain matches
+	</button>
+	<div class="filters">
+
 	{#if hasJlpt}
 		<div class="group">
 			<span class="lbl">JLPT</span>
@@ -152,14 +167,16 @@
 		<span class="no-freq">No frequency data</span>
 	{/if}
 
-	<span class="spacer"></span>
+
+	</div>
+
 	<span class="count">{$visibleTerms.length} / {$fileResult?.terms.length ?? 0} shown</span>
 </div>
 
 <style>
 	.controls {
-		display: flex;
-		flex-wrap: wrap;
+		display: grid;
+		grid-template-columns: minmax(12rem, 1fr) auto auto auto;
 		align-items: center;
 		gap: 0.6rem 0.9rem;
 		margin-bottom: 0.75rem;
@@ -222,8 +239,59 @@
 	.no-freq {
 		color: var(--danger);
 	}
-	.spacer {
-		flex: 1;
+	.filters {
+		grid-column: 1 / -1;
+		grid-row: 2;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.6rem 1.25rem;
+	}
+	.possible-toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.35rem 0;
+		border: 0;
+		background: transparent;
+		color: var(--text);
+		font-size: 0.8rem;
+		white-space: nowrap;
+		cursor: pointer;
+	}
+	.switch-track {
+		width: 2rem;
+		height: 1.15rem;
+		padding: 0.125rem;
+		box-sizing: border-box;
+		border-radius: 999px;
+		background: var(--text-muted);
+		transition: background 120ms ease;
+	}
+	.switch-track.on { background: var(--accent); }
+	.switch-thumb {
+		display: block;
+		width: 0.9rem;
+		height: 0.9rem;
+		border-radius: 50%;
+		background: var(--bg);
+		box-shadow: 0 1px 2px #0004;
+		transition: transform 120ms ease;
+	}
+	.switch-track.on .switch-thumb { transform: translateX(0.85rem); }
+	.possible-toggle:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 3px;
+		border-radius: var(--radius);
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.switch-track, .switch-thumb { transition: none; }
+	}
+	@media (max-width: 720px) {
+		.controls { grid-template-columns: minmax(0, 1fr) auto; }
+		.search { grid-column: 1 / -1; }
+		.filters { grid-row: auto; }
+		.count { grid-column: 1 / -1; }
 	}
 	.count {
 		color: var(--text-muted);

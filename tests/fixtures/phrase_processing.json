@@ -1,0 +1,916 @@
+[
+  {
+    "batch": [
+      [
+        [
+          "化させて",
+          "かさせて"
+        ],
+        [
+          "化する",
+          "かする"
+        ]
+      ],
+      [
+        [
+          "形態",
+          "けいたい"
+        ],
+        [
+          "形態",
+          "けいたい"
+        ]
+      ]
+    ],
+    "corpus": [
+      {
+        "comprehension": 0.0,
+        "frequencies": {},
+        "full_segment": "形態",
+        "full_segment_reading": "けいたい",
+        "id": 0,
+        "is_kana": false,
+        "jlpt_level": null,
+        "lemma_form": "形態",
+        "lemma_reading": "けいたい",
+        "part_of_speech": "Noun",
+        "possible_known_match": null,
+        "sentence_references": [],
+        "surface_form": "形態",
+        "surface_reading": "けいたい"
+      },
+      {
+        "comprehension": 0.0,
+        "frequencies": {},
+        "full_segment": "化させて",
+        "full_segment_reading": "かさせて",
+        "id": 0,
+        "is_kana": false,
+        "jlpt_level": null,
+        "lemma_form": "化させて",
+        "lemma_reading": "かさせて",
+        "part_of_speech": "Verb",
+        "possible_known_match": null,
+        "sentence_references": [],
+        "surface_form": "化させて",
+        "surface_reading": "かさせて"
+      }
+    ],
+    "families": [
+      null,
+      null,
+      null
+    ],
+    "production": [
+      {
+        "comprehension": 0.0,
+        "frequencies": {
+          "HARMONIC": 2000,
+          "test": 2000
+        },
+        "full_segment": "形態",
+        "full_segment_reading": "けいたい",
+        "id": 0,
+        "is_kana": false,
+        "jlpt_level": null,
+        "lemma_form": "形態",
+        "lemma_reading": "けいたい",
+        "part_of_speech": "Noun",
+        "possible_known_match": null,
+        "sentence_references": [
+          [
+            0,
+            0
+          ]
+        ],
+        "surface_form": "形態",
+        "surface_reading": "けいたい"
+      },
+      {
+        "comprehension": 0.0,
+        "frequencies": {
+          "HARMONIC": 4000,
+          "test": 4000
+        },
+        "full_segment": "化させて",
+        "full_segment_reading": "かさせて",
+        "id": 0,
+        "is_kana": false,
+        "jlpt_level": null,
+        "lemma_form": "化する",
+        "lemma_reading": "かする",
+        "part_of_speech": "Verb",
+        "possible_known_match": null,
+        "sentence_references": [
+          [
+            0,
+            6
+          ]
+        ],
+        "surface_form": "化させて",
+        "surface_reading": "かさせて"
+      },
+      {
+        "comprehension": 0.0,
+        "frequencies": {
+          "HARMONIC": 10,
+          "test": 10
+        },
+        "full_segment": "形態化させて",
+        "full_segment_reading": "けいたいかさせて",
+        "id": 1,
+        "is_kana": false,
+        "jlpt_level": null,
+        "lemma_form": "形態化する",
+        "lemma_reading": "けいたいかする",
+        "part_of_speech": "Expression",
+        "possible_known_match": null,
+        "sentence_references": [
+          [
+            0,
+            0
+          ]
+        ],
+        "surface_form": "形態化させて",
+        "surface_reading": "けいたいかさせて"
+      }
+    ],
+    "segments": [
+      [
+        "けいたい",
+        "Noun",
+        0,
+        6
+      ],
+      [
+        "かさせて",
+        "Verb",
+        6,
+        18
+      ]
+    ],
+    "text": "形態化させて"
+  },
+  {
+    "batch": [
+      [
+        [
+          "要らないです",
+          "いらないです"
+        ],
+        [
+          "要らないです",
+          "いらないです"
+        ]
+      ]
+    ],
+    "corpus": [
+      {
+        "comprehension": 0.0,
+        "frequencies": {},
+        "full_segment": "要らないです",
+        "full_segment_reading": "いらないです",
+        "id": 0,
+        "is_kana": false,
+        "jlpt_level": null,
+        "lemma_form": "要らないです",
+        "lemma_reading": "いらないです",
+        "part_of_speech": "Verb",
+        "possible_known_match": null,
+        "sentence_references": [],
+        "surface_form": "要らないです",
+        "surface_reading": "いらないです"
+      }
+    ],
+    "families": [
+      null
+    ],
+    "production": [
+      {
+        "comprehension": 0.0,
+        "frequencies": {
+          "HARMONIC": 700,
+          "test": 700
+        },
+        "full_segment": "要らないです",
+        "full_segment_reading": "いらないです",
+        "id": 0,
+        "is_kana": false,
+        "jlpt_level": null,
+        "lemma_form": "要る",
+        "lemma_reading": "いる",
+        "part_of_speech": "Verb",
+        "possible_known_match": null,
+        "sentence_references": [
+          [
+            0,
+            0
+          ]
+        ],
+        "surface_form": "要らないです",
+        "surface_reading": "いらないです"
+      }
+    ],
+    "segments": [
+      [
+        "いらないです",
+        "Verb",
+        0,
+        18
+      ]
+    ],
+    "text": "要らないです"
+  },
+  {
+    "batch": [
+      [
+        [
+          "知らなかった",
+          "しらなかった"
+        ],
+        [
+          "知る",
+          "しる"
+        ]
+      ]
+    ],
+    "corpus": [
+      {
+        "comprehension": 0.0,
+        "frequencies": {},
+        "full_segment": "知らなかった",
+        "full_segment_reading": "しらなかった",
+        "id": 0,
+        "is_kana": false,
+        "jlpt_level": null,
+        "lemma_form": "知らなかった",
+        "lemma_reading": "しらなかった",
+        "part_of_speech": "Verb",
+        "possible_known_match": null,
+        "sentence_references": [],
+        "surface_form": "知らなかった",
+        "surface_reading": "しらなかった"
+      }
+    ],
+    "families": [
+      null
+    ],
+    "production": [
+      {
+        "comprehension": 0.0,
+        "frequencies": {
+          "HARMONIC": 100,
+          "test": 100
+        },
+        "full_segment": "知らなかった",
+        "full_segment_reading": "しらなかった",
+        "id": 0,
+        "is_kana": false,
+        "jlpt_level": null,
+        "lemma_form": "知る",
+        "lemma_reading": "しる",
+        "part_of_speech": "Verb",
+        "possible_known_match": null,
+        "sentence_references": [
+          [
+            0,
+            0
+          ]
+        ],
+        "surface_form": "知らなかった",
+        "surface_reading": "しらなかった"
+      }
+    ],
+    "segments": [
+      [
+        "しらなかった",
+        "Verb",
+        0,
+        18
+      ]
+    ],
+    "text": "知らなかった"
+  },
+  {
+    "batch": [
+      [
+        [
+          "つまらなかった",
+          "つまらなかった"
+        ],
+        [
+          "つまらなかった",
+          "つまらなかった"
+        ]
+      ]
+    ],
+    "corpus": [
+      {
+        "comprehension": 0.0,
+        "frequencies": {},
+        "full_segment": "つまらなかった",
+        "full_segment_reading": "つまらなかった",
+        "id": 0,
+        "is_kana": true,
+        "jlpt_level": null,
+        "lemma_form": "つまらなかった",
+        "lemma_reading": "つまらなかった",
+        "part_of_speech": "Verb",
+        "possible_known_match": null,
+        "sentence_references": [],
+        "surface_form": "つまらなかった",
+        "surface_reading": "つまらなかった"
+      }
+    ],
+    "families": [
+      null
+    ],
+    "production": [
+      {
+        "comprehension": 0.0,
+        "frequencies": {
+          "HARMONIC": 1000,
+          "test": 1000
+        },
+        "full_segment": "つまらなかった",
+        "full_segment_reading": "つまらなかった",
+        "id": 0,
+        "is_kana": true,
+        "jlpt_level": null,
+        "lemma_form": "つまらない",
+        "lemma_reading": "つまらない",
+        "part_of_speech": "Verb",
+        "possible_known_match": null,
+        "sentence_references": [
+          [
+            0,
+            0
+          ]
+        ],
+        "surface_form": "つまらなかった",
+        "surface_reading": "つまらなかった"
+      }
+    ],
+    "segments": [
+      [
+        "つまらなかった",
+        "Verb",
+        0,
+        21
+      ]
+    ],
+    "text": "つまらなかった"
+  },
+  {
+    "batch": [
+      [
+        [
+          "おばさん",
+          "おばさん"
+        ],
+        [
+          "おばさん",
+          "おばさん"
+        ]
+      ]
+    ],
+    "corpus": [
+      {
+        "comprehension": 0.0,
+        "frequencies": {},
+        "full_segment": "おばさん",
+        "full_segment_reading": "おばさん",
+        "id": 0,
+        "is_kana": true,
+        "jlpt_level": null,
+        "lemma_form": "おばさん",
+        "lemma_reading": "おばさん",
+        "part_of_speech": "Noun",
+        "possible_known_match": null,
+        "sentence_references": [],
+        "surface_form": "おばさん",
+        "surface_reading": "おばさん"
+      }
+    ],
+    "families": [
+      null
+    ],
+    "production": [
+      {
+        "comprehension": 0.0,
+        "frequencies": {
+          "HARMONIC": 2000,
+          "test": 2000
+        },
+        "full_segment": "おばさん",
+        "full_segment_reading": "おばさん",
+        "id": 0,
+        "is_kana": true,
+        "jlpt_level": null,
+        "lemma_form": "おばさん",
+        "lemma_reading": "おばさん",
+        "part_of_speech": "Noun",
+        "possible_known_match": null,
+        "sentence_references": [
+          [
+            0,
+            0
+          ]
+        ],
+        "surface_form": "おばさん",
+        "surface_reading": "おばさん"
+      }
+    ],
+    "segments": [
+      [
+        "おばさん",
+        "Noun",
+        0,
+        12
+      ]
+    ],
+    "text": "おばさん"
+  },
+  {
+    "batch": [
+      [
+        [
+          "と",
+          "と"
+        ],
+        [
+          "と",
+          "と"
+        ]
+      ],
+      [
+        [
+          "なく",
+          "なく"
+        ],
+        [
+          "なく",
+          "なく"
+        ]
+      ],
+      [
+        [
+          "なん",
+          "なん"
+        ],
+        [
+          "なん",
+          "なん"
+        ]
+      ]
+    ],
+    "corpus": [
+      {
+        "comprehension": 0.0,
+        "frequencies": {},
+        "full_segment": "なん",
+        "full_segment_reading": "なん",
+        "id": 0,
+        "is_kana": true,
+        "jlpt_level": null,
+        "lemma_form": "なん",
+        "lemma_reading": "なん",
+        "part_of_speech": "Pronoun",
+        "possible_known_match": null,
+        "sentence_references": [],
+        "surface_form": "なん",
+        "surface_reading": "なん"
+      },
+      {
+        "comprehension": 0.0,
+        "frequencies": {},
+        "full_segment": "と",
+        "full_segment_reading": "と",
+        "id": 0,
+        "is_kana": true,
+        "jlpt_level": null,
+        "lemma_form": "と",
+        "lemma_reading": "と",
+        "part_of_speech": "Postposition",
+        "possible_known_match": null,
+        "sentence_references": [],
+        "surface_form": "と",
+        "surface_reading": "と"
+      },
+      {
+        "comprehension": 0.0,
+        "frequencies": {},
+        "full_segment": "なく",
+        "full_segment_reading": "なく",
+        "id": 0,
+        "is_kana": true,
+        "jlpt_level": null,
+        "lemma_form": "なく",
+        "lemma_reading": "なく",
+        "part_of_speech": "Adjective",
+        "possible_known_match": null,
+        "sentence_references": [],
+        "surface_form": "なく",
+        "surface_reading": "なく"
+      }
+    ],
+    "families": [
+      null,
+      null,
+      null,
+      [
+        "何となく",
+        "何と無く"
+      ]
+    ],
+    "production": [
+      {
+        "comprehension": 0.0,
+        "frequencies": {
+          "HARMONIC": 4294967295
+        },
+        "full_segment": "なん",
+        "full_segment_reading": "なん",
+        "id": 0,
+        "is_kana": true,
+        "jlpt_level": null,
+        "lemma_form": "なん",
+        "lemma_reading": "なん",
+        "part_of_speech": "Pronoun",
+        "possible_known_match": null,
+        "sentence_references": [
+          [
+            0,
+            0
+          ]
+        ],
+        "surface_form": "なん",
+        "surface_reading": "なん"
+      },
+      {
+        "comprehension": 0.0,
+        "frequencies": {
+          "HARMONIC": 4294967295
+        },
+        "full_segment": "と",
+        "full_segment_reading": "と",
+        "id": 0,
+        "is_kana": true,
+        "jlpt_level": null,
+        "lemma_form": "と",
+        "lemma_reading": "と",
+        "part_of_speech": "Postposition",
+        "possible_known_match": null,
+        "sentence_references": [
+          [
+            0,
+            6
+          ]
+        ],
+        "surface_form": "と",
+        "surface_reading": "と"
+      },
+      {
+        "comprehension": 0.0,
+        "frequencies": {
+          "HARMONIC": 4294967295
+        },
+        "full_segment": "なく",
+        "full_segment_reading": "なく",
+        "id": 0,
+        "is_kana": true,
+        "jlpt_level": null,
+        "lemma_form": "ない",
+        "lemma_reading": "ない",
+        "part_of_speech": "Adjective",
+        "possible_known_match": null,
+        "sentence_references": [
+          [
+            0,
+            9
+          ]
+        ],
+        "surface_form": "なく",
+        "surface_reading": "なく"
+      },
+      {
+        "comprehension": 0.0,
+        "frequencies": {
+          "HARMONIC": 2016,
+          "test": 2016
+        },
+        "full_segment": "なんとなく",
+        "full_segment_reading": "なんとなく",
+        "id": 1,
+        "is_kana": true,
+        "jlpt_level": null,
+        "lemma_form": "何となく",
+        "lemma_reading": "なんとなく",
+        "part_of_speech": "Expression",
+        "possible_known_match": null,
+        "sentence_references": [
+          [
+            0,
+            0
+          ]
+        ],
+        "surface_form": "なんとなく",
+        "surface_reading": "なんとなく"
+      }
+    ],
+    "segments": [
+      [
+        "なん",
+        "Pronoun",
+        0,
+        6
+      ],
+      [
+        "と",
+        "Postposition",
+        6,
+        9
+      ],
+      [
+        "なく",
+        "Adjective",
+        9,
+        15
+      ]
+    ],
+    "text": "なんとなく"
+  },
+  {
+    "batch": [
+      [
+        [
+          "の",
+          "の"
+        ],
+        [
+          "の",
+          "の"
+        ]
+      ],
+      [
+        [
+          "体",
+          "たい"
+        ],
+        [
+          "体",
+          "たい"
+        ]
+      ],
+      [
+        [
+          "土曜",
+          "どよう"
+        ],
+        [
+          "土曜",
+          "どよう"
+        ]
+      ],
+      [
+        [
+          "日",
+          "ひ"
+        ],
+        [
+          "日",
+          "ひ"
+        ]
+      ],
+      [
+        [
+          "複合",
+          "ふくごう"
+        ],
+        [
+          "複合",
+          "ふくごう"
+        ]
+      ],
+      [
+        [
+          "複合体",
+          "ふくごうたい"
+        ],
+        [
+          "複合体",
+          "ふくごうたい"
+        ]
+      ]
+    ],
+    "corpus": [
+      {
+        "comprehension": 0.0,
+        "frequencies": {},
+        "full_segment": "土曜",
+        "full_segment_reading": "どよう",
+        "id": 0,
+        "is_kana": false,
+        "jlpt_level": null,
+        "lemma_form": "土曜",
+        "lemma_reading": "どよう",
+        "part_of_speech": "Noun",
+        "possible_known_match": null,
+        "sentence_references": [],
+        "surface_form": "土曜",
+        "surface_reading": "どよう"
+      },
+      {
+        "comprehension": 0.0,
+        "frequencies": {},
+        "full_segment": "日",
+        "full_segment_reading": "ひ",
+        "id": 0,
+        "is_kana": false,
+        "jlpt_level": null,
+        "lemma_form": "日",
+        "lemma_reading": "ひ",
+        "part_of_speech": "Noun",
+        "possible_known_match": null,
+        "sentence_references": [],
+        "surface_form": "日",
+        "surface_reading": "ひ"
+      },
+      {
+        "comprehension": 0.0,
+        "frequencies": {},
+        "full_segment": "の",
+        "full_segment_reading": "の",
+        "id": 0,
+        "is_kana": true,
+        "jlpt_level": null,
+        "lemma_form": "の",
+        "lemma_reading": "の",
+        "part_of_speech": "Postposition",
+        "possible_known_match": null,
+        "sentence_references": [],
+        "surface_form": "の",
+        "surface_reading": "の"
+      },
+      {
+        "comprehension": 0.0,
+        "frequencies": {},
+        "full_segment": "複合",
+        "full_segment_reading": "ふくごう",
+        "id": 0,
+        "is_kana": false,
+        "jlpt_level": null,
+        "lemma_form": "複合",
+        "lemma_reading": "ふくごう",
+        "part_of_speech": "Noun",
+        "possible_known_match": null,
+        "sentence_references": [],
+        "surface_form": "複合",
+        "surface_reading": "ふくごう"
+      },
+      {
+        "comprehension": 0.0,
+        "frequencies": {},
+        "full_segment": "体",
+        "full_segment_reading": "たい",
+        "id": 0,
+        "is_kana": false,
+        "jlpt_level": null,
+        "lemma_form": "体",
+        "lemma_reading": "たい",
+        "part_of_speech": "Noun",
+        "possible_known_match": null,
+        "sentence_references": [],
+        "surface_form": "体",
+        "surface_reading": "たい"
+      },
+      {
+        "comprehension": 0.0,
+        "frequencies": {},
+        "full_segment": "複合体",
+        "full_segment_reading": "ふくごうたい",
+        "id": 1,
+        "is_kana": false,
+        "jlpt_level": null,
+        "lemma_form": "複合体",
+        "lemma_reading": "ふくごうたい",
+        "part_of_speech": "NounExpression",
+        "possible_known_match": null,
+        "sentence_references": [],
+        "surface_form": "複合体",
+        "surface_reading": "ふくごうたい"
+      }
+    ],
+    "families": [
+      null,
+      null,
+      null
+    ],
+    "production": [
+      {
+        "comprehension": 0.0,
+        "frequencies": {
+          "HARMONIC": 4294967295
+        },
+        "full_segment": "の",
+        "full_segment_reading": "の",
+        "id": 0,
+        "is_kana": true,
+        "jlpt_level": null,
+        "lemma_form": "の",
+        "lemma_reading": "の",
+        "part_of_speech": "Postposition",
+        "possible_known_match": null,
+        "sentence_references": [
+          [
+            0,
+            9
+          ]
+        ],
+        "surface_form": "の",
+        "surface_reading": "の"
+      },
+      {
+        "comprehension": 0.0,
+        "frequencies": {
+          "HARMONIC": 100,
+          "test": 100
+        },
+        "full_segment": "土曜日",
+        "full_segment_reading": "どようび",
+        "id": 1,
+        "is_kana": false,
+        "jlpt_level": null,
+        "lemma_form": "土曜日",
+        "lemma_reading": "どようび",
+        "part_of_speech": "NounExpression",
+        "possible_known_match": null,
+        "sentence_references": [
+          [
+            0,
+            0
+          ]
+        ],
+        "surface_form": "土曜日",
+        "surface_reading": "どようび"
+      },
+      {
+        "comprehension": 0.0,
+        "frequencies": {
+          "HARMONIC": 400,
+          "test": 400
+        },
+        "full_segment": "複合体",
+        "full_segment_reading": "ふくごうたい",
+        "id": 1,
+        "is_kana": false,
+        "jlpt_level": null,
+        "lemma_form": "複合体",
+        "lemma_reading": "ふくごうたい",
+        "part_of_speech": "NounExpression",
+        "possible_known_match": null,
+        "sentence_references": [
+          [
+            0,
+            12
+          ]
+        ],
+        "surface_form": "複合体",
+        "surface_reading": "ふくごうたい"
+      }
+    ],
+    "segments": [
+      [
+        "どよう",
+        "Noun",
+        0,
+        6
+      ],
+      [
+        "ひ",
+        "Noun",
+        6,
+        9
+      ],
+      [
+        "の",
+        "Postposition",
+        9,
+        12
+      ],
+      [
+        "ふくごう",
+        "Noun",
+        12,
+        18
+      ],
+      [
+        "たい",
+        "Noun",
+        18,
+        21
+      ]
+    ],
+    "text": "土曜日の複合体"
+  }
+]

@@ -1,3 +1,4 @@
+import { showPossibleKnownMatches } from './knowledgeView';
 // The backend owns settings; this store is a local mirror synced on each save.
 
 import { get, writable } from 'svelte/store';
@@ -7,6 +8,8 @@ import { type FreqFilterState, posEnabled } from './controls';
 import { refreshMinedState } from './mining';
 
 export const settings = writable<ipc.SettingsData | null>(null);
+settings.subscribe((s) => showPossibleKnownMatches.set(s?.show_possible_known_matches ?? true));
+export const setShowPossibleKnownMatches = (show: boolean) => patchSettings({ show_possible_known_matches: show });
 
 /** Returns false when settings haven't hydrated yet, or when the save failed. */
 async function patchSettings(patch: Partial<ipc.SettingsData>): Promise<boolean> {

@@ -101,6 +101,8 @@ pub struct UnidicToken {
     pub surface_hatsuon: String,
     pub lemma_form: String,
     pub lemma_hatsuon: String,
+    /// UniDic lexical form (すごい → 凄い), distinct from the written base `lemma_form`.
+    pub lexeme: String,
 
     /// Byte span in the source sentence; 0..0 for synthetic/test tokens.
     pub start_byte: usize,
@@ -125,6 +127,7 @@ impl From<(String, RawToken)> for UnidicToken {
         let replace_missing = |s: String| if s == "*" { surface.clone() } else { s };
         let surface_hatsuon = replace_missing(raw.pron);
         let lemma_form = replace_missing(raw.orth_base);
+        let lexeme = replace_missing(raw.lemma);
         let lemma_hatsuon = replace_missing(raw.pron_base);
 
         UnidicToken {
@@ -138,8 +141,40 @@ impl From<(String, RawToken)> for UnidicToken {
             surface_hatsuon: surface_hatsuon,
             lemma_form: lemma_form,
             lemma_hatsuon: lemma_hatsuon,
+            lexeme,
             start_byte: 0,
             end_byte: 0,
         }
+    }
+}
+
+#[cfg(test)]
+mod lexeme_tests {
+    use super::*;
+
+    /// Column 8 is the 語彙素, column 11 the written base form; a kana spelling makes
+    /// them differ, which is the whole point of carrying both.
+    const SUGOI: &str = "形容詞,一般,*,*,形容詞,終止形-一般,スゴイ,凄い,すごい,スゴイ,すごい,スゴイ,和,*,*,*,*,*,*,相,スゴイ,スゴイ,スゴイ,スゴイ,2,C1,*,5267493954396843,19163";
+    const MONOSUGOI: &str = "形容詞,一般,*,*,形容詞,終止形-一般,モノスゴイ,物凄い,ものすごい,モノスゴイ,ものすごい,モノスゴイ,和,*,*,*,*,*,*,相,モノスゴイ,モノスゴイ,モノスゴイ,モノスゴイ,4,C1,*,10416506907271851,37895";
+
+    #[test]
+    fn the_lexeme_is_the_kanji_form_of_a_kana_spelling() {
+        let token = UnidicToken::from_parts("すごい", SUGOI, 0..9);
+
+        assert_eq!(token.lexeme, "凄い");
+        assert_eq!(token.lemma_form, "すごい", "the written base form is unchanged");
+    }
+
+    #[test]
+    fn it_reads_the_lexeme_for_compounds_too() {
+        assert_eq!(UnidicToken::from_parts("ものすごい", MONOSUGOI, 0..15).lexeme, "物凄い");
+    }
+
+    /// UniDic writes `*` when a field does not apply; the surface stands in, as it
+    /// already does for the other derived fields.
+    #[test]
+    fn a_missing_lexeme_falls_back_to_the_surface() {
+        let features = SUGOI.replacen(",凄い,", ",*,", 1);
+        assert_eq!(UnidicToken::from_parts("すごい", &features, 0..9).lexeme, "すごい");
     }
 }

@@ -105,6 +105,90 @@ struct TermExpectation {
     pos: Option<String>,
 }
 
+#[test]
+fn citations_survive_dictionary_backed_rescue_and_keep_their_highlights() {
+    let tok = tokenizer().expect("production citation regressions require UniDic");
+    let entries = [
+        ("形態", "けいたい", 2000),
+        ("化", "か", 100),
+        ("化する", "かする", 4000),
+        // A valid enclosing phrase must not erase the explicitly segmented
+        // citation: it remains independently mineable and matchable to its card.
+        ("形態化する", "けいたいかする", 10),
+        ("知る", "しる", 100),
+        ("要る", "いる", 700),
+        ("巣", "す", 3000),
+        ("食べる", "たべる", 200),
+        ("行く", "いく", 100),
+        ("分かる", "わかる", 200),
+        ("つまる", "つまる", 100),
+        ("つまらない", "つまらない", 1000),
+        ("詰まる", "つまる", 100),
+        ("詰まらない", "つまらない", 1000),
+        ("おば", "おば", 100),
+        ("おばさん", "おばさん", 2000),
+    ]
+    .map(|(term, reading, rank)| FreqEntry {
+        term: term.into(),
+        reading: reading.into(),
+        rank,
+        kana: false,
+    });
+    let manager = build_manager(&entries);
+    for (text, surface, lemma, reading) in [
+        ("形態化させて", "化させて", "化する", "かする"),
+        ("知らなかったです", "知らなかったです", "知る", "しる"),
+        ("要らないです", "要らないです", "要る", "いる"),
+        ("食べないです", "食べないです", "食べる", "たべる"),
+        ("行かないです", "行かないです", "行く", "いく"),
+        ("分からないです", "分からないです", "分かる", "わかる"),
+        ("つまらなかった", "つまらなかった", "つまらない", "つまらない"),
+        ("詰まらなかった", "詰まらなかった", "詰まる", "つまる"),
+        ("おばさん", "おばさん", "おばさん", "おばさん"),
+    ] {
+        let mut sentences = vec![Sentence {
+            id: 0,
+            source_id: 0,
+            text: text.into(),
+            segments: Vec::new(),
+            timestamp: None,
+            comprehension: 0.0,
+        }];
+        let terms = extract_words(tok.new_worker(), &mut sentences, &manager);
+        let term = terms
+            .iter()
+            .find(|term| {
+                term.full_segment == surface
+                    || (text == "知らなかったです" && term.full_segment == "知らなかった")
+            })
+            .unwrap_or_else(|| {
+                panic!(
+                    "missing {surface:?} in {text:?}: {:?}",
+                    terms.iter().map(|t| (&t.full_segment, &t.lemma_form)).collect::<Vec<_>>()
+                )
+            });
+        assert_eq!(term.lemma_form, lemma, "{text}");
+        assert_eq!(term.lemma_reading, reading, "{text}");
+        let start = term.sentence_references[0].1;
+        assert_eq!(
+            &text[start..start + term.surface_form.len()],
+            term.full_segment,
+            "highlight for {text}"
+        );
+        assert!(terms.iter().all(|term| term.surface_form != "す"), "bogus す in {text}");
+        if text == "形態化させて" {
+            let segments: Vec<_> = sentences[0]
+                .segments
+                .iter()
+                .map(|(_, _, start, end)| &text[*start..*end])
+                .collect();
+            assert_eq!(segments, ["形態", "化させて"]);
+            assert!(terms.iter().any(|term| term.lemma_form == "形態"));
+            assert!(terms.iter().any(|term| term.lemma_form == "形態化する"));
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Harness
 // ---------------------------------------------------------------------------

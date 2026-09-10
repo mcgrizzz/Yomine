@@ -154,11 +154,21 @@ pub async fn apply_filters(
 
     // Apply Anki filtering
     let (unknown_terms, anki_filtered): (Vec<Term>, Vec<Term>) = match anki_filter {
-        AnkiFilter::KnownLemmas(known) => {
-            not_ignored.into_iter().partition(|t| !known.contains(&t.lemma_form))
-        }
+        AnkiFilter::KnownLemmas(known) => not_ignored
+            .into_iter()
+            .partition(|t| t.possible_known_match.is_some() || !known.contains(&t.lemma_form)),
         AnkiFilter::Snapshot(Some(state)) => state.filter_existing_terms(not_ignored),
-        AnkiFilter::Snapshot(None) => (not_ignored, Vec::new()),
+        AnkiFilter::Snapshot(None) => (
+            not_ignored
+                .into_iter()
+                .map(|mut term| {
+                    term.possible_known_match = None;
+                    term.comprehension = 0.0;
+                    term
+                })
+                .collect(),
+            Vec::new(),
+        ),
     };
 
     Ok(FilterResult { terms: unknown_terms, anki_filtered, ignore_filtered })

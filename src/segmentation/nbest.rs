@@ -12,6 +12,7 @@ use wana_kana::{
 use super::{
     rule_matcher::parse_into_words,
     token_models::UnidicToken,
+    tokenizer::resolve_citation,
     unidic_tags::UnidicTag,
     word::{
         Word,
@@ -34,6 +35,9 @@ pub fn rescue_words(
     mut words: Vec<Word>,
     frequency_manager: &FrequencyManager,
 ) -> Vec<Word> {
+    for word in &mut words {
+        resolve_citation(word, frequency_manager);
+    }
     if frequency_manager.get_enabled_dictionaries().is_empty() {
         return words;
     }
@@ -190,20 +194,25 @@ fn try_rescue_at(
         return false;
     }
 
-    let Ok(candidate) = parse_into_words(path_tokens[i..=j].to_vec()) else {
+    let Ok(mut candidate) = parse_into_words(path_tokens[i..=j].to_vec()) else {
         return false;
     };
     if candidate.is_empty() {
         return false;
     }
 
+    for word in &mut candidate {
+        resolve_citation(word, frequency_manager);
+    }
+    let introduces_unjudgeable_word = introduces_unjudgeable_word(&words[a..=b], &candidate);
     let all_content_words_validate =
-        candidate.iter().all(|w| !needs_validation(w) || validates(w, frequency_manager));
+        candidate.iter().all(|w| !rescue_eligible(w) || validates(w, frequency_manager));
     let flagged_span_now_validates = candidate.iter().any(|w| {
         let (ws, we) = word_span(w);
         ws < e && we > s && is_content(&w.part_of_speech) && validates(w, frequency_manager)
     });
-    if !all_content_words_validate
+    if introduces_unjudgeable_word
+        || !all_content_words_validate
         || !flagged_span_now_validates
         || words_equal(&words[a..=b], &candidate)
     {
@@ -214,8 +223,17 @@ fn try_rescue_at(
     true
 }
 
-fn needs_validation(word: &Word) -> bool {
-    rescue_eligible(word)
+fn introduces_unjudgeable_word(original: &[Word], candidate: &[Word]) -> bool {
+    candidate.iter().any(|word| {
+        is_content(&word.part_of_speech)
+            && !rescue_eligible(word)
+            && !original.iter().any(|old| {
+                word_span(old) == word_span(word)
+                    && old.tokens == word.tokens
+                    && old.main_word == word.main_word
+                    && words_equal(std::slice::from_ref(old), std::slice::from_ref(word))
+            })
+    })
 }
 
 fn is_content(pos: &POS) -> bool {
@@ -271,4 +289,58 @@ fn words_equal(a: &[Word], b: &[Word]) -> bool {
                 && x.lemma_hatsuon == y.lemma_hatsuon
                 && x.part_of_speech == y.part_of_speech
         })
+}
+
+#[cfg(test)]
+mod passenger_guard_tests {
+    use super::*;
+
+    fn word(surface: &str, start: usize, pos: POS) -> Word {
+        let token = UnidicToken::from_parts(
+            surface,
+            "名詞,普通名詞,一般,*,*,*,*,*,*,*,*,*",
+            start..start + surface.len(),
+        );
+        Word {
+            citation: None,
+            surface_form: surface.into(),
+            surface_hatsuon: surface.into(),
+            lemma_form: surface.into(),
+            lemma_hatsuon: surface.into(),
+            part_of_speech: pos,
+            tokens: vec![token],
+            main_word: None,
+        }
+    }
+
+    #[test]
+    fn a_replacement_cannot_introduce_an_unjudged_su() {
+        let original = [word("要らないです", 0, POS::Verb)];
+        let replacement =
+            [word("要らないで", 0, POS::Verb), word("す", "要らないで".len(), POS::Verb)];
+        assert!(introduces_unjudgeable_word(&original, &replacement));
+    }
+
+    #[test]
+    fn an_unchanged_short_kana_neighbor_does_not_veto_rescue() {
+        let original = [word("す", 0, POS::Noun), word("悪形", 3, POS::Noun)];
+        let replacement =
+            [word("す", 0, POS::Noun), word("悪", 3, POS::Noun), word("形", 6, POS::Noun)];
+        assert!(!introduces_unjudgeable_word(&original, &replacement));
+    }
+
+    #[test]
+    fn a_genuine_standalone_su_is_not_a_rescue_target() {
+        let original = [word("す", 0, POS::Noun)];
+        let manager = FrequencyManager::from_dictionaries(Vec::new());
+        assert!(!needs_rescue(&original[0], &manager));
+        assert!(!introduces_unjudgeable_word(&original, &[word("す", 0, POS::Noun)]));
+    }
+
+    #[test]
+    fn reusing_a_surface_at_a_new_span_is_still_an_introduction() {
+        let original = [word("す", 0, POS::Noun), word("です", 3, POS::Copula)];
+        let replacement = [word("す", 6, POS::Verb)];
+        assert!(introduces_unjudgeable_word(&original, &replacement));
+    }
 }

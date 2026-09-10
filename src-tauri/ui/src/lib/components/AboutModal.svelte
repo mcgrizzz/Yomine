@@ -49,6 +49,16 @@
 			<button class="link" onclick={() => openExternal(`${REPO}/issues`)}>Report an issue</button>
 		</div>
 
+		<p class="tagline">
+			Kana matching includes adapted JMdict data (EDRDG / James William Breen) and
+			Jitendex data (Stephen Kraus and contributors), under CC BY-SA 4.0.
+		</p>
+		<div class="links">
+			<button class="link" onclick={() => openExternal('https://www.edrdg.org/edrdg/licence.html')}>JMdict</button>
+			<button class="link" onclick={() => openExternal('https://jitendex.org/pages/legal.html')}>Jitendex</button>
+			<button class="link" onclick={() => openExternal('https://creativecommons.org/licenses/by-sa/4.0/')}>License</button>
+		</div>
+
 		<hr />
 
 		<div class="update-row">

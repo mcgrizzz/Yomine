@@ -117,6 +117,8 @@ pub struct SettingsData {
     pub freq_include_unknown: bool,
     #[serde(default)]
     pub use_serif_font: bool,
+    #[serde(default = "default_true")]
+    pub show_possible_known_matches: bool,
     /// Which preferred theme slot is active (`theme_dark` vs `theme_light`).
     #[serde(default = "default_true")]
     pub dark_mode: bool,
@@ -209,6 +211,7 @@ impl Default for SettingsData {
             freq_filter_max: None,
             freq_include_unknown: false,
             use_serif_font: false,
+            show_possible_known_matches: true,
             dark_mode: true,
             theme_dark: default_theme_dark(),
             theme_light: default_theme_light(),
@@ -234,4 +237,20 @@ pub struct AnkiModelInfo {
     pub name: String,
     pub fields: Vec<String>,
     pub sample_note: Option<HashMap<String, String>>,
+}
+
+#[cfg(test)]
+mod possible_visibility_tests {
+    use super::*;
+    #[test]
+    fn legacy_defaults_and_explicit_preference_round_trip() {
+        let mut value = serde_json::to_value(SettingsData::default()).unwrap();
+        value.as_object_mut().unwrap().remove("show_possible_known_matches");
+        let mut restored: SettingsData = serde_json::from_value(value).unwrap();
+        assert!(restored.show_possible_known_matches);
+        restored.show_possible_known_matches = false;
+        let restored: SettingsData =
+            serde_json::from_value(serde_json::to_value(restored).unwrap()).unwrap();
+        assert!(!restored.show_possible_known_matches);
+    }
 }

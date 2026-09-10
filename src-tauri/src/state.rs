@@ -31,6 +31,8 @@ pub const KNOWLEDGE_SUMMARY_CACHE: &str = "knowledge_summary_cache.json";
 
 #[derive(Default)]
 pub struct FileData {
+    /// Identity of this processed result, distinct even when reopening the same path.
+    pub revision: Arc<()>,
     pub source_file: Option<SourceFile>,
     /// The minable (unknown) terms shown in the table.
     pub terms: Vec<Term>,
@@ -52,6 +54,10 @@ pub struct FileData {
 }
 
 pub struct AppState {
+    /// Changes when settings or dictionary evidence invalidate in-flight work.
+    pub input_revision: Arc<()>,
+    /// Prevent live Anki from filtering old segments while dictionaries are rebuilding them.
+    pub dictionary_refresh_pending: Option<Arc<()>>,
     /// `None` until `load_language_tools` finishes.
     pub language_tools: Option<LanguageTools>,
     pub settings: SettingsData,
@@ -77,6 +83,8 @@ pub struct AppState {
 impl AppState {
     pub fn new(settings: SettingsData) -> Self {
         Self {
+            input_revision: Arc::new(()),
+            dictionary_refresh_pending: None,
             language_tools: None,
             settings,
             file: FileData::default(),
@@ -111,7 +119,60 @@ impl AppState {
 
     /// The snapshot bakes in the vocab cache, `known_interval` and `frequency_manager`.
     pub fn invalidate_anki_cache(&mut self) {
+        self.input_revision = Arc::new(());
         self.cached_anki_state = None;
         self.known_entry_keys = None;
+    }
+
+    pub fn file_update_is_current(&self, file: &Arc<()>, inputs: &Arc<()>) -> bool {
+        Arc::ptr_eq(&self.file.revision, file) && Arc::ptr_eq(&self.input_revision, inputs)
+    }
+
+    pub fn invalidate_dictionary_evidence(&mut self) {
+        self.invalidate_anki_cache();
+        self.dictionary_refresh_pending = Some(self.input_revision.clone());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dictionary_refresh_cannot_overwrite_a_new_file_or_newer_settings() {
+        let mut state = AppState::new(SettingsData::default());
+        let file = state.file.revision.clone();
+        let inputs = state.input_revision.clone();
+        assert!(state.file_update_is_current(&file, &inputs));
+
+        // Even reopening the same path produces a distinct processed result.
+        state.file = FileData::default();
+        assert!(!state.file_update_is_current(&file, &inputs));
+        let file = state.file.revision.clone();
+        assert!(state.file_update_is_current(&file, &inputs));
+
+        state.invalidate_anki_cache();
+        assert!(!state.file_update_is_current(&file, &inputs));
+    }
+
+    #[test]
+    fn later_dictionary_changes_supersede_pending_refreshes() {
+        let mut state = AppState::new(SettingsData::default());
+        state.invalidate_dictionary_evidence();
+        let first = state.input_revision.clone();
+        let file = state.file.revision.clone();
+        state.invalidate_dictionary_evidence();
+        assert!(!state.file_update_is_current(&file, &first));
+        assert!(Arc::ptr_eq(
+            state.dictionary_refresh_pending.as_ref().unwrap(),
+            &state.input_revision,
+        ));
+
+        // A settings change must not leave a stale pending flag blocking Anki.
+        state.invalidate_anki_cache();
+        assert!(!Arc::ptr_eq(
+            state.dictionary_refresh_pending.as_ref().unwrap(),
+            &state.input_revision,
+        ));
     }
 }

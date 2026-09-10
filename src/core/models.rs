@@ -147,6 +147,10 @@ impl PartOfSpeech {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Term {
+    #[serde(default)]
+    pub possible_known_match: Option<String>,
+    #[serde(skip)]
+    pub lexical_family: Option<crate::dictionary::lexical_evidence::LexicalFamily>,
     pub id: u32,
     pub lemma_form: String, // Base form of the term aka lemma form.. what is found in a dictionary
     pub lemma_reading: String, // Lemma form reading in hiragana (we will have convert from katakana)
@@ -175,6 +179,8 @@ impl Term {
         let lemma_reading = surface_reading.clone();
         let is_kana = terms.iter().all(|t| t.is_kana);
         Term {
+            possible_known_match: None,
+            lexical_family: None,
             id: 1,
             surface_form,
             surface_reading,

@@ -84,6 +84,7 @@ export interface FreqRange {
 }
 
 export interface TableControlState {
+	showPossibleKnownMatches?: boolean;
 	search: string;
 	sort: { field: SortField; dir: SortDir };
 	/** POS-key → enabled; a missing key counts as enabled. */
@@ -175,6 +176,7 @@ export function applyControls(
 	c: TableControlState
 ): Term[] {
 	const out = terms.filter((t) => {
+		if (c.showPossibleKnownMatches === false && t.possible_known_match) return false;
 		// Frequency range.
 		if (c.freq) {
 			const f = harmonic(t);

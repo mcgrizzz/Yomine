@@ -1,4 +1,5 @@
 <script lang="ts">
+	import UncertainMatch from './UncertainMatch.svelte';
 	import type { DefinitionEntry, SentenceDto, Term, TimeStampDto } from '$lib/ipc';
 	import {
 		defaultDir,
@@ -456,13 +457,10 @@
 		if (defPopover) return;
 		if (!canMine || isMined(term)) return;
 		if (e.ctrlKey || e.metaKey) return;
-		// Only empty row space toggles — not cell content (copyable text, buttons).
-		// `.sentence`/`.meta` also match SentenceView's full-width blocks.
-		const target = e.target as HTMLElement;
-		if (
-			target !== e.currentTarget &&
-			!target.matches('.sel, .term-cell, .jlpt-cell, .sentence, .meta')
-		)
+		// Text wrappers and their padding belong to the row; only actual controls
+		// own their clicks. Dragging to select text is handled below.
+		const target = e.target as Element;
+		if (target.closest('button, input, select, textarea, a, summary, [contenteditable], [role="tooltip"]'))
 			return;
 		if (window.getSelection()?.toString()) return;
 		const key = termKey(term);
@@ -785,6 +783,7 @@
 			{#each renderCols as id (id)}
 				{#if id === 'term'}
 					<span class="term-cell">
+						<span class="term-copy">
 						<!-- svelte-ignore a11y_click_events_have_key_events -- Ctrl/Cmd+Click is a
 						     mouse-modifier ignore toggle (egui parity); no keyboard equivalent. -->
 						<span
@@ -805,6 +804,10 @@
 							onmouseleave={() => (hovered = null)}
 							><Furigana surface={term.lemma_form} reading={term.lemma_reading} /></span
 						>
+						{#if term.possible_known_match}
+							<UncertainMatch match={term.possible_known_match} />
+						{/if}
+						</span>
 						{#if isMined(term)}
 							{@const noteId = $minedNoteIds[term.lemma_form]}
 							{#if noteId !== undefined && $mediaMissing.has(term.lemma_form)}
@@ -937,6 +940,11 @@
 />
 
 <style>
+	.term-copy {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+	}
 	/* One shared track list (rows subgrid it) so the max-content term column is
 	   sized globally — per-row grids each size their own and misalign. The
 	   template itself is inline (built from the column config, issue #122). */
@@ -1057,6 +1065,7 @@
 	}
 	.num {
 		text-align: right;
+		user-select: none;
 	}
 	.term-cell {
 		display: inline-flex;
