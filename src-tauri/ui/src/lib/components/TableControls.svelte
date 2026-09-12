@@ -115,6 +115,7 @@
 				<button
 					class="jlpt"
 					class:off={$jlptEnabled[key] === false}
+					aria-pressed={$jlptEnabled[key] !== false}
 					title={`Show only ${jlptLabel(key)} — Ctrl+Click to combine, Shift+Click for a range`}
 					onclick={(e) => jlptClick(e, key)}
 				>
@@ -209,8 +210,9 @@
 	.jlpt {
 		cursor: pointer;
 		padding: 0.2rem 0.45rem;
-		background: color-mix(in srgb, var(--accent) 10%, transparent);
-		border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+		background: var(--selection);
+		border: 1px solid var(--accent);
+		box-shadow: inset 0 -2px var(--accent);
 		border-radius: var(--radius);
 		color: var(--text);
 		font-size: 0.75rem;
@@ -218,6 +220,7 @@
 	.jlpt.off {
 		background: var(--bg-raised);
 		border-color: var(--border);
+		box-shadow: none;
 		color: var(--text-muted);
 	}
 	/* Min/Max numeric bounds beside the slider (egui's DragValues). */
