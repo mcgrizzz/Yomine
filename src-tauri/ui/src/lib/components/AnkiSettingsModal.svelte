@@ -559,10 +559,10 @@
 							: catalogPhase === 'failed'
 								? 'Could not load note types. Saved mappings are kept.'
 								: catalogPhase === 'ready' && !models.length
-									? 'No note types with cards were found.'
+									? 'No note types were found.'
 									: catalogPhase === 'idle'
 										? 'Test the Anki connection to load note types.'
-										: `${models.length} note types with cards available`}</span
+										: `${models.length} note types available`}</span
 					><button
 						type="button"
 						class="reset"
@@ -642,7 +642,7 @@
 									<button type="button" class="reset" onclick={() => loadSample(name)}
 										>Retry sample</button
 									>{:else if samples[name]?.sample_note === null}<p class="hint">
-										No sample note is available.
+										No sample note available yet.
 									</p>{/if}
 								<div class="mapping-actions">
 									<button type="button" class="reset danger" onclick={() => removeMapping(name)}

@@ -22,8 +22,7 @@ pub async fn get_anki_status() -> AnkiStatus {
     AnkiStatus { connected, fetching: false }
 }
 
-/// Note types (with fields) that have at least one note. Errors when Anki is
-/// offline so the UI can say so.
+/// All note types and their fields, including empty types.
 #[tauri::command]
 pub async fn list_anki_models(
     connection: AnkiConnectionSettings,

@@ -805,7 +805,7 @@ export function testAnkiConnection(connection: AnkiConnectionSettings): Promise<
 	return invoke('test_anki_connection', { connection });
 }
 
-/** Note types with at least one note, using the supplied connection. */
+/** All note types, using the supplied connection. */
 export function listAnkiModels(connection: AnkiConnectionSettings): Promise<AnkiModelInfo[]> {
 	return invoke('list_anki_models', { connection });
 }

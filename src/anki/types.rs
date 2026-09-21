@@ -3,7 +3,6 @@ pub struct Model {
     pub name: String,
     pub id: u64,
     pub fields: Vec<String>,
-    pub note_count: usize,
     pub sample_note: Option<std::collections::HashMap<String, String>>,
 }
 
