@@ -10,6 +10,11 @@ use std::{
     },
 };
 
+use futures::{
+    stream,
+    StreamExt,
+    TryStreamExt,
+};
 use rayon::iter::{
     IntoParallelIterator,
     ParallelIterator,
@@ -444,20 +449,14 @@ pub async fn get_models(
     client: &super::api::AnkiClient,
 ) -> Result<Vec<Model>, crate::core::errors::YomineError> {
     let model_ids = client.get_model_ids().await?;
-    let models =
-        futures::future::try_join_all(model_ids.into_iter().map(|(name, id)| async move {
+    stream::iter(model_ids)
+        .map(|(name, id)| async move {
             let fields = client.get_field_names(&name).await?;
-            let note_count = client.get_model_note_ids(&name).await?.len();
-            Ok::<_, crate::core::errors::YomineError>((note_count > 0).then_some(Model {
-                name,
-                id,
-                fields,
-                note_count,
-                sample_note: None,
-            }))
-        }))
-        .await?;
-    Ok(models.into_iter().flatten().collect())
+            Ok(Model { name, id, fields, sample_note: None })
+        })
+        .buffer_unordered(8)
+        .try_collect()
+        .await
 }
 
 pub async fn wait_awake(wait_time: u64, max_attempts: u32) -> Result<bool, reqwest::Error> {

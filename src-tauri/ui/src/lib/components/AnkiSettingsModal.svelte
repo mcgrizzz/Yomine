@@ -39,7 +39,9 @@
 	let showKey = $state(false);
 	let expandedModel = $state<string | null>(null);
 	let adding = $state(false);
-	let selectedNewModel = $state('');
+	let pickerStyle = $state('');
+	let modelSearch = $state('');
+	let modelIndex = $state(0);
 	let removed = $state<{ name: string; mapping: ipc.FieldMapping } | null>(null);
 	let saving = $state(false);
 	let saveError = $state<string | null>(null);
@@ -98,6 +100,12 @@
 	const availableModels = $derived(
 		models.filter((model) => !draft.anki_model_mappings[model.name])
 	);
+	const filteredModels = $derived(
+		availableModels.filter((model) =>
+			model.name.toLocaleLowerCase().includes(modelSearch.trim().toLocaleLowerCase())
+		)
+	);
+	const activeModel = $derived(filteredModels[modelIndex]);
 	const guard = dirtyGuard(
 		() => dirty,
 		() => ankiModalOpen.set(false)
@@ -125,7 +133,8 @@
 		else if (catalogPhase === 'loading') catalogPhase = 'idle';
 		expandedModel = null;
 		adding = false;
-		selectedNewModel = '';
+		modelSearch = '';
+		modelIndex = 0;
 		removed = null;
 		showKey = false;
 		saveError = null;
@@ -135,6 +144,7 @@
 	}
 
 	function clearCatalog() {
+		adding = false;
 		models = [];
 		samples = {};
 		sampleErrors = {};
@@ -147,7 +157,8 @@
 		draft = copyDraft(defaults);
 		expandedModel = null;
 		adding = false;
-		selectedNewModel = '';
+		modelSearch = '';
+		modelIndex = 0;
 		removed = null;
 		showKey = false;
 		saveError = null;
@@ -203,6 +214,7 @@
 			const result = await ipc.listAnkiModels(connection);
 			if (generation !== ankiGeneration) return;
 			models = result;
+			modelIndex = 0;
 			catalogConnection = JSON.stringify(connection);
 			catalogPhase = 'ready';
 		} catch (error) {
@@ -272,12 +284,64 @@
 		document.getElementById(`anki-term-${name}`)?.focus();
 	}
 
-	async function addMapping() {
-		if (!selectedNewModel || draft.anki_model_mappings[selectedNewModel]) return;
-		const name = selectedNewModel;
+	async function toggleAdding() {
+		adding = !adding;
+		modelSearch = '';
+		modelIndex = 0;
+		if (adding) {
+			const anchor = document.getElementById('anki-add-model')!.getBoundingClientRect();
+			const zoom = Number(getComputedStyle(document.documentElement).zoom) || 1;
+			const width = Math.min(420, window.innerWidth / zoom - 16);
+			const below = (window.innerHeight - anchor.bottom) / zoom - 14;
+			const above = below < 280 && anchor.top / zoom > below;
+			pickerStyle = `width: ${width}px; left: ${Math.max(8, anchor.right / zoom - width)}px; ` +
+				(above
+					? `bottom: ${(window.innerHeight - anchor.top) / zoom + 6}px; max-height: ${anchor.top / zoom - 14}px;`
+					: `top: ${anchor.bottom / zoom + 6}px; max-height: ${below}px;`);
+		}
+		await tick();
+		document.getElementById(adding ? 'anki-model-search' : 'anki-add-model')?.focus();
+	}
+
+	$effect(() => {
+		if (!adding) return;
+		function dismissPicker(event: Event) {
+			if (event.target instanceof Element && event.target.closest('#anki-model-picker, #anki-add-model')) return;
+			adding = false;
+		}
+		const events = ['pointerdown', 'focusin', 'scroll', 'resize'];
+		for (const event of events) window.addEventListener(event, dismissPicker, true);
+		return () => {
+			for (const event of events) window.removeEventListener(event, dismissPicker, true);
+		};
+	});
+
+	async function searchKeydown(event: KeyboardEvent) {
+		if (event.isComposing) return;
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			event.stopPropagation();
+			void toggleAdding();
+		} else if (event.key === 'Enter') {
+			event.preventDefault();
+			if (activeModel) void addMapping(activeModel.name);
+		} else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+			event.preventDefault();
+			modelIndex = Math.max(
+				0,
+				Math.min(filteredModels.length - 1, modelIndex + (event.key === 'ArrowDown' ? 1 : -1))
+			);
+			await tick();
+			document.getElementById(`anki-model-option-${modelIndex}`)?.scrollIntoView({ block: 'nearest' });
+		}
+	}
+
+	async function addMapping(name: string) {
+		if (!availableModels.some((model) => model.name === name)) return;
 		if (removed?.name === name) removed = null;
 		draft.anki_model_mappings[name] = { term_field: '', reading_field: '', sentence_field: null };
-		selectedNewModel = '';
+		modelSearch = '';
+		modelIndex = 0;
 		adding = false;
 		expandedModel = name;
 		void loadSample(name, true);
@@ -377,7 +441,8 @@
 	title="Anki Settings"
 	width="min(760px, 94%)"
 	onclose={() => {
-		if (!saving) guard.request();
+		if (adding) void toggleAdding();
+		else if (!saving) guard.request();
 	}}
 	oninteract={guard.disarm}
 >
@@ -545,10 +610,13 @@
 				<div class="section-heading">
 					<h3 id="anki-models-heading">Note types</h3>
 					<button
+						id="anki-add-model"
 						type="button"
 						class="quiet"
+						aria-expanded={adding}
+						aria-controls="anki-model-picker"
 						disabled={!availableModels.length}
-						onclick={() => (adding = !adding)}>+ Add note type</button
+						onclick={toggleAdding}>+ Add note type</button
 					>
 				</div>
 				<p class="hint">Choose which fields identify words and sentences already in Anki.</p>
@@ -559,10 +627,10 @@
 							: catalogPhase === 'failed'
 								? 'Could not load note types. Saved mappings are kept.'
 								: catalogPhase === 'ready' && !models.length
-									? 'No note types with cards were found.'
+									? 'No note types were found.'
 									: catalogPhase === 'idle'
 										? 'Test the Anki connection to load note types.'
-										: `${models.length} note types with cards available`}</span
+										: `${models.length} note types available`}</span
 					><button
 						type="button"
 						class="reset"
@@ -577,16 +645,41 @@
 						<summary>Load error details</summary>
 						<p class="detail">{catalogError}</p>
 					</details>{/if}
-				{#if adding}<div class="add-row">
-						<label for="anki-new-model">Note type</label><select
-							id="anki-new-model"
-							bind:value={selectedNewModel}
-							onchange={addMapping}
-							><option value="" disabled>Choose a note type…</option
-							>{#each availableModels as model (model.name)}<option value={model.name}
-									>{model.name}</option
-								>{/each}</select
-						><button type="button" class="quiet" onclick={() => (adding = false)}>Dismiss</button>
+				{#if adding}<div id="anki-model-picker" class="model-picker" style={pickerStyle}>
+						<label for="anki-model-search">Search note types</label>
+						<div class="add-row">
+							<input
+								id="anki-model-search"
+								role="combobox"
+								aria-autocomplete="list"
+								aria-expanded="true"
+								aria-controls="anki-model-options"
+								aria-activedescendant={activeModel ? `anki-model-option-${modelIndex}` : undefined}
+								bind:value={modelSearch}
+								oninput={() => {
+									modelIndex = 0;
+									document.getElementById('anki-model-options')?.scrollTo(0, 0);
+								}}
+								onkeydown={searchKeydown}
+								autocomplete="off"
+								placeholder="Type a name…"
+							/>
+							<button type="button" class="quiet" onclick={toggleAdding}>Dismiss</button>
+						</div>
+						<div id="anki-model-options" class="model-options" role="listbox" aria-label="Note types">
+							{#each filteredModels as model, index (model.name)}
+								<button
+									id={`anki-model-option-${index}`}
+									type="button"
+									role="option"
+									aria-selected={index === modelIndex}
+									tabindex="-1"
+									onpointermove={() => (modelIndex = index)}
+									onclick={() => addMapping(model.name)}>{model.name}</button
+								>
+							{/each}
+						</div>
+						{#if !filteredModels.length}<p class="hint" role="status">No matching note types.</p>{/if}
 					</div>{/if}
 				{#each Object.entries(draft.anki_model_mappings) as [name, mapping] (name)}
 					<div class="mapping">
@@ -642,7 +735,7 @@
 									<button type="button" class="reset" onclick={() => loadSample(name)}
 										>Retry sample</button
 									>{:else if samples[name]?.sample_note === null}<p class="hint">
-										No sample note is available.
+										No sample note available yet.
 									</p>{/if}
 								<div class="mapping-actions">
 									<button type="button" class="reset danger" onclick={() => removeMapping(name)}
@@ -894,6 +987,44 @@
 	.add-row,
 	.removed {
 		margin-top: 0.6rem;
+	}
+	.add-row input {
+		flex: 1;
+		width: 0;
+	}
+	.model-picker {
+		position: fixed;
+		z-index: var(--z-popover);
+		display: flex;
+		flex-direction: column;
+		padding: 0.75rem;
+		background: var(--bg-panel);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		box-shadow: var(--shadow-overlay);
+	}
+	.model-options {
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
+		max-height: 14rem;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		margin-top: 0.35rem;
+	}
+	.model-options button {
+		flex-shrink: 0;
+		text-align: left;
+		overflow-wrap: anywhere;
+		background: transparent;
+		border-color: transparent;
+		font-weight: normal;
+		cursor: pointer;
+	}
+	.model-options button:hover,
+	.model-options button[aria-selected='true'] {
+		background: var(--bg-hover);
+		border-color: var(--accent);
 	}
 	.estimate {
 		display: flex;

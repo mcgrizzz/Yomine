@@ -20,6 +20,11 @@ use crate::core::{
 static CONNECTION: LazyLock<RwLock<AnkiConnectionSettings>> =
     LazyLock::new(|| RwLock::new(AnkiConnectionSettings::default()));
 
+static HTTP_CLIENT: LazyLock<Client> = LazyLock::new(|| {
+    // AnkiConnect closes each response without a Connection: close header.
+    Client::builder().pool_max_idle_per_host(0).build().expect("failed to create Anki HTTP client")
+});
+
 pub fn configure_connection(settings: AnkiConnectionSettings) {
     *CONNECTION.write().unwrap() = settings;
 }
@@ -119,7 +124,7 @@ fn build_request(
     } else {
         host.to_owned()
     };
-    Client::new().post(format!("http://{host}:{}/", connection.port)).json(&body)
+    HTTP_CLIENT.post(format!("http://{host}:{}/", connection.port)).json(&body)
 }
 
 pub async fn get_version() -> Result<u32, YomineError> {
