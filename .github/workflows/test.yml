@@ -100,6 +100,9 @@ jobs:
           find .github/scripts -type f -name '*.js' -print0 2>/dev/null | 
           xargs -0 -n1 node --check || echo "No JS files found"
 
+      - name: Test workflow change filters
+        run: node --test .github/scripts/*.test.js
+
   # 3) Run Rust tests
   # Run if: code changed OR it's a push to main
   rust-tests:
