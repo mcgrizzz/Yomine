@@ -1,11 +1,24 @@
 import { sveltekit } from '@sveltejs/kit/vite';
+import { execFileSync } from 'node:child_process';
 import { defineConfig } from 'vite';
 
 // @tauri-apps/cli sets TAURI_DEV_HOST when running on a physical device.
 const host = process.env.TAURI_DEV_HOST;
 
+let buildCommit = '';
+try {
+	buildCommit = execFileSync('git', ['rev-parse', 'HEAD'], {
+		cwd: new URL('.', import.meta.url),
+		encoding: 'utf8',
+		stdio: ['ignore', 'pipe', 'ignore']
+	}).trim();
+} catch {
+	// Source archives may not contain Git metadata.
+}
+
 export default defineConfig({
 	plugins: [sveltekit()],
+	define: { __BUILD_COMMIT__: JSON.stringify(buildCommit) },
 
 	// Pre-bundle wanakana (search normalization) so a fresh `pnpm install` is
 	// picked up without a manual dev-server restart / re-optimization.

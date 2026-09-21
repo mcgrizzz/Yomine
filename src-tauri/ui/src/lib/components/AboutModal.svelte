@@ -40,7 +40,22 @@
 
 <Modal open={$aboutModalOpen} title="About Yomine" width="min(400px, 92%)" onclose={close}>
 	<div class="body">
-		<p class="name">Yomine <span class="version">v{version}</span></p>
+		<p class="name">
+			Yomine <span class="version">
+				v{version}
+				{#if __BUILD_COMMIT__}
+					<a
+						class="commit"
+						href={`${REPO}/commit/${__BUILD_COMMIT__}`}
+						title={`View commit ${__BUILD_COMMIT__} on GitHub`}
+						onclick={(event) => {
+							event.preventDefault();
+							openExternal(event.currentTarget.href);
+						}}
+					>{__BUILD_COMMIT__.slice(0, 7)}</a>
+				{/if}
+			</span>
+		</p>
 		<p class="tagline">Japanese vocabulary mining — 読み + mine.</p>
 
 		<div class="links">
@@ -49,11 +64,11 @@
 			<button class="link" onclick={() => openExternal(`${REPO}/issues`)}>Report an issue</button>
 		</div>
 
-		<p class="tagline">
+		<p class="attribution">
 			Kana matching includes adapted JMdict data (EDRDG / James William Breen) and
 			Jitendex data (Stephen Kraus and contributors), under CC BY-SA 4.0.
 		</p>
-		<div class="links">
+		<div class="links attribution-links">
 			<button class="link" onclick={() => openExternal('https://www.edrdg.org/edrdg/licence.html')}>JMdict</button>
 			<button class="link" onclick={() => openExternal('https://jitendex.org/pages/legal.html')}>Jitendex</button>
 			<button class="link" onclick={() => openExternal('https://creativecommons.org/licenses/by-sa/4.0/')}>License</button>
@@ -105,11 +120,29 @@
 		font-size: 0.9rem;
 		font-weight: 400;
 		color: var(--text-muted);
+		white-space: nowrap;
+	}
+	.commit {
+		margin-left: 0.35rem;
+		font-family: monospace;
+		font-size: 0.8rem;
+		color: var(--link);
+		text-underline-offset: 0.15em;
 	}
 	.tagline {
 		margin: 0;
 		font-size: 0.85rem;
 		color: var(--text-muted);
+	}
+	.attribution {
+		margin: 0;
+		font-size: 0.72rem;
+		line-height: 1.4;
+		color: var(--text-muted);
+	}
+	.attribution-links .link {
+		padding: 0.15rem 0.4rem;
+		font-size: 0.72rem;
 	}
 	.links {
 		display: flex;
