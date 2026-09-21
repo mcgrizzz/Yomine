@@ -56,6 +56,7 @@ jobs:
     needs: prepare
     name: Build ${{ matrix.platform }}
     runs-on: ${{ matrix.runner }}
+    cache-mode: none
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
@@ -68,10 +69,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform == 'macos' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
-      - uses: Swatinem/rust-cache@v2
-        with:
-          prefix-key: test-build
-          workspaces: '. -> target'
       - name: Install Linux dependencies
         if: matrix.platform == 'linux'
         run: |
@@ -84,8 +81,6 @@ jobs:
       - uses: actions/setup-node@v4.4.0
         with:
           node-version: '22.x'
-          cache: pnpm
-          cache-dependency-path: src-tauri/ui/pnpm-lock.yaml
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
         working-directory: src-tauri/ui
