@@ -1,0 +1,26 @@
+name: Share test build
+
+on:
+  workflow_run:
+    workflows: [PR test installers]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  share:
+    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion != 'cancelled'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { share } = require('./.github/scripts/test-builds.js');
+            await share({ github, context, core });

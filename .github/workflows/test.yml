@@ -93,8 +93,7 @@ jobs:
       - name: Lint GitHub Actions workflows
         uses: docker://rhysd/actionlint:1.7.7
         with:
-          # This actionlint version predates GitHub's cache-mode key.
-          args: -color -ignore ^unexpected.key..cache-mode..for..job..section[.]
+          args: -color
 
       - name: Check JS syntax in scripts/
         run: |
