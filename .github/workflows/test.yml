@@ -36,6 +36,7 @@ jobs:
               - 'tests/**'
               - 'examples/**'
               - 'assets/**'
+              - '.github/workflows/test.yml'
               - 'Cargo.toml'
               - 'Cargo.lock'
               - 'src-tauri/src/**'
@@ -145,6 +146,9 @@ jobs:
 
       - name: Check formatting
         run: cargo +nightly fmt -- --check
+
+      - name: Prepare UniDic before parallel tests
+        run: cargo run -p yomine --example segment -- "日本語"
 
       - name: Run engine tests
         run: |

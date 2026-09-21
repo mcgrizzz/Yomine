@@ -1,0 +1,46 @@
+name: Test build
+run-name: 'Request test build for PR #${{ inputs.pr_number }} (${{ inputs.platform }})'
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number
+        required: true
+        type: number
+      platform:
+        description: Installers to build
+        required: true
+        type: choice
+        default: windows
+        options:
+          - windows
+          - linux
+          - macos
+          - all
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-build-request-${{ inputs.pr_number }}
+  cancel-in-progress: false
+
+jobs:
+  request:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ inputs.pr_number }}
+          PLATFORM: ${{ inputs.platform }}
+        with:
+          # GITHUB_TOKEN label changes do not trigger pull_request workflows.
+          github-token: ${{ secrets.MY_PAT }}
+          script: |
+            const { requestBuild } = require('./.github/scripts/test-builds.js');
+            await requestBuild({ github, context, core });
