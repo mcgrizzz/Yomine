@@ -1,0 +1,10 @@
+name: Yomine production sources
+
+paths-ignore:
+  - '**/tests/**'
+  - '**/__tests__/**'
+  - '**/*.test.*'
+  - '**/*.spec.*'
+  - '**/*_tests.rs'
+  - '**/test_*.py'
+  - '**/*_test.py'

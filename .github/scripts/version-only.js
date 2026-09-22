@@ -1,5 +1,24 @@
-// Cargo.toml is CRLF, so patch lines arrive with a trailing \r.
-const VERSION_LINE = /^[+-]\s*version\s*=\s*".*"\s*$/;
+function isWorkspaceVersionOnly(files) {
+  if (files.length !== 1) return false;
+  const file = files[0];
+  if (file.filename !== 'Cargo.toml' || file.status !== 'modified' ||
+      file.additions !== 1 || file.deletions !== 1) return false;
+
+  let section;
+  let changed = 0;
+  for (const line of (file.patch ?? '').split('\n')) {
+    // Each hunk must supply its own section context.
+    if (line.startsWith('@@')) section = undefined;
+    if (/^ \s*\[/.test(line)) section = line.trim();
+    if (/^[+-]/.test(line)) {
+      if (section !== '[workspace.package]' || !/^[+-]\s*version\s*=\s*"[^"\r\n]+"\s*$/.test(line)) {
+        return false;
+      }
+      changed++;
+    }
+  }
+  return changed === 2;
+}
 
 /**
  * Whether `sha` changes nothing but the workspace version, plus its first parent.
@@ -12,27 +31,10 @@ async function inspectVersionBump({ github, context, sha }) {
     ref: sha,
   });
 
-  const parent = data.parents?.[0]?.sha ?? null;
-  const files = data.files ?? [];
-  if (files.length !== 1 || files[0].filename !== 'Cargo.toml') {
-    return { isVersionOnly: false, parent };
-  }
-
-  const patch = (files[0].patch ?? '').split('\n').map((line) => line.replace(/\r$/, ''));
-  const changed = patch.filter(
-    (line) => /^[+-]/.test(line) && !/^(\+\+\+|---)/.test(line)
-  );
-
-  // A `version = "…"` line also appears under [dependencies.x] tables; requiring
-  // the section header in the hunk's context keeps a dependency bump from
-  // reading as a release bump.
-  const inWorkspacePackage = patch.some((line) => line.trim() === '[workspace.package]');
-
   return {
-    isVersionOnly:
-      changed.length > 0 && inWorkspacePackage && changed.every((line) => VERSION_LINE.test(line)),
-    parent,
+    isVersionOnly: isWorkspaceVersionOnly(data.files ?? []),
+    parent: data.parents?.[0]?.sha ?? null,
   };
 }
 
-module.exports = { inspectVersionBump };
+module.exports = { inspectVersionBump, isWorkspaceVersionOnly };
