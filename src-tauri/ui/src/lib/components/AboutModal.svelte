@@ -33,55 +33,60 @@
 		checking = false;
 	}
 
+	function openLink(event: MouseEvent) {
+		event.preventDefault();
+		openExternal((event.currentTarget as HTMLAnchorElement).href);
+	}
+
 	function close() {
 		aboutModalOpen.set(false);
 	}
 </script>
 
-<Modal open={$aboutModalOpen} title="About Yomine" width="min(400px, 92%)" onclose={close}>
+<Modal open={$aboutModalOpen} title="About Yomine" width="min(440px, 92%)" flush onclose={close}>
 	<div class="body">
-		<p class="name">
-			Yomine <span class="version">
-				v{version}
-				{#if __BUILD_COMMIT__}
-					<a
-						class="commit"
-						href={`${REPO}/commit/${__BUILD_COMMIT__}`}
-						title={`View commit ${__BUILD_COMMIT__} on GitHub`}
-						onclick={(event) => {
-							event.preventDefault();
-							openExternal(event.currentTarget.href);
-						}}
-					>{__BUILD_COMMIT__.slice(0, 7)}</a>
-				{/if}
-			</span>
-		</p>
-		<p class="tagline">Japanese vocabulary mining — 読み + mine.</p>
-
-		<div class="links">
-			<button class="link" onclick={() => openExternal(REPO)}>GitHub</button>
-			<button class="link" onclick={() => openExternal(`${REPO}/releases`)}>Releases</button>
-			<button class="link" onclick={() => openExternal(`${REPO}/issues`)}>Report an issue</button>
-		</div>
-
-		<p class="attribution">
-			Kana matching includes adapted JMdict data (EDRDG / James William Breen) and
-			Jitendex data (Stephen Kraus and contributors), under CC BY-SA 4.0.
-		</p>
-		<div class="links attribution-links">
-			<button class="link" onclick={() => openExternal('https://www.edrdg.org/edrdg/licence.html')}>JMdict</button>
-			<button class="link" onclick={() => openExternal('https://jitendex.org/pages/legal.html')}>Jitendex</button>
-			<button class="link" onclick={() => openExternal('https://creativecommons.org/licenses/by-sa/4.0/')}>License</button>
-		</div>
-
-		<hr />
+		<section class="intro" aria-label="Application information">
+			<div class="identity">
+				<p class="name">Yomine</p>
+				<div class="version">
+					<span>v{version}</span>
+					{#if __BUILD_COMMIT__}
+						<span aria-hidden="true">·</span>
+						<a
+							class="commit"
+							href={`${REPO}/commit/${__BUILD_COMMIT__}`}
+							title={`View commit ${__BUILD_COMMIT__} on GitHub`}
+							onclick={openLink}>{__BUILD_COMMIT__.slice(0, 7)}</a
+						>
+					{/if}
+				</div>
+			</div>
+			<p class="tagline">Japanese vocabulary mining — 読み + mine.</p>
+			<nav class="links" aria-label="Yomine links">
+				<a href={REPO} onclick={openLink}>GitHub</a>
+				<a href={`${REPO}/releases`} onclick={openLink}>Releases</a>
+				<a href={`${REPO}/issues`} onclick={openLink}>Report an issue</a>
+			</nav>
+		</section>
 
 		<div class="update-row">
+			<div class="update-copy">
+				<h3>Updates</h3>
+				<div role="status">
+					{#if $updateInfo}
+						<p class="update-found">{$updateInfo.latest} is available</p>
+					{:else if checkResult === 'up-to-date'}
+						<p class="up-to-date">You're on the latest version</p>
+					{:else if checkResult === 'unavailable'}
+						<p class="unavailable">Couldn't reach GitHub — try again later</p>
+					{/if}
+				</div>
+			</div>
 			{#if $updateInfo}
 				{@const u = $updateInfo}
-				<span class="update-found">{u.latest} is available</span>
 				{#if u.installable}
 					<button
+						class="primary"
 						title="Yomine restarts to finish installing; the loaded file and any queued mining are lost."
 						onclick={() => (installArmed ? installUpdate() : (installArmed = true))}
 					>
@@ -94,13 +99,19 @@
 				<button disabled={checking} onclick={runCheck}>
 					{checking ? 'Checking…' : 'Check for updates'}
 				</button>
-				{#if checkResult === 'up-to-date'}
-					<span class="up-to-date">✓ You're on the latest version</span>
-				{:else if checkResult === 'unavailable'}
-					<span class="unavailable">Couldn't reach GitHub — try again later</span>
-				{/if}
 			{/if}
 		</div>
+
+		<footer class="credits">
+			<p>
+				Kana matching includes adapted
+				<a href="https://www.edrdg.org/edrdg/licence.html" onclick={openLink}>JMdict</a>
+				data (EDRDG / James William Breen) and
+				<a href="https://jitendex.org/pages/legal.html" onclick={openLink}>Jitendex</a>
+				data (Stephen Kraus and contributors), under
+				<a href="https://creativecommons.org/licenses/by-sa/4.0/" onclick={openLink}>CC BY-SA 4.0</a>.
+			</p>
+		</footer>
 	</div>
 </Modal>
 
@@ -108,72 +119,102 @@
 	.body {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
-		padding: 0 1rem;
+		gap: 1.1rem;
+		padding: 1.25rem;
+	}
+	p {
+		margin: 0;
+	}
+	a {
+		color: var(--link);
+		text-underline-offset: 0.2em;
+		text-decoration-thickness: 1px;
+	}
+	a:hover {
+		color: var(--accent);
+	}
+	.identity {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: 0.4rem 1rem;
 	}
 	.name {
-		margin: 0;
-		font-size: 1.3rem;
+		font-size: 1.6rem;
 		font-weight: 700;
+		line-height: 1.2;
 	}
 	.version {
-		font-size: 0.9rem;
-		font-weight: 400;
+		display: flex;
+		align-items: baseline;
+		gap: 0.45rem;
+		font-size: 0.8rem;
 		color: var(--text-muted);
 		white-space: nowrap;
 	}
 	.commit {
-		margin-left: 0.35rem;
 		font-family: monospace;
-		font-size: 0.8rem;
-		color: var(--link);
-		text-underline-offset: 0.15em;
+		font-size: 0.75rem;
 	}
 	.tagline {
-		margin: 0;
+		margin-top: 0.6rem;
 		font-size: 0.85rem;
+		line-height: 1.5;
 		color: var(--text-muted);
-	}
-	.attribution {
-		margin: 0;
-		font-size: 0.72rem;
-		line-height: 1.4;
-		color: var(--text-muted);
-	}
-	.attribution-links .link {
-		padding: 0.15rem 0.4rem;
-		font-size: 0.72rem;
 	}
 	.links {
 		display: flex;
-		gap: 0.4rem;
-		margin-top: 0.25rem;
-	}
-	.link {
-		padding: 0.2rem 0.6rem;
+		flex-wrap: wrap;
+		gap: 0.5rem 1rem;
+		margin-top: 1rem;
 		font-size: 0.8rem;
-	}
-	hr {
-		width: 100%;
-		border: none;
-		border-top: 1px solid var(--border);
-		margin: 0.25rem 0;
 	}
 	.update-row {
 		display: flex;
 		align-items: center;
-		gap: 0.6rem;
-		min-height: 2rem;
-		font-size: 0.85rem;
+		flex-wrap: wrap;
+		gap: 0.75rem;
+		padding-top: 1rem;
+		border-top: 1px solid var(--border);
 	}
-	.update-found {
-		color: var(--success);
+	.update-copy {
+		flex: 1 1 9rem;
+		min-width: 0;
+	}
+	.update-copy h3 {
+		margin: 0;
+		font-size: 0.85rem;
 		font-weight: 600;
 	}
+	.update-copy p {
+		margin-top: 0.3rem;
+		font-size: 0.78rem;
+		line-height: 1.5;
+		overflow-wrap: anywhere;
+	}
+	.update-row button {
+		max-width: 100%;
+		font-size: 0.8rem;
+	}
+	.update-found,
 	.up-to-date {
 		color: var(--success);
 	}
 	.unavailable {
 		color: var(--text-muted);
+	}
+	.credits {
+		padding-top: 1rem;
+		border-top: 1px solid var(--border);
+		font-size: 0.75rem;
+		line-height: 1.6;
+		color: var(--text-muted);
+	}
+	.credits a {
+		color: inherit;
+	}
+	.credits a:hover {
+		color: var(--text);
 	}
 </style>
