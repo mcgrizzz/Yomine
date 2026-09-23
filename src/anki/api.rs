@@ -1,5 +1,10 @@
 use std::{
     collections::HashMap,
+    net::{
+        Ipv4Addr,
+        Ipv6Addr,
+        SocketAddr,
+    },
     sync::{
         LazyLock,
         RwLock,
@@ -21,8 +26,15 @@ static CONNECTION: LazyLock<RwLock<AnkiConnectionSettings>> =
     LazyLock::new(|| RwLock::new(AnkiConnectionSettings::default()));
 
 static HTTP_CLIENT: LazyLock<Client> = LazyLock::new(|| {
-    // AnkiConnect closes each response without a Connection: close header.
-    Client::builder().pool_max_idle_per_host(0).build().expect("failed to create Anki HTTP client")
+    let loopback =
+        [SocketAddr::from((Ipv4Addr::LOCALHOST, 0)), SocketAddr::from((Ipv6Addr::LOCALHOST, 0))];
+    Client::builder()
+        // AnkiConnect closes each response without a Connection: close header.
+        .pool_max_idle_per_host(0)
+        // AnkiConnect binds IPv4 only; trying ::1 first stalls each request 300ms on Windows.
+        .resolve_to_addrs("localhost", &loopback)
+        .build()
+        .expect("failed to create Anki HTTP client")
 });
 
 pub fn configure_connection(settings: AnkiConnectionSettings) {
@@ -393,5 +405,65 @@ mod tests {
             let request = build_request(&connection, "version", None).build().unwrap();
             assert_eq!(request.url().as_str(), expected);
         }
+    }
+
+    #[tokio::test]
+    async fn localhost_reaches_an_ipv4_server_that_closes_every_connection() {
+        use futures::{
+            stream,
+            StreamExt,
+            TryStreamExt,
+        };
+        use tokio::io::{
+            AsyncBufReadExt,
+            AsyncReadExt,
+            AsyncWriteExt,
+            BufReader,
+        };
+        const REQUESTS: usize = 16;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = tokio::spawn(async move {
+            for _ in 0..REQUESTS {
+                let (stream, _) = listener.accept().await.unwrap();
+                tokio::spawn(async move {
+                    let mut stream = BufReader::new(stream);
+                    let mut length = 0;
+                    loop {
+                        let mut line = String::new();
+                        stream.read_line(&mut line).await.unwrap();
+                        if line == "\r\n" {
+                            break;
+                        }
+                        if let Some(value) = line.to_lowercase().strip_prefix("content-length:") {
+                            length = value.trim().parse().unwrap();
+                        }
+                    }
+                    stream.read_exact(&mut vec![0; length]).await.unwrap();
+                    let body = r#"{"result":6,"error":null}"#;
+                    let head = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n", body.len());
+                    stream.write_all(format!("{head}{body}").as_bytes()).await.unwrap();
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                });
+            }
+        });
+        let connection = AnkiConnectionSettings {
+            host: "localhost".into(),
+            port: std::num::NonZeroU16::new(port).unwrap(),
+            api_key: String::new(),
+        };
+        let responses: Vec<ApiResponse<u32>> = stream::iter(0..REQUESTS)
+            .map(|_| async {
+                build_request(&connection, "version", None).send().await?.json().await
+            })
+            .buffer_unordered(8)
+            .try_collect()
+            .await
+            .unwrap();
+        assert!(responses.iter().all(|r| r.result == Some(6)));
+        tokio::time::timeout(std::time::Duration::from_secs(5), server)
+            .await
+            .expect("every request must open its own connection")
+            .unwrap();
     }
 }
