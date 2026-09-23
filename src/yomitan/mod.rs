@@ -49,7 +49,6 @@ pub struct RenderedFields {
     pub dictionary_media: Vec<MediaItem>,
 }
 
-/// Only the field we need: `termEntries` is Yomitan's internal, unstable format.
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct TermEntries {
@@ -98,7 +97,6 @@ async fn post<T: for<'de> Deserialize<'de>>(
     body: serde_json::Value,
 ) -> Result<T, YomineError> {
     let url = format!("{}/{}", base_url.trim_end_matches('/'), path);
-    // 10s cap so status probes can't hang on unroutable URLs.
     let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(10)).build()?;
     let response = client.post(&url).json(&body).send().await?;
     Ok(response.json().await?)

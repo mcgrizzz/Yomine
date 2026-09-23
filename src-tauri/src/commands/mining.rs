@@ -51,7 +51,7 @@ const SEEK_CONFIRM_POLL: Duration = Duration::from_millis(250);
 const RECORD_BUFFER: Duration = Duration::from_millis(1500);
 const MEDIA_VERIFY_TIMEOUT: Duration = Duration::from_secs(6);
 const MEDIA_VERIFY_POLL: Duration = Duration::from_millis(500);
-/// Cloze refinement is optional, so it must never hold up the mine.
+/// Cloze refinement is optional; this caps how long it can delay a mine.
 const MATCH_LOOKUP_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[tauri::command]
@@ -601,7 +601,6 @@ async fn enrich_and_verify(
     }
     player.mine_subtitle(std::collections::HashMap::new(), 2, media_id, Some(note_id)).await?;
 
-    // AnkiConnect hiccup on the baseline read: enrichment ran, verification can't.
     let Some(baseline) = baseline else {
         return Err(EnrichError::Failed(
             "Recording was requested, but Anki could not be read to verify the media".into(),
