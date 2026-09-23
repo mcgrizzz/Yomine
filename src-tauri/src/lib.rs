@@ -84,6 +84,7 @@ pub fn run() {
             commands::mining::get_media_preview,
             batches::create_batch,
             batches::get_last_batch,
+            batches::set_batch_running,
             batches::finish_batch,
             batches::undo_batch,
             commands::mining::retry_mine_media,

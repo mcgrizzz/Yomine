@@ -1,6 +1,12 @@
 use std::{
     path::PathBuf,
-    sync::Mutex,
+    sync::{
+        atomic::{
+            AtomicBool,
+            Ordering,
+        },
+        Mutex,
+    },
 };
 
 use serde::{
@@ -24,6 +30,7 @@ use crate::{
 const FILE: &str = "yomine_last_batch.json";
 static FILE_LOCK: Mutex<()> = Mutex::new(());
 pub static OPERATION: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+pub static RUNNING: AtomicBool = AtomicBool::new(false);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct BatchSource {
@@ -247,6 +254,11 @@ pub fn checkpoint(batch: &mut BatchRecord, index: usize, outcome: Outcome) -> Re
         outcome;
     batch.finished_at = None;
     save(batch)
+}
+
+#[tauri::command]
+pub fn set_batch_running(running: bool) {
+    RUNNING.store(running, Ordering::Relaxed);
 }
 
 #[tauri::command]

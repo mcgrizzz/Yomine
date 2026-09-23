@@ -299,6 +299,7 @@ async function run(
 	}
 
 	try {
+		await ipc.setBatchRunning(true);
 		if (items && previous && needsReview(previous) && !(await replacePrompt.ask(previous))) {
 			if (!cancelled) batchSummaryOpen.set(true);
 			return;
@@ -356,6 +357,7 @@ async function run(
 				report(error);
 			}
 		}
+		void ipc.setBatchRunning(false);
 		miningTerm.set(null);
 		playerBusy.set(false);
 		mineQueueState.set(null);

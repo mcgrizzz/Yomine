@@ -793,6 +793,10 @@ export interface MineOptions {
 	require_dictionary_media: boolean;
 }
 
+export function setBatchRunning(running: boolean): Promise<void> {
+	return invoke('set_batch_running', { running });
+}
+
 export function getLastBatch(): Promise<BatchRecord | null> {
 	return invoke('get_last_batch');
 }
