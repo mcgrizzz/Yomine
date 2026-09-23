@@ -1,9 +1,15 @@
 <script lang="ts">
 	import Modal from './Modal.svelte';
 	import type { BatchRecord } from '$lib/ipc';
-	import { cancelQueue, type BatchProgress } from '$lib/stores/batches';
+	import { cancelQueue, type BatchPreview, type BatchProgress } from '$lib/stores/batches';
 
-	let { progress, batch }: { progress: BatchProgress; batch: BatchRecord | null } = $props();
+	interface Props {
+		progress: BatchProgress;
+		batch: BatchRecord | null;
+		preview: BatchPreview | null;
+	}
+
+	let { progress, batch, preview }: Props = $props();
 
 	let stopping = $state(false);
 	let now = $state(Date.now());
@@ -83,6 +89,17 @@
 				{progress.message ?? 'Starting…'}
 			</span>
 		</div>
+
+		{#if preview && !creating}
+			<figure class="last">
+				<img src={preview.src} alt="Screenshot recorded for {preview.lemma}" />
+				<figcaption>
+					<span class="eyebrow">Last recorded</span>
+					<strong class="last-word" lang="ja">{preview.lemma}</strong>
+					<span class="last-sentence" lang="ja" title={preview.sentence}>{preview.sentence}</span>
+				</figcaption>
+			</figure>
+		{/if}
 
 		{#if counts.length > 0}
 			<p class="muted counts">{counts.join(' · ')}</p>
@@ -184,6 +201,47 @@
 		.fill {
 			transition: none;
 		}
+	}
+	.last {
+		display: flex;
+		align-items: center;
+		gap: 0.85rem;
+		margin: 0.6rem 0 0;
+		padding: 0.6rem;
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+	}
+	.last img {
+		flex-shrink: 0;
+		width: 7.5rem;
+		aspect-ratio: 16 / 9;
+		object-fit: cover;
+		border-radius: var(--radius-sm);
+		background: var(--bg-deep);
+	}
+	.last figcaption {
+		display: grid;
+		gap: 0.15rem;
+		min-width: 0;
+	}
+	.eyebrow {
+		color: var(--text-muted);
+		font-size: 0.7rem;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+	.last-word {
+		font-size: 1rem;
+	}
+	.last-sentence {
+		display: -webkit-box;
+		overflow: hidden;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		color: var(--text-muted);
+		font-size: 0.8rem;
+		line-height: 1.4;
 	}
 	.counts {
 		margin-top: 0.75rem;

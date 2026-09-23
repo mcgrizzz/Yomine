@@ -85,6 +85,13 @@ export const batchReplace = replacePrompt.shown;
 export const batchSaveError = writable<string | null>(null);
 export const lastBatch = writable<ipc.BatchRecord | null>(null);
 export const mineQueueState = writable<BatchProgress | null>(null);
+export interface BatchPreview {
+	lemma: string;
+	sentence: string;
+	src: string;
+}
+
+export const batchPreview = writable<BatchPreview | null>(null);
 
 let cancelled = false;
 
@@ -131,6 +138,11 @@ async function chooseTarget(mediaRun: boolean): Promise<TargetAnswer> {
 	const usable = media.filter((m) => m.active && m.loaded_subtitles.length > 0);
 	if (usable.length === 1) return { target: usable[0].id, record: true };
 	return targetPrompt.ask({ media, mediaRun });
+}
+
+async function showPreview(item: ipc.BatchItem, file: string): Promise<void> {
+	const src = await ipc.getMediaPreview(file).catch(() => null);
+	if (src && get(playerBusy)) batchPreview.set({ lemma: item.lemma, sentence: item.sentence, src });
 }
 
 function recordSuccess(item: ipc.BatchItem): void {
@@ -215,6 +227,7 @@ async function run(
 	const mediaRun = retry?.media ?? false;
 	playerBusy.set(true);
 	cancelled = false;
+	batchPreview.set(null);
 	batchSummaryOpen.set(false);
 	let batch = items ? null : previous;
 	let fatal = false;
@@ -260,6 +273,7 @@ async function run(
 				lastBatch.set(batch);
 				const current = batch.items[index];
 				recordSuccess(current);
+				if (step.preview_file) void showPreview(current, step.preview_file);
 				if (step.failure?.scope === 'stop') {
 					fatal = true;
 					if (step.failure.stage === 'Saving batch') batchSaveError.set(step.failure.message);
@@ -345,6 +359,7 @@ async function run(
 		miningTerm.set(null);
 		playerBusy.set(false);
 		mineQueueState.set(null);
+		batchPreview.set(null);
 		if (batch) {
 			batchSummaryOpen.set(true);
 			void refreshMinedState(true);
