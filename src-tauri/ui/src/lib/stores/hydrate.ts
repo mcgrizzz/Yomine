@@ -120,6 +120,7 @@ export async function hydrate(): Promise<void> {
 	// Restores mined state / mine-button gating on a webview reload.
 	void refreshMinedState(true);
 	void loadLastBatch();
+	void ipc.setBatchRunning(false);
 
 	// Best-effort update check; a failure just means no notice.
 	void checkForUpdate();

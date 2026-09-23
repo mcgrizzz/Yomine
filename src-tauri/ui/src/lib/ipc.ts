@@ -778,6 +778,7 @@ export interface BatchRecord {
 export interface BatchStep {
 	batch: BatchRecord;
 	failure: BatchFailure | null;
+	preview_file: string | null;
 }
 
 export interface BatchUndoResult {
@@ -790,6 +791,10 @@ export interface BatchUndoResult {
 export interface MineOptions {
 	record: boolean;
 	require_dictionary_media: boolean;
+}
+
+export function setBatchRunning(running: boolean): Promise<void> {
+	return invoke('set_batch_running', { running });
 }
 
 export function getLastBatch(): Promise<BatchRecord | null> {
@@ -806,6 +811,10 @@ export function finishBatch(batchId: string): Promise<BatchRecord> {
 
 export function undoBatch(batchId: string): Promise<BatchUndoResult> {
 	return invoke('undo_batch', { batchId });
+}
+
+export function getMediaPreview(filename: string): Promise<string | null> {
+	return invoke('get_media_preview', { filename });
 }
 
 export function mineBatchItem(

@@ -268,6 +268,9 @@ async fn poll_asbplayer_follow(app: AppHandle) {
         }
 
         let Some(next) = target else { continue };
+        if crate::batches::RUNNING.load(Ordering::Relaxed) {
+            continue;
+        }
         seen_ids.insert(next.id.clone());
         let title = next.title.clone().unwrap_or_else(|| "asbplayer video".to_string());
         let file_name = next.loaded_subtitles.first().map(|t| t.file_name.clone());

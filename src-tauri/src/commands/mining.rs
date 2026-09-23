@@ -51,7 +51,7 @@ const SEEK_CONFIRM_POLL: Duration = Duration::from_millis(250);
 const RECORD_BUFFER: Duration = Duration::from_millis(1500);
 const MEDIA_VERIFY_TIMEOUT: Duration = Duration::from_secs(6);
 const MEDIA_VERIFY_POLL: Duration = Duration::from_millis(500);
-/// Cloze refinement is optional, so it must never hold up the mine.
+/// Cloze refinement is optional; this caps how long it can delay a mine.
 const MATCH_LOOKUP_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[tauri::command]
@@ -127,6 +127,7 @@ pub struct MineOptions {
 pub struct BatchStep {
     batch: BatchRecord,
     failure: Option<Failure>,
+    preview_file: Option<String>,
 }
 
 #[tauri::command]
@@ -151,6 +152,7 @@ pub async fn mine_batch_item(
         (state.settings.yomitan_url.clone(), state.file.asbplayer_media_id.clone())
     };
     let target = loaded_target.or(media_target);
+    let mut preview_file = None;
     let result = async {
         match item.outcome {
             Outcome::Unattempted | Outcome::Failed { .. } => {
@@ -168,7 +170,13 @@ pub async fn mine_batch_item(
                     Outcome::Created { note_id, media: MediaState::Pending, error: None },
                 )?;
                 let result = record_item(&player, note_id, target, &item, &progress).await;
-                let failure = result.err().map(|e| e.failure());
+                let failure = match result {
+                    Ok(image) => {
+                        preview_file = image;
+                        None
+                    }
+                    Err(e) => Some(e.failure()),
+                };
                 batches::checkpoint(
                     &mut batch,
                     item_index,
@@ -218,7 +226,7 @@ pub async fn mine_batch_item(
             }
         }
     }
-    Ok(BatchStep { batch, failure })
+    Ok(BatchStep { batch, failure, preview_file })
 }
 
 async fn validate_media_target(player: &PlayerHandle, target: Option<&str>) -> Result<(), Failure> {
@@ -487,6 +495,7 @@ pub async fn retry_mine_media(
         &progress,
     )
     .await
+    .map(|_| ())
     .map_err(|e| e.to_string())
 }
 
@@ -505,7 +514,7 @@ async fn record_item(
     media_id: Option<String>,
     item: &BatchItem,
     progress: &Channel<LoadingMessage>,
-) -> Result<(), EnrichError> {
+) -> Result<Option<String>, EnrichError> {
     let start = item.timestamp.as_ref().map(|t| t.start_secs);
     let end = item.timestamp.as_ref().map(|t| t.end_secs);
     let label = item.timestamp.as_ref().map(|t| t.start_label.clone());
@@ -582,7 +591,7 @@ async fn enrich_and_verify(
     timestamp_label: Option<String>,
     record_secs: f32,
     progress: &Channel<LoadingMessage>,
-) -> Result<(), EnrichError> {
+) -> Result<Option<String>, EnrichError> {
     let _ = progress.send(LoadingMessage::new("Adding audio & screenshot via asbplayer…"));
     let baseline = snapshot_fields(note_id).await;
 
@@ -592,7 +601,6 @@ async fn enrich_and_verify(
     }
     player.mine_subtitle(std::collections::HashMap::new(), 2, media_id, Some(note_id)).await?;
 
-    // AnkiConnect hiccup on the baseline read: enrichment ran, verification can't.
     let Some(baseline) = baseline else {
         return Err(EnrichError::Failed(
             "Recording was requested, but Anki could not be read to verify the media".into(),
@@ -605,14 +613,53 @@ async fn enrich_and_verify(
     let _ = progress.send(LoadingMessage::new("Verifying the media landed in Anki…"));
     let deadline = std::time::Instant::now() + MEDIA_VERIFY_TIMEOUT;
     loop {
-        if snapshot_fields(note_id).await.is_some_and(|now| now != baseline) {
-            return Ok(());
+        if let Some(now) = snapshot_fields(note_id).await.filter(|now| *now != baseline) {
+            return Ok(new_image(&baseline, &now));
         }
         if std::time::Instant::now() >= deadline {
             return Err(EnrichError::Unverified);
         }
         tokio::time::sleep(MEDIA_VERIFY_POLL).await;
     }
+}
+
+fn new_image(
+    before: &std::collections::HashMap<String, String>,
+    after: &std::collections::HashMap<String, String>,
+) -> Option<String> {
+    after.iter().find_map(|(field, value)| {
+        let old = before.get(field).map(String::as_str).unwrap_or_default();
+        image_sources(value).into_iter().find(|src| !old.contains(src)).map(str::to_string)
+    })
+}
+
+fn image_sources(html: &str) -> Vec<&str> {
+    html.split("<img")
+        .skip(1)
+        .filter_map(|tag| {
+            let src = tag.split('>').next()?.split_once("src=")?.1;
+            match src.chars().next()? {
+                quote @ ('"' | '\'') => src[1..].split(quote).next(),
+                _ => src.split(char::is_whitespace).next(),
+            }
+        })
+        .filter(|src| !src.is_empty())
+        .collect()
+}
+
+#[tauri::command]
+pub async fn get_media_preview(filename: String) -> Result<Option<String>, String> {
+    let extension = filename.rsplit_once('.').map(|(_, ext)| ext.to_ascii_lowercase());
+    let mime = match extension.as_deref() {
+        Some("jpg" | "jpeg") => "image/jpeg",
+        Some("png") => "image/png",
+        Some("webp") => "image/webp",
+        Some("gif") => "image/gif",
+        Some("avif") => "image/avif",
+        _ => return Ok(None),
+    };
+    let data = anki_api::retrieve_media_file(&filename).await.map_err(|e| e.to_string())?;
+    Ok(data.map(|d| format!("data:{mime};base64,{d}")))
 }
 
 /// Open Anki's browser on recent adds with the mined note's card selected.

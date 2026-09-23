@@ -191,6 +191,13 @@ fn checked_note_ids(
     Ok(result)
 }
 
+pub async fn retrieve_media_file(filename: &str) -> Result<Option<String>, reqwest::Error> {
+    let params = serde_json::json!({ "filename": filename });
+    let response: ApiResponse<serde_json::Value> =
+        make_request("retrieveMediaFile", Some(params)).await?;
+    Ok(response.result.and_then(|v| v.as_str().map(str::to_string)))
+}
+
 pub async fn delete_notes(ids: &[u64]) -> Result<(), String> {
     let response: ApiResponse<()> =
         make_request("deleteNotes", Some(serde_json::json!({ "notes": ids })))

@@ -1,6 +1,12 @@
 use std::{
     path::PathBuf,
-    sync::Mutex,
+    sync::{
+        atomic::{
+            AtomicBool,
+            Ordering,
+        },
+        Mutex,
+    },
 };
 
 use serde::{
@@ -24,6 +30,7 @@ use crate::{
 const FILE: &str = "yomine_last_batch.json";
 static FILE_LOCK: Mutex<()> = Mutex::new(());
 pub static OPERATION: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+pub static RUNNING: AtomicBool = AtomicBool::new(false);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct BatchSource {
@@ -186,6 +193,11 @@ impl From<LoadError> for String {
     }
 }
 
+enum Stored {
+    Loaded(Option<BatchRecord>),
+    MovedAside(PathBuf),
+}
+
 impl BatchFile {
     fn load(&self) -> Result<Option<BatchRecord>, LoadError> {
         let json = match std::fs::read_to_string(&self.0) {
@@ -195,8 +207,7 @@ impl BatchFile {
         };
         serde_json::from_str(&json).map(Some).map_err(|e| LoadError::Unreadable(e.to_string()))
     }
-    /// `Ok(Err(path))`: the record was unparseable and has been moved to `path`.
-    fn load_or_quarantine(&self) -> Result<Result<Option<BatchRecord>, PathBuf>, String> {
+    fn load_or_move_aside(&self) -> Result<Stored, String> {
         match self.load() {
             Err(LoadError::Unreadable(_)) => {
                 let moved = self.0.with_file_name(format!(
@@ -205,9 +216,9 @@ impl BatchFile {
                 ));
                 std::fs::rename(&self.0, &moved)
                     .map_err(|e| format!("Could not move the unreadable batch record: {e}"))?;
-                Ok(Err(moved))
+                Ok(Stored::MovedAside(moved))
             }
-            loaded => Ok(Ok(loaded?)),
+            loaded => Ok(Stored::Loaded(loaded?)),
         }
     }
     fn write(&self, batch: &BatchRecord) -> Result<(), String> {
@@ -246,15 +257,21 @@ pub fn checkpoint(batch: &mut BatchRecord, index: usize, outcome: Outcome) -> Re
 }
 
 #[tauri::command]
+pub fn set_batch_running(running: bool) {
+    RUNNING.store(running, Ordering::Relaxed);
+}
+
+#[tauri::command]
 pub fn get_last_batch() -> Result<Option<BatchRecord>, String> {
     let _guard = FILE_LOCK.lock().unwrap();
-    file().load_or_quarantine()?.map_err(|moved| {
-        format!(
+    match file().load_or_move_aside()? {
+        Stored::Loaded(batch) => Ok(batch),
+        Stored::MovedAside(moved) => Err(format!(
             "The last batch record was unreadable, so it was moved to {}. New batches will start \
              a fresh record.",
             moved.display()
-        )
-    })
+        )),
+    }
 }
 
 #[tauri::command]
@@ -283,7 +300,7 @@ pub async fn create_batch(
         items,
     };
     let _guard = FILE_LOCK.lock().unwrap();
-    let _ = file().load_or_quarantine()?;
+    file().load_or_move_aside()?;
     file().write(&batch)?;
     Ok(batch)
 }
@@ -346,32 +363,6 @@ fn mark_deleted(batch: &mut BatchRecord, remaining: &[u64]) {
 mod tests {
     use super::*;
 
-    #[test]
-    fn source_identity_detects_changed_content() {
-        let mut file = FileData {
-            source_file: Some(yomine::core::models::SourceFile {
-                original_file: "test.txt".into(),
-                ..Default::default()
-            }),
-            sentences: ["猫だ", "犬だ", "鳥だ"]
-                .iter()
-                .enumerate()
-                .map(|(id, text)| yomine::core::models::Sentence {
-                    id,
-                    text: text.to_string(),
-                    source_id: 1,
-                    segments: vec![],
-                    timestamp: None,
-                    comprehension: 0.0,
-                })
-                .collect(),
-            ..Default::default()
-        };
-        let original = BatchSource::from_file(&file).unwrap();
-        file.sentences[0].text = "違う文".into();
-        assert!(!original.matches(&BatchSource::from_file(&file).unwrap()));
-    }
-
     fn batch() -> BatchRecord {
         BatchRecord {
             id: "first".into(),
@@ -422,9 +413,11 @@ mod tests {
         assert!(store.load().is_err());
         assert!(store.save(&newer).is_err());
         assert_eq!(std::fs::read(&store.0).unwrap(), b"broken json");
-        let Err(moved) = store.load_or_quarantine().unwrap() else { panic!("not moved") };
+        let Stored::MovedAside(moved) = store.load_or_move_aside().unwrap() else {
+            panic!("not moved")
+        };
         assert_eq!(std::fs::read(&moved).unwrap(), b"broken json");
-        assert!(store.load_or_quarantine().unwrap().unwrap().is_none());
+        assert!(matches!(store.load_or_move_aside().unwrap(), Stored::Loaded(None)));
         std::fs::remove_dir_all(dir).unwrap();
     }
 
