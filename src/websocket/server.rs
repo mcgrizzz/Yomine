@@ -326,8 +326,7 @@ impl WebSocketServer {
             Err(_) => {
                 self.pending_requests.lock().unwrap().remove(&message_id);
                 Err(YomineError::Custom(format!(
-                    "asbplayer did not respond to '{command}' — this needs the asbplayer \
-                     extension v1.20+"
+                    "asbplayer did not respond to '{command}'. Check that the extension is connected and responsive"
                 )))
             }
         }
@@ -397,7 +396,7 @@ impl WebSocketServer {
         match body.get("published").and_then(|v| v.as_bool()) {
             Some(true) => Ok(()),
             _ => Err(YomineError::Custom(
-                "asbplayer did not publish the mined card — check its Anki settings".to_string(),
+                "asbplayer did not publish the mining request. The recording target or extension may be unavailable".to_string(),
             )),
         }
     }

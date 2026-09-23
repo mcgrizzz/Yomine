@@ -15,7 +15,6 @@
 		adhocQueue,
 		ankiStatus,
 		asbContext,
-		cancelQueue,
 		cardFormats,
 		clearSelection,
 		fileResult,
@@ -612,14 +611,7 @@
 	</div>
 {/if}
 
-{#if $mineQueueState}
-	<div class="bulk-bar">
-		<span class="bulk-info">
-			Mining {$mineQueueState.done + 1}/{$mineQueueState.total} 「{$mineQueueState.current}」
-		</span>
-		<button class="bulk-btn" onclick={cancelQueue}>Cancel</button>
-	</div>
-{:else if canMine && $queuedCount > 0}
+{#if !$mineQueueState && canMine && $queuedCount > 0}
 	{#if showQueueDetails}
 		<MiningQueueModal {terms} onclose={() => (showQueueDetails = false)} />
 	{/if}

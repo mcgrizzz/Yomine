@@ -4,7 +4,6 @@
 import { get, writable } from 'svelte/store';
 import * as ipc from '$lib/ipc';
 import { playerStatus } from './player';
-import { dropAdhoc, selectedTerms } from './selection';
 import { lastError, showNotice } from './ui';
 
 /** Lemmas mined this session (optimistic, until the next refresh). */
@@ -172,108 +171,6 @@ export interface QueueItem {
 	formatName?: string;
 	/** The text the popover scanned — entryIndex is only valid against it. */
 	scanText?: string;
-}
-
-/** Batch-mine progress (`null` = no queue running). */
-export const mineQueueState = writable<{
-	total: number;
-	done: number;
-	current: string;
-	key: string;
-} | null>(null);
-
-let queueCancelled = false;
-
-/** Stops the running queue between items; the in-flight mine still finishes. */
-export function cancelQueue(): void {
-	queueCancelled = true;
-}
-
-/** Mine the items one by one in timestamp order (timestamp-less last).
- * Failures are collected, never abort the queue. */
-export async function mineQueue(items: QueueItem[]): Promise<void> {
-	if (get(miningTerm) !== null || get(playerBusy) || items.length === 0) return;
-	const sorted = [...items].sort((a, b) => {
-		const ka = a.timestamp?.start_secs ?? Infinity;
-		const kb = b.timestamp?.start_secs ?? Infinity;
-		return ka === kb ? 0 : ka - kb;
-	});
-	queueCancelled = false;
-	playerBusy.set(true);
-	let created = 0;
-	let duplicates = 0;
-	let mediaMissed = 0;
-	let done = 0;
-	const failures: string[] = [];
-	const noteIds: number[] = [];
-	try {
-		for (const item of sorted) {
-			if (queueCancelled) break;
-			miningTerm.set(item.lemma);
-			mineQueueState.set({
-				total: sorted.length,
-				done,
-				current: item.lemma,
-				key: item.key
-			});
-			// Must match the `via` rule in TermTable's mine().
-			const status = get(playerStatus);
-			const via =
-				status.mode === 'asbplayer' && status.ws_clients > 0 && item.timestamp !== null
-					? 'asbplayer'
-					: 'direct';
-			try {
-				const result = await mineOne(
-					item.lemma,
-					item.surface,
-					item.sentence,
-					item.timestamp,
-					via,
-					item.entryIndex,
-					item.formatName,
-					item.scanText
-				);
-				if (result.status === 'duplicate') duplicates++;
-				else created++;
-				if (result.note_id !== null) noteIds.push(result.note_id);
-				if (result.media_missing) mediaMissed++;
-				selectedTerms.update((s) => {
-					const next = new Set(s);
-					next.delete(item.key);
-					return next;
-				});
-				dropAdhoc(item.key);
-			} catch (err) {
-				failures.push(`「${item.lemma}」: ${String(err)}`);
-			}
-			done++;
-		}
-	} finally {
-		miningTerm.set(null);
-		playerBusy.set(false);
-		mineQueueState.set(null);
-		// Mined items were already deselected one by one; cancelled/failed
-		// terms stay selected so the batch can be resumed.
-		void refreshMinedState(true);
-		const parts = [`Mined ${created}`];
-		if (duplicates > 0) parts.push(`${duplicates} duplicate${duplicates === 1 ? '' : 's'}`);
-		if (mediaMissed > 0) parts.push(`${mediaMissed} missing media`);
-		if (failures.length > 0) parts.push(`${failures.length} failed`);
-		showNotice(
-			(queueCancelled && done < sorted.length ? `Cancelled after ${done} — ` : '') +
-				parts.join(' · ')
-		);
-		if (failures.length > 0) {
-			lastError.set({
-				title: 'Batch mining',
-				message: `${failures.length} term${failures.length === 1 ? '' : 's'} failed`,
-				detail: failures.join('\n')
-			});
-		}
-		if (noteIds.length > 0) {
-			ipc.openNotesInAnki(noteIds).catch(() => {});
-		}
-	}
 }
 
 /** Retry asbplayer enrichment for a media-missing note (session-scoped: needs

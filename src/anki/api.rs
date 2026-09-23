@@ -1,5 +1,10 @@
 use std::{
     collections::HashMap,
+    net::{
+        Ipv4Addr,
+        Ipv6Addr,
+        SocketAddr,
+    },
     sync::{
         LazyLock,
         RwLock,
@@ -21,8 +26,15 @@ static CONNECTION: LazyLock<RwLock<AnkiConnectionSettings>> =
     LazyLock::new(|| RwLock::new(AnkiConnectionSettings::default()));
 
 static HTTP_CLIENT: LazyLock<Client> = LazyLock::new(|| {
-    // AnkiConnect closes each response without a Connection: close header.
-    Client::builder().pool_max_idle_per_host(0).build().expect("failed to create Anki HTTP client")
+    let loopback =
+        [SocketAddr::from((Ipv4Addr::LOCALHOST, 0)), SocketAddr::from((Ipv6Addr::LOCALHOST, 0))];
+    Client::builder()
+        // AnkiConnect closes each response without a Connection: close header.
+        .pool_max_idle_per_host(0)
+        // AnkiConnect binds IPv4 only; trying ::1 first stalls each request 300ms on Windows.
+        .resolve_to_addrs("localhost", &loopback)
+        .build()
+        .expect("failed to create Anki HTTP client")
 });
 
 pub fn configure_connection(settings: AnkiConnectionSettings) {
@@ -147,6 +159,47 @@ pub async fn get_note_ids(query: &str) -> Result<Vec<u64>, reqwest::Error> {
     let params = serde_json::json!({ "query": query });
     let response: ApiResponse<Vec<u64>> = make_request("findNotes", Some(params)).await?;
     Ok(response.unwrap_result().unwrap_or_default())
+}
+
+pub async fn existing_note_ids_strict(ids: &[u64]) -> Result<Vec<u64>, String> {
+    let mut found = Vec::new();
+    for chunk in ids.chunks(500) {
+        let query =
+            format!("nid:{}", chunk.iter().map(u64::to_string).collect::<Vec<_>>().join(","));
+        let response: ApiResponse<Vec<u64>> =
+            make_request("findNotes", Some(serde_json::json!({ "query": query })))
+                .await
+                .map_err(|e| e.to_string())?;
+        found.extend(checked_note_ids(response, chunk)?);
+    }
+    found.sort_unstable();
+    found.dedup();
+    Ok(found)
+}
+
+fn checked_note_ids(
+    response: ApiResponse<Vec<u64>>,
+    requested: &[u64],
+) -> Result<Vec<u64>, String> {
+    if let Some(error) = response.error {
+        return Err(error);
+    }
+    let result = response.result.ok_or("Anki returned no note lookup result")?;
+    if result.iter().any(|id| !requested.contains(id)) {
+        return Err("Anki returned unexpected note IDs".into());
+    }
+    Ok(result)
+}
+
+pub async fn delete_notes(ids: &[u64]) -> Result<(), String> {
+    let response: ApiResponse<()> =
+        make_request("deleteNotes", Some(serde_json::json!({ "notes": ids })))
+            .await
+            .map_err(|e| e.to_string())?;
+    match response.error {
+        Some(error) => Err(error),
+        None => Ok(()),
+    }
 }
 
 pub async fn get_notes(note_ids: Vec<u64>) -> Result<Vec<Note>, reqwest::Error> {
@@ -274,6 +327,21 @@ mod tests {
 
     use super::*;
 
+    #[test]
+    fn undo_lookup_does_not_confuse_errors_with_deleted_notes() {
+        for response in [
+            json!({ "result": null, "error": "invalid key" }),
+            json!({ "result": [], "error": "collection unavailable" }),
+            json!({ "result": null, "error": null }),
+            json!({ "result": [99], "error": null }),
+        ] {
+            assert!(checked_note_ids(serde_json::from_value(response).unwrap(), &[42]).is_err());
+        }
+        assert!(checked_note_ids(ApiResponse { result: Some(vec![]), error: None }, &[42])
+            .unwrap()
+            .is_empty());
+    }
+
     async fn server(
         response: serde_json::Value,
     ) -> (AnkiClient, tokio::task::JoinHandle<serde_json::Value>) {
@@ -393,5 +461,65 @@ mod tests {
             let request = build_request(&connection, "version", None).build().unwrap();
             assert_eq!(request.url().as_str(), expected);
         }
+    }
+
+    #[tokio::test]
+    async fn localhost_reaches_an_ipv4_server_that_closes_every_connection() {
+        use futures::{
+            stream,
+            StreamExt,
+            TryStreamExt,
+        };
+        use tokio::io::{
+            AsyncBufReadExt,
+            AsyncReadExt,
+            AsyncWriteExt,
+            BufReader,
+        };
+        const REQUESTS: usize = 16;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = tokio::spawn(async move {
+            for _ in 0..REQUESTS {
+                let (stream, _) = listener.accept().await.unwrap();
+                tokio::spawn(async move {
+                    let mut stream = BufReader::new(stream);
+                    let mut length = 0;
+                    loop {
+                        let mut line = String::new();
+                        stream.read_line(&mut line).await.unwrap();
+                        if line == "\r\n" {
+                            break;
+                        }
+                        if let Some(value) = line.to_lowercase().strip_prefix("content-length:") {
+                            length = value.trim().parse().unwrap();
+                        }
+                    }
+                    stream.read_exact(&mut vec![0; length]).await.unwrap();
+                    let body = r#"{"result":6,"error":null}"#;
+                    let head = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n", body.len());
+                    stream.write_all(format!("{head}{body}").as_bytes()).await.unwrap();
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                });
+            }
+        });
+        let connection = AnkiConnectionSettings {
+            host: "localhost".into(),
+            port: std::num::NonZeroU16::new(port).unwrap(),
+            api_key: String::new(),
+        };
+        let responses: Vec<ApiResponse<u32>> = stream::iter(0..REQUESTS)
+            .map(|_| async {
+                build_request(&connection, "version", None).send().await?.json().await
+            })
+            .buffer_unordered(8)
+            .try_collect()
+            .await
+            .unwrap();
+        assert!(responses.iter().all(|r| r.result == Some(6)));
+        tokio::time::timeout(std::time::Duration::from_secs(5), server)
+            .await
+            .expect("every request must open its own connection")
+            .unwrap();
     }
 }
