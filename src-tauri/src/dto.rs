@@ -226,6 +226,7 @@ pub struct FileLoadResult {
     pub total_terms: usize,
     /// Terms hidden by the ignore list — the known-count hover breakdown.
     pub ignored_terms: usize,
+    pub batch_source: crate::batches::BatchSource,
 }
 
 /// Persisted `IgnoreFile` fields plus the display-only `exists` + `term_count`.

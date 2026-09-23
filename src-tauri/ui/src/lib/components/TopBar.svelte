@@ -29,6 +29,8 @@
 		openProfilesModal,
 		openAnalyzerModal,
 		openAboutModal,
+		openBatchSummary,
+		lastBatch,
 		openDataFolder,
 		refreshTerms,
 		setAsbplayerFollowNewMedia,
@@ -244,6 +246,7 @@
 				<button onclick={() => run(openTextFiltersModal)}>Text Filters</button>
 				<button onclick={() => run(openFrequencyModal)}>Frequency Dictionaries</button>
 				<div class="menu-sep"></div>
+				<button onclick={() => run(openBatchSummary)} disabled={!$lastBatch}>Last Batch…</button>
 				<button onclick={() => run(openAnalyzerModal)} disabled={!toolsReady}
 					>Frequency Analyzer</button
 				>

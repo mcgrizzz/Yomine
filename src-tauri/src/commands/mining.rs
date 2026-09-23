@@ -21,6 +21,18 @@ use yomine::{
 };
 
 use crate::{
+    batches::{
+        self,
+        BatchItem,
+        BatchRecord,
+        BatchSource,
+        Failure,
+        FailureKind,
+        FailureScope,
+        Fallback,
+        MediaState,
+        Outcome,
+    },
     dto::{
         CardFormatDto,
         DefinitionEntryDto,
@@ -57,20 +69,224 @@ pub async fn mine_term(
     format_name: Option<String>,
     progress: Channel<LoadingMessage>,
 ) -> Result<MineResultDto, String> {
+    let _operation =
+        batches::OPERATION.try_lock().map_err(|_| "Mining or undo is already running")?;
     let (yomitan_url, media_id) = {
         let guard = state.lock().unwrap();
         (guard.settings.yomitan_url.clone(), guard.file.asbplayer_media_id.clone())
     };
+    let item = BatchItem {
+        key: String::new(),
+        lemma: term,
+        surface,
+        sentence,
+        timestamp: timestamp_secs.map(|start_secs| crate::dto::TimeStampDto {
+            start_secs,
+            end_secs: timestamp_end_secs.unwrap_or(start_secs),
+            start_label: timestamp_label.unwrap_or_default(),
+            end_label: String::new(),
+        }),
+        entry_index,
+        format_name,
+        scan_text: None,
+        adhoc: false,
+        mine_media: via == "asbplayer",
+        outcome: Outcome::Unattempted,
+    };
+    let options = MineOptions { record: true, require_dictionary_media: true };
+    let mut result =
+        mine(&yomitan_url, &item, options, &progress, None).await.map_err(|e| e.message)?;
+
+    // Enrichment failures don't undo the mine (the note exists) — warn instead.
+    if let Some(id) = result.note_id.filter(|_| item.mine_media) {
+        let warning = if target_lacks_subtitles(&player, media_id.as_deref()).await {
+            Some(
+                "asbplayer has no subtitles loaded on the loaded video — card created without \
+                 audio/screenshot"
+                    .to_string(),
+            )
+        } else {
+            record_item(&player, id, media_id, &item, &progress)
+                .await
+                .err()
+                .map(|e| format!("Card created, but media wasn't added: {e}"))
+        };
+        result.media_missing = warning.is_some();
+        result.warning = warning;
+    }
+    Ok(result)
+}
+
+#[derive(serde::Deserialize, Clone, Copy)]
+pub struct MineOptions {
+    record: bool,
+    require_dictionary_media: bool,
+}
+
+#[derive(serde::Serialize)]
+pub struct BatchStep {
+    batch: BatchRecord,
+    failure: Option<Failure>,
+}
+
+#[tauri::command]
+pub async fn mine_batch_item(
+    state: State<'_, Mutex<AppState>>,
+    player: State<'_, PlayerHandle>,
+    batch_id: String,
+    item_index: usize,
+    media_target: Option<String>,
+    options: MineOptions,
+    progress: Channel<LoadingMessage>,
+) -> Result<BatchStep, String> {
+    let _operation =
+        batches::OPERATION.try_lock().map_err(|_| "Mining or undo is already running")?;
+    let mut batch = batches::load(&batch_id)?;
+    let item = batch.items.get(item_index).ok_or("Batch item not found")?.clone();
+    let (url, loaded_target) = {
+        let state = state.lock().unwrap();
+        if !batch.source.matches(&BatchSource::from_file(&state.file)?) {
+            return Err("Load the original source before retrying this batch".into());
+        }
+        (state.settings.yomitan_url.clone(), state.file.asbplayer_media_id.clone())
+    };
+    let target = loaded_target.or(media_target);
+    let result = async {
+        match item.outcome {
+            Outcome::Unattempted | Outcome::Failed { .. } => {
+                mine(&url, &item, options, &progress, Some((&mut batch, item_index))).await?;
+            }
+            Outcome::Created {
+                note_id,
+                media: MediaState::Pending | MediaState::Failed | MediaState::Skipped,
+                ..
+            } => {
+                validate_media_target(&player, target.as_deref()).await?;
+                batches::checkpoint(
+                    &mut batch,
+                    item_index,
+                    Outcome::Created { note_id, media: MediaState::Pending, error: None },
+                )?;
+                let result = record_item(&player, note_id, target, &item, &progress).await;
+                let failure = result.err().map(|e| e.failure());
+                batches::checkpoint(
+                    &mut batch,
+                    item_index,
+                    Outcome::Created {
+                        note_id,
+                        media: if failure.is_some() {
+                            MediaState::Failed
+                        } else {
+                            MediaState::Complete
+                        },
+                        error: failure.clone(),
+                    },
+                )?;
+                if let Some(failure) = failure {
+                    return Err(failure);
+                }
+            }
+            _ => {
+                return Err(Failure::new(
+                    "Batch recovery",
+                    FailureScope::Stop,
+                    "This item cannot be retried automatically",
+                ))
+            }
+        }
+        Ok(())
+    }
+    .await;
+    let mut failure = result.err();
+    if let Some(error) = &failure {
+        if error.scope != FailureScope::Stop {
+            let outcome = match &batch.items[item_index].outcome {
+                Outcome::Unattempted | Outcome::Failed { .. } => {
+                    Some(Outcome::Failed { error: error.clone() })
+                }
+                Outcome::Created { note_id, media, .. } => Some(Outcome::Created {
+                    note_id: *note_id,
+                    media: *media,
+                    error: Some(error.clone()),
+                }),
+                _ => None,
+            };
+            if let Some(outcome) = outcome {
+                if let Err(storage) = batches::checkpoint(&mut batch, item_index, outcome) {
+                    failure = Some(storage);
+                }
+            }
+        }
+    }
+    Ok(BatchStep { batch, failure })
+}
+
+async fn validate_media_target(player: &PlayerHandle, target: Option<&str>) -> Result<(), Failure> {
+    let status =
+        player.status().await.map_err(|e| Failure::new("asbplayer", FailureScope::Shared, e))?;
+    if status.ws_clients == 0 {
+        return Err(Failure::new(
+            "asbplayer",
+            FailureScope::Shared,
+            "asbplayer is disconnected. Open the video and reconnect the extension, then retry.",
+        ));
+    }
+    let media = player
+        .get_bound_media()
+        .await
+        .map_err(|e| Failure::new("asbplayer", FailureScope::Unknown, e))?;
+    let target = media.iter().find(|m| Some(m.id.as_str()) == target).ok_or_else(|| {
+        Failure::new(
+            "asbplayer",
+            FailureScope::Shared,
+            "The original video is not available. Reopen it in asbplayer before retrying.",
+        )
+    })?;
+    if !target.active || target.loaded_subtitles.is_empty() {
+        return Err(Failure::new(
+            "asbplayer",
+            FailureScope::Shared,
+            "Activate the video's tab and load its subtitles in asbplayer, then retry.",
+        ));
+    }
+    Ok(())
+}
+
+async fn mine(
+    yomitan_url: &str,
+    item: &BatchItem,
+    options: MineOptions,
+    progress: &Channel<LoadingMessage>,
+    mut batch: Option<(&mut BatchRecord, usize)>,
+) -> Result<MineResultDto, Failure> {
+    let term = item.scan_text.as_ref().unwrap_or(&item.lemma).clone();
+    let surface = item.surface.clone();
+    let sentence = item.sentence.clone();
+    let entry_index = item.entry_index;
+    let format_name = item.format_name.clone();
+    let timestamp_secs = item.timestamp.as_ref().map(|t| t.start_secs);
+    let via = if item.mine_media { "asbplayer" } else { "direct" }.to_string();
     let entry_index = entry_index.unwrap_or(0);
 
     let _ = progress.send(LoadingMessage::new(format!("Rendering 「{}」 with Yomitan…", term)));
-    let formats = yomitan::get_term_card_formats(&yomitan_url).await.map_err(|e| e.to_string())?;
+    let formats = yomitan::get_term_card_formats(yomitan_url)
+        .await
+        .map_err(|e| Failure::new("Yomitan connection", FailureScope::Shared, e))?;
     let format = match &format_name {
-        Some(name) => formats
-            .iter()
-            .find(|f| &f.name == name)
-            .ok_or_else(|| format!("Yomitan card format \"{}\" no longer exists", name))?,
-        None => &formats[0],
+        Some(name) => formats.iter().find(|f| &f.name == name).ok_or_else(|| {
+            Failure::new(
+                "Card format",
+                FailureScope::Shared,
+                format!("Yomitan card format \"{}\" no longer exists", name),
+            )
+        })?,
+        None => formats.first().ok_or_else(|| {
+            Failure::new(
+                "Card format",
+                FailureScope::Shared,
+                "Configure a term card format in Yomitan",
+            )
+        })?,
     };
     let format_markers = yomitan::collect_markers(format);
     let mut markers = format_markers.clone();
@@ -80,15 +296,19 @@ pub async fn mine_term(
         }
     }
     let rendered =
-        yomitan::render_fields(&yomitan_url, &term, &markers, entry_index as u32 + 1, true)
+        yomitan::render_fields(yomitan_url, &term, &markers, entry_index as u32 + 1, true)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| Failure::new("Rendering card", FailureScope::Unknown, e))?;
 
     let empty = std::collections::HashMap::new();
     let marker_values = rendered.fields.get(entry_index).unwrap_or(&empty);
     // Only the format's own markers: expression renders for every entry that exists.
     if format_markers.iter().all(|m| marker_values.get(m).is_none_or(|v| v.trim().is_empty())) {
-        return Err(format!("Yomitan has no dictionary entry for 「{}」", term));
+        return Err(Failure::new(
+            "Dictionary entry",
+            FailureScope::Item,
+            format!("Yomitan has no dictionary entry for 「{}」", term),
+        ));
     }
     let key = mined::entry_key(
         marker_values.get("expression").map(String::as_str).unwrap_or_default(),
@@ -99,7 +319,7 @@ pub async fn mine_term(
     // inflected occurrence (沈めて) never contains the lemma (沈める).
     let matched = tokio::time::timeout(
         MATCH_LOOKUP_TIMEOUT,
-        yomitan::matched_source(&yomitan_url, &term, entry_index),
+        yomitan::matched_source(yomitan_url, &term, entry_index),
     )
     .await
     .ok()
@@ -116,19 +336,30 @@ pub async fn mine_term(
     let ctx = yomitan::SentenceContext { sentence: &sentence, term: cloze_term };
     let fields = yomitan::assemble_fields(format, marker_values, Some(ctx));
     if fields.is_empty() {
-        return Err(format!("Yomitan rendered no card content for 「{}」", term));
+        return Err(Failure::new(
+            "Rendering card",
+            FailureScope::Item,
+            format!("Yomitan rendered no card content for 「{}」", term),
+        ));
     }
 
     let _ = progress.send(LoadingMessage::new("Creating Anki note…"));
 
-    // Media failures degrade the note (missing audio/image), not the mine.
     for media in rendered.audio_media.iter().chain(rendered.dictionary_media.iter()) {
-        match anki_api::store_media_file(&media.anki_filename, &media.content).await {
-            Ok(response) if response.error.is_none() => {}
-            Ok(response) => {
-                eprintln!("storeMediaFile {}: {:?}", media.anki_filename, response.error)
+        let response = anki_api::store_media_file(&media.anki_filename, &media.content)
+            .await
+            .map_err(|e| Failure::new("Uploading media", FailureScope::Shared, e))?;
+        match response.error {
+            Some(error) if options.require_dictionary_media => {
+                return Err(Failure::new(
+                    "Uploading media",
+                    FailureScope::Unknown,
+                    format!("{}: {}", media.anki_filename, error),
+                )
+                .with_fallback(Fallback::WithoutDictionaryMedia))
             }
-            Err(e) => eprintln!("storeMediaFile {}: {}", media.anki_filename, e),
+            Some(error) => eprintln!("storeMediaFile {}: {}", media.anki_filename, error),
+            None => {}
         }
     }
 
@@ -137,13 +368,35 @@ pub async fn mine_term(
     if timestamp_secs.is_none() {
         tags.push("yomine::no-media".to_string());
     }
-    let response = anki_api::add_note(&format.deck, &format.model, &fields, &tags)
-        .await
-        .map_err(|e| format!("AnkiConnect is unreachable: {}", e))?;
+    if let Some((record, index)) = &mut batch {
+        batches::checkpoint(record, *index, Outcome::Attempting)?;
+    }
+    let response = match anki_api::add_note(&format.deck, &format.model, &fields, &tags).await {
+        Ok(response) => response,
+        Err(e) if e.is_connect() => {
+            let error = Failure::new("Anki connection", FailureScope::Shared, e);
+            if let Some((record, index)) = &mut batch {
+                batches::checkpoint(record, *index, Outcome::Failed { error: error.clone() })?;
+            }
+            return Err(error);
+        }
+        Err(e) => {
+            return Err(Failure::new(
+                "Creating note",
+                FailureScope::Stop,
+                format!(
+                    "Anki did not confirm whether the note was created. Check Anki before mining \
+                     it again. {e}"
+                ),
+            ))
+        }
+    };
     let note_id = match response.error {
         None => response.result,
         Some(err) if err.contains("duplicate") => {
-            // No enrichment: a duplicate returns no note id to target.
+            if let Some((record, index)) = &mut batch {
+                batches::checkpoint(record, *index, Outcome::Duplicate)?;
+            }
             return Ok(MineResultDto {
                 status: "duplicate".to_string(),
                 via,
@@ -153,45 +406,57 @@ pub async fn mine_term(
                 key,
             });
         }
-        Some(err) => return Err(err),
+        Some(err) => {
+            let lower = err.to_lowercase();
+            let scope = if ["deck", "model", "note type", "api key", "permission"]
+                .iter()
+                .any(|s| lower.contains(s))
+            {
+                FailureScope::Shared
+            } else {
+                FailureScope::Unknown
+            };
+            let error = Failure::new("Creating note", scope, err);
+            if let Some((record, index)) = &mut batch {
+                batches::checkpoint(record, *index, Outcome::Failed { error: error.clone() })?;
+            }
+            return Err(error);
+        }
     };
+    let id = note_id.ok_or_else(|| {
+        Failure::new(
+            "Creating note",
+            FailureScope::Stop,
+            "Anki returned no note ID. Check Anki before retrying.",
+        )
+    })?;
+    if let Some((record, index)) = &mut batch {
+        batches::checkpoint(
+            record,
+            *index,
+            Outcome::Created {
+                note_id: id,
+                media: match (item.mine_media, options.record) {
+                    (false, _) => MediaState::NotRequested,
+                    (true, true) => MediaState::Pending,
+                    (true, false) => MediaState::Skipped,
+                },
+                error: None,
+            },
+        )?;
+    }
     if let Some(id) = note_id {
         mined::record_mined_sentence(id, &sentence);
     }
 
-    // Enrichment failures don't undo the mine (the note exists) — warn instead.
-    let mut warning = None;
-    let mut media_missing = false;
-    if via == "asbplayer" {
-        if let Some(id) = note_id {
-            if target_lacks_subtitles(&player, media_id.as_deref()).await {
-                warning = Some(
-                    "asbplayer has no subtitles loaded on the loaded video — card created without \
-                     audio/screenshot"
-                        .to_string(),
-                );
-                media_missing = true;
-            } else {
-                let record_secs = cue_duration_secs(timestamp_secs, timestamp_end_secs);
-                if let Err(e) = enrich_and_verify(
-                    &player,
-                    id,
-                    media_id,
-                    timestamp_secs,
-                    timestamp_label,
-                    record_secs,
-                    &progress,
-                )
-                .await
-                {
-                    warning = Some(format!("Card created, but media wasn't added: {}", e));
-                    media_missing = true;
-                }
-            }
-        }
-    }
-
-    Ok(MineResultDto { status: "created".to_string(), via, warning, note_id, media_missing, key })
+    Ok(MineResultDto {
+        status: "created".to_string(),
+        via,
+        warning: None,
+        note_id,
+        media_missing: false,
+        key,
+    })
 }
 
 /// Re-run asbplayer enrichment on a note whose media never landed.
@@ -205,6 +470,8 @@ pub async fn retry_mine_media(
     timestamp_label: Option<String>,
     progress: Channel<LoadingMessage>,
 ) -> Result<(), String> {
+    let _operation =
+        batches::OPERATION.try_lock().map_err(|_| "Mining or undo is already running")?;
     let media_id = { state.lock().unwrap().file.asbplayer_media_id.clone() };
     if target_lacks_subtitles(&player, media_id.as_deref()).await {
         return Err("asbplayer still has no subtitles loaded on the loaded video".to_string());
@@ -220,6 +487,7 @@ pub async fn retry_mine_media(
         &progress,
     )
     .await
+    .map_err(|e| e.to_string())
 }
 
 /// asbplayer's `mine-subtitle` drops targets without loaded subtitles, so
@@ -231,10 +499,67 @@ async fn target_lacks_subtitles(player: &PlayerHandle, media_id: Option<&str>) -
     !media.iter().any(|m| m.id == id && !m.loaded_subtitles.is_empty())
 }
 
+async fn record_item(
+    player: &PlayerHandle,
+    note_id: u64,
+    media_id: Option<String>,
+    item: &BatchItem,
+    progress: &Channel<LoadingMessage>,
+) -> Result<(), EnrichError> {
+    let start = item.timestamp.as_ref().map(|t| t.start_secs);
+    let end = item.timestamp.as_ref().map(|t| t.end_secs);
+    let label = item.timestamp.as_ref().map(|t| t.start_label.clone());
+    enrich_and_verify(
+        player,
+        note_id,
+        media_id,
+        start,
+        label,
+        cue_duration_secs(start, end),
+        progress,
+    )
+    .await
+}
+
 fn cue_duration_secs(start: Option<f32>, end: Option<f32>) -> f32 {
     match (start, end) {
         (Some(s), Some(e)) => (e - s).max(0.0),
         _ => 0.0,
+    }
+}
+
+enum EnrichError {
+    Unverified,
+    Failed(String),
+}
+
+impl From<String> for EnrichError {
+    fn from(error: String) -> Self {
+        Self::Failed(error)
+    }
+}
+
+impl std::fmt::Display for EnrichError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unverified => f.write_str(
+                "asbplayer didn't update the card. In a new tab, audio recording usually has to be \
+                 enabled first: open the video tab, click the asbplayer button in the browser \
+                 toolbar and allow recording, then retry. If recording is already enabled, check \
+                 asbplayer's Anki settings (deck, note type, and field mappings).",
+            ),
+            Self::Failed(error) => f.write_str(error),
+        }
+    }
+}
+
+impl EnrichError {
+    fn failure(&self) -> Failure {
+        let failure = Failure::new("Recording media", FailureScope::Unknown, self);
+        match self {
+            Self::Unverified => failure.with_kind(FailureKind::MediaUnverified),
+            Self::Failed(_) => failure,
+        }
     }
 }
 
@@ -257,7 +582,7 @@ async fn enrich_and_verify(
     timestamp_label: Option<String>,
     record_secs: f32,
     progress: &Channel<LoadingMessage>,
-) -> Result<(), String> {
+) -> Result<(), EnrichError> {
     let _ = progress.send(LoadingMessage::new("Adding audio & screenshot via asbplayer…"));
     let baseline = snapshot_fields(note_id).await;
 
@@ -268,7 +593,11 @@ async fn enrich_and_verify(
     player.mine_subtitle(std::collections::HashMap::new(), 2, media_id, Some(note_id)).await?;
 
     // AnkiConnect hiccup on the baseline read: enrichment ran, verification can't.
-    let Some(baseline) = baseline else { return Ok(()) };
+    let Some(baseline) = baseline else {
+        return Err(EnrichError::Failed(
+            "Recording was requested, but Anki could not be read to verify the media".into(),
+        ));
+    };
 
     let _ = progress.send(LoadingMessage::new("Waiting for asbplayer to record the cue…"));
     tokio::time::sleep(Duration::from_secs_f32(record_secs) + RECORD_BUFFER).await;
@@ -280,9 +609,7 @@ async fn enrich_and_verify(
             return Ok(());
         }
         if std::time::Instant::now() >= deadline {
-            return Err("asbplayer accepted the mine but never updated the card — check its \
-                        Anki settings (deck, note type, and field mappings)"
-                .to_string());
+            return Err(EnrichError::Unverified);
         }
         tokio::time::sleep(MEDIA_VERIFY_POLL).await;
     }

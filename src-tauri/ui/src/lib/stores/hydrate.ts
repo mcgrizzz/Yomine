@@ -12,6 +12,7 @@ import { refreshIgnoredLemmas } from './ignore';
 import { refreshRecommendedDicts } from './dictionaries';
 import { refreshMinedState, yomitanReachable } from './mining';
 import { selectedTerms } from './selection';
+import { loadLastBatch } from './batches';
 import { refreshSetupStatus } from './setup';
 
 let hydrated = false;
@@ -118,6 +119,7 @@ export async function hydrate(): Promise<void> {
 	refreshRecommendedDicts();
 	// Restores mined state / mine-button gating on a webview reload.
 	void refreshMinedState(true);
+	void loadLastBatch();
 
 	// Best-effort update check; a failure just means no notice.
 	void checkForUpdate();

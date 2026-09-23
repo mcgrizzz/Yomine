@@ -31,3 +31,6 @@ export const openTextFiltersModal = (): void => textFiltersModalOpen.set(true);
 export const openRecentFilesModal = (): void => recentFilesModalOpen.set(true);
 export const openEpubChapterModal = (): void => epubChapterModalOpen.set(true);
 export const openProfilesModal = (): void => profilesModalOpen.set(true);
+
+export const batchSummaryOpen = writable(false);
+export const openBatchSummary = (): void => batchSummaryOpen.set(true);

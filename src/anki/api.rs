@@ -161,6 +161,47 @@ pub async fn get_note_ids(query: &str) -> Result<Vec<u64>, reqwest::Error> {
     Ok(response.unwrap_result().unwrap_or_default())
 }
 
+pub async fn existing_note_ids_strict(ids: &[u64]) -> Result<Vec<u64>, String> {
+    let mut found = Vec::new();
+    for chunk in ids.chunks(500) {
+        let query =
+            format!("nid:{}", chunk.iter().map(u64::to_string).collect::<Vec<_>>().join(","));
+        let response: ApiResponse<Vec<u64>> =
+            make_request("findNotes", Some(serde_json::json!({ "query": query })))
+                .await
+                .map_err(|e| e.to_string())?;
+        found.extend(checked_note_ids(response, chunk)?);
+    }
+    found.sort_unstable();
+    found.dedup();
+    Ok(found)
+}
+
+fn checked_note_ids(
+    response: ApiResponse<Vec<u64>>,
+    requested: &[u64],
+) -> Result<Vec<u64>, String> {
+    if let Some(error) = response.error {
+        return Err(error);
+    }
+    let result = response.result.ok_or("Anki returned no note lookup result")?;
+    if result.iter().any(|id| !requested.contains(id)) {
+        return Err("Anki returned unexpected note IDs".into());
+    }
+    Ok(result)
+}
+
+pub async fn delete_notes(ids: &[u64]) -> Result<(), String> {
+    let response: ApiResponse<()> =
+        make_request("deleteNotes", Some(serde_json::json!({ "notes": ids })))
+            .await
+            .map_err(|e| e.to_string())?;
+    match response.error {
+        Some(error) => Err(error),
+        None => Ok(()),
+    }
+}
+
 pub async fn get_notes(note_ids: Vec<u64>) -> Result<Vec<Note>, reqwest::Error> {
     let params = serde_json::json!({ "notes": note_ids });
     let response: ApiResponse<Vec<Note>> = make_request("notesInfo", Some(params)).await?;
@@ -285,6 +326,21 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    #[test]
+    fn undo_lookup_does_not_confuse_errors_with_deleted_notes() {
+        for response in [
+            json!({ "result": null, "error": "invalid key" }),
+            json!({ "result": [], "error": "collection unavailable" }),
+            json!({ "result": null, "error": null }),
+            json!({ "result": [99], "error": null }),
+        ] {
+            assert!(checked_note_ids(serde_json::from_value(response).unwrap(), &[42]).is_err());
+        }
+        assert!(checked_note_ids(ApiResponse { result: Some(vec![]), error: None }, &[42])
+            .unwrap()
+            .is_empty());
+    }
 
     async fn server(
         response: serde_json::Value,

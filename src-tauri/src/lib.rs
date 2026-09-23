@@ -1,4 +1,5 @@
 mod background;
+mod batches;
 mod commands;
 mod dto;
 mod events;
@@ -79,6 +80,11 @@ pub fn run() {
             commands::player::get_asbplayer_media,
             commands::player::launch_mpv,
             commands::mining::mine_term,
+            commands::mining::mine_batch_item,
+            batches::create_batch,
+            batches::get_last_batch,
+            batches::finish_batch,
+            batches::undo_batch,
             commands::mining::retry_mine_media,
             commands::mining::get_mined_state,
             commands::mining::get_yomitan_status,

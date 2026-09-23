@@ -27,6 +27,7 @@ const SLUG_PREFIX: &str = "profile-";
 
 /// `dictionaries/` and `asbplayer_subtitles/` are deliberately absent: shared.
 const PROFILE_FILES: &[&str] = &[
+    "yomine_last_batch.json",
     "settings.json",
     "ignore_list.json",
     "recent_files.json",

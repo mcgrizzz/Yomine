@@ -88,6 +88,7 @@ pub(crate) fn load_result(file: &FileData) -> Option<FileLoadResult> {
         anki_filter_active: !file.anki_known_lemmas.is_empty(),
         total_terms: file.base_terms.len(),
         ignored_terms: file.ignored_count,
+        batch_source: crate::batches::BatchSource::from_file(file).ok()?,
     })
 }
 

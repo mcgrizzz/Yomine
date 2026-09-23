@@ -29,6 +29,7 @@
 		queuedCount,
 		settings
 	} from '$lib/stores';
+	import BatchRecovery from '$lib/components/BatchRecovery.svelte';
 	import TopBar from '$lib/components/TopBar.svelte';
 	import TermTable from '$lib/components/TermTable.svelte';
 	import TableControls from '$lib/components/TableControls.svelte';
@@ -75,6 +76,8 @@
 		}
 	}
 </script>
+
+<BatchRecovery />
 
 <!-- Focus refresh catches cards mined outside Yomine (issue #3). -->
 <svelte:window onkeydown={onKeydown} onfocus={() => void refreshMinedState()} />

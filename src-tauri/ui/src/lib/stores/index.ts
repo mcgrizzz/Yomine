@@ -16,3 +16,4 @@ export * from './selection';
 export * from './mining';
 export * from './update';
 export * from './hydrate';
+export * from './batches';

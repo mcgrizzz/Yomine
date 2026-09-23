@@ -95,6 +95,7 @@ export interface FileLoadResult {
 	total_terms: number;
 	/** Terms hidden by the ignore list — the known-count hover breakdown. */
 	ignored_terms: number;
+	batch_source: BatchSource;
 }
 
 /** A previously-opened file for the landing state (mirrors `RecentFileEntry`). */
@@ -728,6 +729,95 @@ export function openInAnki(noteId: number): Promise<void> {
 /** Open Anki's browser on several notes (`guiBrowse nid:a,b,c`). */
 export function openNotesInAnki(noteIds: number[]): Promise<void> {
 	return invoke('open_notes_in_anki', { noteIds });
+}
+
+export interface BatchSource {
+	title: string;
+	locator: string;
+	fingerprint: string;
+}
+
+export interface BatchFailure {
+	stage: string;
+	scope: 'item' | 'shared' | 'unknown' | 'stop';
+	message: string;
+	fallback: 'without_dictionary_media' | null;
+	kind: 'media_unverified' | null;
+}
+
+export type BatchMedia = 'not_requested' | 'pending' | 'complete' | 'failed' | 'skipped';
+
+export type BatchOutcome =
+	| { status: 'unattempted' | 'attempting' | 'duplicate' }
+	| { status: 'failed'; error: BatchFailure }
+	| { status: 'created'; note_id: number; media: BatchMedia; error: BatchFailure | null }
+	| { status: 'deleted'; note_id: number };
+
+export interface BatchItem {
+	key: string;
+	lemma: string;
+	surface: string;
+	sentence: string;
+	timestamp: TimeStampDto | null;
+	entry_index: number | null;
+	format_name: string | null;
+	scan_text: string | null;
+	adhoc: boolean;
+	mine_media: boolean;
+	outcome: BatchOutcome;
+}
+
+export interface BatchRecord {
+	id: string;
+	started_at: number;
+	finished_at: number | null;
+	source: BatchSource;
+	items: BatchItem[];
+}
+
+export interface BatchStep {
+	batch: BatchRecord;
+	failure: BatchFailure | null;
+}
+
+export interface BatchUndoResult {
+	batch: BatchRecord;
+	deleted: number;
+	already_gone: number;
+	remaining: number;
+}
+
+export interface MineOptions {
+	record: boolean;
+	require_dictionary_media: boolean;
+}
+
+export function getLastBatch(): Promise<BatchRecord | null> {
+	return invoke('get_last_batch');
+}
+
+export function createBatch(source: BatchSource, items: BatchItem[]): Promise<BatchRecord> {
+	return invoke('create_batch', { source, items });
+}
+
+export function finishBatch(batchId: string): Promise<BatchRecord> {
+	return invoke('finish_batch', { batchId });
+}
+
+export function undoBatch(batchId: string): Promise<BatchUndoResult> {
+	return invoke('undo_batch', { batchId });
+}
+
+export function mineBatchItem(
+	batchId: string,
+	itemIndex: number,
+	mediaTarget: string | null,
+	options: MineOptions,
+	onProgress: (msg: LoadingMessage) => void
+): Promise<BatchStep> {
+	const channel = new Channel<LoadingMessage>();
+	channel.onmessage = onProgress;
+	return invoke('mine_batch_item', { batchId, itemIndex, mediaTarget, options, progress: channel });
 }
 
 /** Best-effort: an offline AnkiConnect still returns cached sentences. */
