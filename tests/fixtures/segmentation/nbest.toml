@@ -5,6 +5,7 @@
 frequencies = [
 	{ term = "口約束", reading = "くちやくそく", rank = 500 },
 	{ term = "やる", reading = "やる", rank = 50, kana = true },
+	{ term = "うるさい", reading = "うるさい", rank = 900, kana = true },
 	{ term = "口", reading = "くち", rank = 400 },
 	{ term = "約束", reading = "やくそく", rank = 600 },
 	{ term = "丘", reading = "おか", rank = 2000 },
@@ -72,3 +73,11 @@ name = "a passive auxiliary after a non-verb triggers a rescue"
 text = "止まると自分も やられると思って"
 terms = [{ surface = "やられる", lemma = "やる", pos = "Verb" }]
 absent = ["や"]
+
+# A character speaking in katakana leaves UniDic with one unknown token; read as
+# hiragana it is ordinary speech. A name read that way has no such ending.
+[[case]]
+name = "katakana speech is read as the words it spells"
+text = "ウルサクナイモンネ。シルフィエット！"
+terms = [{ surface = "ウルサクナイ", lemma = "うるさい", pos = "Adjective" }, { surface = "シルフィエット" }]
+absent = ["ウルサクナイモンネ"]

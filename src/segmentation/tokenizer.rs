@@ -10,6 +10,7 @@ use super::{
     nbest::rescue_words,
     rule_matcher::parse_into_words,
     token_models::UnidicToken,
+    unidic_tags::UnidicTag,
     word::{
         get_default_pos,
         Citation,
@@ -31,7 +32,10 @@ use crate::{
         YomineError,
     },
     dictionary::{
-        frequency_manager::FrequencyManager,
+        frequency_manager::{
+            fold_katakana,
+            FrequencyManager,
+        },
         jmdict_lexicon,
         token_dictionary::{
             load_dictionary,
@@ -115,11 +119,88 @@ fn analyze_sentence(worker: &mut Worker, text: &str, manager: &FrequencyManager)
         .map(|token| UnidicToken::from_parts(token.surface(), token.feature(), token.range_byte()))
         .collect();
     let words = parse_into_words(tokens).unwrap_or_default();
+    let words = reparse_katakana_speech(worker, words, manager);
     let mut words =
         split_unvalidated_compounds(rescue_words(worker, text, words, manager), manager);
     keep_lexicalized_honorifics(&mut words, manager);
     tag_katakana_interjections(worker, &mut words);
     words
+}
+
+/// Some characters speak in katakana (ウルサクナイモンネ), which UniDic can't read and
+/// leaves as unknown tokens. Read as hiragana, speech parses into dictionary words ending
+/// in a sentence-final particle; names and loanwords (シルフィエット, アウトドアカレー)
+/// are known tokens or don't end that way, so they are never reread.
+fn reparse_katakana_speech(
+    worker: &mut Worker,
+    words: Vec<Word>,
+    manager: &FrequencyManager,
+) -> Vec<Word> {
+    let mut out = Vec::with_capacity(words.len());
+    for word in words {
+        match katakana_as_hiragana(worker, &word, manager) {
+            Some(reread) => out.extend(reread),
+            None => out.push(word),
+        }
+    }
+    out
+}
+
+fn katakana_as_hiragana(
+    worker: &mut Worker,
+    word: &Word,
+    manager: &FrequencyManager,
+) -> Option<Vec<Word>> {
+    let surface = word.surface_form.as_str();
+    // An unknown token's lexeme falls back to its own surface.
+    let all_unknown = word.tokens.iter().all(|t| t.lexeme == t.surface);
+    if !surface.is_katakana()
+        || surface.chars().count() < 3
+        || !all_unknown
+        || !manager.get_frequency_data_by_term(surface).is_empty()
+    {
+        return None;
+    }
+    // Folding keeps every character three bytes wide, so offsets carry over.
+    worker.reset_sentence(&fold_katakana(surface));
+    worker.tokenize();
+    let start = word.byte_span().0;
+    let mut tokens = Vec::new();
+    for token in worker.token_iter() {
+        let fields: Vec<&str> = token.feature().split(',').collect();
+        let listed = fields.get(7).is_some_and(|lemma| *lemma != "*");
+        if !listed || fields[0] == "補助記号" || fields.get(1) == Some(&"固有名詞") {
+            return None;
+        }
+        let range = token.range_byte();
+        tokens.push(UnidicToken::from_parts(
+            token.surface(),
+            token.feature(),
+            start + range.start..start + range.end,
+        ));
+    }
+    // Speech has a predicate and ends like speech (ナイモンネ, クルワヨ); a name that
+    // happens to end in な or ね (ハンナ) has no predicate.
+    let ends_as_speech = tokens.last().is_some_and(|t| t.pos2 == UnidicTag::Shuujoshi);
+    let has_predicate = tokens
+        .iter()
+        .any(|t| matches!(t.pos1, UnidicTag::Doushi | UnidicTag::Keiyoushi | UnidicTag::Jodoushi));
+    if tokens.len() < 2 || !ends_as_speech || !has_predicate {
+        return None;
+    }
+    // Parsed with hiragana surfaces so the katakana binding rule can't re-merge them.
+    let mut reread = parse_into_words(tokens).ok()?;
+    let original = |t: &UnidicToken| surface[t.start_byte - start..t.end_byte - start].to_string();
+    for w in &mut reread {
+        for t in &mut w.tokens {
+            t.surface = original(t);
+        }
+        if let Some(main) = &mut w.main_word {
+            main.surface = original(main);
+        }
+        w.surface_form = w.tokens.iter().map(|t| t.surface.as_str()).collect();
+    }
+    Some(reread)
 }
 
 /// UniDic's first reading of a lone katakana exclamation can be a noun (フン as the
