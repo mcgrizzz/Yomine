@@ -4,6 +4,7 @@
 
 frequencies = [
 	{ term = "口約束", reading = "くちやくそく", rank = 500 },
+	{ term = "やる", reading = "やる", rank = 50, kana = true },
 	{ term = "口", reading = "くち", rank = 400 },
 	{ term = "約束", reading = "やくそく", rank = 600 },
 	{ term = "丘", reading = "おか", rank = 2000 },
@@ -64,3 +65,10 @@ name = "imperative 待て deinflects to 待つ"
 text = "ここで吉報を待て"
 terms = [{ surface = "待て", lemma = "待つ", reading = "まつ" }]
 absent = ["待るて"]
+
+# At a clause start UniDic reads や as 嫌 and strands られる, which only follows a verb.
+[[case]]
+name = "a passive auxiliary after a non-verb triggers a rescue"
+text = "止まると自分も やられると思って"
+terms = [{ surface = "やられる", lemma = "やる", pos = "Verb" }]
+absent = ["や"]
