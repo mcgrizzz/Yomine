@@ -36,3 +36,14 @@ terms = [
 	{ surface = "おかしな", lemma = "おかしな", pos = "AdjectivalNoun" },
 	{ surface = "こんな", lemma = "こんな", pos = "Determiner" },
 ]
+
+# UniDic reads a lone フン as the Huns, and offers 感動詞 for any unknown katakana
+# word, so only a dictionary interjection entry retags a standalone name.
+[[case]]
+name = "lone katakana exclamations are interjections, names stay names"
+text = "フン！ンン…エリス！"
+terms = [
+	{ surface = "フン", pos = "Interjection" },
+	{ surface = "ンン", pos = "Interjection" },
+	{ surface = "エリス", pos = "ProperNoun" },
+]

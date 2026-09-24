@@ -118,7 +118,48 @@ fn analyze_sentence(worker: &mut Worker, text: &str, manager: &FrequencyManager)
     let mut words =
         split_unvalidated_compounds(rescue_words(worker, text, words, manager), manager);
     keep_lexicalized_honorifics(&mut words, manager);
+    tag_katakana_interjections(worker, &mut words);
     words
+}
+
+/// UniDic's first reading of a lone katakana exclamation can be a name (フン as the
+/// Huns), and an unknown one defaults to a noun (ンン). No word begins with ン or ッ.
+fn tag_katakana_interjections(worker: &mut Worker, words: &mut [Word]) {
+    let bounded = |i: usize| words.get(i).is_none_or(|w| w.part_of_speech == POS::Symbol);
+    let standalone: Vec<bool> =
+        (0..words.len()).map(|i| (i == 0 || bounded(i - 1)) && bounded(i + 1)).collect();
+    for (word, standalone) in words.iter_mut().zip(standalone) {
+        let [token] = word.tokens.as_slice() else {
+            continue;
+        };
+        if !token.surface.as_str().is_katakana() {
+            continue;
+        }
+        let unknown_exclamation =
+            token.lexeme == token.surface && token.surface.starts_with(['ン', 'ッ']);
+        let exclaimed_name = standalone
+            && token.pos2 == super::unidic_tags::UnidicTag::Koyuumeishi
+            && has_interjection_reading(worker, &token.surface);
+        if unknown_exclamation || exclaimed_name {
+            word.part_of_speech = POS::Interjection;
+        }
+    }
+}
+
+/// A dictionary interjection entry for this spelling. Unknown-word guesses don't count:
+/// UniDic offers 感動詞 for any unknown katakana (エリス), with no lemma.
+fn has_interjection_reading(worker: &mut Worker, surface: &str) -> bool {
+    worker.reset_sentence(surface);
+    worker.tokenize_nbest(5);
+    (0..worker.num_nbest_paths()).any(|path| {
+        worker.nbest_token_iter(path).is_some_and(|mut tokens| {
+            let (Some(token), None) = (tokens.next(), tokens.next()) else {
+                return false;
+            };
+            let fields: Vec<&str> = token.feature().split(',').collect();
+            fields.first() == Some(&"感動詞") && fields.get(7).is_some_and(|lemma| *lemma != "*")
+        })
+    })
 }
 
 /// The honorific rule mines the noun after お/ご (嬢 in お嬢様). A prefixed word the
