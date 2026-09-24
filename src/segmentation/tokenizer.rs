@@ -115,8 +115,36 @@ fn analyze_sentence(worker: &mut Worker, text: &str, manager: &FrequencyManager)
         .map(|token| UnidicToken::from_parts(token.surface(), token.feature(), token.range_byte()))
         .collect();
     let words = parse_into_words(tokens).unwrap_or_default();
-    let words = rescue_words(worker, text, words, manager);
-    split_unvalidated_compounds(words, manager)
+    let mut words =
+        split_unvalidated_compounds(rescue_words(worker, text, words, manager), manager);
+    keep_lexicalized_honorifics(&mut words, manager);
+    words
+}
+
+/// The honorific rule mines the noun after お/ご (嬢 in お嬢様). A prefixed word the
+/// dictionaries list is a word of its own, so it stays whole, read the way they
+/// mostly read it: UniDic reads 兄 in お兄さん as あに, and BCCWJ inherits that.
+fn keep_lexicalized_honorifics(words: &mut [Word], manager: &FrequencyManager) {
+    for word in words {
+        let (Some(prefix), Some(_)) = (word.tokens.first(), word.main_word.as_ref()) else {
+            continue;
+        };
+        if prefix.pos1 != super::unidic_tags::UnidicTag::Settouji
+            || !matches!(prefix.surface.as_str(), "お" | "ご" | "御")
+        {
+            continue;
+        }
+        let reading = manager.majority_reading(&word.surface_form).or_else(|| {
+            phrase_frequency(manager, &word.surface_form, &word.surface_hatsuon)
+                .map(|_| word.surface_hatsuon.clone())
+        });
+        if let Some(reading) = reading {
+            word.main_word = None;
+            word.lemma_form = word.surface_form.clone();
+            word.surface_hatsuon = reading.clone();
+            word.lemma_hatsuon = reading;
+        }
+    }
 }
 
 #[derive(Clone, Copy)]

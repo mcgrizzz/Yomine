@@ -280,6 +280,22 @@ impl FrequencyManager {
         freqs
     }
 
+    /// The reading most dictionaries give `term`; one dictionary's odd variant
+    /// (BCCWJ's おあにさん for お兄さん) can't outvote the rest, whatever its rank.
+    pub fn majority_reading(&self, term: &str) -> Option<String> {
+        let mut votes: HashMap<String, usize> = HashMap::new();
+        for reading in self.get_frequency_data_by_term(term).iter().filter_map(|d| d.reading()) {
+            *votes.entry(fold_katakana(reading)).or_default() += 1;
+        }
+        votes
+            .into_iter()
+            .max_by_key(|(reading, count)| {
+                let rank = self.get_harmonic_frequency_for_pair(term, reading);
+                (*count, std::cmp::Reverse(rank.unwrap_or(u32::MAX)), reading.clone())
+            })
+            .map(|(reading, _)| reading)
+    }
+
     /// The reading every dictionary gives `term`, when they give only one.
     pub fn sole_reading(&self, term: &str) -> Option<String> {
         let data = self.get_frequency_data_by_term(term);

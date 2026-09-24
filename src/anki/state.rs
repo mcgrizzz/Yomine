@@ -343,7 +343,7 @@ impl AnkiState {
     }
 
     fn classify_term(&self, term: &Term) -> MatchResult<'_> {
-        self.classify(
+        let result = self.classify(
             &term.surface_form,
             &term.surface_reading,
             &term.lemma_form,
@@ -351,7 +351,35 @@ impl AnkiState {
             &term.part_of_speech,
             term.lexical_family.is_some(),
             term.lexeme.as_deref(),
-        )
+        );
+        if !matches!(result, MatchResult::Unmatched)
+            || term.part_of_speech != crate::segmentation::word::POS::Noun
+        {
+            return result;
+        }
+        // A card for the bare noun covers its honorific form (金 for お金, 客 for お客様);
+        // a kana remainder is no evidence of a prefix (おかず is not お+数).
+        const PERSON_SUFFIXES: [(&str, &str); 4] =
+            [("さん", "さん"), ("様", "さま"), ("さま", "さま"), ("ちゃん", "ちゃん")];
+        let reading = normalize_japanese_text(&term.surface_reading);
+        let bare_forms = ['お', 'ご'].into_iter().filter_map(|prefix| {
+            Some((term.surface_form.strip_prefix(prefix)?, reading.strip_prefix(prefix)?))
+        });
+        bare_forms
+            .flat_map(|(noun, reading)| {
+                std::iter::once((noun, reading)).chain(PERSON_SUFFIXES.iter().filter_map(
+                    move |(suffix, suffix_reading)| {
+                        Some((noun.strip_suffix(suffix)?, reading.strip_suffix(suffix_reading)?))
+                    },
+                ))
+            })
+            .filter(|(noun, reading)| noun.chars().any(is_kanji_char) && !reading.is_empty())
+            .find_map(|(noun, reading)| {
+                let bare =
+                    self.classify(noun, reading, noun, reading, &term.part_of_speech, false, None);
+                matches!(bare, MatchResult::Known { .. }).then_some(bare)
+            })
+            .unwrap_or(result)
     }
 
     /// Statistics for an extracted term use the same classification as file filtering.
@@ -950,6 +978,18 @@ mod classification_tests {
         let (unknown, known) = wrong.filter_existing_terms(vec![input]);
         assert!(known.is_empty());
         assert!(unknown[0].possible_known_match.is_none());
+    }
+
+    #[test]
+    fn a_bare_noun_card_covers_its_honorific_form() {
+        let anki = state(
+            Arc::new(FrequencyManager::from_dictionaries(vec![])),
+            &[("金", "かね"), ("数", "かず"), ("客", "きゃく"), ("母", "はは")],
+        );
+        assert!(anki.term_stats(&term("お金", "おかね")).0);
+        assert!(anki.term_stats(&term("お客様", "おきゃくさま")).0);
+        assert!(!anki.term_stats(&term("お母さん", "おかあさん")).0);
+        assert!(!anki.term_stats(&term("おかず", "おかず")).0);
     }
 
     #[test]
