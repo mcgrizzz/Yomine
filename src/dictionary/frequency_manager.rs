@@ -33,8 +33,8 @@ use crate::{
     persistence::get_app_data_dir,
 };
 
-/// Caches hold long-vowel-normalized readings, so the name changes whenever
-/// `normalize_long_vowel` does; a cache under an older name is rebuilt.
+/// Caches hold readings from `normalize_long_vowel`; a new name makes every install
+/// rebuild its caches after that normalization changes.
 const DICT_CACHE_FILE: &str = "cache-v2.bin";
 const LEGACY_DICT_CACHE_FILE: &str = "cache.bin";
 

@@ -202,8 +202,8 @@ impl AnkiState {
         let is_preferred_spelling = |spelling: &str| {
             preference.as_ref().is_some_and(|preferred| preferred.matches(&canonical(spelling)))
         };
-        // UniDic spells a lexeme its own way (御陰, 奇麗), so a card is compared
-        // by the lexeme its spelling resolves to, not by the spelling itself.
+        // UniDic writes lexemes in its own spelling (御陰, 奇麗), so cards are
+        // compared by the lexeme their spelling resolves to.
         let card_lexeme = |card: &Vocab| self.frequency_manager.lexeme_of(&card.term, reading);
         if let Some(lexeme) = lexeme {
             // UniDic files some JMdict-distinct words under one lexeme (診せる under
@@ -219,9 +219,9 @@ impl AnkiState {
         let contradicts_lexeme = |card: &Vocab| {
             lexeme.is_some_and(|lexeme| card_lexeme(card).is_some_and(|other| other != lexeme))
         };
-        // A loanword's lexeme is reliable; UniDic's pick among kana homographs is
-        // only a guess (擤む for 噛む in かんだ), so there a contradiction only
-        // stops the card from counting as known.
+        // A loanword's lexeme is reliable, so a contradicting card is dropped. Among
+        // kana homographs UniDic only guesses (擤む for かんだ, meant as 噛む), so a
+        // contradicting card stays a possible match.
         let excluded = |card: &Vocab| {
             lexeme.is_some_and(|lexeme| lexeme_name(lexeme).is_katakana())
                 && contradicts_lexeme(card)
