@@ -135,7 +135,7 @@ def compile_rows(db):
     return sorted((key, next(iter(v))) for key, v in values.items() if len(v) == 1)
 
 
-def encode(rows):
+def encode(rows, magic=b"KANAIDX2"):
     offset=12+16*len(rows)
     directory=bytearray()
     payload=bytearray()
@@ -143,7 +143,7 @@ def encode(rows):
         directory.extend(struct.pack("<IIII",offset,len(key),offset+len(key),len(value)))
         payload.extend(key);payload.extend(value)
         offset+=len(key)+len(value)
-    return b"KANAIDX2"+struct.pack("<I",len(rows))+directory+payload
+    return magic+struct.pack("<I",len(rows))+directory+payload
 
 
 def main():

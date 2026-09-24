@@ -43,6 +43,7 @@ use crate::{
     anki::comprehensibility::comp_term,
     core::{
         utils::{
+            is_kanji_char,
             normalize_japanese_text,
             FilterKana,
             NormalizeLongVowel,
@@ -59,6 +60,7 @@ pub struct AnkiState {
     vocab: Vec<Vocab>,
     frequency_manager: Arc<FrequencyManager>,
     cards_by_reading: HashMap<String, Vec<usize>>,
+    cards_by_term: HashMap<String, Vec<usize>>,
     known_interval: u32, // From settings, for calculating comprehension
 }
 
@@ -131,10 +133,12 @@ impl AnkiState {
         known_interval: u32,
     ) -> Self {
         let mut cards_by_reading: HashMap<String, Vec<usize>> = HashMap::new();
+        let mut cards_by_term: HashMap<String, Vec<usize>> = HashMap::new();
         for (index, card) in vocab.iter().enumerate() {
             cards_by_reading.entry(normalize_japanese_text(&card.reading)).or_default().push(index);
+            cards_by_term.entry(normalize_japanese_text(&card.term)).or_default().push(index);
         }
-        Self { vocab, frequency_manager, cards_by_reading, known_interval }
+        Self { vocab, frequency_manager, cards_by_reading, cards_by_term, known_interval }
     }
 
     /// Build an `AnkiState` from the on-disk vocab cache, if one exists. Returns
@@ -175,6 +179,17 @@ impl AnkiState {
                 self.cards_read_as(reading).find(|v| normalize_japanese_text(&v.term) == normalized)
             {
                 return MatchResult::Known { card, evidence };
+            }
+        }
+        // UniDic can pick another reading of the card's word (明日 as あす for an あした card).
+        for (form, reading) in [(surface, surface_reading), (citation, reading)] {
+            if !form.chars().any(is_kanji_char) {
+                continue;
+            }
+            if let Some(card) = self.cards_spelled(form).find(|card| {
+                crate::dictionary::jmdict_lexicon::same_entry(form, reading, &card.reading)
+            }) {
+                return MatchResult::Known { card, evidence: MatchEvidence::SameEntry };
             }
         }
         if !matches!(
@@ -320,6 +335,11 @@ impl AnkiState {
     fn cards_read_as<'a>(&'a self, reading: &str) -> impl Iterator<Item = &'a Vocab> {
         let reading = normalize_japanese_text(reading);
         self.cards_by_reading.get(&reading).into_iter().flatten().map(|&i| &self.vocab[i])
+    }
+
+    fn cards_spelled<'a>(&'a self, term: &str) -> impl Iterator<Item = &'a Vocab> {
+        let term = normalize_japanese_text(term);
+        self.cards_by_term.get(&term).into_iter().flatten().map(|&i| &self.vocab[i])
     }
 
     fn classify_term(&self, term: &Term) -> MatchResult<'_> {
@@ -930,6 +950,16 @@ mod classification_tests {
         let (unknown, known) = wrong.filter_existing_terms(vec![input]);
         assert!(known.is_empty());
         assert!(unknown[0].possible_known_match.is_none());
+    }
+
+    #[test]
+    fn another_reading_of_the_same_entry_matches_the_card() {
+        let anki = state(
+            Arc::new(FrequencyManager::from_dictionaries(vec![])),
+            &[("明日", "あした"), ("表", "おもて")],
+        );
+        assert!(anki.term_stats(&term("明日", "あす")).0);
+        assert!(!anki.term_stats(&term("表", "ひょう")).0);
     }
 
     #[test]
