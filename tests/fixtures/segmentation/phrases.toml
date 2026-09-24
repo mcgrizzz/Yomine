@@ -40,6 +40,9 @@ frequencies = [
 	{ term = "映画鑑賞", reading = "ええがかんしょう", rank = 48649 },
 	{ term = "映画", reading = "えいが", rank = 900 },
 	{ term = "鑑賞", reading = "かんしょう", rank = 8600 },
+	{ term = "表沙汰", reading = "おもてざた", rank = 26427 },
+	{ term = "表", reading = "ひょう", rank = 1554 },
+	{ term = "沙汰", reading = "さた", rank = 8815 },
 ]
 
 [[case]]
@@ -128,3 +131,10 @@ terms = [{ surface = "気をつけて", lemma = "気をつける", reading = "�
 name = "pronounced-style dictionary reading still matches"
 text = "趣味は映画鑑賞です。"
 terms = [{ surface = "映画鑑賞", pos = "NounExpression" }]
+
+# UniDic reads 表 as ひょう here; the compound is only ever おもてざた.
+[[case]]
+name = "compound takes its only dictionary reading over the split reading"
+text = "表沙汰にはできない。"
+terms = [{ surface = "表沙汰", reading = "おもてざた", pos = "NounExpression" }]
+absent = ["表", "沙汰"]

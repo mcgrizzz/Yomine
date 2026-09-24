@@ -168,6 +168,23 @@ fn phrase_candidate(
             break;
         }
     }
+    // UniDic can read a component differently inside a compound (表 as ひょう, but
+    // 表沙汰 is おもてざた), so a spelling every dictionary reads one way takes that reading.
+    let kanji_nouns = subrange
+        .iter()
+        .all(|t| matches!(t.part_of_speech, POS::Noun | POS::CompoundNoun | POS::ProperNoun))
+        && phrase.surface_form.chars().all(is_kanji_char);
+    if frequency.is_none() && matches!(mode, PhraseMode::Production) && kanji_nouns {
+        let sole = manager.sole_reading(&phrase.surface_form).and_then(|reading| {
+            phrase_frequency(manager, &phrase.surface_form, &reading).map(|rank| (reading, rank))
+        });
+        if let Some((reading, rank)) = sole {
+            phrase.surface_reading = reading.clone();
+            phrase.lemma_reading = reading.clone();
+            phrase.full_segment_reading = reading;
+            frequency = Some(rank);
+        }
+    }
     if frequency.is_none() {
         if let Some(family) = &phrase.lexical_family {
             for spelling in &family.spellings {

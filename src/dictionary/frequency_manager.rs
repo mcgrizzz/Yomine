@@ -280,6 +280,14 @@ impl FrequencyManager {
         freqs
     }
 
+    /// The reading every dictionary gives `term`, when they give only one.
+    pub fn sole_reading(&self, term: &str) -> Option<String> {
+        let data = self.get_frequency_data_by_term(term);
+        let mut readings = data.iter().filter_map(|d| d.reading());
+        let first = readings.next()?;
+        readings.all(|r| r == first).then(|| first.to_string())
+    }
+
     //Used for deinflection sorting, not affected by weighting or toggling dictionaries.
     //Katakana spellings of hiragana-keyed entries fall back to the folded form
     //(ケガ人 → けが人).
