@@ -47,3 +47,9 @@ terms = [
 	{ surface = "ンン", pos = "Interjection" },
 	{ surface = "エリス", pos = "ProperNoun" },
 ]
+
+# Readings stay as written; only comparisons fold long vowels (おおきい, not おうきい).
+[[case]]
+name = "readings keep their written long vowels"
+text = "大きいお姉さん"
+terms = [{ surface = "大きい", reading = "おおきい" }]

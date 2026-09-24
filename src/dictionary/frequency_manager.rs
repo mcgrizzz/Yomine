@@ -26,7 +26,10 @@ use super::{
 };
 use crate::{
     core::{
-        utils::harmonic_frequency,
+        utils::{
+            harmonic_frequency,
+            NormalizeLongVowel,
+        },
         YomineError,
     },
     dictionary::TermMetaBankV3,
@@ -308,6 +311,8 @@ impl FrequencyManager {
     //Katakana spellings of hiragana-keyed entries fall back to the folded form
     //(ケガ人 → けが人).
     pub fn get_harmonic_frequency_for_pair(&self, word: &str, reading: &str) -> Option<u32> {
+        // Dictionaries store long-vowel-normalized readings; callers pass them as written.
+        let reading = &*reading.normalize_long_vowel();
         self.harmonic_for_exact_pair(word, reading).or_else(|| {
             let folded = fold_katakana(word);
             if folded != word {

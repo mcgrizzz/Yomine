@@ -175,10 +175,13 @@ fn keep_lexicalized_honorifics(words: &mut [Word], manager: &FrequencyManager) {
         {
             continue;
         }
-        let reading = manager.majority_reading(&word.surface_form).or_else(|| {
-            phrase_frequency(manager, &word.surface_form, &word.surface_hatsuon)
-                .map(|_| word.surface_hatsuon.clone())
-        });
+        let reading = manager
+            .majority_reading(&word.surface_form)
+            .map(|reading| as_written(&word.surface_hatsuon, reading))
+            .or_else(|| {
+                phrase_frequency(manager, &word.surface_form, &word.surface_hatsuon)
+                    .map(|_| word.surface_hatsuon.clone())
+            });
         if let Some(reading) = reading {
             word.main_word = None;
             word.lemma_form = word.surface_form.clone();
@@ -209,6 +212,16 @@ fn phrase_frequency(manager: &FrequencyManager, form: &str, reading: &str) -> Op
         &form.normalize_long_vowel(),
         &reading.normalize_long_vowel(),
     )
+}
+
+/// Dictionaries store long-vowel-normalized readings (おねいさん); keep the text's own
+/// spelling when it is the same reading.
+fn as_written(ours: &str, dictionary: String) -> String {
+    if ours.normalize_long_vowel() == dictionary.normalize_long_vowel() {
+        ours.to_string()
+    } else {
+        dictionary
+    }
 }
 
 /// Construct candidates independently of the caller's acceptance and suppression policy.
@@ -246,6 +259,7 @@ fn phrase_candidate(
         && phrase.surface_form.chars().all(is_kanji_char);
     if frequency.is_none() && matches!(mode, PhraseMode::Production) && kanji_nouns {
         let sole = manager.sole_reading(&phrase.surface_form).and_then(|reading| {
+            let reading = as_written(&phrase.full_segment_reading, reading);
             phrase_frequency(manager, &phrase.surface_form, &reading).map(|rank| (reading, rank))
         });
         if let Some((reading, rank)) = sole {
