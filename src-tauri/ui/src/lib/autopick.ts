@@ -22,10 +22,16 @@ export interface PickOptions {
 	normalize: (sentence: string) => string;
 }
 
+// A one-kana "word" is nearly always a misparse fragment (け in ぱんけぇき) or a
+// mislabeled particle, yet frequency lists rank that kana highly (で at 8).
+const SINGLE_KANA = /^[ぁ-ゖァ-ヺーｦ-ﾟ]$/;
+
 /** Best terms to mine from `terms`, at most one per sentence. */
 export function autoPick(terms: Term[], sentences: SentenceDto[], opts: PickOptions): QueueItem[] {
 	const ranked = terms
-		.filter((t) => harmonic(t) !== Infinity && !opts.isMined(t))
+		.filter(
+			(t) => harmonic(t) !== Infinity && !opts.isMined(t) && !SINGLE_KANA.test(t.lemma_form)
+		)
 		.map((term) => ({
 			term,
 			points: pickPoints(harmonic(term), term.part_of_speech, term.jlpt_level, opts.prefs),
