@@ -42,6 +42,9 @@ frequencies = [
 	{ term = "ついで", reading = "ついで", rank = 3929, kana = true },
 	{ term = "あなたに", reading = "あなたに", rank = 2000, kana = true },
 	{ term = "あなた", reading = "あなた", rank = 100, kana = true },
+	{ term = "そのとおり", reading = "そのとおり", rank = 12000, kana = true },
+	{ term = "その", reading = "その", rank = 500, kana = true },
+	{ term = "とおり", reading = "とおり", rank = 600, kana = true },
 	{ term = "気をつける", reading = "きをつける", rank = 900 },
 	{ term = "つける", reading = "つける", rank = 300 },
 	{ term = "映画鑑賞", reading = "ええがかんしょう", rank = 48649 },
@@ -158,3 +161,10 @@ name = "compound takes its only dictionary reading over the split reading"
 text = "表沙汰にはできない。"
 terms = [{ surface = "表沙汰", reading = "おもてざた", pos = "NounExpression" }]
 absent = ["表", "沙汰"]
+
+# Its common parts would fail the frequency gates, but JMdict lists the phrase.
+[[case]]
+name = "JMdict phrase passes the frequency gates"
+text = "そのとおりです。"
+terms = [{ surface = "そのとおり", pos = "Expression" }]
+absent = ["とおり"]

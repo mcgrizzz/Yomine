@@ -422,9 +422,14 @@ pub fn extract_words(
                     // 1-best parse is itself suspect — the corroborated phrase wins.
                     let has_unvalidated_component =
                         word_frequencies.iter().any(|(_, freq)| *freq == u32::MAX as f32);
+                    // A JMdict phrase is no junk n-gram, and it reads as one unit even
+                    // around a particle (しょうがない).
+                    let listed = jmdict_lexicon::is_phrase(&phrase.surface_form)
+                        || jmdict_lexicon::is_phrase(&phrase.lemma_form);
 
                     if !kanji_noun_compound
                         && !has_unvalidated_component
+                        && !listed
                         && frequency > phrase_freq_threshold
                         && max_ratio < override_ratio_threshold
                     {
@@ -435,6 +440,7 @@ pub fn extract_words(
                         if all_nouns { POS::NounExpression } else { POS::Expression };
 
                     if kanji_noun_compound
+                        || listed
                         || score <= score_threshold
                         || max_ratio >= ratio_threshold
                     {
@@ -445,9 +451,6 @@ pub fn extract_words(
                             phrase.is_kana,
                         );
                         phrase.frequencies = freq_map;
-                        // A JMdict phrase is read as one unit even around a particle (しょうがない).
-                        let listed = jmdict_lexicon::is_phrase(&phrase.surface_form)
-                            || jmdict_lexicon::is_phrase(&phrase.lemma_form);
                         sentence_terms.push(phrase);
 
                         if (all_content_words || listed)
