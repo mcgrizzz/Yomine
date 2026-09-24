@@ -294,6 +294,11 @@ pub fn lexeme_name(lexeme: &str) -> &str {
 }
 
 pub fn get_default_pos(token: &UnidicToken) -> POS {
+    // UniDic takes a subtitle's speaker dash (-) for an unknown noun.
+    if token.surface.chars().all(|c| c.is_ascii_punctuation() || matches!(c, '‐'..='―' | '－'))
+    {
+        return POS::Symbol;
+    }
     match token.pos1 {
         UnidicTag::Meishi => match token.pos2 {
             UnidicTag::Koyuumeishi => POS::ProperNoun,

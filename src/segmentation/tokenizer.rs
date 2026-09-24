@@ -122,8 +122,9 @@ fn analyze_sentence(worker: &mut Worker, text: &str, manager: &FrequencyManager)
     words
 }
 
-/// UniDic's first reading of a lone katakana exclamation can be a name (フン as the
-/// Huns), and an unknown one defaults to a noun (ンン). No word begins with ン or ッ.
+/// UniDic's first reading of a lone katakana exclamation can be a noun (フン as the
+/// Huns or as 糞), and an unknown one defaults to a noun (ンン). No word begins with
+/// ン or ッ.
 fn tag_katakana_interjections(worker: &mut Worker, words: &mut [Word]) {
     let bounded = |i: usize| words.get(i).is_none_or(|w| w.part_of_speech == POS::Symbol);
     let standalone: Vec<bool> =
@@ -137,10 +138,10 @@ fn tag_katakana_interjections(worker: &mut Worker, words: &mut [Word]) {
         }
         let unknown_exclamation =
             token.lexeme == token.surface && token.surface.starts_with(['ン', 'ッ']);
-        let exclaimed_name = standalone
-            && token.pos2 == super::unidic_tags::UnidicTag::Koyuumeishi
+        let exclaimed_noun = standalone
+            && token.pos1 == super::unidic_tags::UnidicTag::Meishi
             && has_interjection_reading(worker, &token.surface);
-        if unknown_exclamation || exclaimed_name {
+        if unknown_exclamation || exclaimed_noun {
             word.part_of_speech = POS::Interjection;
         }
     }

@@ -53,3 +53,9 @@ terms = [
 name = "readings keep their written long vowels"
 text = "大きいお姉さん"
 terms = [{ surface = "大きい", reading = "おおきい" }]
+
+# UniDic reads a speaker dash as an unknown noun, and フン after it as 糞.
+[[case]]
+name = "speaker dashes are symbols and a lone フン is an interjection"
+text = "-エヘヘ…-フン！"
+terms = [{ surface = "フン", pos = "Interjection" }, { surface = "-", pos = "Symbol" }]
