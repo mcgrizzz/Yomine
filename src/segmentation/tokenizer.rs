@@ -32,6 +32,7 @@ use crate::{
     },
     dictionary::{
         frequency_manager::FrequencyManager,
+        jmdict_lexicon,
         token_dictionary::{
             load_dictionary,
             DictType,
@@ -264,7 +265,17 @@ pub fn extract_words(
         for start in 0..base_len {
             for end in (start + 1..base_len).rev() {
                 let subrange = &sentence_terms[start..=end];
-                if !phrase_endpoint_ok(&subrange[0]) || !phrase_endpoint_ok(&subrange[end - start])
+                // Frequency lists carry particle n-grams (あなたに); JMdict lists only real
+                // phrases that begin or end in one (ついでに, にとって).
+                let listed_particle_phrase = || {
+                    subrange.iter().any(phrase_endpoint_ok)
+                        && jmdict_lexicon::is_phrase(
+                            &subrange.iter().map(|t| t.full_segment.as_str()).collect::<String>(),
+                        )
+                };
+                if (!phrase_endpoint_ok(&subrange[0])
+                    || !phrase_endpoint_ok(&subrange[end - start]))
+                    && !listed_particle_phrase()
                 {
                     continue;
                 }
@@ -349,9 +360,14 @@ pub fn extract_words(
                             phrase.is_kana,
                         );
                         phrase.frequencies = freq_map;
+                        // A JMdict phrase is read as one unit even around a particle (しょうがない).
+                        let listed = jmdict_lexicon::is_phrase(&phrase.surface_form)
+                            || jmdict_lexicon::is_phrase(&phrase.lemma_form);
                         sentence_terms.push(phrase);
 
-                        if all_content_words && !rule_citations[start..=end].iter().any(|v| *v) {
+                        if (all_content_words || listed)
+                            && !rule_citations[start..=end].iter().any(|v| *v)
+                        {
                             for flag in suppressed[start..=end].iter_mut() {
                                 *flag = true;
                             }

@@ -35,6 +35,13 @@ frequencies = [
 	{ term = "変わる", reading = "かわる", rank = 500 },
 	{ term = "気になる", reading = "きになる", rank = 3000 },
 	{ term = "気", reading = "き", rank = 200 },
+	{ term = "水を飲む", reading = "みずをのむ", rank = 5000 },
+	{ term = "水", reading = "みず", rank = 300 },
+	{ term = "飲む", reading = "のむ", rank = 400 },
+	{ term = "ついでに", reading = "ついでに", rank = 1821, kana = true },
+	{ term = "ついで", reading = "ついで", rank = 3929, kana = true },
+	{ term = "あなたに", reading = "あなたに", rank = 2000, kana = true },
+	{ term = "あなた", reading = "あなた", rank = 100, kana = true },
 	{ term = "気をつける", reading = "きをつける", rank = 900 },
 	{ term = "つける", reading = "つける", rank = 300 },
 	{ term = "映画鑑賞", reading = "ええがかんしょう", rank = 48649 },
@@ -101,16 +108,29 @@ text = "相変わらずひどいこと言うなぁ"
 terms = [{ surface = "相変わらず", lemma = "相変わらず", reading = "あいかわらず", pos = "Expression" }]
 absent = ["相"]
 
-# Interior particles mark a free combination, not a lexical compound: the
-# phrase is added but its component words still surface.
+# JMdict lists 気になる, so it reads as one unit despite the particle.
 [[case]]
-name = "particle-containing phrase keeps its components"
+name = "JMdict phrase hides its components across a particle"
 text = "彼のことが気になる。"
+terms = [{ surface = "気になる", pos = "Expression" }]
+absent = ["気", "なる"]
+
+# JMdict has no 水を飲む: a free combination keeps its component words.
+[[case]]
+name = "unlisted particle-containing phrase keeps its components"
+text = "水を飲む。"
 terms = [
-	{ surface = "気になる", pos = "Expression" },
-	{ surface = "気", lemma = "気" },
-	{ surface = "なる", lemma = "なる" },
+	{ surface = "水を飲む", pos = "Expression" },
+	{ surface = "水", lemma = "水" },
+	{ surface = "飲む", lemma = "飲む" },
 ]
+
+# Frequency lists keep particle n-grams; JMdict lists only real ones (ついでに).
+[[case]]
+name = "phrase ending in a particle needs a JMdict listing"
+text = "ついでにあなたに聞く。"
+terms = [{ surface = "ついでに", pos = "Expression" }]
+absent = ["ついで", "あなたに"]
 
 # UniDic mis-lexicalizes 負けじと as 負け+じと(副詞); じと validates in no
 # dictionary, which waives the frequency/ratio gates for the corroborated phrase.

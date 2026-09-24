@@ -15,6 +15,11 @@ fn lookup(key: String) -> Option<&'static [u8]> {
     bundled().lookup(key.as_bytes())
 }
 
+/// JMdict lists `form` as an expression, adverb, conjunction or particle (ついでに, に取って).
+pub(crate) fn is_phrase(form: &str) -> bool {
+    lookup(format!("p\t{}", form.normalize_long_vowel())).is_some()
+}
+
 /// One JMdict entry lists `spelling` under both readings (明日 as あした and あす).
 pub(crate) fn same_entry(spelling: &str, reading: &str, other: &str) -> bool {
     let entries = |reading: &str| {
@@ -29,6 +34,18 @@ pub(crate) fn same_entry(spelling: &str, reading: &str, other: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn phrases_are_jmdict_expressions_not_particle_ngrams() {
+        for form in ["ついでに", "にとって", "に取って", "について", "しょうがない", "ところが"]
+        {
+            assert!(is_phrase(form), "{form}");
+        }
+        for form in ["あなたに", "いたから", "したんだ", "子らしい", "にカット"]
+        {
+            assert!(!is_phrase(form), "{form}");
+        }
+    }
 
     #[test]
     fn readings_match_only_within_one_entry() {
