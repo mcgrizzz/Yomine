@@ -1,6 +1,9 @@
 //! Generated JMdict/Jitendex kana preferences. No startup deserialization or heap index.
 use super::frequency_manager::fold_katakana;
-use crate::segmentation::word::POS;
+use crate::{
+    core::utils::NormalizeLongVowel,
+    segmentation::word::POS,
+};
 
 const DATA: &[u8] = include_bytes!("../../assets/kana-preference.bin");
 
@@ -97,7 +100,7 @@ pub(crate) fn preference(reading: &str, pos: &POS) -> Option<Preference<'static>
         POS::Adverb => 16,
         _ => return None,
     };
-    let key = format!("{}\t{}", fold_katakana(reading), pos);
+    let key = format!("{}\t{}", fold_katakana(reading).normalize_long_vowel(), pos);
     Some(Preference { value: bundled().lookup(key.as_bytes())?, pos })
 }
 
@@ -133,6 +136,9 @@ mod tests {
             let selected = preference(reading, &pos).unwrap();
             assert!(selected.matches(spelling));
             assert!(!selected.matches(rival));
+        }
+        for reading in ["おおきい", "おうきい"] {
+            assert!(preference(reading, &POS::Adjective).unwrap().matches("大きい"), "{reading}");
         }
         assert!(preference("はし", &POS::Noun).is_none());
         assert!(preference("こと", &POS::Verb).is_none());

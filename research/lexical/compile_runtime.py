@@ -4,6 +4,7 @@ import argparse
 import collections
 import hashlib
 import json
+import re
 import sqlite3
 import struct
 from pathlib import Path
@@ -13,6 +14,16 @@ from source_policy import prepare_frequencies, source_manifest, policy_manifest
 # Stable format bits, deliberately independent of Rust enum discriminants.
 POS_BITS = {"n":1, "n-adv":1, "v1":2, "vs":2, "vs-i":2, "vs-s":2,
             "vk":2, "vz":2, "adj-i":4, "adj-ix":4, "adj-na":8, "adv":16, "adv-to":16}
+
+
+LONG_VOWEL = re.compile(r"([おこそとのほもよろごぞどぼぽ])お|([えけせてねへめれげぜでべぺ])え")
+
+
+def normalize_long_vowel(text):
+    """Mirrors NormalizeLongVowel in src/core/utils.rs, which the app applies to readings it looks up."""
+    if not text or not all(0x3041 <= ord(c) <= 0x3096 or c == "ー" for c in text):
+        return text
+    return LONG_VOWEL.sub(lambda m: m[1] + "う" if m[1] else m[2] + "い", text)
 
 
 def pos_mask(codes):
@@ -50,12 +61,16 @@ def compile_rows(db):
     readings = {r for r, in db.execute("SELECT DISTINCT reading FROM research_frequencies WHERE kana_marker=1 AND reading IS NOT NULL")}
     identities = collections.defaultdict(set)
     groups = collections.defaultdict(lambda: collections.defaultdict(dict))
+    sharing = collections.defaultdict(lambda: collections.defaultdict(set))
     for entry, reading, spelling, pos, ki, ri, no_kanji in db.execute("SELECT entry_id,reading,spelling,pos,spelling_info,reading_info,no_kanji FROM pairs"):
+        mask = pos_mask(json.loads(pos))
+        for bit in (1, 2, 4, 8, 16):
+            if mask & bit:
+                sharing[(normalize_long_vowel(reading), bit)][reading].add(entry)
         if reading not in readings:
             continue
         spelling = normalize(spelling)
         identities[(reading, spelling)].add(entry)
-        mask = pos_mask(json.loads(pos))
         usable = not no_kanji and not (set(json.loads(ki)) & {"sK", "rK", "oK"} or set(json.loads(ri)) & {"sk", "rk", "ok", "gikun"})
         for bit in (1, 2, 4, 8, 16):
             if mask & bit:
@@ -106,8 +121,18 @@ def compile_rows(db):
             raw = spelling.encode()
             value.extend(struct.pack("<IH", mask, len(raw)))
             value.extend(raw)
-        result.append(((reading + "\t" + str(bit)).encode(), bytes(value)))
-    return sorted(result)
+        result.append((reading, bit, bytes(value)))
+    # こおり and こうり share a runtime key, so neither word's preference can answer for it;
+    # variant readings of the same entries (ほうっておく, ほおっておく) can.
+    def unambiguous(reading, bit):
+        entries = sharing[(normalize_long_vowel(reading), bit)].values()
+        return len({frozenset(e) for e in entries}) == 1
+
+    values = collections.defaultdict(set)
+    for reading, bit, value in result:
+        if unambiguous(reading, bit):
+            values[(normalize_long_vowel(reading) + "\t" + str(bit)).encode()].add(value)
+    return sorted((key, next(iter(v))) for key, v in values.items() if len(v) == 1)
 
 
 def encode(rows):
