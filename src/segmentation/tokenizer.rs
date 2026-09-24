@@ -261,7 +261,9 @@ pub fn extract_words(
         ));
 
         let base_len = sentence_terms.len();
-        let mut suppressed = vec![false; base_len];
+        // Whitespace keeps its display segment but is never a term.
+        let mut suppressed: Vec<bool> =
+            sentence_terms.iter().map(|t| t.surface_form.trim().is_empty()).collect();
         for start in 0..base_len {
             for end in (start + 1..base_len).rev() {
                 let subrange = &sentence_terms[start..=end];
