@@ -51,6 +51,8 @@ frequencies = [
 	{ term = "映画", reading = "えいが", rank = 900 },
 	{ term = "鑑賞", reading = "かんしょう", rank = 8600 },
 	{ term = "表沙汰", reading = "おもてざた", rank = 26427 },
+	{ term = "気にかける", reading = "きにかける", rank = 6082 },
+	{ term = "にかけて", reading = "にかけて", rank = 3776, kana = true },
 	{ term = "表", reading = "ひょう", rank = 1554 },
 	{ term = "沙汰", reading = "さた", rank = 8815 },
 ]
@@ -168,3 +170,10 @@ name = "JMdict phrase passes the frequency gates"
 text = "そのとおりです。"
 terms = [{ surface = "そのとおり", pos = "Expression" }]
 absent = ["とおり"]
+
+# にかけて is a JMdict phrase too, but inside 気にかける it is no unit of its own.
+[[case]]
+name = "a phrase that hides its words hides phrases inside it"
+text = "いつも気にかけてくださる。"
+terms = [{ surface = "気にかけて", lemma = "気にかける", pos = "Expression" }]
+absent = ["にかけて"]

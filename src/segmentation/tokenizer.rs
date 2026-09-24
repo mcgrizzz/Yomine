@@ -347,7 +347,12 @@ pub fn extract_words(
         // Whitespace keeps its display segment but is never a term.
         let mut suppressed: Vec<bool> =
             sentence_terms.iter().map(|t| t.surface_form.trim().is_empty()).collect();
+        // A phrase that hides its words also hides phrases inside it (にかけて in 気にかける).
+        let mut hidden_through = None;
         for start in 0..base_len {
+            if hidden_through.is_some_and(|last| start <= last) {
+                continue;
+            }
             for end in (start + 1..base_len).rev() {
                 let subrange = &sentence_terms[start..=end];
                 // Frequency lists carry particle n-grams (あなたに); JMdict lists only real
@@ -459,6 +464,7 @@ pub fn extract_words(
                             for flag in suppressed[start..=end].iter_mut() {
                                 *flag = true;
                             }
+                            hidden_through = Some(end);
                         }
 
                         // Largest phrase at this start position is accepted; move to next start.
