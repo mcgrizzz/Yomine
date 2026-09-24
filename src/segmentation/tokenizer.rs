@@ -10,6 +10,7 @@ use super::{
     nbest::rescue_words,
     rule_matcher::parse_into_words,
     token_models::UnidicToken,
+    unidic_tags::UnidicTag,
     word::{
         get_default_pos,
         Citation,
@@ -31,7 +32,11 @@ use crate::{
         YomineError,
     },
     dictionary::{
-        frequency_manager::FrequencyManager,
+        frequency_manager::{
+            fold_katakana,
+            FrequencyManager,
+        },
+        jmdict_lexicon,
         token_dictionary::{
             load_dictionary,
             DictType,
@@ -114,8 +119,158 @@ fn analyze_sentence(worker: &mut Worker, text: &str, manager: &FrequencyManager)
         .map(|token| UnidicToken::from_parts(token.surface(), token.feature(), token.range_byte()))
         .collect();
     let words = parse_into_words(tokens).unwrap_or_default();
-    let words = rescue_words(worker, text, words, manager);
-    split_unvalidated_compounds(words, manager)
+    let words = reparse_katakana_speech(worker, words, manager);
+    let mut words =
+        split_unvalidated_compounds(rescue_words(worker, text, words, manager), manager);
+    keep_lexicalized_honorifics(&mut words, manager);
+    tag_katakana_interjections(worker, &mut words);
+    words
+}
+
+/// Some characters speak in katakana (ウルサクナイモンネ), which UniDic can't read and
+/// leaves as unknown tokens. Read as hiragana, speech parses into dictionary words ending
+/// in a sentence-final particle; names and loanwords (シルフィエット, アウトドアカレー)
+/// are known tokens or don't end that way, so they are never reread.
+fn reparse_katakana_speech(
+    worker: &mut Worker,
+    words: Vec<Word>,
+    manager: &FrequencyManager,
+) -> Vec<Word> {
+    let mut out = Vec::with_capacity(words.len());
+    for word in words {
+        match katakana_as_hiragana(worker, &word, manager) {
+            Some(reread) => out.extend(reread),
+            None => out.push(word),
+        }
+    }
+    out
+}
+
+fn katakana_as_hiragana(
+    worker: &mut Worker,
+    word: &Word,
+    manager: &FrequencyManager,
+) -> Option<Vec<Word>> {
+    let surface = word.surface_form.as_str();
+    // An unknown token's lexeme falls back to its own surface.
+    let all_unknown = word.tokens.iter().all(|t| t.lexeme == t.surface);
+    if !surface.is_katakana()
+        || surface.chars().count() < 3
+        || !all_unknown
+        || !manager.get_frequency_data_by_term(surface).is_empty()
+    {
+        return None;
+    }
+    // Folding keeps every character three bytes wide, so offsets carry over.
+    worker.reset_sentence(&fold_katakana(surface));
+    worker.tokenize();
+    let start = word.byte_span().0;
+    let mut tokens = Vec::new();
+    for token in worker.token_iter() {
+        let fields: Vec<&str> = token.feature().split(',').collect();
+        let listed = fields.get(7).is_some_and(|lemma| *lemma != "*");
+        if !listed || fields[0] == "補助記号" || fields.get(1) == Some(&"固有名詞") {
+            return None;
+        }
+        let range = token.range_byte();
+        tokens.push(UnidicToken::from_parts(
+            token.surface(),
+            token.feature(),
+            start + range.start..start + range.end,
+        ));
+    }
+    // Speech has a predicate and ends like speech (ナイモンネ, クルワヨ); a name that
+    // happens to end in な or ね (ハンナ) has no predicate.
+    let ends_as_speech = tokens.last().is_some_and(|t| t.pos2 == UnidicTag::Shuujoshi);
+    let has_predicate = tokens
+        .iter()
+        .any(|t| matches!(t.pos1, UnidicTag::Doushi | UnidicTag::Keiyoushi | UnidicTag::Jodoushi));
+    if tokens.len() < 2 || !ends_as_speech || !has_predicate {
+        return None;
+    }
+    // Parsed with hiragana surfaces so the katakana binding rule can't re-merge them.
+    let mut reread = parse_into_words(tokens).ok()?;
+    let original = |t: &UnidicToken| surface[t.start_byte - start..t.end_byte - start].to_string();
+    for w in &mut reread {
+        for t in &mut w.tokens {
+            t.surface = original(t);
+        }
+        if let Some(main) = &mut w.main_word {
+            main.surface = original(main);
+        }
+        w.surface_form = w.tokens.iter().map(|t| t.surface.as_str()).collect();
+    }
+    Some(reread)
+}
+
+/// UniDic's first reading of a lone katakana exclamation can be a noun (フン as the
+/// Huns or as 糞), and an unknown one defaults to a noun (ンン). No word begins with
+/// ン or ッ.
+fn tag_katakana_interjections(worker: &mut Worker, words: &mut [Word]) {
+    let bounded = |i: usize| words.get(i).is_none_or(|w| w.part_of_speech == POS::Symbol);
+    let standalone: Vec<bool> =
+        (0..words.len()).map(|i| (i == 0 || bounded(i - 1)) && bounded(i + 1)).collect();
+    for (word, standalone) in words.iter_mut().zip(standalone) {
+        let [token] = word.tokens.as_slice() else {
+            continue;
+        };
+        if !token.surface.as_str().is_katakana() {
+            continue;
+        }
+        let unknown_exclamation =
+            token.lexeme == token.surface && token.surface.starts_with(['ン', 'ッ']);
+        let exclaimed_noun = standalone
+            && token.pos1 == super::unidic_tags::UnidicTag::Meishi
+            && has_interjection_reading(worker, &token.surface);
+        if unknown_exclamation || exclaimed_noun {
+            word.part_of_speech = POS::Interjection;
+        }
+    }
+}
+
+/// A dictionary interjection entry for this spelling. Unknown-word guesses don't count:
+/// UniDic offers 感動詞 for any unknown katakana (エリス), with no lemma.
+fn has_interjection_reading(worker: &mut Worker, surface: &str) -> bool {
+    worker.reset_sentence(surface);
+    worker.tokenize_nbest(5);
+    (0..worker.num_nbest_paths()).any(|path| {
+        worker.nbest_token_iter(path).is_some_and(|mut tokens| {
+            let (Some(token), None) = (tokens.next(), tokens.next()) else {
+                return false;
+            };
+            let fields: Vec<&str> = token.feature().split(',').collect();
+            fields.first() == Some(&"感動詞") && fields.get(7).is_some_and(|lemma| *lemma != "*")
+        })
+    })
+}
+
+/// The honorific rule mines the noun after お/ご (嬢 in お嬢様). A prefixed word the
+/// dictionaries list is a word of its own, so it stays whole, read the way they
+/// mostly read it: UniDic reads 兄 in お兄さん as あに, and BCCWJ inherits that.
+fn keep_lexicalized_honorifics(words: &mut [Word], manager: &FrequencyManager) {
+    for word in words {
+        let (Some(prefix), Some(_)) = (word.tokens.first(), word.main_word.as_ref()) else {
+            continue;
+        };
+        if prefix.pos1 != super::unidic_tags::UnidicTag::Settouji
+            || !matches!(prefix.surface.as_str(), "お" | "ご" | "御")
+        {
+            continue;
+        }
+        let reading = manager
+            .majority_reading(&word.surface_form)
+            .map(|reading| as_written(&word.surface_hatsuon, reading))
+            .or_else(|| {
+                phrase_frequency(manager, &word.surface_form, &word.surface_hatsuon)
+                    .map(|_| word.surface_hatsuon.clone())
+            });
+        if let Some(reading) = reading {
+            word.main_word = None;
+            word.lemma_form = word.surface_form.clone();
+            word.surface_hatsuon = reading.clone();
+            word.lemma_hatsuon = reading;
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -139,6 +294,16 @@ fn phrase_frequency(manager: &FrequencyManager, form: &str, reading: &str) -> Op
         &form.normalize_long_vowel(),
         &reading.normalize_long_vowel(),
     )
+}
+
+/// Dictionaries store long-vowel-normalized readings (おねいさん); keep the text's own
+/// spelling when it is the same reading.
+fn as_written(ours: &str, dictionary: String) -> String {
+    if ours.normalize_long_vowel() == dictionary.normalize_long_vowel() {
+        ours.to_string()
+    } else {
+        dictionary
+    }
 }
 
 /// Construct candidates independently of the caller's acceptance and suppression policy.
@@ -166,6 +331,24 @@ fn phrase_candidate(
             phrase.full_segment_reading = reading;
             frequency = Some(rank);
             break;
+        }
+    }
+    // UniDic can read a component differently inside a compound (表 as ひょう, but
+    // 表沙汰 is おもてざた), so a spelling every dictionary reads one way takes that reading.
+    let kanji_nouns = subrange
+        .iter()
+        .all(|t| matches!(t.part_of_speech, POS::Noun | POS::CompoundNoun | POS::ProperNoun))
+        && phrase.surface_form.chars().all(is_kanji_char);
+    if frequency.is_none() && matches!(mode, PhraseMode::Production) && kanji_nouns {
+        let sole = manager.sole_reading(&phrase.surface_form).and_then(|reading| {
+            let reading = as_written(&phrase.full_segment_reading, reading);
+            phrase_frequency(manager, &phrase.surface_form, &reading).map(|rank| (reading, rank))
+        });
+        if let Some((reading, rank)) = sole {
+            phrase.surface_reading = reading.clone();
+            phrase.lemma_reading = reading.clone();
+            phrase.full_segment_reading = reading;
+            frequency = Some(rank);
         }
     }
     if frequency.is_none() {
@@ -243,11 +426,28 @@ pub fn extract_words(
         ));
 
         let base_len = sentence_terms.len();
-        let mut suppressed = vec![false; base_len];
+        // Whitespace keeps its display segment but is never a term.
+        let mut suppressed: Vec<bool> =
+            sentence_terms.iter().map(|t| t.surface_form.trim().is_empty()).collect();
+        // A phrase that hides its words also hides phrases inside it (にかけて in 気にかける).
+        let mut hidden_through = None;
         for start in 0..base_len {
+            if hidden_through.is_some_and(|last| start <= last) {
+                continue;
+            }
             for end in (start + 1..base_len).rev() {
                 let subrange = &sentence_terms[start..=end];
-                if !phrase_endpoint_ok(&subrange[0]) || !phrase_endpoint_ok(&subrange[end - start])
+                // Frequency lists carry particle n-grams (あなたに); JMdict lists only real
+                // phrases that begin or end in one (ついでに, にとって).
+                let listed_particle_phrase = || {
+                    subrange.iter().any(phrase_endpoint_ok)
+                        && jmdict_lexicon::is_phrase(
+                            &subrange.iter().map(|t| t.full_segment.as_str()).collect::<String>(),
+                        )
+                };
+                if (!phrase_endpoint_ok(&subrange[0])
+                    || !phrase_endpoint_ok(&subrange[end - start]))
+                    && !listed_particle_phrase()
                 {
                     continue;
                 }
@@ -309,9 +509,14 @@ pub fn extract_words(
                     // 1-best parse is itself suspect — the corroborated phrase wins.
                     let has_unvalidated_component =
                         word_frequencies.iter().any(|(_, freq)| *freq == u32::MAX as f32);
+                    // A JMdict phrase is no junk n-gram, and it reads as one unit even
+                    // around a particle (しょうがない).
+                    let listed = jmdict_lexicon::is_phrase(&phrase.surface_form)
+                        || jmdict_lexicon::is_phrase(&phrase.lemma_form);
 
                     if !kanji_noun_compound
                         && !has_unvalidated_component
+                        && !listed
                         && frequency > phrase_freq_threshold
                         && max_ratio < override_ratio_threshold
                     {
@@ -322,6 +527,7 @@ pub fn extract_words(
                         if all_nouns { POS::NounExpression } else { POS::Expression };
 
                     if kanji_noun_compound
+                        || listed
                         || score <= score_threshold
                         || max_ratio >= ratio_threshold
                     {
@@ -334,10 +540,13 @@ pub fn extract_words(
                         phrase.frequencies = freq_map;
                         sentence_terms.push(phrase);
 
-                        if all_content_words && !rule_citations[start..=end].iter().any(|v| *v) {
+                        if (all_content_words || listed)
+                            && !rule_citations[start..=end].iter().any(|v| *v)
+                        {
                             for flag in suppressed[start..=end].iter_mut() {
                                 *flag = true;
                             }
+                            hidden_through = Some(end);
                         }
 
                         // Largest phrase at this start position is accepted; move to next start.

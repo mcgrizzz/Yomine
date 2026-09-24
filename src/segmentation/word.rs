@@ -11,7 +11,10 @@ use super::{
     token_models::UnidicToken,
     unidic_tags::UnidicTag,
 };
-use crate::core::Term;
+use crate::core::{
+    utils::is_kanji_char,
+    Term,
+};
 
 #[derive(PartialEq, Clone, Copy, Debug, Hash, Eq, Serialize, Deserialize)]
 pub enum POS {
@@ -226,6 +229,7 @@ impl From<Word> for Term {
             Term {
                 possible_known_match: None,
                 lexical_family: None,
+                lexeme: written_lexeme(&main_word),
                 id: 0,
                 lemma_form: main_word.lemma_form,
                 lemma_reading: main_word.lemma_hatsuon,
@@ -242,9 +246,16 @@ impl From<Word> for Term {
             }
         } else {
             let is_kana = word.surface_form.as_str().is_kana();
+            // Only a citation taken from the head token identifies that token's lexeme.
+            let lexeme = word
+                .tokens
+                .first()
+                .filter(|head| head.lemma_form == word.lemma_form)
+                .and_then(written_lexeme);
             Term {
                 possible_known_match: None,
                 lexical_family: None,
+                lexeme,
                 id: 0,
                 lemma_form: word.lemma_form,
                 lemma_reading: word.lemma_hatsuon,
@@ -263,7 +274,31 @@ impl From<Word> for Term {
     }
 }
 
+/// Hiragana lexemes name no spelling to compare a card with, and a lone kana
+/// token is usually a fragment of a misparse (a laugh's ハ read as 歯). An
+/// unknown katakana word carries its own surface as lexeme (トウチャク).
+fn written_lexeme(token: &UnidicToken) -> Option<String> {
+    let surface = token.surface.as_str();
+    if (surface.is_kana() && surface.chars().count() < 2)
+        || (surface.is_katakana() && token.lexeme == surface)
+    {
+        return None;
+    }
+    let name = lexeme_name(&token.lexeme);
+    (name.chars().any(is_kanji_char) || name.is_katakana()).then(|| token.lexeme.clone())
+}
+
+/// UniDic tells homographic lexemes apart with a suffix (クラス-class, 私-代名詞).
+pub fn lexeme_name(lexeme: &str) -> &str {
+    lexeme.split('-').next().unwrap_or(lexeme)
+}
+
 pub fn get_default_pos(token: &UnidicToken) -> POS {
+    // UniDic takes a subtitle's speaker dash (-) for an unknown noun.
+    if token.surface.chars().all(|c| c.is_ascii_punctuation() || matches!(c, '‐'..='―' | '－'))
+    {
+        return POS::Symbol;
+    }
     match token.pos1 {
         UnidicTag::Meishi => match token.pos2 {
             UnidicTag::Koyuumeishi => POS::ProperNoun,

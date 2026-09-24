@@ -35,6 +35,26 @@ frequencies = [
 	{ term = "変わる", reading = "かわる", rank = 500 },
 	{ term = "気になる", reading = "きになる", rank = 3000 },
 	{ term = "気", reading = "き", rank = 200 },
+	{ term = "水を飲む", reading = "みずをのむ", rank = 5000 },
+	{ term = "水", reading = "みず", rank = 300 },
+	{ term = "飲む", reading = "のむ", rank = 400 },
+	{ term = "ついでに", reading = "ついでに", rank = 1821, kana = true },
+	{ term = "ついで", reading = "ついで", rank = 3929, kana = true },
+	{ term = "あなたに", reading = "あなたに", rank = 2000, kana = true },
+	{ term = "あなた", reading = "あなた", rank = 100, kana = true },
+	{ term = "そのとおり", reading = "そのとおり", rank = 12000, kana = true },
+	{ term = "その", reading = "その", rank = 500, kana = true },
+	{ term = "とおり", reading = "とおり", rank = 600, kana = true },
+	{ term = "気をつける", reading = "きをつける", rank = 900 },
+	{ term = "つける", reading = "つける", rank = 300 },
+	{ term = "映画鑑賞", reading = "ええがかんしょう", rank = 48649 },
+	{ term = "映画", reading = "えいが", rank = 900 },
+	{ term = "鑑賞", reading = "かんしょう", rank = 8600 },
+	{ term = "表沙汰", reading = "おもてざた", rank = 26427 },
+	{ term = "気にかける", reading = "きにかける", rank = 6082 },
+	{ term = "にかけて", reading = "にかけて", rank = 3776, kana = true },
+	{ term = "表", reading = "ひょう", rank = 1554 },
+	{ term = "沙汰", reading = "さた", rank = 8815 },
 ]
 
 [[case]]
@@ -93,16 +113,29 @@ text = "相変わらずひどいこと言うなぁ"
 terms = [{ surface = "相変わらず", lemma = "相変わらず", reading = "あいかわらず", pos = "Expression" }]
 absent = ["相"]
 
-# Interior particles mark a free combination, not a lexical compound: the
-# phrase is added but its component words still surface.
+# JMdict lists 気になる, so it reads as one unit despite the particle.
 [[case]]
-name = "particle-containing phrase keeps its components"
+name = "JMdict phrase hides its components across a particle"
 text = "彼のことが気になる。"
+terms = [{ surface = "気になる", pos = "Expression" }]
+absent = ["気", "なる"]
+
+# JMdict has no 水を飲む: a free combination keeps its component words.
+[[case]]
+name = "unlisted particle-containing phrase keeps its components"
+text = "水を飲む。"
 terms = [
-	{ surface = "気になる", pos = "Expression" },
-	{ surface = "気", lemma = "気" },
-	{ surface = "なる", lemma = "なる" },
+	{ surface = "水を飲む", pos = "Expression" },
+	{ surface = "水", lemma = "水" },
+	{ surface = "飲む", lemma = "飲む" },
 ]
+
+# Frequency lists keep particle n-grams; JMdict lists only real ones (ついでに).
+[[case]]
+name = "phrase ending in a particle needs a JMdict listing"
+text = "ついでにあなたに聞く。"
+terms = [{ surface = "ついでに", pos = "Expression" }]
+absent = ["ついで", "あなたに"]
 
 # UniDic mis-lexicalizes 負けじと as 負け+じと(副詞); じと validates in no
 # dictionary, which waives the frequency/ratio gates for the corroborated phrase.
@@ -111,3 +144,36 @@ name = "負けじと promoted over the mis-tokenized 負け+じと"
 text = "私は客の出す音に圧倒されながらも、負けじと、「いらっしゃいませ」"
 terms = [{ surface = "負けじと", lemma = "負けじと", reading = "まけじと", pos = "Expression" }]
 absent = ["負け", "じと"]
+
+# Dictionaries spell an interior を as を; read as pronounced (お) it never matches.
+[[case]]
+name = "phrase with an interior を matches its dictionary reading"
+text = "気をつけて。"
+terms = [{ surface = "気をつけて", lemma = "気をつける", reading = "きをつける", pos = "Expression" }]
+
+# BCCWJ writes readings as pronounced (映画鑑賞 as ええがかんしょう).
+[[case]]
+name = "pronounced-style dictionary reading still matches"
+text = "趣味は映画鑑賞です。"
+terms = [{ surface = "映画鑑賞", pos = "NounExpression" }]
+
+# UniDic reads 表 as ひょう here; the compound is only ever おもてざた.
+[[case]]
+name = "compound takes its only dictionary reading over the split reading"
+text = "表沙汰にはできない。"
+terms = [{ surface = "表沙汰", reading = "おもてざた", pos = "NounExpression" }]
+absent = ["表", "沙汰"]
+
+# Its common parts would fail the frequency gates, but JMdict lists the phrase.
+[[case]]
+name = "JMdict phrase passes the frequency gates"
+text = "そのとおりです。"
+terms = [{ surface = "そのとおり", pos = "Expression" }]
+absent = ["とおり"]
+
+# にかけて is a JMdict phrase too, but inside 気にかける it is no unit of its own.
+[[case]]
+name = "a phrase that hides its words hides phrases inside it"
+text = "いつも気にかけてくださる。"
+terms = [{ surface = "気にかけて", lemma = "気にかける", pos = "Expression" }]
+absent = ["にかけて"]

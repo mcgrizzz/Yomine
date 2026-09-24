@@ -10,14 +10,12 @@
 	const DEFAULTS: AutoMine = {
 		limit: 10,
 		pos_points: {
-			SuruVerb: 5,
-			AdjectivalNoun: 5,
-			Noun: 3,
-			Verb: 2,
-			Adjective: 2,
+			Noun: 30,
+			SuruVerb: 30,
+			AdjectivalNoun: 25,
+			Adjective: 20,
+			Verb: 20,
 			Adverb: 0,
-			Expression: -10,
-			NounExpression: -10,
 			ProperNoun: -10,
 			Pronoun: -10
 		},

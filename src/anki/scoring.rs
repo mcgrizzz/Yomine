@@ -6,6 +6,8 @@ pub enum MatchEvidence {
     Citation,
     LexicalFamily,
     KanaPreference,
+    Lexeme,
+    SameEntry,
 }
 pub enum MatchResult<'a> {
     Known { card: &'a Vocab, evidence: MatchEvidence },

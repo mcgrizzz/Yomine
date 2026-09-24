@@ -6,9 +6,9 @@ name = "plain sentence: splits, readings, POS"
 text = "昨日は寿司を食べた。"
 segments = [
 	{ surface = "昨日", reading = "きのう", pos = "Noun" },
-	{ surface = "は", reading = "わ", pos = "Postposition" },
+	{ surface = "は", reading = "は", pos = "Postposition" },
 	{ surface = "寿司", reading = "すし", pos = "Noun" },
-	{ surface = "を", reading = "お", pos = "Postposition" },
+	{ surface = "を", reading = "を", pos = "Postposition" },
 	{ surface = "食べた", reading = "たべた", pos = "Verb" },
 	{ surface = "。", pos = "Symbol" },
 ]
@@ -36,3 +36,26 @@ terms = [
 	{ surface = "おかしな", lemma = "おかしな", pos = "AdjectivalNoun" },
 	{ surface = "こんな", lemma = "こんな", pos = "Determiner" },
 ]
+
+# UniDic reads a lone フン as the Huns, and offers 感動詞 for any unknown katakana
+# word, so only a dictionary interjection entry retags a standalone name.
+[[case]]
+name = "lone katakana exclamations are interjections, names stay names"
+text = "フン！ンン…エリス！"
+terms = [
+	{ surface = "フン", pos = "Interjection" },
+	{ surface = "ンン", pos = "Interjection" },
+	{ surface = "エリス", pos = "ProperNoun" },
+]
+
+# Readings stay as written; only comparisons fold long vowels (おおきい, not おうきい).
+[[case]]
+name = "readings keep their written long vowels"
+text = "大きいお姉さん"
+terms = [{ surface = "大きい", reading = "おおきい" }]
+
+# UniDic reads a speaker dash as an unknown noun, and フン after it as 糞.
+[[case]]
+name = "speaker dashes are symbols and a lone フン is an interjection"
+text = "-エヘヘ…-フン！"
+terms = [{ surface = "フン", pos = "Interjection" }, { surface = "-", pos = "Symbol" }]

@@ -93,7 +93,18 @@ pub fn rescue_words(
 }
 
 fn is_suspicious(words: &[Word], idx: usize, frequency_manager: &FrequencyManager) -> bool {
-    needs_rescue(&words[idx], frequency_manager) || follows_ta_as_conditional(words, idx)
+    needs_rescue(&words[idx], frequency_manager)
+        || follows_ta_as_conditional(words, idx)
+        || precedes_stranded_passive(words, idx)
+}
+
+/// れる/られる attach only to a verb, so a non-verb before one is a wrong boundary
+/// (や read as 嫌 in やられる, which UniDic favors at a clause start).
+fn precedes_stranded_passive(words: &[Word], idx: usize) -> bool {
+    words[idx].tokens.last().is_some_and(|t| t.pos1 != UnidicTag::Doushi)
+        && words.get(idx + 1).is_some_and(|next| {
+            next.tokens.first().is_some_and(|t| t.conjugation_type == UnidicTag::JodoushiReru)
+        })
 }
 
 /// 助動詞タ directly followed by a bare verb in 仮定形 (つけた|けれ|ば) is

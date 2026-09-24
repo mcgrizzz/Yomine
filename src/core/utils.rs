@@ -22,7 +22,7 @@ impl NormalizeLongVowel for str {
             // Lazily initialize the regex using OnceCell
             let cell = OnceCell::new();
             let re: &Regex = cell.get_or_init(|| {
-                Regex::new(r"([おこそとのほもよろごぞどぼぽ])お|([けせてねへめれげぜでべぺ])え")
+                Regex::new(r"([おこそとのほもよろごぞどぼぽ])お|([えけせてねへめれげぜでべぺ])え")
                     .unwrap()
             });
 
@@ -89,12 +89,13 @@ pub fn normalize_japanese_text(text: &str) -> String {
     text.to_hiragana().normalize_long_vowel().to_string()
 }
 
-/// Normalize reading based on the surface form
+/// The reading in the surface's script, spelled as written (おねえさん, not おねいさん);
+/// comparisons normalize long vowels themselves.
 pub fn normalize_reading(surface: &str, reading: &str) -> String {
     if surface.is_katakana() {
         reading.to_katakana()
     } else {
-        reading.to_hiragana().normalize_long_vowel().into_owned()
+        reading.to_hiragana()
     }
 }
 

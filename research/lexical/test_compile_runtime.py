@@ -15,11 +15,11 @@ class RuntimeTests(unittest.TestCase):
             CREATE TABLE frequencies(dictionary,term,reading,rank,kana_marker);
         ''')
 
-    def pair(self, entry, spelling, pos='["n"]', supported=True, info="[]", no_kanji=0):
+    def pair(self, entry, spelling, pos='["n"]', supported=True, info="[]", no_kanji=0, reading="こと"):
         self.db.execute("INSERT INTO pairs VALUES(?,?,?,?,?,?,?,?,?)",
-                        (entry, "こと", spelling, 1, pos, info, "[]", no_kanji, 0))
+                        (entry, reading, spelling, 1, pos, info, "[]", no_kanji, 0))
         if supported:
-            self.db.execute("INSERT INTO jitendex VALUES(?,?,?,?)", (entry, "こと", spelling, "[]"))
+            self.db.execute("INSERT INTO jitendex VALUES(?,?,?,?)", (entry, reading, spelling, "[]"))
 
     def rank(self, spelling, rank, marker=False, source="A", reading="こと"):
         self.db.execute("INSERT INTO frequencies VALUES(?,?,?,?,?)", (source, spelling, reading, rank, marker))
@@ -122,6 +122,31 @@ class RuntimeTests(unittest.TestCase):
         prepare_frequencies(self.db)
         self.assertEqual(self.db.execute("SELECT dictionary FROM research_frequencies").fetchall(), [("Jiten",)])
         self.assertEqual(source_manifest(self.db)["frequency_sources"], [{"dictionary": "Jiten"}])
+
+    def long_vowel_preference(self):
+        self.pair(1, "大家", reading="おおや")
+        self.pair(2, "大矢", reading="おおや")
+        self.rank("大家", 203, reading="おおや")
+        self.rank("大家", 860, True, reading="おおや")
+        self.rank("大矢", 20000, reading="おおや")
+
+    def test_keys_use_the_apps_long_vowel_normalization(self):
+        self.long_vowel_preference()
+        self.assertEqual([key for key, _ in compile_rows(self.db)], ["おうや\t1".encode()])
+
+    def test_readings_that_normalize_alike_share_no_key(self):
+        self.long_vowel_preference()
+        self.pair(3, "親家", reading="おうや", supported=False)
+        self.assertEqual(compile_rows(self.db), [])
+
+    def test_variant_readings_of_one_entry_emit_one_key(self):
+        for reading in ["おおや", "おうや"]:
+            self.pair(1, "大家", reading=reading)
+            self.pair(2, "大矢", reading=reading)
+            self.rank("大家", 203, reading=reading)
+            self.rank("大家", 860, True, reading=reading)
+            self.rank("大矢", 20000, reading=reading)
+        self.assertEqual([key for key, _ in compile_rows(self.db)], ["おうや\t1".encode()])
 
     def test_output_is_deterministic(self):
         self.preferred()

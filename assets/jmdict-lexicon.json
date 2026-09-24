@@ -1,0 +1,20 @@
+{
+  "format": "LEXIDX01",
+  "records": 70126,
+  "bytes": 2724628,
+  "sha256": "ebf08a9532cc96bd9141653e3dd7138f6a9e5404bd78be7e7a58608fa1438ce8",
+  "generator_sha256": "101e4ebd3f6a77c88261491e40ba43a19038218bc7fb5f13ebc7c4f96a86b68a",
+  "jmdict": {
+    "url": "https://www.edrdg.org/pub/Nihongo/JMdict_e.gz",
+    "sha256": "19990edcbac569575e9a555ce1d2e900c95c81bdb7096e3cc44c1b3970d7b6b5",
+    "created": "2026-09-05"
+  },
+  "phrase_pos": [
+    "adv",
+    "conj",
+    "exp",
+    "prt"
+  ],
+  "license": "CC-BY-SA-4.0",
+  "attribution": "JMdict: EDRDG / James William Breen; Jitendex: Stephen Kraus and contributors"
+}

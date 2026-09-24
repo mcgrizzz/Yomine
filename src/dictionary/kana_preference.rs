@@ -1,20 +1,24 @@
 //! Generated JMdict/Jitendex kana preferences. No startup deserialization or heap index.
 use super::frequency_manager::fold_katakana;
-use crate::segmentation::word::POS;
+use crate::{
+    core::utils::NormalizeLongVowel,
+    segmentation::word::POS,
+};
 
 const DATA: &[u8] = include_bytes!("../../assets/kana-preference.bin");
 
+/// The layout research/lexical's `encode` writes: sorted keys, searched in place.
 #[derive(Clone, Copy)]
-struct KanaIndex<'a> {
+pub(super) struct SortedIndex<'a> {
     data: &'a [u8],
     count: usize,
 }
 fn u32_at(data: &[u8], offset: usize) -> Option<usize> {
     Some(u32::from_le_bytes(data.get(offset..offset.checked_add(4)?)?.try_into().ok()?) as usize)
 }
-impl<'a> KanaIndex<'a> {
-    fn from_bytes(data: &'a [u8]) -> Option<Self> {
-        if data.get(..8)? != b"KANAIDX2" {
+impl<'a> SortedIndex<'a> {
+    pub(super) fn from_bytes(data: &'a [u8], magic: &[u8; 8]) -> Option<Self> {
+        if data.get(..8)? != magic {
             return None;
         }
         let count = u32_at(data, 8)?;
@@ -35,7 +39,7 @@ impl<'a> KanaIndex<'a> {
             self.data.get(value..value.checked_add(value_len)?)?,
         ))
     }
-    fn lookup(&self, key: &[u8]) -> Option<&'a [u8]> {
+    pub(super) fn lookup(&self, key: &[u8]) -> Option<&'a [u8]> {
         let (mut low, mut high) = (0, self.count);
         while low < high {
             let mid = low + (high - low) / 2;
@@ -49,8 +53,8 @@ impl<'a> KanaIndex<'a> {
         None
     }
 }
-fn bundled() -> KanaIndex<'static> {
-    KanaIndex::from_bytes(DATA).expect("validated bundled kana index")
+fn bundled() -> SortedIndex<'static> {
+    SortedIndex::from_bytes(DATA, b"KANAIDX2").expect("validated bundled kana index")
 }
 
 pub(crate) struct Preference<'a> {
@@ -97,7 +101,7 @@ pub(crate) fn preference(reading: &str, pos: &POS) -> Option<Preference<'static>
         POS::Adverb => 16,
         _ => return None,
     };
-    let key = format!("{}\t{}", fold_katakana(reading), pos);
+    let key = format!("{}\t{}", fold_katakana(reading).normalize_long_vowel(), pos);
     Some(Preference { value: bundled().lookup(key.as_bytes())?, pos })
 }
 
@@ -117,8 +121,8 @@ mod tests {
             previous = key;
         }
         assert!(index.lookup(b"absent").is_none());
-        assert!(KanaIndex::from_bytes(b"KANAIDX2").is_none());
-        assert!(KanaIndex::from_bytes(b"KANAIDX2\xff\xff\xff\xff").is_none());
+        assert!(SortedIndex::from_bytes(b"KANAIDX2", b"KANAIDX2").is_none());
+        assert!(SortedIndex::from_bytes(b"KANAIDX2\xff\xff\xff\xff", b"KANAIDX2").is_none());
     }
     #[test]
     fn preferences_require_reading_and_pos_and_keep_rivals_separate() {
@@ -133,6 +137,9 @@ mod tests {
             let selected = preference(reading, &pos).unwrap();
             assert!(selected.matches(spelling));
             assert!(!selected.matches(rival));
+        }
+        for reading in ["おおきい", "おうきい"] {
+            assert!(preference(reading, &POS::Adjective).unwrap().matches("大きい"), "{reading}");
         }
         assert!(preference("はし", &POS::Noun).is_none());
         assert!(preference("こと", &POS::Verb).is_none());

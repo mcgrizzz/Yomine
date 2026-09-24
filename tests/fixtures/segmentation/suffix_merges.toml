@@ -56,5 +56,5 @@ absent = ["げ", "おぼろ"]
 [[case]]
 name = "楽しげ merges the suffix and keeps the い-form lemma"
 text = "彼は楽しげに笑った"
-terms = [{ surface = "楽しげ", lemma = "楽しい", reading = "たのしい", pos = "AdjectivalNoun" }]
+terms = [{ surface = "楽しげ", lemma = "楽しい", reading = "たのしい", pos = "Adjective" }]
 absent = ["げ"]

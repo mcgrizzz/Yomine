@@ -151,4 +151,5 @@ impl From<JsonFrequencyData> for CacheFrequencyData {
 
 pub mod lexical_evidence;
 
+pub(crate) mod jmdict_lexicon;
 pub(crate) mod kana_preference;

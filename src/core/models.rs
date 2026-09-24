@@ -151,6 +151,9 @@ pub struct Term {
     pub possible_known_match: Option<String>,
     #[serde(skip)]
     pub lexical_family: Option<crate::dictionary::lexical_evidence::LexicalFamily>,
+    /// UniDic's 語彙素 for this occurrence, picked in context (かく in 恥をかく is 掻く).
+    #[serde(default)]
+    pub lexeme: Option<String>,
     pub id: u32,
     pub lemma_form: String, // Base form of the term aka lemma form.. what is found in a dictionary
     pub lemma_reading: String, // Lemma form reading in hiragana (we will have convert from katakana)
@@ -181,6 +184,7 @@ impl Term {
         Term {
             possible_known_match: None,
             lexical_family: None,
+            lexeme: None,
             id: 1,
             surface_form,
             surface_reading,

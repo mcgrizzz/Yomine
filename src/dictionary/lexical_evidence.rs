@@ -98,9 +98,24 @@ impl ReadingEvidence {
 #[derive(Debug, Default)]
 pub struct LexicalEvidence {
     cache: Mutex<HashMap<String, Arc<ReadingEvidence>>>,
+    lexemes: Mutex<HashMap<(String, String), Option<String>>>,
     resolver: OnceLock<Option<CandidateLexemeResolver>>,
 }
 impl LexicalEvidence {
+    fn resolver(&self) -> Option<&CandidateLexemeResolver> {
+        self.resolver.get_or_init(|| shared_tokenizer().map(CandidateLexemeResolver::new)).as_ref()
+    }
+
+    pub fn lexeme_of(&self, spelling: &str, reading: &str) -> Option<String> {
+        let key = (spelling.to_string(), normalize_japanese_text(reading));
+        if let Some(found) = self.lexemes.lock().expect("lexeme cache poisoned").get(&key) {
+            return found.clone();
+        }
+        let lexeme = self.resolver().and_then(|r| r.resolve(&key.0, &key.1));
+        self.lexemes.lock().expect("lexeme cache poisoned").insert(key, lexeme.clone());
+        lexeme
+    }
+
     pub fn for_reading(&self, manager: &FrequencyManager, reading: &str) -> Arc<ReadingEvidence> {
         let reading = normalize_japanese_text(reading);
         if let Some(found) = self.cache.lock().expect("lexical cache poisoned").get(&reading) {
@@ -110,10 +125,9 @@ impl LexicalEvidence {
         let families = if candidates.is_empty() {
             Vec::new()
         } else {
-            let resolver =
-                self.resolver.get_or_init(|| shared_tokenizer().map(CandidateLexemeResolver::new));
+            let resolver = self.resolver();
             build_families(&candidates, |spelling| {
-                resolver.as_ref().and_then(|r| r.resolve(spelling, &reading))
+                resolver.and_then(|r| r.resolve(spelling, &reading))
             })
         };
         let result = Arc::new(ReadingEvidence { families });

@@ -22,7 +22,7 @@ pub struct FrequencyDictionary {
     pub revision: String,
     pub terms: HashMap<String, Vec<CacheFrequencyData>>, // Map term -> multiple frequency entries
     /// Normalized reading → terms written with it. Rebuilt on load rather than cached,
-    /// so adding it does not invalidate every existing `cache.bin`.
+    /// so adding it does not invalidate every existing dictionary cache.
     #[serde(skip)]
     readings: HashMap<String, Vec<String>>,
 }
@@ -97,6 +97,8 @@ impl FrequencyDictionary {
         lemma_reading: &str,
         is_kana: bool,
     ) -> Option<&FrequencyData> {
+        let lemma_form = &*lemma_form.normalize_long_vowel();
+        let lemma_reading = &*lemma_reading.normalize_long_vowel();
         if is_kana {
             self.get_kana_frequency(lemma_form, lemma_reading)
                 .or_else(|| self.get_normal_frequency(lemma_form, lemma_reading))
@@ -148,6 +150,6 @@ impl FrequencyDictionary {
 
     //Grab all the matching frequencies by key (just directly look up the key we want)
     pub fn get_frequencies_by_key(&self, key: &str) -> Option<&Vec<FrequencyData>> {
-        self.terms.get(key)
+        self.terms.get(&*key.normalize_long_vowel())
     }
 }
