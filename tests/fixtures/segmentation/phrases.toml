@@ -37,6 +37,9 @@ frequencies = [
 	{ term = "気", reading = "き", rank = 200 },
 	{ term = "気をつける", reading = "きをつける", rank = 900 },
 	{ term = "つける", reading = "つける", rank = 300 },
+	{ term = "映画鑑賞", reading = "ええがかんしょう", rank = 48649 },
+	{ term = "映画", reading = "えいが", rank = 900 },
+	{ term = "鑑賞", reading = "かんしょう", rank = 8600 },
 ]
 
 [[case]]
@@ -119,3 +122,9 @@ absent = ["負け", "じと"]
 name = "phrase with an interior を matches its dictionary reading"
 text = "気をつけて。"
 terms = [{ surface = "気をつけて", lemma = "気をつける", reading = "きをつける", pos = "Expression" }]
+
+# BCCWJ writes readings as pronounced (映画鑑賞 as ええがかんしょう).
+[[case]]
+name = "pronounced-style dictionary reading still matches"
+text = "趣味は映画鑑賞です。"
+terms = [{ surface = "映画鑑賞", pos = "NounExpression" }]

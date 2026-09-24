@@ -22,7 +22,7 @@ pub struct FrequencyDictionary {
     pub revision: String,
     pub terms: HashMap<String, Vec<CacheFrequencyData>>, // Map term -> multiple frequency entries
     /// Normalized reading → terms written with it. Rebuilt on load rather than cached,
-    /// so adding it does not invalidate every existing `cache.bin`.
+    /// so adding it does not invalidate every existing dictionary cache.
     #[serde(skip)]
     readings: HashMap<String, Vec<String>>,
 }

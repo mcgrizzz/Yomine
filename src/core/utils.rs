@@ -22,7 +22,7 @@ impl NormalizeLongVowel for str {
             // Lazily initialize the regex using OnceCell
             let cell = OnceCell::new();
             let re: &Regex = cell.get_or_init(|| {
-                Regex::new(r"([おこそとのほもよろごぞどぼぽ])お|([けせてねへめれげぜでべぺ])え")
+                Regex::new(r"([おこそとのほもよろごぞどぼぽ])お|([えけせてねへめれげぜでべぺ])え")
                     .unwrap()
             });
 

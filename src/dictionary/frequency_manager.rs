@@ -33,6 +33,11 @@ use crate::{
     persistence::get_app_data_dir,
 };
 
+/// Caches hold long-vowel-normalized readings, so the name changes whenever
+/// `normalize_long_vowel` does; a cache under an older name is rebuilt.
+const DICT_CACHE_FILE: &str = "cache-v2.bin";
+const LEGACY_DICT_CACHE_FILE: &str = "cache.bin";
+
 /// カ→か etc.; everything else untouched (ケガ人 → けが人). Unlike wana_kana's
 /// `to_hiragana`, never transliterates romaji.
 pub(crate) fn fold_katakana(s: &str) -> String {
@@ -561,7 +566,7 @@ pub fn process_frequency_dictionaries(
 
     for (idx, entry) in dict_dirs.iter().enumerate() {
         let path = entry.path();
-        let cache_path = path.join("cache.bin");
+        let cache_path = path.join(DICT_CACHE_FILE);
 
         // Parse index.json to get metadata
         if let Ok(Some(index)) = parse_index_json(&path) {
@@ -628,6 +633,8 @@ pub fn process_frequency_dictionaries(
                 // Save to cache
                 if let Err(e) = save_cached_dict(&freq_dict, &cache_path) {
                     println!("Failed to save cache for '{}': {}", dict_name, e);
+                } else {
+                    fs::remove_file(path.join(LEGACY_DICT_CACHE_FILE)).ok();
                 }
             } else {
                 println!("Failed to parse term meta bank for '{}'", dict_name);
