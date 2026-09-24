@@ -405,7 +405,7 @@ pub fn create_default_rules() -> Vec<Rule> {
             action: RuleAction::MergeWithPrevious {
                 attach_prev: true,
                 attach_prev_lemma: false,
-                update_prev_pos: Some(POS::AdjectivalNoun),
+                update_prev_pos: None,
                 main_word_policy: None,
             },
         },
