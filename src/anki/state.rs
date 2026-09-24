@@ -50,6 +50,7 @@ use crate::{
         Term,
     },
     dictionary::frequency_manager::FrequencyManager,
+    segmentation::word::lexeme_name,
 };
 
 pub(crate) const ANKI_VOCAB_CACHE: &str = "anki_vocab_cache.json";
@@ -150,6 +151,7 @@ impl AnkiState {
         Some(Self::from_vocab(vocab, frequency_manager, known_interval))
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn classify(
         &self,
         surface: &str,
@@ -158,6 +160,7 @@ impl AnkiState {
         reading: &str,
         pos: &crate::segmentation::word::POS,
         promoted: bool,
+        lexeme: Option<&str>,
     ) -> MatchResult<'_> {
         use crate::segmentation::word::POS;
         for (form, reading, evidence) in [
@@ -191,31 +194,61 @@ impl AnkiState {
         }
         let preference = crate::dictionary::kana_preference::preference(reading, pos);
         let normalized_reading = normalize_japanese_text(reading);
+        let canonical = |spelling: &str| -> String {
+            crate::segmentation::lexeme_resolver::documented_alias(spelling, &normalized_reading)
+                .unwrap_or(spelling)
+                .to_string()
+        };
         let is_preferred_spelling = |spelling: &str| {
-            let spelling = crate::segmentation::lexeme_resolver::documented_alias(
-                spelling,
-                &normalized_reading,
-            )
-            .unwrap_or(spelling);
-            preference.as_ref().is_some_and(|preferred| preferred.matches(spelling))
+            preference.as_ref().is_some_and(|preferred| preferred.matches(&canonical(spelling)))
+        };
+        // UniDic spells a lexeme its own way (御陰, 奇麗), so a card is compared
+        // by the lexeme its spelling resolves to, not by the spelling itself.
+        let card_lexeme = |card: &Vocab| self.frequency_manager.lexeme_of(&card.term, reading);
+        if let Some(lexeme) = lexeme {
+            // UniDic files some JMdict-distinct words under one lexeme (診せる under
+            // 見せる), so a card the bundled preference rejects cannot match here.
+            if let Some(card) = self.cards_read_as(reading).find(|card| {
+                (preference.is_none() || is_preferred_spelling(&card.term))
+                    && (canonical(&card.term) == canonical(lexeme_name(lexeme))
+                        || card_lexeme(card).as_deref() == Some(lexeme))
+            }) {
+                return MatchResult::Known { card, evidence: MatchEvidence::Lexeme };
+            }
+        }
+        let contradicts_lexeme = |card: &Vocab| {
+            lexeme.is_some_and(|lexeme| card_lexeme(card).is_some_and(|other| other != lexeme))
+        };
+        // A loanword's lexeme is reliable; UniDic's pick among kana homographs is
+        // only a guess (擤む for 噛む in かんだ), so there a contradiction only
+        // stops the card from counting as known.
+        let excluded = |card: &Vocab| {
+            lexeme.is_some_and(|lexeme| lexeme_name(lexeme).is_katakana())
+                && contradicts_lexeme(card)
+        };
+        let known = |card, evidence| {
+            if contradicts_lexeme(card) {
+                MatchResult::Possible { card }
+            } else {
+                MatchResult::Known { card, evidence }
+            }
         };
         let citation_is_preferred = is_preferred_spelling(citation);
         if preference.is_some() {
             if citation.is_kana() && !citation.is_empty() {
                 return self
                     .cards_read_as(reading)
-                    .find(|card| is_preferred_spelling(&card.term))
-                    .map_or(MatchResult::Unmatched, |card| MatchResult::Known {
-                        card,
-                        evidence: MatchEvidence::KanaPreference,
+                    .find(|card| is_preferred_spelling(&card.term) && !excluded(card))
+                    .map_or(MatchResult::Unmatched, |card| {
+                        known(card, MatchEvidence::KanaPreference)
                     });
             }
             if citation_is_preferred {
-                if let Some(card) = self
-                    .cards_read_as(reading)
-                    .find(|card| card.term.as_str().is_kana() || is_preferred_spelling(&card.term))
-                {
-                    return MatchResult::Known { card, evidence: MatchEvidence::KanaPreference };
+                if let Some(card) = self.cards_read_as(reading).find(|card| {
+                    (card.term.as_str().is_kana() || is_preferred_spelling(&card.term))
+                        && !excluded(card)
+                }) {
+                    return known(card, MatchEvidence::KanaPreference);
                 }
             }
         }
@@ -226,9 +259,10 @@ impl AnkiState {
         let cards: Vec<_> = self
             .cards_read_as(reading)
             .filter(|card| {
-                preference.is_none()
+                (preference.is_none()
                     || (!card.term.as_str().is_kana()
-                        && citation_is_preferred == is_preferred_spelling(&card.term))
+                        && citation_is_preferred == is_preferred_spelling(&card.term)))
+                    && !excluded(card)
             })
             .collect();
         let belongs = |family: &crate::dictionary::lexical_evidence::LexicalFamily,
@@ -241,7 +275,7 @@ impl AnkiState {
         match selection {
             ExpressionSelection::Selected { family } => {
                 if let Some(card) = cards.iter().copied().find(|card| belongs(family, card)) {
-                    return MatchResult::Known { card, evidence: MatchEvidence::LexicalFamily };
+                    return known(card, MatchEvidence::LexicalFamily);
                 }
                 // A kana card must independently resolve to this same expression.
                 // Sharing its reading alone does not establish a duplicate.
@@ -253,10 +287,7 @@ impl AnkiState {
                         evidence.select_expression(&card.term, &card.term)
                     {
                         if card_family == family {
-                            return MatchResult::Known {
-                                card,
-                                evidence: MatchEvidence::LexicalFamily,
-                            };
+                            return known(card, MatchEvidence::LexicalFamily);
                         }
                     }
                 }
@@ -267,7 +298,7 @@ impl AnkiState {
                     cards.iter().copied().find(|card| families.iter().any(|f| belongs(f, card)))
                 {
                     if families.iter().all(|f| cards.iter().any(|card| belongs(f, card))) {
-                        return MatchResult::Known { card, evidence: MatchEvidence::LexicalFamily };
+                        return known(card, MatchEvidence::LexicalFamily);
                     }
                     return MatchResult::Possible { card };
                 }
@@ -299,6 +330,7 @@ impl AnkiState {
             &term.lemma_reading,
             &term.part_of_speech,
             term.lexical_family.is_some(),
+            term.lexeme.as_deref(),
         )
     }
 
@@ -353,7 +385,7 @@ impl AnkiState {
     ) -> (bool, f32) {
         let promoted = *pos == crate::segmentation::word::POS::Expression
             && self.frequency_manager.lexical_families(reading).phrase_family(term).is_some();
-        match self.classify(term, reading, term, reading, pos, promoted) {
+        match self.classify(term, reading, term, reading, pos, promoted, None) {
             MatchResult::Known { card, .. } => {
                 (true, comp_term(card.interval.or(Some(1.0)), self.known_interval))
             }
@@ -550,6 +582,7 @@ mod classification_tests {
         Term {
             possible_known_match: None,
             lexical_family: None,
+            lexeme: None,
             id: 0,
             lemma_form: surface.into(),
             lemma_reading: reading.into(),
@@ -583,7 +616,7 @@ mod classification_tests {
         assert!(filtered[0].comprehension > 0.0);
         assert!(known.word_stats("いく", "いく", &POS::Verb).0);
         assert!(matches!(
-            known.classify("いく", "いく", "いく", "いく", &POS::Verb, false),
+            known.classify("いく", "いく", "いく", "いく", &POS::Verb, false, None),
             MatchResult::Known { evidence: MatchEvidence::KanaPreference, .. }
         ));
         let reverse = state(manager.clone(), &[("いく", "いく")]);
@@ -621,7 +654,7 @@ mod classification_tests {
         {
             let anki = state(manager.clone(), &cards);
             let MatchResult::Known { card, .. } =
-                anki.classify("いく", "いく", "いく", "いく", &POS::Verb, false)
+                anki.classify("いく", "いく", "いく", "いく", &POS::Verb, false, None)
             else {
                 panic!("selected expression should match");
             };
@@ -635,7 +668,7 @@ mod classification_tests {
         let anki = state(manager, &[("行く", "いく")]);
         // The validated citation says 逝く; the common homophone must not replace it.
         assert!(matches!(
-            anki.classify("いった", "いった", "逝く", "いく", &POS::Verb, false),
+            anki.classify("いった", "いった", "逝く", "いく", &POS::Verb, false, None),
             MatchResult::Unmatched
         ));
     }
@@ -776,7 +809,10 @@ mod classification_tests {
             assert!(
                 matches!(
                     matching.classify_term(&input),
-                    MatchResult::Known { evidence: MatchEvidence::KanaPreference, .. }
+                    MatchResult::Known {
+                        evidence: MatchEvidence::KanaPreference | MatchEvidence::Lexeme,
+                        ..
+                    }
                 ),
                 "{input:?}"
             );
@@ -787,7 +823,7 @@ mod classification_tests {
             for cards in [vec![], vec![(wrong_card, reading)], vec![(card, "invalid")]] {
                 let changed = state(manager.clone(), &cards);
                 let (unknown, known) = changed.filter_existing_terms(known.clone());
-                assert!(known.is_empty());
+                assert!(known.is_empty(), "{surface} matched {cards:?}");
                 assert_eq!(unknown[0].comprehension, 0.0);
                 assert!(unknown[0].possible_known_match.is_none());
                 assert!(!changed.term_stats(&input).0);
@@ -894,5 +930,44 @@ mod classification_tests {
         let (unknown, known) = wrong.filter_existing_terms(vec![input]);
         assert!(known.is_empty());
         assert!(unknown[0].possible_known_match.is_none());
+    }
+
+    #[test]
+    fn contextual_lexeme_picks_the_card_among_homophones() {
+        let Some(tokenizer) = crate::segmentation::lexeme_resolver::test_tokenizer() else {
+            return;
+        };
+        let manager = Arc::new(FrequencyManager::from_dictionaries(vec![]));
+        for (text, surface, cards, expected) in [
+            (
+                "水浴びをのぞいていた",
+                "のぞい",
+                &[("除く", "のぞく"), ("覗く", "のぞく")],
+                Some("覗く"),
+            ),
+            ("考えていきたい", "いきたい", &[("逝く", "いく"), ("行く", "いく")], Some("行く")),
+            ("大恥をかいてしまう", "かい", &[("核", "かく"), ("書く", "かく")], None),
+        ] {
+            let mut sentences = vec![Sentence {
+                id: 0,
+                source_id: 0,
+                text: text.into(),
+                segments: vec![],
+                timestamp: None,
+                comprehension: 0.0,
+            }];
+            let terms = extract_words(tokenizer.new_worker(), &mut sentences, &manager);
+            let input = terms
+                .into_iter()
+                .find(|t| t.surface_form == surface)
+                .unwrap_or_else(|| panic!("missing {surface}"));
+            let anki = state(manager.clone(), cards);
+            let known = match anki.classify_term(&input) {
+                MatchResult::Known { card, .. } => Some(card.term.as_str()),
+                _ => None,
+            };
+            assert_eq!(known, expected, "{surface}");
+            assert_eq!(anki.term_stats(&input).0, expected.is_some(), "{surface}");
+        }
     }
 }

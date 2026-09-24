@@ -453,6 +453,7 @@ mod tests {
         Term {
             possible_known_match: None,
             lexical_family: None,
+            lexeme: None,
             id: 1,
             lemma_form: surface.to_string(),
             lemma_reading: String::new(),

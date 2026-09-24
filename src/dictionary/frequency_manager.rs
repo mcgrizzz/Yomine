@@ -100,6 +100,11 @@ impl FrequencyManager {
         self.lexical.for_reading(self, reading)
     }
 
+    /// UniDic's 語彙素 for a spelling at a reading, or `None` when UniDic gives no single answer.
+    pub fn lexeme_of(&self, spelling: &str, reading: &str) -> Option<String> {
+        self.lexical.lexeme_of(spelling, reading)
+    }
+
     fn new(states: Option<HashMap<String, DictionaryState>>) -> Self {
         let dict_states: HashMap<String, DictionaryState> = states.unwrap_or_default();
         FrequencyManager {
