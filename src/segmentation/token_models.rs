@@ -49,9 +49,28 @@ pub struct RawToken {
     pub lemma_id: String,   // Column 29: Lemma ID
 }
 
+/// Splits a UniDic feature string. Some fields are quoted and contain commas
+/// (`"B1WB2WB3WB4WBjS,B1WB2WB8SjS"`); a plain split shifts every later column.
+fn split_features(features: &str) -> Vec<&str> {
+    let mut fields = Vec::new();
+    let (mut start, mut quoted) = (0, false);
+    for (i, c) in features.char_indices() {
+        match c {
+            '"' => quoted = !quoted,
+            ',' if !quoted => {
+                fields.push(features[start..i].trim_matches('"'));
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    fields.push(features[start..].trim_matches('"'));
+    fields
+}
+
 impl From<VibratoToken> for RawToken {
     fn from(vt: VibratoToken) -> Self {
-        let fields: Vec<&str> = vt.features.split(',').collect();
+        let fields = split_features(&vt.features);
 
         // Helper to get field with default value if missing
         let get_field = |idx: usize| fields.get(idx).unwrap_or(&"*").to_string();
@@ -128,8 +147,7 @@ impl From<(String, RawToken)> for UnidicToken {
 
         let replace_missing = |s: String| if s == "*" { surface.clone() } else { s };
         // The kana columns spell readings the way dictionaries do (は, を, 気づく's づ);
-        // pron spells them as spoken (ワ, オ, ズ). Some entries have their later
-        // columns shifted (日 as a counter carries 体 there), so pron stays the fallback.
+        // pron spells them as spoken (ワ, オ, ズ) and covers entries without kana.
         let spelled =
             |kana: String, pron: String| if kana.as_str().is_kana() { kana } else { pron };
         let surface_hatsuon = replace_missing(spelled(raw.kana, raw.pron));
@@ -183,5 +201,11 @@ mod lexeme_tests {
     fn a_missing_lexeme_falls_back_to_the_surface() {
         let features = SUGOI.replacen(",凄い,", ",*,", 1);
         assert_eq!(UnidicToken::from_parts("すごい", &features, 0..9).lexeme, "すごい");
+    }
+
+    #[test]
+    fn a_quoted_field_does_not_shift_the_kana_columns() {
+        const DOORI: &str = "名詞,普通名詞,助数詞可能,*,*,*,トオリ,通り,どおり,ドーリ,どおり,ドーリ,和,ト濁,濁音形,*,*,*,\"B1WB2WB3WB4WBjS,B1WB2WB8SjS\",体,ドオリ,ドオリ,ドオリ,トオリ,3,C2,*,7202643009225216,26203";
+        assert_eq!(UnidicToken::from_parts("どおり", DOORI, 0..9).surface_hatsuon, "ドオリ");
     }
 }
