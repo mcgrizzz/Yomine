@@ -6,9 +6,9 @@ name = "plain sentence: splits, readings, POS"
 text = "昨日は寿司を食べた。"
 segments = [
 	{ surface = "昨日", reading = "きのう", pos = "Noun" },
-	{ surface = "は", reading = "わ", pos = "Postposition" },
+	{ surface = "は", reading = "は", pos = "Postposition" },
 	{ surface = "寿司", reading = "すし", pos = "Noun" },
-	{ surface = "を", reading = "お", pos = "Postposition" },
+	{ surface = "を", reading = "を", pos = "Postposition" },
 	{ surface = "食べた", reading = "たべた", pos = "Verb" },
 	{ surface = "。", pos = "Symbol" },
 ]

@@ -1,6 +1,8 @@
 //Using https://github.com/jannisbecker/ve-rs/blob/main/src/lib.rs as an example for ipadic and implementing for unidic
 //Unidic POS: https://gist.github.com/masayu-a/e3eee0637c07d4019ec9
 
+use wana_kana::IsJapaneseStr;
+
 use super::unidic_tags::UnidicTag;
 
 pub struct VibratoToken {
@@ -125,10 +127,15 @@ impl From<(String, RawToken)> for UnidicToken {
         let (surface, raw) = item;
 
         let replace_missing = |s: String| if s == "*" { surface.clone() } else { s };
-        let surface_hatsuon = replace_missing(raw.pron);
+        // The kana columns spell readings the way dictionaries do (は, を, 気づく's づ);
+        // pron spells them as spoken (ワ, オ, ズ). Some entries have their later
+        // columns shifted (日 as a counter carries 体 there), so pron stays the fallback.
+        let spelled =
+            |kana: String, pron: String| if kana.as_str().is_kana() { kana } else { pron };
+        let surface_hatsuon = replace_missing(spelled(raw.kana, raw.pron));
         let lemma_form = replace_missing(raw.orth_base);
         let lexeme = replace_missing(raw.lemma);
-        let lemma_hatsuon = replace_missing(raw.pron_base);
+        let lemma_hatsuon = replace_missing(spelled(raw.kana_base, raw.pron_base));
 
         UnidicToken {
             surface,

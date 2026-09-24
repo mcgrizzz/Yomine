@@ -35,6 +35,8 @@ frequencies = [
 	{ term = "変わる", reading = "かわる", rank = 500 },
 	{ term = "気になる", reading = "きになる", rank = 3000 },
 	{ term = "気", reading = "き", rank = 200 },
+	{ term = "気をつける", reading = "きをつける", rank = 900 },
+	{ term = "つける", reading = "つける", rank = 300 },
 ]
 
 [[case]]
@@ -111,3 +113,9 @@ name = "負けじと promoted over the mis-tokenized 負け+じと"
 text = "私は客の出す音に圧倒されながらも、負けじと、「いらっしゃいませ」"
 terms = [{ surface = "負けじと", lemma = "負けじと", reading = "まけじと", pos = "Expression" }]
 absent = ["負け", "じと"]
+
+# Dictionaries spell an interior を as を; read as pronounced (お) it never matches.
+[[case]]
+name = "phrase with an interior を matches its dictionary reading"
+text = "気をつけて。"
+terms = [{ surface = "気をつけて", lemma = "気をつける", reading = "きをつける", pos = "Expression" }]
