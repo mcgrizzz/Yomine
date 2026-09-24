@@ -1,5 +1,8 @@
 use std::{
-    collections::HashMap,
+    collections::{
+        HashMap,
+        HashSet,
+    },
     fs::{
         self,
         File,
@@ -67,6 +70,8 @@ pub struct FrequencyManager {
     dictionaries: HashMap<String, FrequencyDictionary>,
     states: RwLock<HashMap<String, DictionaryState>>,
     lexical: super::lexical_evidence::LexicalEvidence,
+    /// Built by Yomine's analyzer from its own segmentation, so never evidence for it.
+    generated: HashSet<String>,
 }
 
 impl FrequencyManager {
@@ -119,6 +124,7 @@ impl FrequencyManager {
             dictionaries: HashMap::new(),
             states: RwLock::new(dict_states),
             lexical: Default::default(),
+            generated: HashSet::new(),
         }
     }
 
@@ -142,10 +148,14 @@ impl FrequencyManager {
         manager
     }
 
+    fn evidence_dictionaries(&self) -> impl Iterator<Item = &FrequencyDictionary> {
+        self.dictionaries.iter().filter(|(name, _)| !self.generated.contains(*name)).map(|(_, d)| d)
+    }
+
     pub fn terms_with_reading_from_all_dictionaries(&self, reading: &str) -> Vec<&str> {
         let normalized = crate::core::utils::normalize_japanese_text(reading);
         let mut terms: Vec<&str> = Vec::new();
-        for dictionary in self.dictionaries.values() {
+        for dictionary in self.evidence_dictionaries() {
             for term in dictionary.terms_with_reading(&normalized) {
                 if !terms.contains(&term.as_str()) {
                     terms.push(term);
@@ -263,7 +273,7 @@ impl FrequencyManager {
     // Used for anki term filtering, not affected by weighting or toggling dictionaries.
     pub fn get_frequency_data_by_term(&self, input: &str) -> Vec<&FrequencyData> {
         let mut freqs = Vec::new();
-        for (_, dictionary) in &self.dictionaries {
+        for dictionary in self.evidence_dictionaries() {
             if let Some(freq_data) = dictionary.get_frequencies_by_key(input) {
                 if !input.is_kana() {
                     //Filter the kana specific frequencies
@@ -381,7 +391,11 @@ impl FrequencyManager {
             }
         };
 
-        let enabled_dicts = self.get_enabled_dictionaries();
+        let enabled_dicts: Vec<_> = self
+            .get_enabled_dictionaries()
+            .into_iter()
+            .filter(|d| !self.generated.contains(&d.title))
+            .collect();
 
         // Collect frequencies for exact word/reading pairs
         let exact_freqs: Vec<u32> =
@@ -600,6 +614,10 @@ pub fn process_frequency_dictionaries(
         // Parse index.json to get metadata
         if let Ok(Some(index)) = parse_index_json(&path) {
             let dict_name = index.title.clone();
+            // The frequency analyzer stamps every dictionary it writes.
+            if index.description.as_deref().is_some_and(|d| d.contains("Generated in Yomine")) {
+                manager.generated.insert(dict_name.clone());
+            }
             let progress_num = idx + 1;
 
             // Try loading from cache
@@ -702,5 +720,31 @@ mod batch_tests {
         assert_eq!(manager.get_dictionary_state("test").unwrap().weight, 1.0);
         assert!(manager.get_dictionary_state("test").unwrap().enabled);
         assert!(manager.set_dictionary_state("test", f32::NAN, true).is_err());
+    }
+
+    #[test]
+    fn generated_dictionaries_are_no_evidence() {
+        use crate::dictionary::{
+            JsonFrequency,
+            JsonFrequencyData,
+        };
+        let entry = TermMetaBankV3 {
+            term: "お誘い".into(),
+            data_type: "freq".into(),
+            data: Some(JsonFrequencyData::Nested {
+                reading: "おさそい".into(),
+                frequency: JsonFrequency::Number(500),
+            }),
+        };
+        let mut manager = FrequencyManager::from_dictionaries(vec![FrequencyDictionary::new(
+            "Generated".into(),
+            "1".into(),
+            vec![entry],
+        )]);
+        assert_eq!(manager.majority_reading("お誘い").as_deref(), Some("おさそい"));
+        manager.generated.insert("Generated".into());
+        assert_eq!(manager.majority_reading("お誘い"), None);
+        assert!(manager.get_harmonic_frequency_for_pair("お誘い", "おさそい").is_none());
+        assert!(manager.terms_with_reading_from_all_dictionaries("おさそい").is_empty());
     }
 }
