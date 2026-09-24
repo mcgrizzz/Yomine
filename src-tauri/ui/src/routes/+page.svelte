@@ -96,7 +96,12 @@
 			<div class="header-row">
 				<div class="header-left">
 					<div class="title-row">
-						<h2 class="title">{$fileResult.source_file.title}</h2>
+						<h2
+							class="title"
+							title={`${$fileResult.source_file.title}\n${filename($fileResult.source_file.original_file)}`}
+						>
+							{$fileResult.source_file.title}
+						</h2>
 						{#if $fileResult.source_file.epub_label}
 							<span class="selection-label" title={$fileResult.source_file.epub_label}
 								>{$fileResult.source_file.epub_label}</span
@@ -307,7 +312,11 @@
 		gap: 0.5rem;
 	}
 	.title {
+		min-width: 0;
 		margin: 0 0 0.25rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.selection-label {
 		font-size: 0.78rem;
