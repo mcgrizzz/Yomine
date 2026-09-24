@@ -16,8 +16,6 @@
 			Adjective: 20,
 			Verb: 20,
 			Adverb: 0,
-			Expression: -10,
-			NounExpression: -10,
 			ProperNoun: -10,
 			Pronoun: -10
 		},
