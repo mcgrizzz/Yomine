@@ -165,7 +165,8 @@ async fn poll_asbplayer_follow(app: AppHandle) {
         let (armed, follow_new, follow_active, poll_secs, current_media_id) = {
             let state = app.state::<Mutex<AppState>>();
             let guard = state.lock().unwrap();
-            let follow_new = guard.settings.asbplayer_follow_new_media;
+            let follow_new = guard.settings.asbplayer_follow_new_media
+                || crate::batches::AUTO.load(Ordering::Relaxed);
             let follow_active = guard.settings.asbplayer_follow_active_tab;
             let armed = (follow_new || follow_active) && guard.language_tools.is_some();
             (

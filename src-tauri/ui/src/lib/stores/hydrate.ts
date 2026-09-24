@@ -12,6 +12,7 @@ import { refreshIgnoredLemmas } from './ignore';
 import { refreshRecommendedDicts } from './dictionaries';
 import { refreshMinedState, yomitanReachable } from './mining';
 import { selectedTerms } from './selection';
+import { autoMine } from './auto';
 import { loadLastBatch } from './batches';
 import { refreshSetupStatus } from './setup';
 
@@ -55,6 +56,7 @@ export async function hydrate(): Promise<void> {
 		fileEventSeen = true;
 		fileResult.set(r);
 		showNotice(`Loaded from asbplayer: ${r.source_file.title}`);
+		void autoMine();
 	});
 	ipc.onAsbplayerContext((c) => asbContext.set(c));
 	ipc.onDictionariesChanged(() => { refreshSetupStatus(); });
@@ -121,6 +123,7 @@ export async function hydrate(): Promise<void> {
 	void refreshMinedState(true);
 	void loadLastBatch();
 	void ipc.setBatchRunning(false);
+	void ipc.setAutoMode(false);
 
 	// Best-effort update check; a failure just means no notice.
 	void checkForUpdate();

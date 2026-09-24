@@ -213,17 +213,18 @@ function toBatchItems(items: QueueItem[]): ipc.BatchItem[] {
 
 async function run(
 	items: QueueItem[] | null,
-	retry: { indices: number[]; media: boolean } | null = null
-): Promise<void> {
-	if (get(playerBusy) || get(miningTerm) !== null) return;
+	retry: { indices: number[]; media: boolean } | null = null,
+	auto = false
+): Promise<ipc.BatchRecord | null> {
+	if (get(playerBusy) || get(miningTerm) !== null) return null;
 	const file = get(fileResult);
-	if (!file) return;
+	if (!file) return null;
 	const previous = get(lastBatch);
 	if (!items && (!previous || !sameSource(previous, file))) {
 		report('Load the original source before retrying this batch');
-		return;
+		return null;
 	}
-	if (items?.length === 0 || retry?.indices.length === 0) return;
+	if (items?.length === 0 || retry?.indices.length === 0) return null;
 	const mediaRun = retry?.media ?? false;
 	playerBusy.set(true);
 	cancelled = false;
@@ -234,6 +235,7 @@ async function run(
 	let started = false;
 	const options: ipc.MineOptions = { record: true, require_dictionary_media: true };
 	let target: string | null = null;
+	let finished: ipc.BatchRecord | null = null;
 
 	const plan: BatchPlan = {
 		create: { indices: [], done: 0, samples: [] },
@@ -302,14 +304,14 @@ async function run(
 		await ipc.setBatchRunning(true);
 		if (items && previous && needsReview(previous) && !(await replacePrompt.ask(previous))) {
 			if (!cancelled) batchSummaryOpen.set(true);
-			return;
+			return null;
 		}
 		const snapshot = items ? toBatchItems(items) : previous!.items;
 		const selected = retry?.indices ?? snapshot.map((_, i) => i);
 		const records = selected.some((i) => snapshot[i].mine_media);
 		if (records && !get(asbContext).loaded_from_asbplayer) {
 			const answer = await chooseTarget(mediaRun);
-			if (!answer || cancelled) return;
+			if (!answer || cancelled) return null;
 			target = answer.target;
 			options.record = answer.record;
 		}
@@ -317,7 +319,7 @@ async function run(
 			batch = await ipc.createBatch(file.batch_source, snapshot);
 			batchSaveError.set(null);
 		}
-		if (!batch) return;
+		if (!batch) return null;
 		lastBatch.set(batch);
 		started = true;
 		if (mediaRun) {
@@ -352,6 +354,7 @@ async function run(
 			try {
 				batch = await ipc.finishBatch(batch.id);
 				lastBatch.set(batch);
+				if (!cancelled) finished = batch;
 			} catch (error) {
 				batchSaveError.set(String(error));
 				report(error);
@@ -363,17 +366,19 @@ async function run(
 		mineQueueState.set(null);
 		batchPreview.set(null);
 		if (batch) {
-			batchSummaryOpen.set(true);
+			if (!auto || !finished) batchSummaryOpen.set(true);
 			void refreshMinedState(true);
 		}
 	}
+	return finished;
 }
 
-export const mineQueue = (items: QueueItem[]): Promise<void> => run(items);
+export const mineQueue = (items: QueueItem[], auto = false): Promise<ipc.BatchRecord | null> =>
+	run(items, null, auto);
 
-export function retryBatch(media = false): Promise<void> {
+export function retryBatch(media = false): Promise<ipc.BatchRecord | null> {
 	const batch = get(lastBatch);
-	if (get(batchSaveError) || !batch) return Promise.resolve();
+	if (get(batchSaveError) || !batch) return Promise.resolve(null);
 	return run(null, { indices: retryIndices(batch, media), media });
 }
 

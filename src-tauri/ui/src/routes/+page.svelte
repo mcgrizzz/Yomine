@@ -49,6 +49,8 @@
 	import RecentFilesModal from '$lib/components/RecentFilesModal.svelte';
 	import EpubChapterPickerModal from '$lib/components/EpubChapterPickerModal.svelte';
 	import KnowledgeSummary from '$lib/components/KnowledgeSummary.svelte';
+	import AutoModeModal from '$lib/components/AutoModeModal.svelte';
+	import AutoModeToggle from '$lib/components/AutoModeToggle.svelte';
 	import { fileIcon, filename, formatTermCount, formatFileSize, formatLastOpened } from '$lib/recents';
 
 	onMount(hydrate);
@@ -96,7 +98,12 @@
 			<div class="header-row">
 				<div class="header-left">
 					<div class="title-row">
-						<h2 class="title">{$fileResult.source_file.title}</h2>
+						<h2
+							class="title"
+							title={`${$fileResult.source_file.title}\n${filename($fileResult.source_file.original_file)}`}
+						>
+							{$fileResult.source_file.title}
+						</h2>
 						{#if $fileResult.source_file.epub_label}
 							<span class="selection-label" title={$fileResult.source_file.epub_label}
 								>{$fileResult.source_file.epub_label}</span
@@ -156,7 +163,10 @@
 				· {total} total
 			</p>
 				</div>
-				<KnowledgeSummary />
+				<div class="header-right">
+					<AutoModeToggle />
+					<KnowledgeSummary />
+				</div>
 			</div>
 			<TableControls />
 			<!-- The one scroll region in the file view: title/coverage/controls above
@@ -207,6 +217,7 @@
 							>▶ Load from asbplayer</button
 						>
 					{/if}
+					<AutoModeToggle />
 				</div>
 
 				{#if $recentFiles.length > 0}
@@ -253,6 +264,7 @@
 	<IgnoreListModal />
 	<AsbplayerModal />
 	<WebsocketSettingsModal />
+	<AutoModeModal />
 	<AppearanceModal />
 	<AboutModal />
 	<AnkiSettingsModal />
@@ -307,7 +319,18 @@
 		gap: 0.5rem;
 	}
 	.title {
+		min-width: 0;
 		margin: 0 0 0.25rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.header-right {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 0.6rem;
+		flex-shrink: 0;
 	}
 	.selection-label {
 		font-size: 0.78rem;
