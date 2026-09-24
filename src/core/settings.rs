@@ -6,7 +6,10 @@
 //! unchanged, so existing users' settings load in both apps.
 
 use std::{
-    collections::HashMap,
+    collections::{
+        BTreeMap,
+        HashMap,
+    },
     num::NonZeroU16,
 };
 
@@ -115,6 +118,39 @@ impl Default for UnderlineToggles {
     }
 }
 
+/// Card limit and pick preferences for auto mode. Points are added to a term's frequency
+/// points; keys are `POS::as_key()` values and JLPT levels.
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct AutoMine {
+    pub limit: u32,
+    pub pos_points: BTreeMap<String, i32>,
+    pub jlpt_points: BTreeMap<String, i32>,
+}
+
+impl Default for AutoMine {
+    fn default() -> Self {
+        let points =
+            |pairs: &[(&str, i32)]| pairs.iter().map(|(k, v)| (k.to_string(), *v)).collect();
+        Self {
+            limit: 10,
+            pos_points: points(&[
+                ("SuruVerb", 5),
+                ("AdjectivalNoun", 5),
+                ("Noun", 3),
+                ("Verb", 2),
+                ("Adjective", 2),
+                ("Adverb", 0),
+                ("Expression", -10),
+                ("NounExpression", -10),
+                ("ProperNoun", -10),
+                ("Pronoun", -10),
+            ]),
+            jlpt_points: points(&[("N5", 15), ("N4", 20), ("N3", 20), ("N2", 20), ("N1", 20)]),
+        }
+    }
+}
+
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct TableColumn {
     pub id: String,
@@ -180,6 +216,8 @@ pub struct SettingsData {
     /// How often follow mode polls asbplayer's bound-media list, in seconds.
     #[serde(default = "default_asbplayer_poll_secs")]
     pub asbplayer_poll_secs: u32,
+    #[serde(default)]
+    pub auto_mine: AutoMine,
     /// Whole-UI scale factor (Tauri app only; 1.0 = 100%). The egui app ignores it.
     #[serde(default = "default_font_scale")]
     pub font_scale: f32,
@@ -263,6 +301,7 @@ impl Default for SettingsData {
             asbplayer_follow_new_media: false,
             asbplayer_follow_active_tab: true,
             asbplayer_poll_secs: default_asbplayer_poll_secs(),
+            auto_mine: AutoMine::default(),
             font_scale: default_font_scale(),
             definition_scale: default_font_scale(),
             yomitan_url: default_yomitan_url(),

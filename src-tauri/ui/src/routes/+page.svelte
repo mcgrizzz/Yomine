@@ -49,6 +49,8 @@
 	import RecentFilesModal from '$lib/components/RecentFilesModal.svelte';
 	import EpubChapterPickerModal from '$lib/components/EpubChapterPickerModal.svelte';
 	import KnowledgeSummary from '$lib/components/KnowledgeSummary.svelte';
+	import AutoModeModal from '$lib/components/AutoModeModal.svelte';
+	import AutoModeToggle from '$lib/components/AutoModeToggle.svelte';
 	import { fileIcon, filename, formatTermCount, formatFileSize, formatLastOpened } from '$lib/recents';
 
 	onMount(hydrate);
@@ -161,7 +163,10 @@
 				· {total} total
 			</p>
 				</div>
-				<KnowledgeSummary />
+				<div class="header-right">
+					<AutoModeToggle />
+					<KnowledgeSummary />
+				</div>
 			</div>
 			<TableControls />
 			<!-- The one scroll region in the file view: title/coverage/controls above
@@ -212,6 +217,7 @@
 							>▶ Load from asbplayer</button
 						>
 					{/if}
+					<AutoModeToggle />
 				</div>
 
 				{#if $recentFiles.length > 0}
@@ -258,6 +264,7 @@
 	<IgnoreListModal />
 	<AsbplayerModal />
 	<WebsocketSettingsModal />
+	<AutoModeModal />
 	<AppearanceModal />
 	<AboutModal />
 	<AnkiSettingsModal />
@@ -317,6 +324,13 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.header-right {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 0.6rem;
+		flex-shrink: 0;
 	}
 	.selection-label {
 		font-size: 0.78rem;

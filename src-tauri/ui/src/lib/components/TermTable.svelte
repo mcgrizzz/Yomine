@@ -5,6 +5,7 @@
 		defaultDir,
 		harmonic,
 		normalizeColumns,
+		occurrencesOf as occurrencesFor,
 		termKey,
 		textMatches,
 		type ColumnId,
@@ -26,6 +27,7 @@
 		addedKeys,
 		minedKeys,
 		minedNoteIds,
+		isMinedTerm,
 		minedTerms,
 		miningTerm,
 		normalizeSentence,
@@ -208,14 +210,7 @@
 		return v === Infinity ? '？' : String(v);
 	}
 
-	function occurrencesOf(term: Term): Occurrence[] {
-		const out: Occurrence[] = [];
-		for (const [i, start] of term.sentence_references) {
-			const sentence = sentences[i];
-			if (sentence) out.push({ sentence, start });
-		}
-		return out;
-	}
+	const occurrencesOf = (term: Term): Occurrence[] => occurrencesFor(term, sentences);
 
 	// Each row's displayed occurrence - a queued term mines its pin instead.
 	let occIdx = $state<Record<string, number>>({});
@@ -255,10 +250,7 @@
 		}
 	});
 
-	const isMined = (t: Term): boolean =>
-		$minedTerms.has(t.lemma_form) ||
-		$addedTerms.has(t.lemma_form) ||
-		$addedTerms.has(t.surface_form);
+	const isMined = (t: Term): boolean => isMinedTerm(t, $minedTerms, $addedTerms);
 
 	let confirmMine = $state<{ term: Term; occs: Occurrence[] } | null>(null);
 

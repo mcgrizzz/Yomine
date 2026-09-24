@@ -102,6 +102,18 @@ export type JlptChip = (typeof JLPT_CHIPS)[number];
  * pair is the stable row/selection key. */
 export const termKey = (t: Term): string => `${t.lemma_form} ${t.lemma_reading}`;
 
+export function occurrencesOf(
+	term: Term,
+	sentences: SentenceDto[]
+): { sentence: SentenceDto; start: number }[] {
+	const out: { sentence: SentenceDto; start: number }[] = [];
+	for (const [i, start] of term.sentence_references) {
+		const sentence = sentences[i];
+		if (sentence) out.push({ sentence, start });
+	}
+	return out;
+}
+
 /**
  * Min/max of the known (non-unknown) harmonic frequencies, mirroring egui's
  * `configure_bounds` + `update_bounds` clamping (lower bound floored at 1).

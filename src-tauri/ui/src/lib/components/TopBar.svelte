@@ -27,6 +27,7 @@
 		openPosModal,
 		openSetupModal,
 		openProfilesModal,
+		openAutoModal,
 		openAnalyzerModal,
 		openAboutModal,
 		openBatchSummary,
@@ -245,6 +246,7 @@
 				<button onclick={() => run(openPosModal)}>Part of Speech Filters</button>
 				<button onclick={() => run(openTextFiltersModal)}>Text Filters</button>
 				<button onclick={() => run(openFrequencyModal)}>Frequency Dictionaries</button>
+				<button onclick={() => run(openAutoModal)}>✦ Auto Mode</button>
 				<div class="menu-sep"></div>
 				<button onclick={() => run(openBatchSummary)} disabled={!$lastBatch}>Last Batch…</button>
 				<button onclick={() => run(openAnalyzerModal)} disabled={!toolsReady}

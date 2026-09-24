@@ -4,6 +4,8 @@
 	interface Props {
 		title: string;
 		width: string;
+		/** Percent, not vh: vh ignores the root `zoom` the Appearance scale applies. */
+		maxHeight?: string;
 		onclose: () => void;
 		open?: boolean;
 		/** Content owns its own bottom edge — for a footer with its own padding and border. */
@@ -19,6 +21,7 @@
 	let {
 		title,
 		width,
+		maxHeight = '85%',
 		onclose,
 		open = true,
 		flush = false,
@@ -94,7 +97,7 @@
 		aria-labelledby={headingId}
 		tabindex="-1"
 		bind:this={dialog}
-		style="width: {width}"
+		style="width: {width}; max-height: {maxHeight}"
 	>
 		<header>
 			<h2 id={headingId} title={title}>{title}</h2>
@@ -136,12 +139,10 @@
 		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
 		z-index: var(--z-modal);
 	}
-	/* Percent, not vh: vh ignores the root `zoom` the Appearance scale applies. */
 	.dialog {
 		display: flex;
 		flex-direction: column;
 		gap: 0.6rem;
-		max-height: 85%;
 		padding-bottom: 0.75rem;
 		background: var(--bg-panel);
 		border: 1px solid var(--border);
