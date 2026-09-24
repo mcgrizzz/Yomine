@@ -781,6 +781,7 @@ export interface BatchRecord {
 	finished_at: number | null;
 	source: BatchSource;
 	items: BatchItem[];
+	auto: boolean;
 }
 
 export interface BatchStep {
@@ -794,6 +795,8 @@ export interface BatchUndoResult {
 	deleted: number;
 	already_gone: number;
 	remaining: number;
+	/** Auto mode can mine the source again. */
+	reopened: boolean;
 }
 
 export interface MineOptions {
@@ -821,8 +824,12 @@ export function getLastBatch(): Promise<BatchRecord | null> {
 	return invoke('get_last_batch');
 }
 
-export function createBatch(source: BatchSource, items: BatchItem[]): Promise<BatchRecord> {
-	return invoke('create_batch', { source, items });
+export function createBatch(
+	source: BatchSource,
+	items: BatchItem[],
+	auto: boolean
+): Promise<BatchRecord> {
+	return invoke('create_batch', { source, items, auto });
 }
 
 export function finishBatch(batchId: string): Promise<BatchRecord> {

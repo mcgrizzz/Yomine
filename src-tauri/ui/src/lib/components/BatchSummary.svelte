@@ -1,6 +1,8 @@
 <script lang="ts">
 	import Modal from './Modal.svelte';
 	import RecordingSteps from './RecordingSteps.svelte';
+	import AutoLedger from './AutoLedger.svelte';
+	import AutoWaiting from './AutoWaiting.svelte';
 	import { openNotesInAnki, type BatchItem, type BatchRecord } from '$lib/ipc';
 	import { lacksMedia, retryIndices, sameSource } from '$lib/batch';
 	import {
@@ -9,6 +11,7 @@
 		retryBatch,
 		undoLastBatch
 	} from '$lib/stores/batches';
+	import { autoMode } from '$lib/stores/auto';
 	import { fileResult } from '$lib/stores/file';
 	import { openInAnki, playerBusy } from '$lib/stores/mining';
 	import { lastError } from '$lib/stores/ui';
@@ -165,6 +168,13 @@
 			{/each}
 		</ul>
 
+		{#if batch.auto && $autoMode}
+			<details class="auto">
+				<summary><AutoWaiting /></summary>
+				<AutoLedger />
+			</details>
+		{/if}
+
 		{#if $batchSaveError}
 			<p class="notice alert">
 				{$batchSaveError} Retry and undo are unavailable until the saved record can be verified.
@@ -284,6 +294,17 @@
 		flex-direction: column;
 		gap: 0.75rem;
 		padding: 0.25rem 1rem 0.5rem;
+	}
+	.auto {
+		padding: 0.4rem 0.6rem;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+	}
+	.auto summary {
+		cursor: pointer;
+	}
+	.auto[open] summary {
+		margin-bottom: 0.4rem;
 	}
 	.heading h2 {
 		margin: 0;

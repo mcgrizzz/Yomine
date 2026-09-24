@@ -178,6 +178,8 @@ pub struct BatchRecord {
     pub finished_at: Option<i64>,
     pub source: BatchSource,
     pub items: Vec<BatchItem>,
+    #[serde(default)]
+    pub auto: bool,
 }
 
 struct BatchFile(PathBuf);
@@ -286,10 +288,23 @@ pub fn mark_media_processed(fingerprint: String) -> Result<(), String> {
     let _lock = PROCESSED_LOCK.lock().unwrap();
     let mut processed = processed_media()?;
     if processed.insert(fingerprint) {
-        persistence::save_json(&processed, PROCESSED_FILE)
-            .map_err(|e| format!("Could not save the processed video list: {e}"))?;
+        save_processed_media(&processed)?;
     }
     Ok(())
+}
+
+fn unmark_media_processed(fingerprint: &str) -> Result<(), String> {
+    let _lock = PROCESSED_LOCK.lock().unwrap();
+    let mut processed = processed_media()?;
+    if processed.remove(fingerprint) {
+        save_processed_media(&processed)?;
+    }
+    Ok(())
+}
+
+fn save_processed_media(processed: &BTreeSet<String>) -> Result<(), String> {
+    persistence::save_json(processed, PROCESSED_FILE)
+        .map_err(|e| format!("Could not save the processed video list: {e}"))
 }
 
 #[tauri::command]
@@ -310,6 +325,7 @@ pub async fn create_batch(
     state: State<'_, Mutex<AppState>>,
     source: BatchSource,
     mut items: Vec<BatchItem>,
+    auto: bool,
 ) -> Result<BatchRecord, String> {
     let _operation = OPERATION.try_lock().map_err(|_| "Mining or undo is already running")?;
     if items.is_empty() {
@@ -329,6 +345,7 @@ pub async fn create_batch(
         finished_at: None,
         source: current,
         items,
+        auto,
     };
     let _guard = FILE_LOCK.lock().unwrap();
     file().load_or_move_aside()?;
@@ -351,6 +368,8 @@ pub struct UndoResult {
     pub deleted: usize,
     pub already_gone: usize,
     pub remaining: usize,
+    /// Auto mode can mine the source again.
+    pub reopened: bool,
 }
 
 #[tauri::command]
@@ -372,10 +391,15 @@ pub async fn undo_batch(batch_id: String) -> Result<UndoResult, String> {
     let remaining = api::existing_note_ids_strict(&existing).await?;
     mark_deleted(&mut batch, &remaining);
     save(&batch).map_err(|e| format!("Anki deletion was checked, but recovery history could not be saved: {}. Retry Undo to reconcile it.", e.message))?;
+    let reopened = batch.auto && remaining.is_empty();
+    if reopened {
+        unmark_media_processed(&batch.source.fingerprint)?;
+    }
     Ok(UndoResult {
         deleted: existing.len() - remaining.len(),
         already_gone: ids.len() - existing.len(),
         remaining: remaining.len(),
+        reopened,
         batch,
     })
 }
@@ -417,6 +441,7 @@ mod tests {
                 mine_media: true,
                 outcome: Outcome::Created { note_id: 42, media: MediaState::Pending, error: None },
             }],
+            auto: false,
         }
     }
 
