@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeSet,
     path::PathBuf,
     sync::{
         atomic::{
@@ -31,6 +32,9 @@ const FILE: &str = "yomine_last_batch.json";
 static FILE_LOCK: Mutex<()> = Mutex::new(());
 pub static OPERATION: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 pub static RUNNING: AtomicBool = AtomicBool::new(false);
+pub static AUTO: AtomicBool = AtomicBool::new(false);
+const PROCESSED_FILE: &str = "processed_media.json";
+static PROCESSED_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct BatchSource {
@@ -259,6 +263,33 @@ pub fn checkpoint(batch: &mut BatchRecord, index: usize, outcome: Outcome) -> Re
 #[tauri::command]
 pub fn set_batch_running(running: bool) {
     RUNNING.store(running, Ordering::Relaxed);
+}
+
+#[tauri::command]
+pub fn set_auto_mode(on: bool) {
+    AUTO.store(on, Ordering::Relaxed);
+}
+
+fn processed_media() -> Result<BTreeSet<String>, String> {
+    persistence::load_json(PROCESSED_FILE)
+        .map_err(|e| format!("Could not read the processed video list: {e}"))
+}
+
+#[tauri::command]
+pub fn is_media_processed(fingerprint: String) -> Result<bool, String> {
+    let _lock = PROCESSED_LOCK.lock().unwrap();
+    Ok(processed_media()?.contains(&fingerprint))
+}
+
+#[tauri::command]
+pub fn mark_media_processed(fingerprint: String) -> Result<(), String> {
+    let _lock = PROCESSED_LOCK.lock().unwrap();
+    let mut processed = processed_media()?;
+    if processed.insert(fingerprint) {
+        persistence::save_json(&processed, PROCESSED_FILE)
+            .map_err(|e| format!("Could not save the processed video list: {e}"))?;
+    }
+    Ok(())
 }
 
 #[tauri::command]

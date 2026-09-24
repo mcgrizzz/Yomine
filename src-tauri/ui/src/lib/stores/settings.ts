@@ -74,6 +74,15 @@ export const setAsbplayerFollowNewMedia = (on: boolean) =>
 export const setAsbplayerFollowActiveTab = (on: boolean) =>
 	patchSettings({ asbplayer_follow_active_tab: on });
 
+export const setAutoMine = (prefs: ipc.AutoMine) =>
+	patchSettings({
+		auto_mine: {
+			limit: Math.min(50, Math.max(1, Math.round(prefs.limit) || 1)),
+			pos_points: { ...prefs.pos_points },
+			jlpt_points: { ...prefs.jlpt_points }
+		}
+	});
+
 export const setAsbplayerPollSecs = (secs: number) =>
 	patchSettings({ asbplayer_poll_secs: Math.max(1, Math.round(secs) || 1) });
 

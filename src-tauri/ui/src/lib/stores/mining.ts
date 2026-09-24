@@ -34,6 +34,9 @@ export const playerBusy = writable(false);
 /** Must stay in sync with the engine's `anki::mined::normalize_sentence`. */
 export const normalizeSentence = (s: string): string => s.replace(/\s+/g, '');
 
+export const isMinedTerm = (t: ipc.Term, mined: Set<string>, added: Set<string>): boolean =>
+	mined.has(t.lemma_form) || added.has(t.lemma_form) || added.has(t.surface_form);
+
 const REFRESH_DEBOUNCE_MS = 5000;
 let lastRefresh = 0;
 

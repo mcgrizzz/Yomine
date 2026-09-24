@@ -220,6 +220,13 @@ export interface AnkiConnectionSettings {
 	api_key: string;
 }
 
+/** Auto mode's card limit and pick preferences. Points are keyed by POS key and JLPT level. */
+export interface AutoMine {
+	limit: number;
+	pos_points: Record<string, number>;
+	jlpt_points: Record<string, number>;
+}
+
 export interface SettingsData {
 	anki_model_mappings: Record<string, FieldMapping>;
 	anki_connection: AnkiConnectionSettings;
@@ -245,6 +252,7 @@ export interface SettingsData {
 	asbplayer_follow_active_tab: boolean;
 	/** Follow-mode poll cadence in seconds (≥1). */
 	asbplayer_poll_secs: number;
+	auto_mine: AutoMine;
 	/** Whole-UI scale factor (1.0 = 100%), applied as CSS zoom on the root. */
 	font_scale: number;
 	/** Definition popover scale factor (issue #113), independent of font_scale. */
@@ -795,6 +803,18 @@ export interface MineOptions {
 
 export function setBatchRunning(running: boolean): Promise<void> {
 	return invoke('set_batch_running', { running });
+}
+
+export function setAutoMode(on: boolean): Promise<void> {
+	return invoke('set_auto_mode', { on });
+}
+
+export function isMediaProcessed(fingerprint: string): Promise<boolean> {
+	return invoke('is_media_processed', { fingerprint });
+}
+
+export function markMediaProcessed(fingerprint: string): Promise<void> {
+	return invoke('mark_media_processed', { fingerprint });
 }
 
 export function getLastBatch(): Promise<BatchRecord | null> {

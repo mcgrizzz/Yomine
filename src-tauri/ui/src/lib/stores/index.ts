@@ -17,3 +17,4 @@ export * from './mining';
 export * from './update';
 export * from './hydrate';
 export * from './batches';
+export * from './auto';

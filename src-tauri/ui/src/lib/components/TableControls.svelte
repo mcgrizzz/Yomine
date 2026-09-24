@@ -161,7 +161,7 @@
 					checked={$freqFilter.includeUnknown}
 					onchange={(e) => setUnknown(e.currentTarget.checked)}
 				/>
-				?
+				Unranked
 			</label>
 		</div>
 	{:else if $freqFilter}
