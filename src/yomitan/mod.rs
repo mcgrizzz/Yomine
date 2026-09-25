@@ -96,23 +96,26 @@ pub async fn matched_source(base_url: &str, text: &str, entry_index: usize) -> O
         .map(str::to_string)
 }
 
-/// The first entry for `text` headed by `term` read as `reading`, else the first read as
-/// `reading`; `None` when no entry has that reading.
+/// The entry for our word among Yomitan's entries for `text`, preferring UniDic's lexeme at
+/// our reading (染みる over a kana-headword しみる entry without Jitendex's glosses), then
+/// `term` at our reading, then the lexeme at any reading (成る for the potential なれる),
+/// then any entry at our reading. `None` when none qualifies.
 pub async fn entry_index_for(
     base_url: &str,
     text: &str,
     term: &str,
     reading: &str,
+    lexeme: Option<&str>,
 ) -> Option<usize> {
     let entries: TermEntries =
         post(base_url, "termEntries", serde_json::json!({ "term": text })).await.ok()?;
     let reading = reading.to_hiragana();
     let reads = |h: &Headword| h.reading.to_hiragana() == reading;
+    let is_lexeme = |h: &Headword| lexeme.is_some_and(|l| h.term == l);
+    let tiers: [&dyn Fn(&Headword) -> bool; 4] =
+        [&|h| is_lexeme(h) && reads(h), &|h| h.term == term && reads(h), &is_lexeme, &reads];
     let entries = &entries.dictionary_entries;
-    entries
-        .iter()
-        .position(|e| e.headwords.iter().any(|h| h.term == term && reads(h)))
-        .or_else(|| entries.iter().position(|e| e.headwords.iter().any(reads)))
+    tiers.iter().find_map(|tier| entries.iter().position(|e| e.headwords.iter().any(tier)))
 }
 
 async fn post<T: for<'de> Deserialize<'de>>(

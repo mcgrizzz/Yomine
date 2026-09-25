@@ -72,12 +72,17 @@ pub async fn mine_term(
 ) -> Result<MineResultDto, String> {
     let _operation =
         batches::OPERATION.try_lock().map_err(|_| "Mining or undo is already running")?;
-    let (yomitan_url, media_id) = {
+    let item_key = reading.map(|r| format!("{term} {r}")).unwrap_or_default();
+    let (yomitan_url, media_id, lexeme) = {
         let guard = state.lock().unwrap();
-        (guard.settings.yomitan_url.clone(), guard.file.asbplayer_media_id.clone())
+        (
+            guard.settings.yomitan_url.clone(),
+            guard.file.asbplayer_media_id.clone(),
+            row_lexeme(&guard.file, &item_key),
+        )
     };
     let item = BatchItem {
-        key: reading.map(|r| format!("{term} {r}")).unwrap_or_default(),
+        key: item_key,
         lemma: term,
         surface,
         sentence,
@@ -96,7 +101,7 @@ pub async fn mine_term(
     };
     let options = MineOptions { record: true, require_dictionary_media: true };
     let mut result =
-        mine(&yomitan_url, &item, options, &progress, None).await.map_err(|e| e.message)?;
+        mine(&yomitan_url, &item, lexeme, options, &progress, None).await.map_err(|e| e.message)?;
 
     // Enrichment failures don't undo the mine (the note exists) — warn instead.
     if let Some(id) = result.note_id.filter(|_| item.mine_media) {
@@ -145,19 +150,24 @@ pub async fn mine_batch_item(
         batches::OPERATION.try_lock().map_err(|_| "Mining or undo is already running")?;
     let mut batch = batches::load(&batch_id)?;
     let item = batch.items.get(item_index).ok_or("Batch item not found")?.clone();
-    let (url, loaded_target) = {
+    let (url, loaded_target, lexeme) = {
         let state = state.lock().unwrap();
         if !batch.source.matches(&BatchSource::from_file(&state.file)?) {
             return Err("Load the original source before retrying this batch".into());
         }
-        (state.settings.yomitan_url.clone(), state.file.asbplayer_media_id.clone())
+        (
+            state.settings.yomitan_url.clone(),
+            state.file.asbplayer_media_id.clone(),
+            (!item.adhoc).then(|| row_lexeme(&state.file, &item.key)).flatten(),
+        )
     };
     let target = loaded_target.or(media_target);
     let mut preview_file = None;
     let result = async {
         match item.outcome {
             Outcome::Unattempted | Outcome::Failed { .. } => {
-                mine(&url, &item, options, &progress, Some((&mut batch, item_index))).await?;
+                mine(&url, &item, lexeme, options, &progress, Some((&mut batch, item_index)))
+                    .await?;
             }
             Outcome::Created {
                 note_id,
@@ -261,9 +271,24 @@ async fn validate_media_target(player: &PlayerHandle, target: Option<&str>) -> R
     Ok(())
 }
 
+/// UniDic's lexeme for a row, keyed by `termKey`: "{lemma} {reading}".
+fn row_lexeme(file: &crate::state::FileData, key: &str) -> Option<String> {
+    let (lemma, reading) = key.split_once(' ')?;
+    file.base_terms
+        .iter()
+        .find(|t| t.lemma_form == lemma && t.lemma_reading == reading)?
+        .lexeme
+        .clone()
+}
+
 /// Yomitan's first entry can be a different word with the same spelling (止める as やめる when
-/// the sentence reads とめる), so a row picks the entry matching its own reading.
-async fn default_entry(yomitan_url: &str, item: &BatchItem, term: &str) -> usize {
+/// the sentence reads とめる), so a row picks the entry for its own word.
+async fn default_entry(
+    yomitan_url: &str,
+    item: &BatchItem,
+    term: &str,
+    lexeme: Option<&str>,
+) -> usize {
     // A row's key is `termKey`: "{lemma} {reading}".
     let reading = match item.key.split_once(' ') {
         Some((lemma, reading)) if !item.adhoc && lemma == item.lemma => reading,
@@ -271,7 +296,13 @@ async fn default_entry(yomitan_url: &str, item: &BatchItem, term: &str) -> usize
     };
     tokio::time::timeout(
         MATCH_LOOKUP_TIMEOUT,
-        yomitan::entry_index_for(yomitan_url, term, &item.lemma, reading),
+        yomitan::entry_index_for(
+            yomitan_url,
+            term,
+            &item.lemma,
+            reading,
+            lexeme.map(yomine::segmentation::word::lexeme_name),
+        ),
     )
     .await
     .ok()
@@ -282,6 +313,7 @@ async fn default_entry(yomitan_url: &str, item: &BatchItem, term: &str) -> usize
 async fn mine(
     yomitan_url: &str,
     item: &BatchItem,
+    lexeme: Option<String>,
     options: MineOptions,
     progress: &Channel<LoadingMessage>,
     mut batch: Option<(&mut BatchRecord, usize)>,
@@ -295,7 +327,7 @@ async fn mine(
     let via = if item.mine_media { "asbplayer" } else { "direct" }.to_string();
     let entry_index = match entry_index {
         Some(index) => index,
-        None => default_entry(yomitan_url, item, &term).await,
+        None => default_entry(yomitan_url, item, &term, lexeme.as_deref()).await,
     };
 
     let _ = progress.send(LoadingMessage::new(format!("Rendering 「{}」 with Yomitan…", term)));
