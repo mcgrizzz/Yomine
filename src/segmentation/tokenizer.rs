@@ -74,10 +74,13 @@ pub(super) fn resolve_citation(word: &mut Word, manager: &FrequencyManager) {
         .collect();
     candidates
         .sort_by_key(|(form, reading)| manager.get_harmonic_frequency_for_pair(form, reading));
-    if word.part_of_speech == POS::Verb {
-        retain_verb_final_candidates(&mut candidates, &word.surface_form);
-    }
     let lemma = (word.lemma_form.clone(), word.lemma_hatsuon.clone());
+    match word.part_of_speech {
+        POS::Verb => retain_verb_final_candidates(&mut candidates, &word.surface_form),
+        // An adjective stem can deinflect as a verb (のろ as 乗る's imperative).
+        POS::Adjective => candidates.retain(|pair| pair.0.ends_with('い') || *pair == lemma),
+        _ => {}
+    }
     let selected = exception
         .map(|pair| (pair, CitationProvenance::LexicalException))
         .or_else(|| {
@@ -289,6 +292,56 @@ impl PhraseMode {
     }
 }
 
+/// Subtitle labels: a bracketed group opening the text or following whitespace, with any
+/// dialogue dash before it (`-（伊黒）`, `（足音）`). Each is its whole byte range and the
+/// byte range inside the brackets.
+fn bracket_labels(text: &str) -> Vec<((usize, usize), (usize, usize))> {
+    let mut labels = Vec::new();
+    let mut line_start = true;
+    let mut dash_start = None;
+    let mut chars = text.char_indices();
+    while let Some((i, c)) = chars.next() {
+        match c {
+            _ if c.is_whitespace() => {
+                line_start = true;
+                dash_start = None;
+            }
+            '-' | '－' | '‐' | '―' if line_start => {
+                dash_start.get_or_insert(i);
+            }
+            '（' | '(' if line_start => {
+                let close = if c == '（' { '）' } else { ')' };
+                match chars.by_ref().find(|&(_, c)| c == close) {
+                    Some((j, _)) => labels.push((
+                        (dash_start.unwrap_or(i), j + close.len_utf8()),
+                        (i + c.len_utf8(), j),
+                    )),
+                    None => break,
+                }
+                line_start = false;
+                dash_start = None;
+            }
+            _ => {
+                line_start = false;
+                dash_start = None;
+            }
+        }
+    }
+    labels
+}
+
+/// A label naming the speaker rather than describing a sound (（足音）, （炭治郎の声）):
+/// katakana UniDic doesn't know (anime frequency lists rank names like フリーレン), proper
+/// nouns only, or kanji no frequency list knows (UniDic splits 伊黒 into 伊 + 黒).
+fn names_speaker(content: &str, words: &[&Term], manager: &FrequencyManager) -> bool {
+    let katakana = |c: char| matches!(c, 'ァ'..='ヺ' | 'ー' | '・' | '･' | 'ｦ'..='ﾟ');
+    !content.is_empty()
+        && ((content.chars().all(katakana) && words.iter().all(|w| w.lexeme.is_none()))
+            || (!words.is_empty() && words.iter().all(|w| w.part_of_speech == POS::ProperNoun))
+            || (content.chars().all(is_kanji_char)
+                && manager.get_frequency_data_by_term(content).is_empty()))
+}
+
 fn phrase_frequency(manager: &FrequencyManager, form: &str, reading: &str) -> Option<u32> {
     manager.get_harmonic_frequency_for_pair(
         &form.normalize_long_vowel(),
@@ -426,9 +479,39 @@ pub fn extract_words(
         ));
 
         let base_len = sentence_terms.len();
-        // Whitespace keeps its display segment but is never a term.
-        let mut suppressed: Vec<bool> =
-            sentence_terms.iter().map(|t| t.surface_form.trim().is_empty()).collect();
+        let labels: Vec<(usize, usize)> = bracket_labels(&sentence.text)
+            .into_iter()
+            .filter(|&(_, (start, end))| {
+                let words: Vec<&Term> = sentence_terms
+                    .iter()
+                    .zip(&term_spans)
+                    .filter(|(t, &(s, e))| {
+                        s >= start && e <= end && !t.surface_form.trim().is_empty()
+                    })
+                    .map(|(t, _)| t)
+                    .collect();
+                names_speaker(&sentence.text[start..end], &words, frequency_manager)
+            })
+            .map(|(label, _)| label)
+            .collect();
+        let labelled: Vec<bool> = term_spans
+            .iter()
+            .map(|&(s, e)| labels.iter().any(|&(ls, le)| s >= ls && e <= le))
+            .collect();
+        // A kana noun right before an ellipsis is usually a word cut off mid-way
+        // (お願いしま… as 縞).
+        let cut_off = |i: usize| {
+            sentence_terms[i].is_kana
+                && sentence_terms[i].part_of_speech == POS::Noun
+                && sentence_terms
+                    .get(i + 1)
+                    .is_some_and(|n| n.surface_form.starts_with(['…', '‥', '.', '．']))
+        };
+        // Whitespace, speaker labels and cut-off words keep their display segments but are
+        // never terms.
+        let mut suppressed: Vec<bool> = (0..base_len)
+            .map(|i| labelled[i] || cut_off(i) || sentence_terms[i].surface_form.trim().is_empty())
+            .collect();
         // A phrase that hides its words also hides phrases inside it (にかけて in 気にかける).
         let mut hidden_through = None;
         for start in 0..base_len {
@@ -436,6 +519,9 @@ pub fn extract_words(
                 continue;
             }
             for end in (start + 1..base_len).rev() {
+                if labelled[start..=end].iter().any(|&l| l) {
+                    continue;
+                }
                 let subrange = &sentence_terms[start..=end];
                 // Frequency lists carry particle n-grams (あなたに); JMdict lists only real
                 // phrases that begin or end in one (ついでに, にとって).

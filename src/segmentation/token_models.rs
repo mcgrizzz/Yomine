@@ -151,9 +151,20 @@ impl From<(String, RawToken)> for UnidicToken {
         let spelled =
             |kana: String, pron: String| if kana.as_str().is_kana() { kana } else { pron };
         let surface_hatsuon = replace_missing(spelled(raw.kana, raw.pron));
-        let lemma_form = replace_missing(raw.orth_base);
+        let mut lemma_form = replace_missing(raw.orth_base);
         let lexeme = replace_missing(raw.lemma);
-        let lemma_hatsuon = replace_missing(spelled(raw.kana_base, raw.pron_base));
+        let mut lemma_hatsuon = replace_missing(spelled(raw.kana_base, raw.pron_base));
+        // UniDic files 信じる/感じる under the literary 信ずる/感ずる; a じ-stem is the
+        // modern verb.
+        if raw.pos1 == "動詞"
+            && ["ジ", "ジル", "ジレ", "ジロ"].iter().any(|e| surface_hatsuon.ends_with(e))
+        {
+            if let (Some(form), Some(reading)) =
+                (lemma_form.strip_suffix("ずる"), lemma_hatsuon.strip_suffix("ズル"))
+            {
+                (lemma_form, lemma_hatsuon) = (format!("{form}じる"), format!("{reading}ジル"));
+            }
+        }
 
         UnidicToken {
             surface,
