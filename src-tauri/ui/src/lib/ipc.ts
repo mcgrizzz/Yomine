@@ -15,14 +15,16 @@ export type Pos = string;
 
 export type JlptLevel = 'N5' | 'N4' | 'N3' | 'N2' | 'N1';
 
+export interface AutoSkip {
+	spelling_in_anki: boolean;
+	speaker_name: boolean;
+	ambiguous_grammar: boolean;
+}
+
 export interface Term {
 	possible_known_match?: string | null;
-	/** An Anki card has this spelling under another reading; Anki refuses the note. */
-	spelling_in_anki?: boolean;
-	/** Every occurrence sits inside a name the file's speaker labels use. */
-	in_speaker_name?: boolean;
-	/** A phrase of grammatical words only that JMdict gives several senses. */
-	ambiguous_grammar?: boolean;
+	/** Why auto mode passes over this term (`AutoSkip` in core/models.rs). */
+	auto_skip?: AutoSkip;
 	id: number;
 	lemma_form: string;
 	lemma_reading: string;

@@ -412,7 +412,7 @@ impl AnkiState {
             .map(|mut term| {
                 term.possible_known_match = None;
                 term.comprehension = 0.0;
-                term.spelling_in_anki =
+                term.auto_skip.spelling_in_anki =
                     self.cards_by_term.contains_key(&normalize_japanese_text(&term.lemma_form));
                 let known = match self.classify_term(&term) {
                     MatchResult::Known { card, evidence: _ } => {
@@ -645,9 +645,7 @@ mod classification_tests {
     fn term(surface: &str, reading: &str) -> Term {
         Term {
             possible_known_match: None,
-            spelling_in_anki: false,
-            in_speaker_name: false,
-            ambiguous_grammar: false,
+            auto_skip: Default::default(),
             lexical_family: None,
             lexeme: None,
             id: 0,

@@ -1,5 +1,9 @@
 pub mod nbest;
 
+mod grammar;
+
+mod speaker_labels;
+
 pub mod numbers;
 
 pub mod tokenizer;

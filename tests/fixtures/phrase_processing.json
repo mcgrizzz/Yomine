@@ -24,13 +24,16 @@
     ],
     "corpus": [
       {
-        "ambiguous_grammar": false,
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "形態",
         "full_segment_reading": "けいたい",
         "id": 0,
-        "in_speaker_name": false,
         "is_kana": false,
         "jlpt_level": null,
         "lemma_form": "形態",
@@ -39,18 +42,20 @@
         "part_of_speech": "Noun",
         "possible_known_match": null,
         "sentence_references": [],
-        "spelling_in_anki": false,
         "surface_form": "形態",
         "surface_reading": "けいたい"
       },
       {
-        "ambiguous_grammar": false,
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "化させて",
         "full_segment_reading": "かさせて",
         "id": 0,
-        "in_speaker_name": false,
         "is_kana": false,
         "jlpt_level": null,
         "lemma_form": "化させて",
@@ -59,7 +64,6 @@
         "part_of_speech": "Verb",
         "possible_known_match": null,
         "sentence_references": [],
-        "spelling_in_anki": false,
         "surface_form": "化させて",
         "surface_reading": "かさせて"
       }
@@ -71,7 +75,11 @@
     ],
     "production": [
       {
-        "ambiguous_grammar": false,
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 2000,
@@ -80,7 +88,6 @@
         "full_segment": "形態",
         "full_segment_reading": "けいたい",
         "id": 0,
-        "in_speaker_name": false,
         "is_kana": false,
         "jlpt_level": null,
         "lemma_form": "形態",
@@ -94,12 +101,15 @@
             0
           ]
         ],
-        "spelling_in_anki": false,
         "surface_form": "形態",
         "surface_reading": "けいたい"
       },
       {
-        "ambiguous_grammar": false,
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 4000,
@@ -108,7 +118,6 @@
         "full_segment": "化させて",
         "full_segment_reading": "かさせて",
         "id": 0,
-        "in_speaker_name": false,
         "is_kana": false,
         "jlpt_level": null,
         "lemma_form": "化する",
@@ -122,12 +131,15 @@
             6
           ]
         ],
-        "spelling_in_anki": false,
         "surface_form": "化させて",
         "surface_reading": "かさせて"
       },
       {
-        "ambiguous_grammar": false,
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 10,
@@ -136,7 +148,6 @@
         "full_segment": "形態化させて",
         "full_segment_reading": "けいたいかさせて",
         "id": 1,
-        "in_speaker_name": false,
         "is_kana": false,
         "jlpt_level": null,
         "lemma_form": "形態化する",
@@ -150,7 +161,6 @@
             0
           ]
         ],
-        "spelling_in_anki": false,
         "surface_form": "形態化させて",
         "surface_reading": "けいたいかさせて"
       }
@@ -186,13 +196,16 @@
     ],
     "corpus": [
       {
-        "ambiguous_grammar": false,
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "要らないです",
         "full_segment_reading": "いらないです",
         "id": 0,
-        "in_speaker_name": false,
         "is_kana": false,
         "jlpt_level": null,
         "lemma_form": "要らないです",
@@ -201,7 +214,6 @@
         "part_of_speech": "Verb",
         "possible_known_match": null,
         "sentence_references": [],
-        "spelling_in_anki": false,
         "surface_form": "要らないです",
         "surface_reading": "いらないです"
       }
@@ -211,7 +223,11 @@
     ],
     "production": [
       {
-        "ambiguous_grammar": false,
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 700,
@@ -220,7 +236,6 @@
         "full_segment": "要らないです",
         "full_segment_reading": "いらないです",
         "id": 0,
-        "in_speaker_name": false,
         "is_kana": false,
         "jlpt_level": null,
         "lemma_form": "要る",
@@ -234,7 +249,6 @@
             0
           ]
         ],
-        "spelling_in_anki": false,
         "surface_form": "要らないです",
         "surface_reading": "いらないです"
       }
@@ -264,13 +278,16 @@
     ],
     "corpus": [
       {
-        "ambiguous_grammar": false,
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "知らなかった",
         "full_segment_reading": "しらなかった",
         "id": 0,
-        "in_speaker_name": false,
         "is_kana": false,
         "jlpt_level": null,
         "lemma_form": "知らなかった",
@@ -279,7 +296,6 @@
         "part_of_speech": "Verb",
         "possible_known_match": null,
         "sentence_references": [],
-        "spelling_in_anki": false,
         "surface_form": "知らなかった",
         "surface_reading": "しらなかった"
       }
@@ -289,7 +305,11 @@
     ],
     "production": [
       {
-        "ambiguous_grammar": false,
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 100,
@@ -298,7 +318,6 @@
         "full_segment": "知らなかった",
         "full_segment_reading": "しらなかった",
         "id": 0,
-        "in_speaker_name": false,
         "is_kana": false,
         "jlpt_level": null,
         "lemma_form": "知る",
@@ -312,7 +331,6 @@
             0
           ]
         ],
-        "spelling_in_anki": false,
         "surface_form": "知らなかった",
         "surface_reading": "しらなかった"
       }
@@ -342,13 +360,16 @@
     ],
     "corpus": [
       {
-        "ambiguous_grammar": false,
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "つまらなかった",
         "full_segment_reading": "つまらなかった",
         "id": 0,
-        "in_speaker_name": false,
         "is_kana": true,
         "jlpt_level": null,
         "lemma_form": "つまらなかった",
@@ -357,7 +378,6 @@
         "part_of_speech": "Verb",
         "possible_known_match": null,
         "sentence_references": [],
-        "spelling_in_anki": false,
         "surface_form": "つまらなかった",
         "surface_reading": "つまらなかった"
       }
@@ -367,7 +387,11 @@
     ],
     "production": [
       {
-        "ambiguous_grammar": false,
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 1000,
@@ -376,7 +400,6 @@
         "full_segment": "つまらなかった",
         "full_segment_reading": "つまらなかった",
         "id": 0,
-        "in_speaker_name": false,
         "is_kana": true,
         "jlpt_level": null,
         "lemma_form": "つまらない",
@@ -390,7 +413,6 @@
             0
           ]
         ],
-        "spelling_in_anki": false,
         "surface_form": "つまらなかった",
         "surface_reading": "つまらなかった"
       }
@@ -420,13 +442,16 @@
     ],
     "corpus": [
       {
-        "ambiguous_grammar": false,
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "おばさん",
         "full_segment_reading": "おばさん",
         "id": 0,
-        "in_speaker_name": false,
         "is_kana": true,
         "jlpt_level": null,
         "lemma_form": "おばさん",
@@ -435,7 +460,6 @@
         "part_of_speech": "Noun",
         "possible_known_match": null,
         "sentence_references": [],
-        "spelling_in_anki": false,
         "surface_form": "おばさん",
         "surface_reading": "おばさん"
       }
@@ -445,7 +469,11 @@
     ],
     "production": [
       {
-        "ambiguous_grammar": false,
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 2000,
@@ -454,7 +482,6 @@
         "full_segment": "おばさん",
         "full_segment_reading": "おばさん",
         "id": 0,
-        "in_speaker_name": false,
         "is_kana": true,
         "jlpt_level": null,
         "lemma_form": "おばさん",
@@ -468,7 +495,6 @@
             0
           ]
         ],
-        "spelling_in_anki": false,
         "surface_form": "おばさん",
         "surface_reading": "おばさん"
       }
@@ -518,13 +544,16 @@
     ],
     "corpus": [
       {
-        "ambiguous_grammar": false,
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "なん",
         "full_segment_reading": "なん",
         "id": 0,
-        "in_speaker_name": false,
         "is_kana": true,
         "jlpt_level": null,
         "lemma_form": "なん",
@@ -533,18 +562,20 @@
         "part_of_speech": "Pronoun",
         "possible_known_match": null,
         "sentence_references": [],
-        "spelling_in_anki": false,
         "surface_form": "なん",
         "surface_reading": "なん"
       },
       {
-        "ambiguous_grammar": false,
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "と",
         "full_segment_reading": "と",
         "id": 0,
-        "in_speaker_name": false,
         "is_kana": true,
         "jlpt_level": null,
         "lemma_form": "と",
@@ -553,18 +584,20 @@
         "part_of_speech": "Postposition",
         "possible_known_match": null,
         "sentence_references": [],
-        "spelling_in_anki": false,
         "surface_form": "と",
         "surface_reading": "と"
       },
       {
-        "ambiguous_grammar": false,
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "なく",
         "full_segment_reading": "なく",
         "id": 0,
-        "in_speaker_name": false,
         "is_kana": true,
         "jlpt_level": null,
         "lemma_form": "なく",
@@ -573,7 +606,6 @@
         "part_of_speech": "Adjective",
         "possible_known_match": null,
         "sentence_references": [],
-        "spelling_in_anki": false,
         "surface_form": "なく",
         "surface_reading": "なく"
       }
@@ -586,7 +618,11 @@
     ],
     "production": [
       {
-        "ambiguous_grammar": false,
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 2016,
@@ -595,7 +631,6 @@
         "full_segment": "なんとなく",
         "full_segment_reading": "なんとなく",
         "id": 1,
-        "in_speaker_name": false,
         "is_kana": true,
         "jlpt_level": null,
         "lemma_form": "何となく",
@@ -609,7 +644,6 @@
             0
           ]
         ],
-        "spelling_in_anki": false,
         "surface_form": "なんとなく",
         "surface_reading": "なんとなく"
       }
@@ -701,13 +735,16 @@
     ],
     "corpus": [
       {
-        "ambiguous_grammar": false,
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "土曜",
         "full_segment_reading": "どよう",
         "id": 0,
-        "in_speaker_name": false,
         "is_kana": false,
         "jlpt_level": null,
         "lemma_form": "土曜",
@@ -716,18 +753,20 @@
         "part_of_speech": "Noun",
         "possible_known_match": null,
         "sentence_references": [],
-        "spelling_in_anki": false,
         "surface_form": "土曜",
         "surface_reading": "どよう"
       },
       {
-        "ambiguous_grammar": false,
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "日",
         "full_segment_reading": "ひ",
         "id": 0,
-        "in_speaker_name": false,
         "is_kana": false,
         "jlpt_level": null,
         "lemma_form": "日",
@@ -736,18 +775,20 @@
         "part_of_speech": "Noun",
         "possible_known_match": null,
         "sentence_references": [],
-        "spelling_in_anki": false,
         "surface_form": "日",
         "surface_reading": "ひ"
       },
       {
-        "ambiguous_grammar": false,
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "の",
         "full_segment_reading": "の",
         "id": 0,
-        "in_speaker_name": false,
         "is_kana": true,
         "jlpt_level": null,
         "lemma_form": "の",
@@ -756,18 +797,20 @@
         "part_of_speech": "Postposition",
         "possible_known_match": null,
         "sentence_references": [],
-        "spelling_in_anki": false,
         "surface_form": "の",
         "surface_reading": "の"
       },
       {
-        "ambiguous_grammar": false,
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "複合",
         "full_segment_reading": "ふくごう",
         "id": 0,
-        "in_speaker_name": false,
         "is_kana": false,
         "jlpt_level": null,
         "lemma_form": "複合",
@@ -776,18 +819,20 @@
         "part_of_speech": "Noun",
         "possible_known_match": null,
         "sentence_references": [],
-        "spelling_in_anki": false,
         "surface_form": "複合",
         "surface_reading": "ふくごう"
       },
       {
-        "ambiguous_grammar": false,
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "体",
         "full_segment_reading": "たい",
         "id": 0,
-        "in_speaker_name": false,
         "is_kana": false,
         "jlpt_level": null,
         "lemma_form": "体",
@@ -796,18 +841,20 @@
         "part_of_speech": "Noun",
         "possible_known_match": null,
         "sentence_references": [],
-        "spelling_in_anki": false,
         "surface_form": "体",
         "surface_reading": "たい"
       },
       {
-        "ambiguous_grammar": false,
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "複合体",
         "full_segment_reading": "ふくごうたい",
         "id": 1,
-        "in_speaker_name": false,
         "is_kana": false,
         "jlpt_level": null,
         "lemma_form": "複合体",
@@ -816,7 +863,6 @@
         "part_of_speech": "NounExpression",
         "possible_known_match": null,
         "sentence_references": [],
-        "spelling_in_anki": false,
         "surface_form": "複合体",
         "surface_reading": "ふくごうたい"
       }
@@ -828,7 +874,11 @@
     ],
     "production": [
       {
-        "ambiguous_grammar": false,
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 4294967295
@@ -836,7 +886,6 @@
         "full_segment": "の",
         "full_segment_reading": "の",
         "id": 0,
-        "in_speaker_name": false,
         "is_kana": true,
         "jlpt_level": null,
         "lemma_form": "の",
@@ -850,12 +899,15 @@
             9
           ]
         ],
-        "spelling_in_anki": false,
         "surface_form": "の",
         "surface_reading": "の"
       },
       {
-        "ambiguous_grammar": false,
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 100,
@@ -864,7 +916,6 @@
         "full_segment": "土曜日",
         "full_segment_reading": "どようび",
         "id": 1,
-        "in_speaker_name": false,
         "is_kana": false,
         "jlpt_level": null,
         "lemma_form": "土曜日",
@@ -878,12 +929,15 @@
             0
           ]
         ],
-        "spelling_in_anki": false,
         "surface_form": "土曜日",
         "surface_reading": "どようび"
       },
       {
-        "ambiguous_grammar": false,
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 400,
@@ -892,7 +946,6 @@
         "full_segment": "複合体",
         "full_segment_reading": "ふくごうたい",
         "id": 1,
-        "in_speaker_name": false,
         "is_kana": false,
         "jlpt_level": null,
         "lemma_form": "複合体",
@@ -906,7 +959,6 @@
             12
           ]
         ],
-        "spelling_in_anki": false,
         "surface_form": "複合体",
         "surface_reading": "ふくごうたい"
       }

@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::collections::{
+    HashMap,
+    HashSet,
+};
 
 use vibrato::{
     tokenizer::worker::Worker,
@@ -7,8 +10,10 @@ use vibrato::{
 use wana_kana::IsJapaneseStr;
 
 use super::{
+    grammar,
     nbest::rescue_words,
     rule_matcher::parse_into_words,
+    speaker_labels,
     token_models::UnidicToken,
     unidic_tags::UnidicTag,
     word::{
@@ -292,68 +297,6 @@ impl PhraseMode {
     }
 }
 
-/// Subtitle labels: a bracketed group opening the text or following whitespace, with any
-/// dialogue dash before it (`-（伊黒）`, `（足音）`). Each is its whole byte range and the
-/// byte range inside the brackets.
-fn bracket_labels(text: &str) -> Vec<((usize, usize), (usize, usize))> {
-    let mut labels = Vec::new();
-    let mut line_start = true;
-    let mut dash_start = None;
-    let mut chars = text.char_indices();
-    while let Some((i, c)) = chars.next() {
-        match c {
-            _ if c.is_whitespace() => {
-                line_start = true;
-                dash_start = None;
-            }
-            '-' | '－' | '‐' | '―' if line_start => {
-                dash_start.get_or_insert(i);
-            }
-            '（' | '(' if line_start => {
-                let close = if c == '（' { '）' } else { ')' };
-                match chars.by_ref().find(|&(_, c)| c == close) {
-                    Some((j, _)) => labels.push((
-                        (dash_start.unwrap_or(i), j + close.len_utf8()),
-                        (i + c.len_utf8(), j),
-                    )),
-                    None => break,
-                }
-                line_start = false;
-                dash_start = None;
-            }
-            _ => {
-                line_start = false;
-                dash_start = None;
-            }
-        }
-    }
-    labels
-}
-
-/// Nouns that only carry grammar (ことになる, わけがない).
-const FORMAL_NOUNS: &[&str] = &["事", "物", "所", "訳", "筈"];
-
-/// Particles, copulas, bound words (ない, なる, ある) and formal nouns.
-fn is_grammatical(word: &Word) -> bool {
-    matches!(word.part_of_speech, POS::Postposition | POS::Copula)
-        || word.tokens.first().is_some_and(|t| {
-            matches!(t.pos2, UnidicTag::Hijiritsukanou | UnidicTag::Jodoushigokan)
-                || (t.surface.as_str().is_kana() && FORMAL_NOUNS.contains(&t.lexeme.as_str()))
-        })
-}
-
-/// A label naming the speaker rather than describing a sound (（足音）, （炭治郎の声）):
-/// katakana UniDic doesn't know (anime frequency lists rank names like フリーレン), proper
-/// nouns only, or kanji no frequency list knows (UniDic splits 伊黒 into 伊 + 黒).
-fn names_speaker(content: &str, words: &[&Term], manager: &FrequencyManager) -> bool {
-    let katakana = |c: char| matches!(c, 'ァ'..='ヺ' | 'ー' | '・' | '･' | 'ｦ'..='ﾟ');
-    !content.is_empty()
-        && ((content.chars().all(katakana) && words.iter().all(|w| w.lexeme.is_none()))
-            || (!words.is_empty() && words.iter().all(|w| w.part_of_speech == POS::ProperNoun))
-            || (content.chars().all(is_kanji_char)
-                && manager.get_frequency_data_by_term(content).is_empty()))
-}
-
 fn phrase_frequency(manager: &FrequencyManager, form: &str, reading: &str) -> Option<u32> {
     manager.get_harmonic_frequency_for_pair(
         &form.normalize_long_vowel(),
@@ -452,7 +395,7 @@ pub fn extract_words(
     frequency_manager: &FrequencyManager,
 ) -> Vec<Term> {
     let mut terms = Vec::<Term>::new();
-    let mut speaker_names = std::collections::HashSet::new();
+    let mut speaker_names = HashSet::new();
 
     for (ord, sentence) in sentences.iter_mut().enumerate() {
         let words = analyze_sentence(&mut worker, &sentence.text, frequency_manager);
@@ -464,7 +407,7 @@ pub fn extract_words(
         for word in words {
             let span = word.byte_span();
             rule_citations.push(word.has_rule_citation());
-            grammatical.push(is_grammatical(&word));
+            grammatical.push(grammar::is_grammatical(&word));
             // The highlight span ends at start + surface_form.len(), so the
             // reference must point at the main word, not the segment.
             let ref_start = word.mining_span().0;
@@ -494,7 +437,7 @@ pub fn extract_words(
         ));
 
         let base_len = sentence_terms.len();
-        let labels: Vec<(usize, usize)> = bracket_labels(&sentence.text)
+        let labels: Vec<(usize, usize)> = speaker_labels::bracket_labels(&sentence.text)
             .into_iter()
             .filter(|&(_, (start, end))| {
                 let words: Vec<&Term> = sentence_terms
@@ -506,7 +449,7 @@ pub fn extract_words(
                     .map(|(t, _)| t)
                     .collect();
                 let name = &sentence.text[start..end];
-                let names = names_speaker(name, &words, frequency_manager);
+                let names = speaker_labels::names_speaker(name, &words, frequency_manager);
                 if names {
                     speaker_names.insert(name.to_string());
                 }
@@ -631,12 +574,8 @@ pub fn extract_words(
 
                     phrase.part_of_speech =
                         if all_nouns { POS::NounExpression } else { POS::Expression };
-                    // Grammar with several JMdict senses (ことになる) often gets a card for
-                    // the wrong one.
-                    phrase.ambiguous_grammar = grammatical[start..=end].iter().all(|&g| g)
-                        && [&phrase.surface_form, &phrase.lemma_form].iter().any(|form| {
-                            jmdict_lexicon::phrase_senses(form).is_some_and(|senses| senses > 1)
-                        });
+                    phrase.auto_skip.ambiguous_grammar =
+                        grammar::is_ambiguous(&grammatical[start..=end], &phrase);
 
                     if kanji_noun_compound
                         || listed
@@ -697,17 +636,7 @@ pub fn extract_words(
         terms.append(&mut sentence_terms);
     }
 
-    // Dialogue names its speakers too (善逸！), where UniDic splits the name into words.
-    for term in &mut terms {
-        term.in_speaker_name = term.sentence_references.iter().all(|&(ord, start)| {
-            let text = &sentences[ord].text;
-            let end = start + term.surface_form.len();
-            speaker_names.iter().any(|name| {
-                text.match_indices(name.as_str())
-                    .any(|(at, _)| at <= start && end <= at + name.len())
-            })
-        }) && !term.sentence_references.is_empty();
-    }
+    speaker_labels::mark_speaker_names(&mut terms, sentences, &speaker_names);
 
     terms
 }
@@ -1025,34 +954,4 @@ pub fn init_vibrato(
     let dict = load_dictionary(dict_type, progress_callback)?;
     let tokenizer = vibrato::Tokenizer::new(dict);
     Ok(tokenizer)
-}
-
-#[cfg(test)]
-mod speaker_name_tests {
-    use super::*;
-
-    #[test]
-    fn a_name_from_a_speaker_label_is_flagged_in_dialogue() {
-        let Some(tokenizer) = super::super::lexeme_resolver::test_tokenizer() else {
-            return;
-        };
-        let manager = FrequencyManager::from_dictionaries(vec![]);
-        let mut sentences: Vec<Sentence> = ["（善逸）うるさいな", "善逸！ 待って"]
-            .iter()
-            .enumerate()
-            .map(|(id, text)| Sentence {
-                id,
-                source_id: 0,
-                text: text.to_string(),
-                segments: vec![],
-                timestamp: None,
-                comprehension: 0.0,
-            })
-            .collect();
-        let terms = extract_words(tokenizer.new_worker(), &mut sentences, &manager);
-        let flagged =
-            |form: &str| terms.iter().find(|t| t.surface_form == form).map(|t| t.in_speaker_name);
-        assert_eq!(flagged("善"), Some(true));
-        assert_eq!(flagged("待っ").or(flagged("待って")), Some(false));
-    }
 }

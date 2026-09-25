@@ -22,22 +22,25 @@ export interface PickOptions {
 	normalize: (sentence: string) => string;
 }
 
-// A one-kana "word" is nearly always a misparse fragment (け in ぱんけぇき) or a
-// mislabeled particle, yet frequency lists rank that kana highly (で at 8).
 const SINGLE_KANA = /^[ぁ-ゖァ-ヺーｦ-ﾟ]$/;
+
+/** Terms auto mode never picks; the table still lists them. */
+function skipped(t: Term, opts: PickOptions): boolean {
+	return (
+		// No frequency list ranks it, so it's likely a misparse or a name.
+		harmonic(t) === Infinity ||
+		opts.isMined(t) ||
+		// A one-kana "word" is nearly always a misparse fragment (け in ぱんけぇき) or a
+		// mislabeled particle, yet frequency lists rank that kana highly (で at 8).
+		SINGLE_KANA.test(t.lemma_form) ||
+		Object.values(t.auto_skip ?? {}).some(Boolean)
+	);
+}
 
 /** Best terms to mine from `terms`, at most one per sentence. */
 export function autoPick(terms: Term[], sentences: SentenceDto[], opts: PickOptions): QueueItem[] {
 	const ranked = terms
-		.filter(
-			(t) =>
-				harmonic(t) !== Infinity &&
-				!opts.isMined(t) &&
-				!t.spelling_in_anki &&
-				!t.in_speaker_name &&
-				!t.ambiguous_grammar &&
-				!SINGLE_KANA.test(t.lemma_form)
-		)
+		.filter((t) => !skipped(t, opts))
 		.map((term) => ({
 			term,
 			points: pickPoints(harmonic(term), term.part_of_speech, term.jlpt_level, opts.prefs),

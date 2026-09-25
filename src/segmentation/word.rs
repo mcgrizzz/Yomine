@@ -228,9 +228,7 @@ impl From<Word> for Term {
             let is_kana = main_word.surface.as_str().is_kana();
             Term {
                 possible_known_match: None,
-                spelling_in_anki: false,
-                in_speaker_name: false,
-                ambiguous_grammar: false,
+                auto_skip: Default::default(),
                 lexical_family: None,
                 lexeme: written_lexeme(&main_word),
                 id: 0,
@@ -257,9 +255,7 @@ impl From<Word> for Term {
                 .and_then(written_lexeme);
             Term {
                 possible_known_match: None,
-                spelling_in_anki: false,
-                in_speaker_name: false,
-                ambiguous_grammar: false,
+                auto_skip: Default::default(),
                 lexical_family: None,
                 lexeme,
                 id: 0,
