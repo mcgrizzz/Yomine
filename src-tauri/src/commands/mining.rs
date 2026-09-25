@@ -430,6 +430,9 @@ async fn mine(
     if timestamp_secs.is_none() {
         tags.push("yomine::no-media".to_string());
     }
+    if batch.as_ref().is_some_and(|(record, _)| record.auto) {
+        tags.push("yomine::auto".to_string());
+    }
     if let Some((record, index)) = &mut batch {
         batches::checkpoint(record, *index, Outcome::Attempting)?;
     }

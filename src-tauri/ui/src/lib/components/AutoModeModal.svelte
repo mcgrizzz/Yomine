@@ -110,7 +110,7 @@
 	<div class="body">
 		<p class="intro">
 			Mines each new asbplayer video as it loads, using the terms your table filters show, and records
-			audio and screenshots from the video tab.
+			audio and screenshots from the video tab. Its notes are tagged <code>yomine::auto</code>.
 		</p>
 
 		<section>
@@ -275,6 +275,9 @@
 	}
 	.intro {
 		font-size: 0.9rem;
+	}
+	.intro code {
+		font-size: 0.85em;
 	}
 	section {
 		display: flex;
