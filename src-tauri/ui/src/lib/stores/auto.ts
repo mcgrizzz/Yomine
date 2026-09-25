@@ -1,6 +1,6 @@
 import { derived, get, writable } from 'svelte/store';
 import * as ipc from '$lib/ipc';
-import { autoPick } from '$lib/autopick';
+import { autoPick, DEFAULT_HORIZON } from '$lib/autopick';
 import { applyControls } from '$lib/table';
 import { autoLedger, mineQueue } from './batches';
 import { freqFilter, jlptEnabled, posEnabled } from './controls';
@@ -19,7 +19,7 @@ import {
 	yomitanReachable
 } from './mining';
 import { playerStatus } from './player';
-import { ankiStatus } from './status';
+import { ankiStatus, knowledge } from './status';
 import { settings } from './settings';
 import { lastError, showNotice } from './ui';
 
@@ -102,6 +102,7 @@ function pick(file: ipc.FileLoadResult, prefs: ipc.AutoMine) {
 	const added = get(addedTerms);
 	return autoPick(terms, file.sentences, {
 		prefs,
+		horizon: get(knowledge)?.horizon ?? DEFAULT_HORIZON,
 		isMined: (t) => isMinedTerm(t, mined, added),
 		minedSentences: new Set([...get(minedSentences), ...get(sessionMinedSentences)]),
 		normalize: normalizeSentence

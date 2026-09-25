@@ -150,8 +150,9 @@ impl Default for AutoMine {
         Self {
             stop: AutoMineStop::Count,
             limit: 10,
-            // With these points, about 18 cards from a typical anime episode.
-            min_score: 78,
+            // JLPT verbs and adjectives inside the horizon score 80; with these points a
+            // typical anime episode has about 44 such terms, so the cap usually decides.
+            min_score: 80,
             max_cards: Some(40),
             pos_points: points(&[
                 ("Noun", 30),

@@ -330,6 +330,8 @@ export interface BandStats {
 export interface KnowledgeSummary {
 	jlpt: { level: string; stats: BandStats }[];
 	frequency: { label: string; stats: BandStats }[];
+	/** Rank up to which auto mode gives full frequency points; only ever grows. */
+	horizon?: number | null;
 }
 
 // ---- Event payloads (contracts/events.md) ----

@@ -355,6 +355,8 @@ pub struct FrequencyBand {
 pub struct KnowledgeSummaryDto {
     pub jlpt: Vec<JlptBand>,
     pub frequency: Vec<FrequencyBand>,
+    #[serde(default)]
+    pub horizon: Option<u32>,
 }
 
 impl KnowledgeSummaryDto {
@@ -370,6 +372,7 @@ impl KnowledgeSummaryDto {
                 .into_iter()
                 .map(|(label, stats)| FrequencyBand { label, stats })
                 .collect(),
+            horizon: s.horizon,
         }
     }
 }

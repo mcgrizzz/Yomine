@@ -116,10 +116,15 @@ pub(crate) async fn refresh_knowledge_summary(app: &AppHandle) {
     .await
     {
         // Cached for the one-shot pull; pushed to any live webview.
-        let dto = KnowledgeSummaryDto::from_summary(summary);
+        let mut dto = KnowledgeSummaryDto::from_summary(summary);
         {
             let state = app.state::<Mutex<AppState>>();
-            state.lock().unwrap().knowledge_summary = Some(dto.clone());
+            let mut guard = state.lock().unwrap();
+            // The horizon only moves outward: a dip in coverage (a batch of new cards,
+            // retired ones) mustn't pull auto mode back to commoner words.
+            let reached = guard.knowledge_summary.as_ref().and_then(|s| s.horizon);
+            dto.horizon = dto.horizon.max(reached);
+            guard.knowledge_summary = Some(dto.clone());
         }
         let _ = yomine::persistence::save_json(&dto, crate::state::KNOWLEDGE_SUMMARY_CACHE);
         let _ = app.emit(names::KNOWLEDGE_SUMMARY, dto);

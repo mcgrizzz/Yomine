@@ -1,16 +1,16 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { dirtyGuard } from '$lib/dirtyGuard.svelte';
-	import { frequencyPoints, pickPoints } from '$lib/autopick';
+	import { DEFAULT_HORIZON, frequencyPoints, pickPoints } from '$lib/autopick';
 	import type { AutoMine } from '$lib/ipc';
 	import Modal from './Modal.svelte';
-	import { autoModalOpen, posCatalog, setAutoMine, settings } from '$lib/stores';
+	import { autoModalOpen, knowledge, posCatalog, setAutoMine, settings } from '$lib/stores';
 
 	/** `AutoMine::default()` (core/settings.rs). */
 	const DEFAULTS: AutoMine = {
 		stop: 'count',
 		limit: 10,
-		min_score: 78,
+		min_score: 80,
 		max_cards: 40,
 		pos_points: {
 			Noun: 30,
@@ -81,15 +81,16 @@
 		delete draft.pos_points[key];
 	}
 
+	const horizon = $derived($knowledge?.horizon ?? DEFAULT_HORIZON);
 	const examples = $derived(
 		[
-			{ rank: 3000, pos: 'Verb', jlpt: 'N3' },
-			{ rank: 3000, pos: 'Interjection', jlpt: null }
+			{ rank: Math.round(horizon / 2), pos: 'Verb', jlpt: 'N3' },
+			{ rank: horizon * 10, pos: 'Noun', jlpt: null }
 		].map((e) => ({
 			...e,
 			label: `${posName(e.pos)}${e.jlpt ? `, ${e.jlpt}` : ''}, rank ${e.rank.toLocaleString()}`,
-			freq: Math.round(frequencyPoints(e.rank)),
-			total: Math.round(pickPoints(e.rank, e.pos, e.jlpt, draft))
+			freq: Math.round(frequencyPoints(e.rank, horizon)),
+			total: Math.round(pickPoints(e.rank, e.pos, e.jlpt, horizon, draft))
 		}))
 	);
 
@@ -163,8 +164,10 @@
 		</fieldset>
 
 		<p class="hint">
-			Score = frequency points (20 per tenfold step: rank 1,000 → 40, rank 10,000 → 20) + word type
-			+ JLPT points. The highest total is mined first; negative points lower priority.
+			Score = frequency points + word type + JLPT points. Frequency points are 40 up to your
+			horizon, rank {horizon.toLocaleString()}, and 20 fewer per tenfold step past it. The horizon
+			follows your Anki cards and only moves outward. The highest total is mined first; negative
+			points lower priority.
 		</p>
 
 		<div class="tables">

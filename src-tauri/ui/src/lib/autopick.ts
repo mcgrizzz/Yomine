@@ -3,20 +3,32 @@ import { harmonic, occurrencesOf, termKey } from '$lib/table';
 import { termHighlightText } from '$lib/components/SentenceView.svelte';
 import type { QueueItem } from '$lib/stores/mining';
 
-/** 20 points per tenfold increase in commonness: rank 10 → 80, rank 10,000 → 20. */
-export const frequencyPoints = (rank: number): number => 20 * Math.log10(100000 / rank);
+/** The horizon before the user's Anki coverage is known, about where a beginner's is. */
+export const DEFAULT_HORIZON = 1000;
+const FULL_FREQUENCY_POINTS = 40;
+
+/** Full points up to the horizon, where the user's knowledge reaches (`KnowledgeSummary`),
+ * then 20 fewer per tenfold step past it. */
+export const frequencyPoints = (rank: number, horizon: number): number =>
+	FULL_FREQUENCY_POINTS - 20 * Math.max(0, Math.log10(rank / horizon));
 
 export function pickPoints(
 	rank: number,
 	pos: string,
 	jlpt: string | null,
+	horizon: number,
 	prefs: Pick<AutoMine, 'pos_points' | 'jlpt_points'>
 ): number {
-	return frequencyPoints(rank) + (prefs.pos_points[pos] ?? 0) + (prefs.jlpt_points[jlpt ?? ''] ?? 0);
+	return (
+		frequencyPoints(rank, horizon) +
+		(prefs.pos_points[pos] ?? 0) +
+		(prefs.jlpt_points[jlpt ?? ''] ?? 0)
+	);
 }
 
 export interface PickOptions {
 	prefs: AutoMine;
+	horizon: number;
 	isMined: (term: Term) => boolean;
 	minedSentences: Set<string>;
 	normalize: (sentence: string) => string;
@@ -43,12 +55,20 @@ export function autoPick(terms: Term[], sentences: SentenceDto[], opts: PickOpti
 		.filter((t) => !skipped(t, opts))
 		.map((term) => ({
 			term,
-			points: pickPoints(harmonic(term), term.part_of_speech, term.jlpt_level, opts.prefs),
+			points: pickPoints(
+				harmonic(term),
+				term.part_of_speech,
+				term.jlpt_level,
+				opts.horizon,
+				opts.prefs
+			),
 			first: Math.min(...term.sentence_references.map(([i]) => i))
 		}))
+		// Words inside the horizon tie on frequency points, so the commoner goes first.
 		.sort(
 			(a, b) =>
 				b.points - a.points ||
+				harmonic(a.term) - harmonic(b.term) ||
 				b.term.sentence_references.length - a.term.sentence_references.length ||
 				a.first - b.first
 		);

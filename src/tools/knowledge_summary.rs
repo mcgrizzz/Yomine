@@ -62,6 +62,30 @@ impl KnowledgeMode {
 pub struct KnowledgeSummary {
     pub jlpt: Vec<(JlptLevel, BandStats)>,
     pub frequency: Vec<(String, BandStats)>,
+    /// How far down the frequency list auto mode gives words full frequency points.
+    pub horizon: Option<u32>,
+}
+
+/// The horizon is this many times the frontier, the rank where the user's Anki coverage
+/// falls off.
+const HORIZON_PER_FRONTIER: u32 = 3;
+
+/// The frontier is the first rank whose band (half that rank up to it) has under half the
+/// coverage of the top 1,000 words. Coverage counts cards, not known words, so it levels off
+/// well below 100% even for words the user knows; halving that level finds where it drops.
+fn mining_horizon(ranks: &[u32], max_rank: u32) -> Option<u32> {
+    let covered = |low: u32, high: u32| {
+        ranks.iter().filter(|&&r| r > low && r <= high).count() as f32 / (high - low) as f32
+    };
+    let top = covered(0, 1_000);
+    if top == 0.0 {
+        return None;
+    }
+    let mut rank = 1_000;
+    while rank < max_rank && covered(rank / 2, rank) >= top / 2.0 {
+        rank += rank / 4;
+    }
+    Some(rank.min(max_rank) * HORIZON_PER_FRONTIER)
 }
 
 /// Frequency bands with geometrically-growing boundaries (Zipf's law: equal rank *ratios*
@@ -118,10 +142,12 @@ pub fn compute_knowledge_summary(
 
         let mut coverage_sums = vec![0.0_f32; FREQUENCY_BANDS.len()];
         let mut comprehension_sums = vec![0.0_f32; FREQUENCY_BANDS.len()];
+        let mut ranks = Vec::new();
         for vocab in anki.vocab() {
             if let Some(rank) =
                 frequency_manager.get_harmonic_frequency_for_pair(&vocab.term, &vocab.reading)
             {
+                ranks.push(rank);
                 if let Some(band) = band_for_rank(rank) {
                     coverage_sums[band] += 1.0;
                     comprehension_sums[band] += comp_term(vocab.interval, anki.known_interval());
@@ -141,7 +167,24 @@ pub fn compute_knowledge_summary(
                 .frequency
                 .push((label.to_string(), BandStats { coverage, comprehension, total: size }));
         }
+        ranks.sort_unstable();
+        ranks.dedup();
+        summary.horizon = mining_horizon(&ranks, max_rank);
     }
 
     summary
+}
+
+#[cfg(test)]
+mod horizon_tests {
+    use super::mining_horizon;
+
+    #[test]
+    fn the_horizon_sits_past_where_coverage_falls_off() {
+        // Half the words known up to rank 2,000, none after.
+        let ranks: Vec<u32> = (1..=2_000).step_by(2).collect();
+        let horizon = mining_horizon(&ranks, 100_000).unwrap();
+        assert!((6_000..=12_000).contains(&horizon), "{horizon}");
+        assert_eq!(mining_horizon(&[], 100_000), None);
+    }
 }
