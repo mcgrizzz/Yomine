@@ -64,7 +64,8 @@ pub(super) fn names_speaker(content: &str, words: &[&Term], manager: &FrequencyM
 }
 
 /// Dialogue names its speakers too (善逸！), where UniDic splits the name into words; a term
-/// found only inside such a name is skipped by auto mode.
+/// that only ever starts inside such a name is skipped by auto mode, suffix and all (黒さん
+/// in 伊黒さん).
 pub(super) fn mark_speaker_names(
     terms: &mut [Term],
     sentences: &[Sentence],
@@ -74,10 +75,9 @@ pub(super) fn mark_speaker_names(
         term.auto_skip.speaker_name = !term.sentence_references.is_empty()
             && term.sentence_references.iter().all(|&(ord, start)| {
                 let text = &sentences[ord].text;
-                let end = start + term.surface_form.len();
                 names.iter().any(|name| {
                     text.match_indices(name.as_str())
-                        .any(|(at, _)| at <= start && end <= at + name.len())
+                        .any(|(at, _)| (at..at + name.len()).contains(&start))
                 })
             });
     }
@@ -94,23 +94,25 @@ mod tests {
             return;
         };
         let manager = FrequencyManager::from_dictionaries(vec![]);
-        let mut sentences: Vec<Sentence> = ["（善逸）うるさいな", "善逸！ 待って"]
-            .iter()
-            .enumerate()
-            .map(|(id, text)| Sentence {
-                id,
-                source_id: 0,
-                text: text.to_string(),
-                segments: vec![],
-                timestamp: None,
-                comprehension: 0.0,
-            })
-            .collect();
+        let mut sentences: Vec<Sentence> =
+            ["（善逸）うるさいな", "（伊黒）のろい", "善逸！ 伊黒さん 待って"]
+                .iter()
+                .enumerate()
+                .map(|(id, text)| Sentence {
+                    id,
+                    source_id: 0,
+                    text: text.to_string(),
+                    segments: vec![],
+                    timestamp: None,
+                    comprehension: 0.0,
+                })
+                .collect();
         let terms = extract_words(tokenizer.new_worker(), &mut sentences, &manager);
         let flagged = |form: &str| {
             terms.iter().find(|t| t.surface_form == form).map(|t| t.auto_skip.speaker_name)
         };
         assert_eq!(flagged("善"), Some(true));
+        assert_eq!(flagged("黒さん"), Some(true));
         assert_eq!(flagged("待っ").or(flagged("待って")), Some(false));
     }
 }
