@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 
 use serde::Deserialize;
+use wana_kana::ConvertJapanese;
 
 use crate::core::errors::YomineError;
 
@@ -65,6 +66,10 @@ struct TermDictionaryEntry {
 #[derive(Debug, Deserialize)]
 struct Headword {
     #[serde(default)]
+    term: String,
+    #[serde(default)]
+    reading: String,
+    #[serde(default)]
     sources: Vec<HeadwordSource>,
 }
 
@@ -89,6 +94,25 @@ pub async fn matched_source(base_url: &str, text: &str, entry_index: usize) -> O
         .filter(|t| !t.is_empty())
         .max_by_key(|t| t.chars().count())
         .map(str::to_string)
+}
+
+/// The first entry for `text` headed by `term` read as `reading`, else the first read as
+/// `reading`; `None` when no entry has that reading.
+pub async fn entry_index_for(
+    base_url: &str,
+    text: &str,
+    term: &str,
+    reading: &str,
+) -> Option<usize> {
+    let entries: TermEntries =
+        post(base_url, "termEntries", serde_json::json!({ "term": text })).await.ok()?;
+    let reading = reading.to_hiragana();
+    let reads = |h: &Headword| h.reading.to_hiragana() == reading;
+    let entries = &entries.dictionary_entries;
+    entries
+        .iter()
+        .position(|e| e.headwords.iter().any(|h| h.term == term && reads(h)))
+        .or_else(|| entries.iter().position(|e| e.headwords.iter().any(reads)))
 }
 
 async fn post<T: for<'de> Deserialize<'de>>(

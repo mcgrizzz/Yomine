@@ -59,6 +59,7 @@ pub async fn mine_term(
     state: State<'_, Mutex<AppState>>,
     player: State<'_, PlayerHandle>,
     term: String,
+    reading: Option<String>,
     surface: String,
     sentence: String,
     timestamp_secs: Option<f32>,
@@ -76,7 +77,7 @@ pub async fn mine_term(
         (guard.settings.yomitan_url.clone(), guard.file.asbplayer_media_id.clone())
     };
     let item = BatchItem {
-        key: String::new(),
+        key: reading.map(|r| format!("{term} {r}")).unwrap_or_default(),
         lemma: term,
         surface,
         sentence,
@@ -260,6 +261,24 @@ async fn validate_media_target(player: &PlayerHandle, target: Option<&str>) -> R
     Ok(())
 }
 
+/// Yomitan's first entry can be a different word with the same spelling (止める as やめる when
+/// the sentence reads とめる), so a row picks the entry matching its own reading.
+async fn default_entry(yomitan_url: &str, item: &BatchItem, term: &str) -> usize {
+    // A row's key is `termKey`: "{lemma} {reading}".
+    let reading = match item.key.split_once(' ') {
+        Some((lemma, reading)) if !item.adhoc && lemma == item.lemma => reading,
+        _ => return 0,
+    };
+    tokio::time::timeout(
+        MATCH_LOOKUP_TIMEOUT,
+        yomitan::entry_index_for(yomitan_url, term, &item.lemma, reading),
+    )
+    .await
+    .ok()
+    .flatten()
+    .unwrap_or(0)
+}
+
 async fn mine(
     yomitan_url: &str,
     item: &BatchItem,
@@ -274,7 +293,10 @@ async fn mine(
     let format_name = item.format_name.clone();
     let timestamp_secs = item.timestamp.as_ref().map(|t| t.start_secs);
     let via = if item.mine_media { "asbplayer" } else { "direct" }.to_string();
-    let entry_index = entry_index.unwrap_or(0);
+    let entry_index = match entry_index {
+        Some(index) => index,
+        None => default_entry(yomitan_url, item, &term).await,
+    };
 
     let _ = progress.send(LoadingMessage::new(format!("Rendering 「{}」 with Yomitan…", term)));
     let formats = yomitan::get_term_card_formats(yomitan_url)

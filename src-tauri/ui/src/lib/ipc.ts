@@ -696,6 +696,8 @@ export interface YomitanStatus {
 export function mineTerm(
 	args: {
 		term: string;
+		/** The row's reading, which picks the matching entry when `entryIndex` is null. */
+		reading: string | null;
 		/** The occurrence as tokenized from the text — cloze/bold highlighting. */
 		surface: string;
 		sentence: string;

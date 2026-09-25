@@ -85,12 +85,14 @@ async function mineOne(
 	via: 'asbplayer' | 'direct',
 	entryIndex?: number,
 	formatName?: string,
-	scanText?: string
+	scanText?: string,
+	reading?: string
 ): Promise<ipc.MineResult> {
 	const result = await ipc.mineTerm(
 		{
 			// entryIndex is a position within the scan of scanText — mine_term must rescan that same string.
 			term: scanText ?? lemma,
+			reading: reading ?? null,
 			surface,
 			sentence,
 			timestampSecs: timestamp?.start_secs ?? null,
@@ -128,7 +130,8 @@ export async function mineTerm(
 	surface: string,
 	entryIndex?: number,
 	formatName?: string,
-	scanText?: string
+	scanText?: string,
+	reading?: string
 ): Promise<void> {
 	if (get(miningTerm) !== null || get(playerBusy)) return;
 	miningTerm.set(lemma);
@@ -142,7 +145,8 @@ export async function mineTerm(
 			via,
 			entryIndex,
 			formatName,
-			scanText
+			scanText,
+			reading
 		);
 		showNotice(
 			result.warning ??

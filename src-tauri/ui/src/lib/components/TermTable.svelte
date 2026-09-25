@@ -290,7 +290,8 @@
 			surface,
 			entryIndex,
 			formatName,
-			scanText
+			scanText,
+			term.lemma_reading
 		);
 	}
 
