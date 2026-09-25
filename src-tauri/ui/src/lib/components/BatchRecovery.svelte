@@ -16,8 +16,13 @@
 		selectBatchTarget
 	} from '$lib/stores/batches';
 	import { batchSummaryOpen } from '$lib/stores/modals';
+	import type { BatchRecord } from '$lib/ipc';
 
 	const NARROW = 'min(30rem, calc(100vw - 2rem))';
+
+	const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+	const count = (batch: BatchRecord, statuses: string[]) =>
+		batch.items.filter((i) => statuses.includes(i.outcome.status)).length;
 </script>
 
 {#if $batchTarget}
@@ -64,18 +69,27 @@
 	</Modal>
 {:else if $batchReplace}
 	{@const previous = $batchReplace}
+	{@const unchecked = count(previous, ['attempting'])}
+	{@const notCreated = count(previous, ['unattempted', 'failed'])}
 	<Modal
-		title="Replace the last batch?"
+		title="Start a new batch?"
 		width={NARROW}
 		dismissible={false}
 		onclose={() => confirmReplaceBatch(false)}
 	>
 		<div class="body">
+			<p class="source" title={previous.source.title}>Last batch: {previous.source.title}</p>
+			<ul>
+				{#if previous.finished_at === null}<li>It stopped before finishing.</li>{/if}
+				{#if notCreated > 0}<li>{plural(notCreated, 'card')} weren't created.</li>{/if}
+				{#if unchecked > 0}
+					<li>{plural(unchecked, 'card')} may or may not be in Anki; check before mining again.</li>
+				{/if}
+			</ul>
 			<p>
-				The last batch from <strong>{previous.source.title}</strong> was interrupted or has cards
-				that need review in Anki.
+				Yomine keeps only the most recent batch. After you start a new one, the last batch can't be
+				retried or undone.
 			</p>
-			<p>Starting a new batch replaces its record, so it can no longer be retried or undone.</p>
 		</div>
 		{#snippet footer()}
 			<footer>
@@ -100,6 +114,17 @@
 	}
 	p {
 		margin: 0.6rem 0;
+	}
+	ul {
+		margin: 0.4rem 0;
+		padding-left: 1.2rem;
+	}
+	.source {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		color: var(--text-muted);
+		font-size: 0.85rem;
 	}
 	footer {
 		display: flex;
