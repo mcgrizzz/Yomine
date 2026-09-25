@@ -34,6 +34,7 @@ export function autoPick(terms: Term[], sentences: SentenceDto[], opts: PickOpti
 				harmonic(t) !== Infinity &&
 				!opts.isMined(t) &&
 				!t.spelling_in_anki &&
+				!t.in_speaker_name &&
 				!SINGLE_KANA.test(t.lemma_form)
 		)
 		.map((term) => ({

@@ -453,6 +453,7 @@ mod tests {
         Term {
             possible_known_match: None,
             spelling_in_anki: false,
+            in_speaker_name: false,
             lexical_family: None,
             lexeme: None,
             id: 1,

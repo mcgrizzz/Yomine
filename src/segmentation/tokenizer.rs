@@ -440,6 +440,7 @@ pub fn extract_words(
     frequency_manager: &FrequencyManager,
 ) -> Vec<Term> {
     let mut terms = Vec::<Term>::new();
+    let mut speaker_names = std::collections::HashSet::new();
 
     for (ord, sentence) in sentences.iter_mut().enumerate() {
         let words = analyze_sentence(&mut worker, &sentence.text, frequency_manager);
@@ -490,7 +491,12 @@ pub fn extract_words(
                     })
                     .map(|(t, _)| t)
                     .collect();
-                names_speaker(&sentence.text[start..end], &words, frequency_manager)
+                let name = &sentence.text[start..end];
+                let names = names_speaker(name, &words, frequency_manager);
+                if names {
+                    speaker_names.insert(name.to_string());
+                }
+                names
             })
             .map(|(label, _)| label)
             .collect();
@@ -669,6 +675,18 @@ pub fn extract_words(
         });
 
         terms.append(&mut sentence_terms);
+    }
+
+    // Dialogue names its speakers too (善逸！), where UniDic splits the name into words.
+    for term in &mut terms {
+        term.in_speaker_name = term.sentence_references.iter().all(|&(ord, start)| {
+            let text = &sentences[ord].text;
+            let end = start + term.surface_form.len();
+            speaker_names.iter().any(|name| {
+                text.match_indices(name.as_str())
+                    .any(|(at, _)| at <= start && end <= at + name.len())
+            })
+        }) && !term.sentence_references.is_empty();
     }
 
     terms
@@ -987,4 +1005,34 @@ pub fn init_vibrato(
     let dict = load_dictionary(dict_type, progress_callback)?;
     let tokenizer = vibrato::Tokenizer::new(dict);
     Ok(tokenizer)
+}
+
+#[cfg(test)]
+mod speaker_name_tests {
+    use super::*;
+
+    #[test]
+    fn a_name_from_a_speaker_label_is_flagged_in_dialogue() {
+        let Some(tokenizer) = super::super::lexeme_resolver::test_tokenizer() else {
+            return;
+        };
+        let manager = FrequencyManager::from_dictionaries(vec![]);
+        let mut sentences: Vec<Sentence> = ["（善逸）うるさいな", "善逸！ 待って"]
+            .iter()
+            .enumerate()
+            .map(|(id, text)| Sentence {
+                id,
+                source_id: 0,
+                text: text.to_string(),
+                segments: vec![],
+                timestamp: None,
+                comprehension: 0.0,
+            })
+            .collect();
+        let terms = extract_words(tokenizer.new_worker(), &mut sentences, &manager);
+        let flagged =
+            |form: &str| terms.iter().find(|t| t.surface_form == form).map(|t| t.in_speaker_name);
+        assert_eq!(flagged("善"), Some(true));
+        assert_eq!(flagged("待っ").or(flagged("待って")), Some(false));
+    }
 }

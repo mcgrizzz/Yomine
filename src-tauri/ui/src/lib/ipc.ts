@@ -19,6 +19,8 @@ export interface Term {
 	possible_known_match?: string | null;
 	/** An Anki card has this spelling under another reading; Anki refuses the note. */
 	spelling_in_anki?: boolean;
+	/** Every occurrence sits inside a name the file's speaker labels use. */
+	in_speaker_name?: boolean;
 	id: number;
 	lemma_form: string;
 	lemma_reading: string;

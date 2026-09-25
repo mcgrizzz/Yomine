@@ -229,6 +229,7 @@ impl From<Word> for Term {
             Term {
                 possible_known_match: None,
                 spelling_in_anki: false,
+                in_speaker_name: false,
                 lexical_family: None,
                 lexeme: written_lexeme(&main_word),
                 id: 0,
@@ -256,6 +257,7 @@ impl From<Word> for Term {
             Term {
                 possible_known_match: None,
                 spelling_in_anki: false,
+                in_speaker_name: false,
                 lexical_family: None,
                 lexeme,
                 id: 0,
