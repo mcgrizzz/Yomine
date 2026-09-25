@@ -37,6 +37,7 @@
         "part_of_speech": "Noun",
         "possible_known_match": null,
         "sentence_references": [],
+        "spelling_in_anki": false,
         "surface_form": "形態",
         "surface_reading": "けいたい"
       },
@@ -54,6 +55,7 @@
         "part_of_speech": "Verb",
         "possible_known_match": null,
         "sentence_references": [],
+        "spelling_in_anki": false,
         "surface_form": "化させて",
         "surface_reading": "かさせて"
       }
@@ -86,6 +88,7 @@
             0
           ]
         ],
+        "spelling_in_anki": false,
         "surface_form": "形態",
         "surface_reading": "けいたい"
       },
@@ -111,6 +114,7 @@
             6
           ]
         ],
+        "spelling_in_anki": false,
         "surface_form": "化させて",
         "surface_reading": "かさせて"
       },
@@ -136,6 +140,7 @@
             0
           ]
         ],
+        "spelling_in_anki": false,
         "surface_form": "形態化させて",
         "surface_reading": "けいたいかさせて"
       }
@@ -184,6 +189,7 @@
         "part_of_speech": "Verb",
         "possible_known_match": null,
         "sentence_references": [],
+        "spelling_in_anki": false,
         "surface_form": "要らないです",
         "surface_reading": "いらないです"
       }
@@ -214,6 +220,7 @@
             0
           ]
         ],
+        "spelling_in_anki": false,
         "surface_form": "要らないです",
         "surface_reading": "いらないです"
       }
@@ -256,6 +263,7 @@
         "part_of_speech": "Verb",
         "possible_known_match": null,
         "sentence_references": [],
+        "spelling_in_anki": false,
         "surface_form": "知らなかった",
         "surface_reading": "しらなかった"
       }
@@ -286,6 +294,7 @@
             0
           ]
         ],
+        "spelling_in_anki": false,
         "surface_form": "知らなかった",
         "surface_reading": "しらなかった"
       }
@@ -328,6 +337,7 @@
         "part_of_speech": "Verb",
         "possible_known_match": null,
         "sentence_references": [],
+        "spelling_in_anki": false,
         "surface_form": "つまらなかった",
         "surface_reading": "つまらなかった"
       }
@@ -358,6 +368,7 @@
             0
           ]
         ],
+        "spelling_in_anki": false,
         "surface_form": "つまらなかった",
         "surface_reading": "つまらなかった"
       }
@@ -400,6 +411,7 @@
         "part_of_speech": "Noun",
         "possible_known_match": null,
         "sentence_references": [],
+        "spelling_in_anki": false,
         "surface_form": "おばさん",
         "surface_reading": "おばさん"
       }
@@ -430,6 +442,7 @@
             0
           ]
         ],
+        "spelling_in_anki": false,
         "surface_form": "おばさん",
         "surface_reading": "おばさん"
       }
@@ -492,6 +505,7 @@
         "part_of_speech": "Pronoun",
         "possible_known_match": null,
         "sentence_references": [],
+        "spelling_in_anki": false,
         "surface_form": "なん",
         "surface_reading": "なん"
       },
@@ -509,6 +523,7 @@
         "part_of_speech": "Postposition",
         "possible_known_match": null,
         "sentence_references": [],
+        "spelling_in_anki": false,
         "surface_form": "と",
         "surface_reading": "と"
       },
@@ -526,6 +541,7 @@
         "part_of_speech": "Adjective",
         "possible_known_match": null,
         "sentence_references": [],
+        "spelling_in_anki": false,
         "surface_form": "なく",
         "surface_reading": "なく"
       }
@@ -559,6 +575,7 @@
             0
           ]
         ],
+        "spelling_in_anki": false,
         "surface_form": "なんとなく",
         "surface_reading": "なんとなく"
       }
@@ -663,6 +680,7 @@
         "part_of_speech": "Noun",
         "possible_known_match": null,
         "sentence_references": [],
+        "spelling_in_anki": false,
         "surface_form": "土曜",
         "surface_reading": "どよう"
       },
@@ -680,6 +698,7 @@
         "part_of_speech": "Noun",
         "possible_known_match": null,
         "sentence_references": [],
+        "spelling_in_anki": false,
         "surface_form": "日",
         "surface_reading": "ひ"
       },
@@ -697,6 +716,7 @@
         "part_of_speech": "Postposition",
         "possible_known_match": null,
         "sentence_references": [],
+        "spelling_in_anki": false,
         "surface_form": "の",
         "surface_reading": "の"
       },
@@ -714,6 +734,7 @@
         "part_of_speech": "Noun",
         "possible_known_match": null,
         "sentence_references": [],
+        "spelling_in_anki": false,
         "surface_form": "複合",
         "surface_reading": "ふくごう"
       },
@@ -731,6 +752,7 @@
         "part_of_speech": "Noun",
         "possible_known_match": null,
         "sentence_references": [],
+        "spelling_in_anki": false,
         "surface_form": "体",
         "surface_reading": "たい"
       },
@@ -748,6 +770,7 @@
         "part_of_speech": "NounExpression",
         "possible_known_match": null,
         "sentence_references": [],
+        "spelling_in_anki": false,
         "surface_form": "複合体",
         "surface_reading": "ふくごうたい"
       }
@@ -779,6 +802,7 @@
             9
           ]
         ],
+        "spelling_in_anki": false,
         "surface_form": "の",
         "surface_reading": "の"
       },
@@ -804,6 +828,7 @@
             0
           ]
         ],
+        "spelling_in_anki": false,
         "surface_form": "土曜日",
         "surface_reading": "どようび"
       },
@@ -829,6 +854,7 @@
             12
           ]
         ],
+        "spelling_in_anki": false,
         "surface_form": "複合体",
         "surface_reading": "ふくごうたい"
       }

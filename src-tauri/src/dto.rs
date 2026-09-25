@@ -452,6 +452,7 @@ mod tests {
     fn term(surface: &str, pos: POS, comprehension: f32, start: usize) -> Term {
         Term {
             possible_known_match: None,
+            spelling_in_anki: false,
             lexical_family: None,
             lexeme: None,
             id: 1,

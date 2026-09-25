@@ -30,7 +30,11 @@ const SINGLE_KANA = /^[ぁ-ゖァ-ヺーｦ-ﾟ]$/;
 export function autoPick(terms: Term[], sentences: SentenceDto[], opts: PickOptions): QueueItem[] {
 	const ranked = terms
 		.filter(
-			(t) => harmonic(t) !== Infinity && !opts.isMined(t) && !SINGLE_KANA.test(t.lemma_form)
+			(t) =>
+				harmonic(t) !== Infinity &&
+				!opts.isMined(t) &&
+				!t.spelling_in_anki &&
+				!SINGLE_KANA.test(t.lemma_form)
 		)
 		.map((term) => ({
 			term,

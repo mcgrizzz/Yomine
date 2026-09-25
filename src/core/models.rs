@@ -149,6 +149,10 @@ impl PartOfSpeech {
 pub struct Term {
     #[serde(default)]
     pub possible_known_match: Option<String>,
+    /// An Anki card has this spelling under another reading, and Anki refuses a second note
+    /// with the same first field.
+    #[serde(default)]
+    pub spelling_in_anki: bool,
     #[serde(skip)]
     pub lexical_family: Option<crate::dictionary::lexical_evidence::LexicalFamily>,
     /// UniDic's 語彙素 for this occurrence, picked in context (かく in 恥をかく is 掻く).
@@ -183,6 +187,7 @@ impl Term {
         let is_kana = terms.iter().all(|t| t.is_kana);
         Term {
             possible_known_match: None,
+            spelling_in_anki: false,
             lexical_family: None,
             lexeme: None,
             id: 1,
