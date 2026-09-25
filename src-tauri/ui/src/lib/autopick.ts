@@ -35,6 +35,7 @@ export function autoPick(terms: Term[], sentences: SentenceDto[], opts: PickOpti
 				!opts.isMined(t) &&
 				!t.spelling_in_anki &&
 				!t.in_speaker_name &&
+				!t.ambiguous_grammar &&
 				!SINGLE_KANA.test(t.lemma_form)
 		)
 		.map((term) => ({

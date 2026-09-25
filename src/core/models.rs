@@ -156,6 +156,9 @@ pub struct Term {
     /// Every occurrence sits inside a name the file's speaker labels use (善 of 善逸).
     #[serde(default)]
     pub in_speaker_name: bool,
+    /// A phrase of grammatical words only that JMdict gives several senses (ことになる).
+    #[serde(default)]
+    pub ambiguous_grammar: bool,
     #[serde(skip)]
     pub lexical_family: Option<crate::dictionary::lexical_evidence::LexicalFamily>,
     /// UniDic's 語彙素 for this occurrence, picked in context (かく in 恥をかく is 掻く).
@@ -192,6 +195,7 @@ impl Term {
             possible_known_match: None,
             spelling_in_anki: false,
             in_speaker_name: false,
+            ambiguous_grammar: false,
             lexical_family: None,
             lexeme: None,
             id: 1,

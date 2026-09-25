@@ -24,6 +24,7 @@
     ],
     "corpus": [
       {
+        "ambiguous_grammar": false,
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "形態",
@@ -43,6 +44,7 @@
         "surface_reading": "けいたい"
       },
       {
+        "ambiguous_grammar": false,
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "化させて",
@@ -69,6 +71,7 @@
     ],
     "production": [
       {
+        "ambiguous_grammar": false,
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 2000,
@@ -96,6 +99,7 @@
         "surface_reading": "けいたい"
       },
       {
+        "ambiguous_grammar": false,
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 4000,
@@ -123,6 +127,7 @@
         "surface_reading": "かさせて"
       },
       {
+        "ambiguous_grammar": false,
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 10,
@@ -181,6 +186,7 @@
     ],
     "corpus": [
       {
+        "ambiguous_grammar": false,
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "要らないです",
@@ -205,6 +211,7 @@
     ],
     "production": [
       {
+        "ambiguous_grammar": false,
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 700,
@@ -257,6 +264,7 @@
     ],
     "corpus": [
       {
+        "ambiguous_grammar": false,
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "知らなかった",
@@ -281,6 +289,7 @@
     ],
     "production": [
       {
+        "ambiguous_grammar": false,
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 100,
@@ -333,6 +342,7 @@
     ],
     "corpus": [
       {
+        "ambiguous_grammar": false,
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "つまらなかった",
@@ -357,6 +367,7 @@
     ],
     "production": [
       {
+        "ambiguous_grammar": false,
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 1000,
@@ -409,6 +420,7 @@
     ],
     "corpus": [
       {
+        "ambiguous_grammar": false,
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "おばさん",
@@ -433,6 +445,7 @@
     ],
     "production": [
       {
+        "ambiguous_grammar": false,
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 2000,
@@ -505,6 +518,7 @@
     ],
     "corpus": [
       {
+        "ambiguous_grammar": false,
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "なん",
@@ -524,6 +538,7 @@
         "surface_reading": "なん"
       },
       {
+        "ambiguous_grammar": false,
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "と",
@@ -543,6 +558,7 @@
         "surface_reading": "と"
       },
       {
+        "ambiguous_grammar": false,
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "なく",
@@ -570,6 +586,7 @@
     ],
     "production": [
       {
+        "ambiguous_grammar": false,
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 2016,
@@ -684,6 +701,7 @@
     ],
     "corpus": [
       {
+        "ambiguous_grammar": false,
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "土曜",
@@ -703,6 +721,7 @@
         "surface_reading": "どよう"
       },
       {
+        "ambiguous_grammar": false,
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "日",
@@ -722,6 +741,7 @@
         "surface_reading": "ひ"
       },
       {
+        "ambiguous_grammar": false,
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "の",
@@ -741,6 +761,7 @@
         "surface_reading": "の"
       },
       {
+        "ambiguous_grammar": false,
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "複合",
@@ -760,6 +781,7 @@
         "surface_reading": "ふくごう"
       },
       {
+        "ambiguous_grammar": false,
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "体",
@@ -779,6 +801,7 @@
         "surface_reading": "たい"
       },
       {
+        "ambiguous_grammar": false,
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "複合体",
@@ -805,6 +828,7 @@
     ],
     "production": [
       {
+        "ambiguous_grammar": false,
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 4294967295
@@ -831,6 +855,7 @@
         "surface_reading": "の"
       },
       {
+        "ambiguous_grammar": false,
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 100,
@@ -858,6 +883,7 @@
         "surface_reading": "どようび"
       },
       {
+        "ambiguous_grammar": false,
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 400,

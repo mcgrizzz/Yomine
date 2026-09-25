@@ -454,6 +454,7 @@ mod tests {
             possible_known_match: None,
             spelling_in_anki: false,
             in_speaker_name: false,
+            ambiguous_grammar: false,
             lexical_family: None,
             lexeme: None,
             id: 1,

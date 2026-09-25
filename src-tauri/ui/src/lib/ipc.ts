@@ -21,6 +21,8 @@ export interface Term {
 	spelling_in_anki?: boolean;
 	/** Every occurrence sits inside a name the file's speaker labels use. */
 	in_speaker_name?: boolean;
+	/** A phrase of grammatical words only that JMdict gives several senses. */
+	ambiguous_grammar?: boolean;
 	id: number;
 	lemma_form: string;
 	lemma_reading: string;

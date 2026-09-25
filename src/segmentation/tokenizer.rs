@@ -330,6 +330,18 @@ fn bracket_labels(text: &str) -> Vec<((usize, usize), (usize, usize))> {
     labels
 }
 
+/// Nouns that only carry grammar (ことになる, わけがない).
+const FORMAL_NOUNS: &[&str] = &["事", "物", "所", "訳", "筈"];
+
+/// Particles, copulas, bound words (ない, なる, ある) and formal nouns.
+fn is_grammatical(word: &Word) -> bool {
+    matches!(word.part_of_speech, POS::Postposition | POS::Copula)
+        || word.tokens.first().is_some_and(|t| {
+            matches!(t.pos2, UnidicTag::Hijiritsukanou | UnidicTag::Jodoushigokan)
+                || (t.surface.as_str().is_kana() && FORMAL_NOUNS.contains(&t.lexeme.as_str()))
+        })
+}
+
 /// A label naming the speaker rather than describing a sound (（足音）, （炭治郎の声）):
 /// katakana UniDic doesn't know (anime frequency lists rank names like フリーレン), proper
 /// nouns only, or kanji no frequency list knows (UniDic splits 伊黒 into 伊 + 黒).
@@ -448,9 +460,11 @@ pub fn extract_words(
         let mut term_spans: Vec<(usize, usize)> = Vec::with_capacity(words.len());
         let mut sentence_terms: Vec<Term> = Vec::with_capacity(words.len());
         let mut rule_citations = Vec::with_capacity(words.len());
+        let mut grammatical = Vec::with_capacity(words.len());
         for word in words {
             let span = word.byte_span();
             rule_citations.push(word.has_rule_citation());
+            grammatical.push(is_grammatical(&word));
             // The highlight span ends at start + surface_form.len(), so the
             // reference must point at the main word, not the segment.
             let ref_start = word.mining_span().0;
@@ -617,6 +631,12 @@ pub fn extract_words(
 
                     phrase.part_of_speech =
                         if all_nouns { POS::NounExpression } else { POS::Expression };
+                    // Grammar with several JMdict senses (ことになる) often gets a card for
+                    // the wrong one.
+                    phrase.ambiguous_grammar = grammatical[start..=end].iter().all(|&g| g)
+                        && [&phrase.surface_form, &phrase.lemma_form].iter().any(|form| {
+                            jmdict_lexicon::phrase_senses(form).is_some_and(|senses| senses > 1)
+                        });
 
                     if kanji_noun_compound
                         || listed
