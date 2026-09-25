@@ -320,6 +320,7 @@ pub async fn load_asbplayer_media(
     subtitle_file_name: Option<String>,
     progress: Channel<LoadingMessage>,
 ) -> Result<FileLoadResult, String> {
+    crate::background::MANUAL_PICK.store(true, std::sync::atomic::Ordering::Relaxed);
     load_asbplayer_into_state(
         &app,
         &player,
@@ -330,6 +331,19 @@ pub async fn load_asbplayer_media(
         Some(&progress),
     )
     .await
+}
+
+/// A subtitle file name without its extensions. A copy of Yomine's own saved `.srt` loaded
+/// back into asbplayer (`ep.srt.srt`) then saves to the same path, so its batch still matches.
+pub(crate) fn subtitle_stem(name: &str) -> &str {
+    let mut stem = name.trim();
+    while let Some((rest, ext)) = stem.rsplit_once('.') {
+        if !["srt", "ass", "ssa", "vtt"].contains(&ext.to_ascii_lowercase().as_str()) {
+            break;
+        }
+        stem = rest;
+    }
+    stem
 }
 
 /// The shared asbplayer-load path — the command above (picker, with progress)
@@ -390,11 +404,7 @@ pub(crate) async fn load_asbplayer_into_state(
     let title = if title.trim().is_empty() { "asbplayer video".to_string() } else { title };
     let (stem, display_title, creator) = match &file_name {
         Some(name) => {
-            let stem = std::path::Path::new(name)
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or(name)
-                .to_string();
+            let stem = subtitle_stem(name).to_string();
             let media_info = filename_parser::parse_filename(name);
             let metadata = media_info.get_metadata_string();
             (
@@ -739,5 +749,18 @@ fn save_subtitles_srt(
             eprintln!("[asbplayer] Failed to save subtitles to {}: {e}", path.display());
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::subtitle_stem;
+
+    #[test]
+    fn a_resaved_copy_keeps_the_original_stem() {
+        for name in ["Show - 04.srt", "Show - 04.srt.srt.srt", "Show - 04.SRT.ass"] {
+            assert_eq!(subtitle_stem(name), "Show - 04");
+        }
+        assert_eq!(subtitle_stem("Show v1.2.srt"), "Show v1.2");
     }
 }

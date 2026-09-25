@@ -30,6 +30,13 @@ export const asbContext = writable<ipc.AsbplayerContext>({
 	loaded_has_subtitles: false
 });
 
+/** asbplayer records from the visible tab, so a video bound to a background tab isn't
+ * recorded: its cards get no audio or screenshot. */
+export const backgroundTab = derived(
+	asbContext,
+	($c) => $c.loaded_from_asbplayer && !$c.loaded_is_active
+);
+
 export async function seekTimestamp(seconds: number, label: string): Promise<void> {
 	try {
 		await ipc.seekTimestamp(seconds, label);

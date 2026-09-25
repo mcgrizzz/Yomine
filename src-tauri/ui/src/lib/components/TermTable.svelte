@@ -16,6 +16,7 @@
 		adhocQueue,
 		ankiStatus,
 		asbContext,
+		backgroundTab,
 		cardFormats,
 		clearSelection,
 		fileResult,
@@ -268,7 +269,7 @@
 
 	// asbplayer enrichment needs asbplayer active (same rule as seeking) + a cue.
 	const viaFor = (ts: TimeStampDto | null): 'asbplayer' | 'direct' =>
-		$playerStatus.mode === 'asbplayer' && $playerStatus.ws_clients > 0 && ts !== null
+		$playerStatus.mode === 'asbplayer' && $playerStatus.ws_clients > 0 && ts !== null && !$backgroundTab
 			? 'asbplayer'
 			: 'direct';
 
@@ -427,8 +428,8 @@
 			return ' — no audio/screenshot without asbplayer';
 		if ($asbContext.loaded_from_asbplayer && !$asbContext.loaded_has_subtitles)
 			return ' — the loaded video has no subtitles in asbplayer; card will get no audio/screenshot';
-		if ($asbContext.loaded_from_asbplayer && !$asbContext.loaded_is_active)
-			return " — ⚠ the video's tab isn't active; screenshots capture the visible tab";
+		if ($backgroundTab)
+			return " — ⚠ the video's tab isn't active; card will get no audio/screenshot";
 		// Timestamp-less sources (EPUB/TXT) never enrich, so no target note.
 		const subtitleFile =
 			$fileResult?.source_file.file_type === 'SRT' ||

@@ -12,7 +12,7 @@ import {
 	type BatchPlan
 } from '$lib/batch';
 import { fileResult } from './file';
-import { asbContext, playerStatus } from './player';
+import { asbContext, backgroundTab, playerStatus } from './player';
 import { adhocQueue, dropAdhoc, queuedMineOptions, queueAdhoc, setSelected } from './selection';
 import {
 	mediaMissing,
@@ -202,7 +202,8 @@ function clearUnchangedSelection(item: ipc.BatchItem): void {
 
 function toBatchItems(items: QueueItem[]): ipc.BatchItem[] {
 	const status = get(playerStatus);
-	const recording = status.mode === 'asbplayer' || get(asbContext).loaded_from_asbplayer;
+	const recording =
+		(status.mode === 'asbplayer' || get(asbContext).loaded_from_asbplayer) && !get(backgroundTab);
 	const adhoc = new Set(get(adhocQueue).map((a) => a.key));
 	const start = (i: QueueItem) => i.timestamp?.start_secs ?? Infinity;
 	return [...items]
