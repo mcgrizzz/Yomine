@@ -14,11 +14,15 @@
 		settings
 	} from '$lib/stores';
 
-	const limit = $derived($settings?.auto_mine.limit ?? 10);
+	const amount = $derived.by(() => {
+		const prefs = $settings?.auto_mine;
+		if (prefs?.stop !== 'min_score') return `up to ${prefs?.limit ?? 10} cards`;
+		return `every term scoring at least ${prefs.min_score}`;
+	});
 	const tip = $derived(
 		$autoMode
 			? 'Auto mode is on. Click to stop mining new videos automatically.'
-			: `Turn on to mine up to ${limit} cards from each new video asbplayer opens, with audio and screenshots, as soon as it loads. Configure it in Mining → Auto Mode.`
+			: `Turn on to mine ${amount} from each new video asbplayer opens, with audio and screenshots, as soon as it loads. Configure it in Mining → Auto Mode.`
 	);
 	// The start screen lines the toggle up with its buttons, so it gets no status line.
 	const waiting = $derived(

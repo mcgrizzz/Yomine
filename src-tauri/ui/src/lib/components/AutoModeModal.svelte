@@ -8,7 +8,10 @@
 
 	/** `AutoMine::default()` (core/settings.rs). */
 	const DEFAULTS: AutoMine = {
+		stop: 'count',
 		limit: 10,
+		min_score: 78,
+		max_cards: 40,
 		pos_points: {
 			Noun: 30,
 			SuruVerb: 30,
@@ -24,7 +27,10 @@
 	const JLPT_LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
 
 	const copy = (a: AutoMine): AutoMine => ({
+		stop: a.stop,
 		limit: a.limit,
+		min_score: a.min_score,
+		max_cards: a.max_cards,
 		pos_points: { ...a.pos_points },
 		jlpt_points: Object.fromEntries(JLPT_LEVELS.map((l) => [l, a.jlpt_points[l] ?? 0]))
 	});
@@ -54,6 +60,8 @@
 		Number.isInteger(draft.limit) &&
 			draft.limit >= 1 &&
 			draft.limit <= 50 &&
+			Number.isInteger(draft.min_score) &&
+			(draft.max_cards === null || (Number.isInteger(draft.max_cards) && draft.max_cards >= 1)) &&
 			[...Object.values(draft.pos_points), ...Object.values(draft.jlpt_points)].every(pointsValid)
 	);
 
@@ -104,11 +112,55 @@
 			audio and screenshots in the video tab.
 		</p>
 
-		<div class="limit">
-			<label for="auto-limit">Cards per video</label>
-			<input id="auto-limit" type="number" min="1" max="50" bind:value={draft.limit} />
+		<fieldset class="stop">
+			<legend class="hint">Cards per video</legend>
+			<label class="limit">
+				<input type="radio" value="count" bind:group={draft.stop} />
+				Mine the best
+				<input
+					type="number"
+					min="1"
+					max="50"
+					aria-label="Cards per video"
+					disabled={draft.stop !== 'count'}
+					bind:value={draft.limit}
+				/>
+				cards
+			</label>
+			<label class="limit">
+				<input type="radio" value="min_score" bind:group={draft.stop} />
+				Mine every term scoring at least
+				<input
+					type="number"
+					aria-label="Minimum score"
+					disabled={draft.stop !== 'min_score'}
+					bind:value={draft.min_score}
+				/>
+			</label>
+			{#if draft.stop === 'min_score'}
+				<div class="limit cap">
+					<label for="auto-cap">Up to</label>
+					<input
+						id="auto-cap"
+						type="number"
+						min="1"
+						disabled={draft.max_cards === null}
+						value={draft.max_cards ?? ''}
+						oninput={(e) => (draft.max_cards = e.currentTarget.valueAsNumber)}
+					/>
+					<span>cards</span>
+					<label class="no-cap">
+						<input
+							type="checkbox"
+							checked={draft.max_cards === null}
+							onchange={(e) => (draft.max_cards = e.currentTarget.checked ? null : 40)}
+						/>
+						No cap
+					</label>
+				</div>
+			{/if}
 			<span class="hint">Fewer when the filters leave less.</span>
-		</div>
+		</fieldset>
 
 		<p class="hint">
 			Score = frequency points (20 per tenfold step: rank 1,000 → 40, rank 10,000 → 20) + word type
@@ -180,7 +232,7 @@
 			</table>
 		</div>
 		{#if !valid}
-			<p class="invalid">⚠ Cards per video must be 1–50 and points between -50 and 50</p>
+			<p class="invalid">⚠ Cards per video must be 1–50, the cap at least 1, and points between -50 and 50</p>
 		{/if}
 	</div>
 
@@ -220,6 +272,25 @@
 	}
 	.intro {
 		font-size: 0.9rem;
+	}
+	.stop {
+		display: grid;
+		gap: 0.35rem;
+		margin: 0;
+		padding: 0;
+		border: none;
+	}
+	.stop legend {
+		padding: 0;
+		margin-bottom: 0.2rem;
+	}
+	.cap {
+		padding-left: 1.6rem;
+	}
+	.no-cap {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
 	}
 	.limit {
 		display: flex;

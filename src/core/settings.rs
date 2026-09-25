@@ -118,12 +118,27 @@ impl Default for UnderlineToggles {
     }
 }
 
+/// When auto mode stops picking from a video.
+#[derive(Clone, Copy, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AutoMineStop {
+    /// After `limit` cards.
+    #[default]
+    Count,
+    /// Once no term left scores `min_score`, or at `max_cards`.
+    MinScore,
+}
+
 /// Card limit and pick preferences for auto mode. Points are added to a term's frequency
 /// points; keys are `POS::as_key()` values and JLPT levels.
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct AutoMine {
+    pub stop: AutoMineStop,
     pub limit: u32,
+    pub min_score: i32,
+    /// `None` mines every term above `min_score`.
+    pub max_cards: Option<u32>,
     pub pos_points: BTreeMap<String, i32>,
     pub jlpt_points: BTreeMap<String, i32>,
 }
@@ -133,7 +148,11 @@ impl Default for AutoMine {
         let points =
             |pairs: &[(&str, i32)]| pairs.iter().map(|(k, v)| (k.to_string(), *v)).collect();
         Self {
+            stop: AutoMineStop::Count,
             limit: 10,
+            // With these points, about 18 cards from a typical anime episode.
+            min_score: 78,
+            max_cards: Some(40),
             pos_points: points(&[
                 ("Noun", 30),
                 ("SuruVerb", 30),

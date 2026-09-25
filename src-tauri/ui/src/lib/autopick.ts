@@ -55,8 +55,11 @@ export function autoPick(terms: Term[], sentences: SentenceDto[], opts: PickOpti
 
 	const used = new Set(opts.minedSentences);
 	const picks: QueueItem[] = [];
-	for (const { term } of ranked) {
-		if (picks.length >= opts.prefs.limit) break;
+	const { stop, limit, min_score, max_cards } = opts.prefs;
+	const cap = stop === 'count' ? limit : (max_cards ?? Infinity);
+	for (const { term, points } of ranked) {
+		// Ranked best first, so the first term under the minimum ends the picks.
+		if (picks.length >= cap || (stop === 'min_score' && points < min_score)) break;
 		const occ = occurrencesOf(term, sentences)
 			.filter((o) => !used.has(opts.normalize(o.sentence.text)))
 			.reduce<ReturnType<typeof occurrencesOf>[number] | null>(

@@ -230,7 +230,12 @@ export interface AnkiConnectionSettings {
 
 /** Auto mode's card limit and pick preferences. Points are keyed by POS key and JLPT level. */
 export interface AutoMine {
+	/** `count` stops after `limit` cards; `min_score` once no term left scores `min_score`. */
+	stop: 'count' | 'min_score';
 	limit: number;
+	min_score: number;
+	/** Null mines every term above `min_score`. */
+	max_cards: number | null;
 	pos_points: Record<string, number>;
 	jlpt_points: Record<string, number>;
 }
