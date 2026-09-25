@@ -412,8 +412,14 @@ impl AnkiState {
             .map(|mut term| {
                 term.possible_known_match = None;
                 term.comprehension = 0.0;
-                term.auto_skip.spelling_in_anki =
-                    self.cards_by_term.contains_key(&normalize_japanese_text(&term.lemma_form));
+                // Yomitan heads a kana word's card with its kanji spelling, UniDic's lexeme
+                // (振り for ふり), so that spelling counts too.
+                let spellings =
+                    [Some(term.lemma_form.as_str()), term.lexeme.as_deref().map(lexeme_name)];
+                term.auto_skip.spelling_in_anki = spellings
+                    .into_iter()
+                    .flatten()
+                    .any(|form| self.cards_by_term.contains_key(&normalize_japanese_text(form)));
                 let known = match self.classify_term(&term) {
                     MatchResult::Known { card, evidence: _ } => {
                         term.comprehension =
