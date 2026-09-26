@@ -1,98 +1,79 @@
 <script lang="ts">
 	// Staged edits, discarded on close/Cancel. The row right-click "Add to
 	// ignore list" stays immediate (the stores' toggleIgnore), unlike this modal.
-	import { dirtyGuard } from '$lib/dirtyGuard.svelte';
+	import { settingsDraft } from '$lib/settingsDraft.svelte';
 	import Modal from './Modal.svelte';
+	import SettingsFooter from './SettingsFooter.svelte';
 	import { ignoreModalOpen, saveIgnore } from '$lib/stores';
 	import * as ipc from '$lib/ipc';
 	import { textMatches } from '$lib/table';
-
-	// Staged state + the snapshot it's diffed against for the dirty indicator.
-	let tempTerms = $state<string[]>([]);
-	let tempFiles = $state<ipc.IgnoreFileView[]>([]);
-	let originalTerms = $state<string[]>([]);
-	let originalFiles = $state<ipc.IgnoreFileView[]>([]);
 
 	let newTerm = $state('');
 	let searchFilter = $state('');
 	let exportMessage = $state<{ ok: boolean; text: string } | null>(null);
 
-	// Hydrate (egui's open_modal) each time the modal opens; reset on close.
-	$effect(() => {
-		if ($ignoreModalOpen) hydrate();
+	const form = settingsDraft({
+		open: ignoreModalOpen,
+		initial: { terms: [] as string[], files: [] as ipc.IgnoreFileView[] },
+		load: async () => {
+			newTerm = '';
+			searchFilter = '';
+			exportMessage = null;
+			return await ipc.getIgnoreListFull();
+		},
+		// Only a file's path and enabled flag are saved, like egui.
+		compared: ({ terms, files }) => [terms, files.map((f) => [f.path, f.enabled])]
 	});
-
-	async function hydrate() {
-		newTerm = '';
-		searchFilter = '';
-		exportMessage = null;
-		const view = await ipc.getIgnoreListFull();
-		tempTerms = view.terms;
-		tempFiles = view.files;
-		originalTerms = [...view.terms];
-		originalFiles = view.files.map((f) => ({ ...f }));
-		guard.disarm();
-	}
-
-	// Compare only the persisted fields (path + enabled) for files, like egui.
-	const fileKey = (f: ipc.IgnoreFile[]) => JSON.stringify(f.map((x) => [x.path, x.enabled]));
-	const dirty = $derived(
-		JSON.stringify(tempTerms) !== JSON.stringify(originalTerms) ||
-			fileKey(tempFiles) !== fileKey(originalFiles)
-	);
-	const guard = dirtyGuard(
-		() => dirty,
-		() => ignoreModalOpen.set(false)
-	);
+	const draft = $derived(form.value);
 
 	const search = $derived(searchFilter.trim());
 	const filteredTerms = $derived(
-		search === '' ? tempTerms : tempTerms.filter((t) => textMatches(t, search))
+		search === '' ? draft.terms : draft.terms.filter((t) => textMatches(t, search))
 	);
 	// "From Files" count = terms across enabled files (egui's file_term_counts sum).
 	const fileTermCount = $derived(
-		tempFiles.filter((f) => f.enabled).reduce((n, f) => n + f.term_count, 0)
+		draft.files.filter((f) => f.enabled).reduce((n, f) => n + f.term_count, 0)
 	);
 
 	function addTerm() {
 		const term = newTerm.trim();
-		if (term === '' || tempTerms.includes(term)) return;
-		tempTerms = [...tempTerms, term];
+		if (term === '' || draft.terms.includes(term)) return;
+		draft.terms = [...draft.terms, term];
 		newTerm = '';
 	}
 
 	function removeTerm(term: string) {
-		const i = tempTerms.indexOf(term);
-		if (i !== -1) tempTerms = tempTerms.toSpliced(i, 1);
+		const i = draft.terms.indexOf(term);
+		if (i !== -1) draft.terms = draft.terms.toSpliced(i, 1);
 	}
 
 	function toggleFile(i: number) {
-		tempFiles[i].enabled = !tempFiles[i].enabled;
+		draft.files[i].enabled = !draft.files[i].enabled;
 	}
 
 	function removeFile(i: number) {
-		tempFiles = tempFiles.toSpliced(i, 1);
+		draft.files = draft.files.toSpliced(i, 1);
 	}
 
 	async function refreshFile(i: number) {
-		const v = await ipc.refreshIgnoreFile(tempFiles[i].path);
+		const v = await ipc.refreshIgnoreFile(draft.files[i].path);
 		// Preserve the staged enabled; only the display metadata is refreshed.
-		tempFiles[i] = { ...tempFiles[i], exists: v.exists, term_count: v.term_count };
+		draft.files[i] = { ...draft.files[i], exists: v.exists, term_count: v.term_count };
 	}
 
 	async function importFile() {
 		const v = await ipc.importIgnoreFile();
-		if (v && !tempFiles.some((f) => f.path === v.path)) tempFiles = [...tempFiles, v];
+		if (v && !draft.files.some((f) => f.path === v.path)) draft.files = [...draft.files, v];
 	}
 
 	async function restoreDefault() {
-		tempTerms = await ipc.getDefaultIgnoredTerms();
-		tempFiles = [];
+		draft.terms = await ipc.getDefaultIgnoredTerms();
+		draft.files = [];
 	}
 
 	async function exportTerms() {
 		try {
-			const path = await ipc.exportIgnoreList(tempTerms);
+			const path = await ipc.exportIgnoreList(draft.terms);
 			exportMessage = path ? { ok: true, text: 'Terms exported successfully' } : null;
 		} catch (err) {
 			exportMessage = { ok: false, text: `Export failed: ${String(err)}` };
@@ -101,19 +82,12 @@
 
 	async function save() {
 		const saved = await saveIgnore(
-			tempTerms,
-			tempFiles.map((f) => ({ path: f.path, enabled: f.enabled }))
+			draft.terms,
+			draft.files.map((f) => ({ path: f.path, enabled: f.enabled }))
 		);
 		if (!saved) return;
-		originalTerms = [...tempTerms];
-		originalFiles = tempFiles.map((f) => ({ ...f }));
+		form.commit();
 		ignoreModalOpen.set(false);
-	}
-
-	// egui's Cancel reverts staged edits but keeps the modal open.
-	function cancel() {
-		tempTerms = [...originalTerms];
-		tempFiles = originalFiles.map((f) => ({ ...f }));
 	}
 
 	function fileName(path: string): string {
@@ -125,8 +99,8 @@
 	open={$ignoreModalOpen}
 	title="Ignore List"
 	width="min(620px, 92%)"
-	onclose={guard.request}
-	oninteract={guard.disarm}
+	onclose={form.request}
+	oninteract={form.disarm}
 >
 	<!-- Controls: add new term + search. -->
 	<div class="controls">
@@ -153,12 +127,12 @@
 	<div class="list">
 		<div class="list-head">
 			<span>Current Terms</span>
-			<span class="counts">Manual: {tempTerms.length} | From Files: {fileTermCount}</span>
+			<span class="counts">Manual: {draft.terms.length} | From Files: {fileTermCount}</span>
 		</div>
 
 		<div class="scroll">
 			<div class="pills">
-				{#each tempFiles as file, i (file.path)}
+				{#each draft.files as file, i (file.path)}
 					<span
 						class="file-pill"
 						class:enabled={file.enabled}
@@ -183,11 +157,11 @@
 				{/if}
 			</div>
 
-			{#if tempFiles.length > 0 && filteredTerms.length > 0}
+			{#if draft.files.length > 0 && filteredTerms.length > 0}
 				<hr />
 			{/if}
 
-			{#if filteredTerms.length === 0 && tempFiles.length === 0}
+			{#if filteredTerms.length === 0 && draft.files.length === 0}
 				<p class="empty">No terms found</p>
 			{:else if filteredTerms.length > 0}
 				<div class="pills">
@@ -203,21 +177,14 @@
 	</div>
 
 	{#snippet footer()}
-		<div class="status">
-			{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings
-				have been modified{/if}
-		</div>
 		{#if exportMessage}
 			<p class="export-msg" class:ok={exportMessage.ok}>
 				{exportMessage.ok ? '✓' : '⚠'} {exportMessage.text}
 			</p>
 		{/if}
-		<footer>
-			<button class="primary" disabled={!dirty} onclick={save}>Save Settings</button>
-			<button disabled={!dirty} onclick={cancel}>Cancel</button>
+		<SettingsFooter {form} onsave={save} oncancel={form.revert} onrestore={restoreDefault}>
 			<button onclick={exportTerms}>Export…</button>
-			<button class="right" onclick={restoreDefault}>Restore Default</button>
-		</footer>
+		</SettingsFooter>
 	{/snippet}
 </Modal>
 
@@ -343,12 +310,6 @@
 		color: var(--text-muted);
 		text-align: center;
 	}
-	.status {
-		min-height: 1.2rem;
-		padding: 0 1rem;
-		font-size: 0.85rem;
-		color: var(--warning);
-	}
 	.export-msg {
 		margin: 0;
 		padding: 0 1rem;
@@ -357,18 +318,5 @@
 	}
 	.export-msg.ok {
 		color: var(--success);
-	}
-	footer {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0 1rem;
-	}
-	footer .right {
-		margin-left: auto;
-	}
-	button:disabled {
-		opacity: 0.5;
-		cursor: default;
 	}
 </style>

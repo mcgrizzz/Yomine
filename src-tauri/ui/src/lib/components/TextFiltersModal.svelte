@@ -1,9 +1,9 @@
 <script lang="ts">
 	// Staged edits; Save persists AND re-processes the loaded file so the new
 	// filters take effect immediately (issue #92).
-	import { untrack } from 'svelte';
-	import { dirtyGuard } from '$lib/dirtyGuard.svelte';
+	import { settingsDraft } from '$lib/settingsDraft.svelte';
 	import Modal from './Modal.svelte';
+	import SettingsFooter from './SettingsFooter.svelte';
 	import {
 		getTextFilterPresets,
 		testTextFilters,
@@ -20,46 +20,36 @@
 	} from '$lib/stores';
 
 	let presets = $state<FilterPreset[]>([]);
-	let stagedPresets = $state<Record<string, boolean>>({});
-	let stagedFilters = $state<TextFilterSetting[]>([]);
-	let original = $state('');
 	let sample = $state('（田中）おはよう♪');
 	let testResult = $state<string | null>(null);
 	let testError = $state<string | null>(null);
 	let saving = $state(false);
 
-	const snapshot = () => JSON.stringify([stagedPresets, stagedFilters]);
-	const dirty = $derived(snapshot() !== original);
-	const guard = dirtyGuard(
-		() => dirty,
-		() => textFiltersModalOpen.set(false)
-	);
-
-	$effect(() => {
-		if ($textFiltersModalOpen) untrack(hydrate);
-	});
-
-	function hydrate() {
-		if (presets.length === 0) {
-			getTextFilterPresets().then(
-				(p) => (presets = p),
-				() => {}
-			);
+	const form = settingsDraft({
+		open: textFiltersModalOpen,
+		initial: { presets: {} as Record<string, boolean>, filters: [] as TextFilterSetting[] },
+		load: () => {
+			if (presets.length === 0) {
+				getTextFilterPresets().then(
+					(p) => (presets = p),
+					() => {}
+				);
+			}
+			return {
+				presets: $settings?.text_filter_presets ?? {},
+				filters: $settings?.text_filters ?? []
+			};
 		}
-		stagedPresets = { ...($settings?.text_filter_presets ?? {}) };
-		stagedFilters = ($settings?.text_filters ?? []).map((f) => ({ ...f }));
-		original = snapshot();
-		guard.disarm();
-	}
+	});
+	const draft = $derived(form.value);
 
 	// Live preview + validation, debounced. Runs even with an empty sample —
 	// the command validates every enabled pattern before filtering.
 	$effect(() => {
 		if (!$textFiltersModalOpen) return;
-		const staged = snapshot();
+		const { presets: p, filters: f } = $state.snapshot(draft);
 		const text = sample;
 		const timer = setTimeout(() => {
-			const [p, f] = JSON.parse(staged) as [Record<string, boolean>, TextFilterSetting[]];
 			testTextFilters(p, f, text).then(
 				(result) => {
 					testResult = result;
@@ -75,16 +65,16 @@
 	});
 
 	function addFilter() {
-		stagedFilters.push({ pattern: '', replacement: '', enabled: true });
+		draft.filters.push({ pattern: '', replacement: '', enabled: true });
 	}
 
 	async function save() {
 		saving = true;
 		try {
-			const filters = stagedFilters.filter((f) => f.pattern.trim() !== '');
-			if (!(await saveTextFilters(stagedPresets, filters))) return;
-			stagedFilters = filters.map((f) => ({ ...f }));
-			original = snapshot();
+			const filters = draft.filters.filter((f) => f.pattern.trim() !== '');
+			if (!(await saveTextFilters(draft.presets, filters))) return;
+			draft.filters = filters;
+			form.commit();
 			if ($fileResult) await reloadCurrentFile();
 			textFiltersModalOpen.set(false);
 		} catch (err) {
@@ -97,20 +87,14 @@
 			saving = false;
 		}
 	}
-
-	function cancel() {
-		const [p, f] = JSON.parse(original) as [Record<string, boolean>, TextFilterSetting[]];
-		stagedPresets = p;
-		stagedFilters = f;
-	}
 </script>
 
 <Modal
 	open={$textFiltersModalOpen}
 	title="Text Filters"
 	width="min(600px, 92%)"
-	onclose={guard.request}
-	oninteract={guard.disarm}
+	onclose={form.request}
+	oninteract={form.disarm}
 >
 	<p class="blurb">
 		Filters run on each line before terms and comprehension are computed. A line left empty is
@@ -121,7 +105,7 @@
 		<h3>Presets</h3>
 		{#each presets as preset (preset.id)}
 			<label class="preset">
-				<input type="checkbox" bind:checked={stagedPresets[preset.id]} />
+				<input type="checkbox" bind:checked={draft.presets[preset.id]} />
 				<span>
 					<span class="preset-label" lang="ja">{preset.label}</span>
 					<span class="preset-desc" lang="ja">{preset.description}</span>
@@ -132,7 +116,7 @@
 
 	<section>
 		<h3>Custom filters <span class="dim">(regex, applied in order)</span></h3>
-		{#each stagedFilters as filter, i (i)}
+		{#each draft.filters as filter, i (i)}
 			<div class="rule">
 				<input
 					type="checkbox"
@@ -154,7 +138,7 @@
 				<button
 					class="icon remove"
 					aria-label="Remove this filter"
-					onclick={() => stagedFilters.splice(i, 1)}>✕</button
+					onclick={() => draft.filters.splice(i, 1)}>✕</button
 				>
 			</div>
 		{/each}
@@ -174,16 +158,15 @@
 	</section>
 
 	{#snippet footer()}
-		<div class="status">
-			{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if testError}⚠ Fix the
-				invalid pattern to save{:else if dirty}⚠ Settings have been modified{/if}
-		</div>
-		<footer>
-			<button class="primary" disabled={!dirty || saving || testError !== null} onclick={save}>
-				{saving ? 'Applying…' : $fileResult ? 'Save & Apply' : 'Save Settings'}
-			</button>
-			<button disabled={!dirty || saving} onclick={cancel}>Cancel</button>
-		</footer>
+		<SettingsFooter
+			{form}
+			invalid={testError !== null}
+			problem={testError && 'Fix the invalid pattern to save'}
+			busy={saving}
+			saveLabel={saving ? 'Applying…' : $fileResult ? 'Save & Apply' : 'Save Settings'}
+			onsave={save}
+			oncancel={form.revert}
+		/>
 	{/snippet}
 </Modal>
 
@@ -259,21 +242,5 @@
 	}
 	.test-out.error {
 		color: var(--danger);
-	}
-	.status {
-		min-height: 1.2rem;
-		padding: 0 1rem;
-		font-size: 0.85rem;
-		color: var(--warning);
-	}
-	footer {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0 1rem;
-	}
-	footer button:disabled {
-		opacity: 0.5;
-		cursor: default;
 	}
 </style>

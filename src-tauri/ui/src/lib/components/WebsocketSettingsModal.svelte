@@ -1,71 +1,50 @@
 <script lang="ts">
 	// Staged edits; Cancel reverts but keeps the modal open (egui behavior).
 	// Saving the port also restarts a running server on it.
-	import { untrack } from 'svelte';
-	import { dirtyGuard } from '$lib/dirtyGuard.svelte';
+	import { settingsDraft } from '$lib/settingsDraft.svelte';
 	import Modal from './Modal.svelte';
+	import SettingsFooter from './SettingsFooter.svelte';
 	import {
+		defaultSettings,
 		settings,
 		websocketModalOpen,
 		saveWebsocketPort,
 		setAsbplayerPollSecs
 	} from '$lib/stores';
+	import type { SettingsData } from '$lib/ipc';
 
-	/** `WebSocketSettings::default()` (core/settings.rs). */
-	const DEFAULT_PORT = 8766;
-	/** `default_asbplayer_poll_secs()` (core/settings.rs). */
-	const DEFAULT_POLL_SECS = 3;
-
-	let tempPort = $state(DEFAULT_PORT);
-	let originalPort = $state(DEFAULT_PORT);
-	let tempPoll = $state(DEFAULT_POLL_SECS);
-	let originalPoll = $state(DEFAULT_POLL_SECS);
-
-	// untrack: a tracked $settings read would re-hydrate (clobbering the staged
-	// edit) on any settings change while open.
-	$effect(() => {
-		if ($websocketModalOpen) untrack(hydrate);
+	const fields = (s: SettingsData) => ({
+		port: s.websocket_settings.port,
+		poll: s.asbplayer_poll_secs
 	});
+	const form = settingsDraft({
+		open: websocketModalOpen,
+		initial: { port: 0, poll: 0 },
+		load: () => {
+			const s = $settings ?? $defaultSettings;
+			return s ? fields(s) : undefined;
+		}
+	});
+	const draft = $derived(form.value);
 
-	function hydrate() {
-		const port = $settings?.websocket_settings.port ?? DEFAULT_PORT;
-		tempPort = port;
-		originalPort = port;
-		const poll = $settings?.asbplayer_poll_secs ?? DEFAULT_POLL_SECS;
-		tempPoll = poll;
-		originalPoll = poll;
-		guard.disarm();
-	}
-
-	const dirty = $derived(tempPort !== originalPort || tempPoll !== originalPoll);
-	const guard = dirtyGuard(
-		() => dirty,
-		() => websocketModalOpen.set(false)
-	);
 	// u16 caps at 65535 — the number input doesn't.
-	const valid = $derived(Number.isInteger(tempPort) && tempPort >= 1024 && tempPort <= 65535);
-	const pollValid = $derived(Number.isInteger(tempPoll) && tempPoll >= 1 && tempPoll <= 60);
+	const valid = $derived(Number.isInteger(draft.port) && draft.port >= 1024 && draft.port <= 65535);
+	const pollValid = $derived(Number.isInteger(draft.poll) && draft.poll >= 1 && draft.poll <= 60);
 
 	async function save() {
-		if (tempPoll !== originalPoll) {
-			await setAsbplayerPollSecs(tempPoll);
-			originalPoll = tempPoll;
+		if (draft.poll !== form.saved.poll) {
+			await setAsbplayerPollSecs(draft.poll);
+			form.saved.poll = draft.poll;
 		}
-		if (tempPort !== originalPort) {
-			if (!(await saveWebsocketPort(tempPort))) return;
+		if (draft.port !== form.saved.port) {
+			if (!(await saveWebsocketPort(draft.port))) return;
 			// On failure the lastError banner shows; staged state stays for a retry.
 		}
 		websocketModalOpen.set(false);
 	}
 
-	function cancel() {
-		tempPort = originalPort;
-		tempPoll = originalPoll;
-	}
-
 	function restoreDefault() {
-		tempPort = DEFAULT_PORT;
-		tempPoll = DEFAULT_POLL_SECS;
+		if ($defaultSettings) form.value = fields($defaultSettings);
 	}
 </script>
 
@@ -73,12 +52,12 @@
 	open={$websocketModalOpen}
 	title="WebSocket Server Settings"
 	width="min(420px, 92%)"
-	onclose={guard.request}
-	oninteract={guard.disarm}
+	onclose={form.request}
+	oninteract={form.disarm}
 >
 	<div class="port-row">
 		<label for="ws-port">Server Port:</label>
-		<input id="ws-port" type="number" min="1024" max="65535" bind:value={tempPort} />
+		<input id="ws-port" type="number" min="1024" max="65535" bind:value={draft.port} />
 		<span class="hint">(Valid range: 1024-65535)</span>
 	</div>
 	{#if !valid}
@@ -87,7 +66,7 @@
 
 	<div class="port-row">
 		<label for="asb-poll">asbplayer poll interval:</label>
-		<input id="asb-poll" type="number" min="1" max="60" bind:value={tempPoll} />
+		<input id="asb-poll" type="number" min="1" max="60" bind:value={draft.poll} />
 		<span class="hint">seconds (1-60; used by follow mode)</span>
 	</div>
 	{#if !pollValid}
@@ -95,16 +74,13 @@
 	{/if}
 
 	{#snippet footer()}
-		<hr />
-		<div class="status">
-			{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings have
-				been modified{/if}
-		</div>
-		<footer>
-			<button class="primary" disabled={!dirty || !valid || !pollValid} onclick={save}>Save Settings</button>
-			<button disabled={!dirty} onclick={cancel}>Cancel</button>
-			<button class="right" onclick={restoreDefault}>Restore Default</button>
-		</footer>
+		<SettingsFooter
+			{form}
+			invalid={!valid || !pollValid}
+			onsave={save}
+			oncancel={form.revert}
+			onrestore={restoreDefault}
+		/>
 	{/snippet}
 </Modal>
 
@@ -132,29 +108,5 @@
 		padding: 0 1rem;
 		font-size: 0.85rem;
 		color: var(--danger);
-	}
-	hr {
-		border: none;
-		border-top: 1px solid var(--border);
-		margin: 0 1rem;
-	}
-	.status {
-		min-height: 1.2rem;
-		padding: 0 1rem;
-		font-size: 0.85rem;
-		color: var(--warning);
-	}
-	footer {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0 1rem;
-	}
-	footer .right {
-		margin-left: auto;
-	}
-	button:disabled {
-		opacity: 0.5;
-		cursor: default;
 	}
 </style>

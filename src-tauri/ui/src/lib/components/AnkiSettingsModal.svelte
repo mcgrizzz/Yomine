@@ -1,24 +1,16 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
-	import { dirtyGuard } from '$lib/dirtyGuard.svelte';
+	import { settingsDraft } from '$lib/settingsDraft.svelte';
 	import Modal from './Modal.svelte';
+	import SettingsFooter from './SettingsFooter.svelte';
 	import * as ipc from '$lib/ipc';
-	import { ankiModalOpen, settings, saveAnkiSettings } from '$lib/stores';
+	import { ankiModalOpen, defaultSettings, settings, saveAnkiSettings } from '$lib/stores';
 
 	type Draft = Pick<
 		ipc.SettingsData,
 		'anki_connection' | 'anki_model_mappings' | 'anki_interval' | 'yomitan_url'
 	>;
 	type Phase = 'idle' | 'loading' | 'ready' | 'failed';
-	const DEFAULT_PORT = 8765;
-	const DEFAULT_INTERVAL = 30;
-	const DEFAULT_YOMITAN_URL = 'http://127.0.0.1:19633';
-	const defaults: Draft = {
-		anki_connection: { host: 'localhost', port: DEFAULT_PORT, api_key: '' },
-		anki_model_mappings: {},
-		anki_interval: DEFAULT_INTERVAL,
-		yomitan_url: DEFAULT_YOMITAN_URL
-	};
 	function copyDraft(s: Draft): Draft {
 		return {
 			anki_connection: { ...s.anki_connection },
@@ -32,8 +24,17 @@
 			yomitan_url: s.yomitan_url
 		};
 	}
-	let original = $state(copyDraft(defaults));
-	let draft = $state(copyDraft(defaults));
+	// Replaced from the saved settings each time the dialog opens.
+	const form = settingsDraft<Draft>({
+		open: ankiModalOpen,
+		initial: {
+			anki_connection: { host: '', port: 0, api_key: '' },
+			anki_model_mappings: {},
+			anki_interval: 0,
+			yomitan_url: ''
+		}
+	});
+	const draft = $derived(form.value);
 	let ankiExpanded = $state(false);
 	let yomitanExpanded = $state(false);
 	let showKey = $state(false);
@@ -59,26 +60,6 @@
 	let ankiGeneration = 0;
 	let yomitanGeneration = 0;
 
-	function mappingsEqual(a: Draft['anki_model_mappings'], b: Draft['anki_model_mappings']) {
-		return (
-			Object.keys(a).length === Object.keys(b).length &&
-			Object.entries(a).every(
-				([name, fields]) =>
-					b[name] &&
-					fields.term_field === b[name].term_field &&
-					fields.reading_field === b[name].reading_field &&
-					(fields.sentence_field ?? null) === (b[name].sentence_field ?? null)
-			)
-		);
-	}
-	const dirty = $derived(
-		draft.anki_connection.host !== original.anki_connection.host ||
-			draft.anki_connection.port !== original.anki_connection.port ||
-			draft.anki_connection.api_key !== original.anki_connection.api_key ||
-			draft.anki_interval !== original.anki_interval ||
-			draft.yomitan_url !== original.yomitan_url ||
-			!mappingsEqual(draft.anki_model_mappings, original.anki_model_mappings)
-	);
 	const validPort = $derived(
 		Number.isInteger(draft.anki_connection.port) &&
 			draft.anki_connection.port >= 1 &&
@@ -106,10 +87,6 @@
 		)
 	);
 	const activeModel = $derived(filteredModels[modelIndex]);
-	const guard = dirtyGuard(
-		() => dirty,
-		() => ankiModalOpen.set(false)
-	);
 
 	$effect(() => {
 		if (!$ankiModalOpen) return;
@@ -121,12 +98,13 @@
 	});
 
 	function hydrate() {
-		original = copyDraft($settings ?? defaults);
+		const saved = $settings ?? $defaultSettings;
+		if (saved) form.reset(copyDraft(saved));
 		revert();
 	}
 
 	function revert() {
-		draft = copyDraft(original);
+		form.revert();
 		ankiGeneration++;
 		yomitanGeneration++;
 		if (catalogConnection !== JSON.stringify(draft.anki_connection)) clearCatalog();
@@ -138,7 +116,7 @@
 		removed = null;
 		showKey = false;
 		saveError = null;
-		guard.disarm();
+		form.disarm();
 		void testAnki();
 		void testYomitan();
 	}
@@ -154,7 +132,8 @@
 	}
 
 	function restoreDefault() {
-		draft = copyDraft(defaults);
+		if (!$defaultSettings) return;
+		form.value = copyDraft($defaultSettings);
 		expandedModel = null;
 		adding = false;
 		modelSearch = '';
@@ -164,7 +143,7 @@
 		saveError = null;
 		editConnection();
 		editYomitan();
-		guard.disarm();
+		form.disarm();
 	}
 
 	function editConnection() {
@@ -375,7 +354,7 @@
 	}
 
 	async function save() {
-		if (saving || !dirty) return;
+		if (saving || !form.dirty) return;
 		saveError = null;
 		let invalidField: string | null = null;
 		if (!validHost) {
@@ -442,9 +421,9 @@
 	width="min(760px, 94%)"
 	onclose={() => {
 		if (adding) void toggleAdding();
-		else if (!saving) guard.request();
+		else if (!saving) form.request();
 	}}
-	oninteract={guard.disarm}
+	oninteract={form.disarm}
 >
 	<form
 		id="anki-settings-form"
@@ -782,22 +761,15 @@
 		</fieldset>
 	</form>
 	{#snippet footer()}
-		<hr />
 		{#if saveError}<p class="save-error error" role="alert">{saveError}</p>{/if}
-		<div class="dirty" role="status">
-			{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings have
-				been modified{/if}
-		</div>
-		<footer>
-			<button
-				class="primary"
-				type="submit"
-				form="anki-settings-form"
-				disabled={!dirty || !validPort || saving}>Save Settings</button
-			>
-			<button disabled={!dirty || saving} onclick={revert}>Cancel</button>
-			<button class="right" disabled={saving} onclick={restoreDefault}>Restore Default</button>
-		</footer>
+		<SettingsFooter
+			{form}
+			invalid={!validPort}
+			busy={saving}
+			submits="anki-settings-form"
+			oncancel={revert}
+			onrestore={restoreDefault}
+		/>
 	{/snippet}
 </Modal>
 
@@ -1034,32 +1006,8 @@
 	.estimate > div:first-child {
 		flex: 1;
 	}
-	hr {
-		border: none;
-		border-top: 1px solid var(--border);
-		margin: 0 1rem;
-	}
 	.save-error {
 		margin: 0.5rem 1rem;
-	}
-	.dirty {
-		min-height: 1.2rem;
-		padding: 0 1rem;
-		font-size: 0.85rem;
-		color: var(--warning);
-	}
-	footer {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0 1rem;
-	}
-	footer .right {
-		margin-left: auto;
-	}
-	button:disabled {
-		opacity: 0.5;
-		cursor: default;
 	}
 	@media (max-width: 640px) {
 		.connection-row {

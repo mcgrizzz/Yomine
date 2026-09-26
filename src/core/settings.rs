@@ -201,7 +201,8 @@ pub struct SettingsData {
     pub websocket_settings: WebSocketSettings,
     #[serde(default)]
     pub frequency_weights: HashMap<String, FrequencyDictionarySetting>,
-    #[serde(default)]
+    /// POS key → enabled; missing = enabled.
+    #[serde(default = "default_pos_filters")]
     pub pos_filters: HashMap<String, bool>,
     /// JLPT chip key (N5..N1, "none") → enabled; missing = enabled.
     #[serde(default)]
@@ -282,6 +283,10 @@ const fn default_asbplayer_poll_secs() -> u32 {
     3
 }
 
+fn default_pos_filters() -> HashMap<String, bool> {
+    ["Unknown", "Other", "Symbol"].into_iter().map(|key| (key.to_owned(), false)).collect()
+}
+
 const fn default_interval() -> u32 {
     30
 }
@@ -306,7 +311,7 @@ impl Default for SettingsData {
             anki_interval: default_interval(),
             websocket_settings: WebSocketSettings::default(),
             frequency_weights: HashMap::new(),
-            pos_filters: HashMap::new(),
+            pos_filters: default_pos_filters(),
             jlpt_filters: HashMap::new(),
             freq_filter_min: None,
             freq_filter_max: None,

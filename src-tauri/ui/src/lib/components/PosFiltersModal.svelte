@@ -1,10 +1,16 @@
 <script lang="ts">
 	// Staged edits; Save both persists the defaults AND applies them to the live
 	// table. Cancel reverts but keeps the modal open (egui behavior).
-	import { untrack } from 'svelte';
-	import { dirtyGuard } from '$lib/dirtyGuard.svelte';
+	import { settingsDraft } from '$lib/settingsDraft.svelte';
 	import Modal from './Modal.svelte';
-	import { posCatalog, posEnabled, posModalOpen, savePosFilters } from '$lib/stores';
+	import SettingsFooter from './SettingsFooter.svelte';
+	import {
+		defaultSettings,
+		posCatalog,
+		posEnabled,
+		posModalOpen,
+		savePosFilters
+	} from '$lib/stores';
 
 	// NounExpression is intentionally absent (hidden but still saved).
 	const NOUN_CHILDREN = ['ProperNoun', 'CompoundNoun', 'AdjectivalNoun', 'SuruVerb'];
@@ -31,35 +37,18 @@
 		'Unknown'
 	];
 
-	/** egui `default_pos_map`: everything on except the low-value categories. */
-	const DEFAULT_OFF = new Set(['Unknown', 'Other', 'Symbol', 'KanaExpression']);
-
-	let staged = $state<Record<string, boolean>>({});
-	let original = $state<Record<string, boolean>>({});
-
-	// Seeds from the *live* table state, not the saved defaults. untrack: a
-	// tracked read would clobber staged edits while open.
-	$effect(() => {
-		if ($posModalOpen) untrack(hydrate);
+	// Seeds from the *live* table state, not the saved defaults.
+	const form = settingsDraft({
+		open: posModalOpen,
+		initial: {} as Record<string, boolean>,
+		load: () => Object.fromEntries($posCatalog.map((p) => [p.key, $posEnabled[p.key] !== false]))
 	});
-
-	function hydrate() {
-		const current: Record<string, boolean> = {};
-		for (const p of $posCatalog) current[p.key] = $posEnabled[p.key] !== false;
-		staged = current;
-		original = { ...current };
-		guard.disarm();
-	}
+	const staged = $derived(form.value);
 
 	const labelOf = $derived(
 		new Map($posCatalog.map((p) => [p.key, p.display_name] as [string, string]))
 	);
 	const nounOn = $derived(staged['Noun'] !== false);
-	const dirty = $derived($posCatalog.some((p) => staged[p.key] !== original[p.key]));
-	const guard = dirtyGuard(
-		() => dirty,
-		() => posModalOpen.set(false)
-	);
 
 	function toggle(key: string) {
 		staged[key] = !(staged[key] !== false);
@@ -67,20 +56,15 @@
 
 	async function save() {
 		if (await savePosFilters({ ...staged })) {
-			original = { ...staged };
+			form.commit();
 			posModalOpen.set(false);
 		}
 		// On failure the lastError banner shows; staged state stays for a retry.
 	}
 
-	function cancel() {
-		staged = { ...original };
-	}
-
 	function restoreDefault() {
-		const next: Record<string, boolean> = {};
-		for (const p of $posCatalog) next[p.key] = !DEFAULT_OFF.has(p.key);
-		staged = next;
+		const off = $defaultSettings?.pos_filters;
+		if (off) form.value = Object.fromEntries($posCatalog.map((p) => [p.key, off[p.key] !== false]));
 	}
 </script>
 
@@ -88,8 +72,8 @@
 	open={$posModalOpen}
 	title="Part of Speech Filters"
 	width="min(560px, 92%)"
-	onclose={guard.request}
-	oninteract={guard.disarm}
+	onclose={form.request}
+	oninteract={form.disarm}
 >
 	<div class="chips">
 		<!-- Parent "Noun" chip; its sub-categories grey out when it's off. -->
@@ -116,16 +100,7 @@
 	</div>
 
 	{#snippet footer()}
-		<hr />
-		<div class="status">
-			{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings have
-				been modified{/if}
-		</div>
-		<footer>
-			<button class="primary" disabled={!dirty} onclick={save}>Save Settings</button>
-			<button disabled={!dirty} onclick={cancel}>Cancel</button>
-			<button class="right" onclick={restoreDefault}>Restore Default</button>
-		</footer>
+		<SettingsFooter {form} onsave={save} oncancel={form.revert} onrestore={restoreDefault} />
 	{/snippet}
 </Modal>
 
@@ -167,30 +142,6 @@
 	.chip:disabled {
 		opacity: 0.55;
 		color: var(--text-muted);
-		cursor: default;
-	}
-	hr {
-		border: none;
-		border-top: 1px solid var(--border);
-		margin: 0 1rem;
-	}
-	.status {
-		min-height: 1.2rem;
-		padding: 0 1rem;
-		font-size: 0.85rem;
-		color: var(--warning);
-	}
-	footer {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0 1rem;
-	}
-	footer .right {
-		margin-left: auto;
-	}
-	footer button:disabled {
-		opacity: 0.5;
 		cursor: default;
 	}
 </style>
