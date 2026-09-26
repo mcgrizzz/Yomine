@@ -7,7 +7,7 @@ import { checkForUpdate } from './update';
 import { asbContext, playerStatus } from './player';
 import { fileResult, isSupportedPath, loadAndStore, recentFiles } from './file';
 import { jlptEnabled, posCatalog, posEnabled } from './controls';
-import { settings } from './settings';
+import { defaultSettings, settings } from './settings';
 import { refreshIgnoredLemmas } from './ignore';
 import { refreshRecommendedDicts } from './dictionaries';
 import { refreshMinedState, yomitanReachable } from './mining';
@@ -24,6 +24,7 @@ export async function hydrate(): Promise<void> {
 	hydrated = true;
 
 	const settingsPull = ipc.getSettings();
+	void ipc.getDefaultSettings().then((d) => defaultSettings.set(d));
 	const recentsPull = ipc.getRecentFiles().then((r) => recentFiles.set(r));
 
 	// Events are wired before any await so early emits aren't missed. player/

@@ -394,6 +394,10 @@ export function getSettings(): Promise<SettingsData> {
 	return invoke('get_settings');
 }
 
+export function getDefaultSettings(): Promise<SettingsData> {
+	return invoke('get_default_settings');
+}
+
 export function saveSettings(settings: SettingsData): Promise<void> {
 	return invoke('save_settings', { settings });
 }

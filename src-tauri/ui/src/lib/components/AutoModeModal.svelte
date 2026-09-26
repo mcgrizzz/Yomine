@@ -4,26 +4,15 @@
 	import { DEFAULT_HORIZON, frequencyPoints, pickPoints, POS_ALIASES } from '$lib/autopick';
 	import type { AutoMine } from '$lib/ipc';
 	import Modal from './Modal.svelte';
-	import { autoModalOpen, knowledge, posCatalog, setAutoMine, settings } from '$lib/stores';
+	import {
+		autoModalOpen,
+		defaultSettings,
+		knowledge,
+		posCatalog,
+		setAutoMine,
+		settings
+	} from '$lib/stores';
 
-	/** `AutoMine::default()` (core/settings.rs). */
-	const DEFAULTS: AutoMine = {
-		stop: 'count',
-		limit: 10,
-		min_score: 80,
-		max_cards: 40,
-		pos_points: {
-			Noun: 30,
-			SuruVerb: 30,
-			AdjectivalNoun: 25,
-			Adjective: 20,
-			Verb: 20,
-			Adverb: 0,
-			ProperNoun: -10,
-			Pronoun: -10
-		},
-		jlpt_points: { N5: 15, N4: 20, N3: 20, N2: 20, N1: 20 }
-	};
 	const JLPT_LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
 
 	const copy = (a: AutoMine): AutoMine => ({
@@ -40,8 +29,17 @@
 		jlpt_points: Object.fromEntries(JLPT_LEVELS.map((l) => [l, a.jlpt_points[l] ?? 0]))
 	});
 
-	let draft = $state<AutoMine>(copy(DEFAULTS));
-	let original = $state<AutoMine>(copy(DEFAULTS));
+	// Replaced from the saved settings each time the dialog opens.
+	const UNLOADED: AutoMine = {
+		stop: 'count',
+		limit: 1,
+		min_score: 0,
+		max_cards: null,
+		pos_points: {},
+		jlpt_points: {}
+	};
+	let draft = $state<AutoMine>(copy(UNLOADED));
+	let original = $state<AutoMine>(copy(UNLOADED));
 	let adding = $state('');
 
 	$effect(() => {
@@ -49,7 +47,8 @@
 	});
 
 	function hydrate() {
-		const saved = $settings?.auto_mine ?? DEFAULTS;
+		const saved = $settings?.auto_mine ?? $defaultSettings?.auto_mine;
+		if (!saved) return;
 		draft = copy(saved);
 		original = copy(saved);
 		guard.disarm();
@@ -283,7 +282,12 @@
 		<footer>
 			<button class="primary" disabled={!dirty || !valid} onclick={save}>Save Settings</button>
 			<button disabled={!dirty} onclick={() => (draft = copy(original))}>Cancel</button>
-			<button class="right" onclick={() => (draft = copy(DEFAULTS))}>Restore Default</button>
+			<button
+				class="right"
+				disabled={!$defaultSettings}
+				onclick={() => $defaultSettings && (draft = copy($defaultSettings.auto_mine))}
+				>Restore Default</button
+			>
 		</footer>
 	{/snippet}
 </Modal>

@@ -8,6 +8,8 @@ import { type FreqFilterState, posEnabled } from './controls';
 import { refreshMinedState } from './mining';
 
 export const settings = writable<ipc.SettingsData | null>(null);
+/** Every setting's default (`SettingsData::default()`), for Restore Default. */
+export const defaultSettings = writable<ipc.SettingsData | null>(null);
 settings.subscribe((s) => showPossibleKnownMatches.set(s?.show_possible_known_matches ?? true));
 export const setShowPossibleKnownMatches = (show: boolean) => patchSettings({ show_possible_known_matches: show });
 

@@ -196,6 +196,12 @@ pub fn get_pos_catalog() -> Vec<PosInfo> {
     POS::all().iter().copied().map(PosInfo::from_pos).collect()
 }
 
+/// Every setting's default, for the dialogs' Restore Default.
+#[tauri::command]
+pub fn get_default_settings() -> SettingsData {
+    SettingsData::default()
+}
+
 /// The backend-owned settings (loaded at startup). One source of truth.
 #[tauri::command]
 pub fn get_settings(state: State<'_, Mutex<AppState>>) -> SettingsData {
