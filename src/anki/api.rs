@@ -155,6 +155,12 @@ pub async fn get_deck_ids() -> Result<Vec<Deck>, reqwest::Error> {
         .collect())
 }
 
+/// The open Anki profile's name, which keys Yomine's copy of its collection.
+pub async fn active_profile() -> Result<String, reqwest::Error> {
+    let response: ApiResponse<String> = make_request("getActiveProfile", None).await?;
+    Ok(response.unwrap_result().unwrap_or_default())
+}
+
 pub async fn get_note_ids(query: &str) -> Result<Vec<u64>, reqwest::Error> {
     let params = serde_json::json!({ "query": query });
     let response: ApiResponse<Vec<u64>> = make_request("findNotes", Some(params)).await?;

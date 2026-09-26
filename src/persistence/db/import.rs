@@ -6,6 +6,7 @@ use rusqlite::Connection;
 use serde_json::Value;
 
 use super::{
+    anki,
     batches::{
         self,
         StoredBatch,
@@ -20,16 +21,24 @@ use super::{
         Open,
     },
 };
-use crate::anki::mined::normalize_sentence;
+use crate::anki::{
+    mined::{
+        normalize_sentence,
+        MinedSentence,
+    },
+    types::Vocab,
+};
+
+fn read(dir: &Path, name: &str) -> Option<Value> {
+    let text = std::fs::read_to_string(dir.join(name)).ok()?;
+    serde_json::from_str(&text)
+        .inspect_err(|e| eprintln!("Skipping {name} in the history import: {e}"))
+        .ok()
+}
 
 /// Reads whatever JSON history exists; a missing or unreadable file imports nothing.
 pub(super) fn import_json(conn: &Connection, dir: &Path) -> rusqlite::Result<()> {
-    let read = |name: &str| -> Option<Value> {
-        let text = std::fs::read_to_string(dir.join(name)).ok()?;
-        serde_json::from_str(&text)
-            .inspect_err(|e| eprintln!("Skipping {name} in the history import: {e}"))
-            .ok()
-    };
+    let read = |name: &str| read(dir, name);
     let now = now_ms();
 
     if let Some(batch) = read("yomine_last_batch.json") {
@@ -48,6 +57,7 @@ pub(super) fn import_json(conn: &Connection, dir: &Path) -> rusqlite::Result<()>
                         term: None,
                         source: None,
                         batch_id: None,
+                        collection: None,
                         deleted_at: None,
                     },
                 )?;
@@ -88,6 +98,26 @@ pub(super) fn import_json(conn: &Connection, dir: &Path) -> rusqlite::Result<()>
     Ok(())
 }
 
+/// The Anki caches, filed under the unknown collection until a harvest names it.
+pub(super) fn import_anki_caches(conn: &Connection, dir: &Path) -> rusqlite::Result<()> {
+    let now = now_ms();
+    let cards: Vec<Vocab> = read(dir, "anki_vocab_cache.json")
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default();
+    for card in &cards {
+        if let Some(card_id) = card.card_id {
+            anki::insert_card(conn, anki::UNKNOWN, card_id, card, now)?;
+        }
+    }
+    let sentences: Vec<MinedSentence> = read(dir, "anki_mined_sentences.json")
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default();
+    for sentence in &sentences {
+        anki::insert_sentence(conn, anki::UNKNOWN, sentence, now)?;
+    }
+    Ok(())
+}
+
 fn import_batch(conn: &Connection, batch: &Value, now: i64) -> rusqlite::Result<()> {
     let (Some(id), Some(fingerprint)) =
         (batch["id"].as_str(), batch["source"]["fingerprint"].as_str())
@@ -123,6 +153,7 @@ fn import_batch(conn: &Connection, batch: &Value, now: i64) -> rusqlite::Result<
                 term: item["lemma"].as_str(),
                 source: Some(source),
                 batch_id: Some(id),
+                collection: None,
                 deleted_at,
             },
         )?;
@@ -170,6 +201,12 @@ mod tests {
                     "last_opened":"2026-09-01T10:00:00Z","file_size":10,"term_count":4}]}"#,
             ),
             ("epub_history.json", r#"{"book.epub":[1,3]}"#),
+            (
+                "anki_vocab_cache.json",
+                r#"[{"term":"猫","reading":"ねこ","card_id":5,"interval":21.0},
+                    {"term":"犬","reading":"いぬ","card_id":6,"interval":null}]"#,
+            ),
+            ("anki_mined_sentences.json", r#"[{"note_id":8,"sentence":"猫だ"}]"#),
         ];
         for (name, json) in files {
             std::fs::write(dir.join(name), json).unwrap();
@@ -184,6 +221,11 @@ mod tests {
             assert_eq!(count(&conn, "SELECT count(*) FROM sources WHERE auto_processed_at > 0"), 2);
             assert_eq!(count(&conn, "SELECT opened_at FROM opens"), 1_788_256_800_000);
             assert_eq!(count(&conn, "SELECT count(*) FROM epub_parts_seen"), 2);
+            assert_eq!(count(&conn, "SELECT count(*) FROM anki_cards WHERE collection = ''"), 2);
+            assert_eq!(
+                count(&conn, "SELECT count(*) FROM anki_sentences WHERE collection = ''"),
+                1
+            );
         }
         assert!(dir.join("yomine_last_batch.json").exists());
         std::fs::remove_dir_all(dir).unwrap();

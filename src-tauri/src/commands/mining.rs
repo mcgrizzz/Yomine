@@ -519,12 +519,14 @@ async fn mine(
             Some((record, _)) => (Some(&record.source), Some(record.id.as_str())),
             None => (source, None),
         };
+        let collection = yomine::anki::api::active_profile().await.ok();
         mined::record_note(
             id,
             &sentence,
             &item.lemma,
             source.map(|s| s.fingerprint.as_str()),
             batch_id,
+            collection.as_deref(),
         );
     }
 

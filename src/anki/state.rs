@@ -24,6 +24,7 @@ use wana_kana::IsJapaneseStr;
 
 use super::{
     api::{
+        active_profile,
         get_intervals,
         get_note_ids,
         get_notes,
@@ -51,10 +52,9 @@ use crate::{
         Term,
     },
     dictionary::frequency_manager::FrequencyManager,
+    persistence::db,
     segmentation::word::lexeme_name,
 };
-
-pub(crate) const ANKI_VOCAB_CACHE: &str = "anki_vocab_cache.json";
 
 pub struct AnkiState {
     vocab: Vec<Vocab>,
@@ -71,7 +71,8 @@ impl AnkiState {
         known_interval: u32,
     ) -> Result<Self, reqwest::Error> {
         let start = Instant::now();
-        let mut vocab = get_total_vocab(&model_mapping).await?;
+        let collection = active_profile().await?;
+        let mut vocab = get_total_vocab(&model_mapping, &collection).await?;
         println!(
             "Loaded {} vocab items from Anki ({:.1}s)",
             vocab.len(),
@@ -118,8 +119,10 @@ impl AnkiState {
         // Persist the freshly fetched vocab so it can be reused offline / for fast loads
         if vocab.is_empty() {
             eprintln!("Anki returned no vocab; keeping the existing cache");
-        } else if let Err(e) = crate::persistence::save_json(&vocab, ANKI_VOCAB_CACHE) {
-            eprintln!("Failed to save Anki vocab cache: {}", e);
+        } else if let Err(e) =
+            db::with(|conn| db::anki::sync_cards(conn, &collection, &vocab, db::now_ms()))
+        {
+            eprintln!("Failed to save Anki vocab cache: {e}");
         }
 
         println!("AnkiState initialized ({:.1}s total)", start.elapsed().as_secs_f32());
@@ -141,13 +144,18 @@ impl AnkiState {
         Self { vocab, frequency_manager, cards_by_reading, cards_by_term, known_interval }
     }
 
-    /// Build an `AnkiState` from the on-disk vocab cache, if one exists. Returns
-    /// `None` when no cache is present so callers can fall back gracefully.
+    /// Build an `AnkiState` from the latest harvested collection's cards, if any.
+    /// Returns `None` when there are none so callers can fall back gracefully.
     pub fn from_cache(
         frequency_manager: Arc<FrequencyManager>,
         known_interval: u32,
     ) -> Option<Self> {
-        let vocab: Vec<Vocab> = crate::persistence::load_json_or_default(ANKI_VOCAB_CACHE);
+        let vocab =
+            db::with(|conn| db::anki::live_cards(conn, &db::anki::active_collection(conn)?))
+                .unwrap_or_else(|e| {
+                    eprintln!("{e}");
+                    Vec::new()
+                });
         if vocab.is_empty() {
             return None;
         }
@@ -474,6 +482,7 @@ impl AnkiState {
 
 pub async fn get_total_vocab(
     model_mapping: &HashMap<String, FieldMapping>,
+    collection: &str,
 ) -> Result<Vec<Vocab>, reqwest::Error> {
     let deck_query = "deck:*";
 
@@ -508,7 +517,7 @@ pub async fn get_total_vocab(
             })
         })
         .collect();
-    super::mined::save_harvested_sentences(&mined_sentences);
+    super::mined::save_harvested_sentences(collection, &mined_sentences);
 
     let processing_start = Instant::now();
     let relevant_models: HashSet<&String> = model_mapping.keys().collect();

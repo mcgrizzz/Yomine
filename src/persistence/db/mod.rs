@@ -1,5 +1,5 @@
-//! Mining history in one SQLite file per profile. Settings and Anki mirrors stay JSON:
-//! they're small, hand-editable, or rebuilt from Anki.
+//! Mining history and Anki mirrors in one SQLite file per profile. Settings stay JSON:
+//! they're small and hand-editable.
 
 use std::{
     path::Path,
@@ -11,6 +11,7 @@ use rusqlite::{
     Connection,
 };
 
+pub mod anki;
 pub mod batches;
 mod import;
 pub mod notes;
@@ -105,6 +106,51 @@ CREATE TABLE notes (
 );
 ";
 
+/// Anki's cards and sentence fields per collection (the Anki profile name), with the
+/// dates Yomine first and last saw them. Rows imported from the JSON caches start in
+/// the unknown collection '' until the first harvest claims them.
+const SCHEMA_V2: &str = "
+CREATE TABLE meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+CREATE TABLE anki_cards (
+    collection TEXT NOT NULL,
+    card_id INTEGER NOT NULL,
+    term TEXT NOT NULL,
+    reading TEXT NOT NULL,
+    -- Days; fractional while learning.
+    interval REAL,
+    first_seen_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    gone_at INTEGER,
+    PRIMARY KEY (collection, card_id)
+);
+
+-- A card's scheduling state each time a harvest saw it change, from its first sighting.
+CREATE TABLE anki_card_history (
+    collection TEXT NOT NULL,
+    card_id INTEGER NOT NULL,
+    at INTEGER NOT NULL,
+    interval REAL
+);
+CREATE INDEX anki_card_history_by_card ON anki_card_history(collection, card_id, at);
+
+CREATE TABLE anki_sentences (
+    collection TEXT NOT NULL,
+    note_id INTEGER NOT NULL,
+    -- normalize_sentence's form.
+    sentence TEXT NOT NULL,
+    first_seen_at INTEGER NOT NULL,
+    gone_at INTEGER,
+    PRIMARY KEY (collection, note_id)
+);
+
+-- Empty for notes mined before collections were recorded.
+ALTER TABLE notes ADD COLUMN collection TEXT;
+";
+
 static DB: Mutex<Option<Connection>> = Mutex::new(None);
 
 /// Runs `f` on the active profile's database, opening it on first use.
@@ -127,13 +173,22 @@ pub fn open(path: &Path, json_dir: &Path) -> rusqlite::Result<Connection> {
     conn.pragma_update(None, "foreign_keys", true)?;
     conn.busy_timeout(std::time::Duration::from_secs(5))?;
     let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
-    if version == 0 {
-        let tx = conn.transaction()?;
+    let tx = conn.transaction()?;
+    // Every schema step runs before any import, which writes the latest columns.
+    if version < 1 {
         tx.execute_batch(SCHEMA)?;
-        import::import_json(&tx, json_dir)?;
-        tx.pragma_update(None, "user_version", 1)?;
-        tx.commit()?;
     }
+    if version < 2 {
+        tx.execute_batch(SCHEMA_V2)?;
+    }
+    if version < 1 {
+        import::import_json(&tx, json_dir)?;
+    }
+    if version < 2 {
+        import::import_anki_caches(&tx, json_dir)?;
+    }
+    tx.pragma_update(None, "user_version", 2)?;
+    tx.commit()?;
     Ok(conn)
 }
 
