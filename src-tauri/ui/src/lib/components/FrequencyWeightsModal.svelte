@@ -3,8 +3,9 @@
 	// install/update/import/remove are immediate and re-hydrate the list,
 	// resetting staged edits with it.
 	import { untrack } from 'svelte';
-	import { dirtyGuard } from '$lib/dirtyGuard.svelte';
+	import { settingsDraft } from '$lib/settingsDraft.svelte';
 	import Modal from './Modal.svelte';
+	import SettingsFooter from './SettingsFooter.svelte';
 	import {
 		settings,
 		frequencyModalOpen,
@@ -17,8 +18,8 @@
 	const MIN_WEIGHT = 0.1;
 	const MAX_WEIGHT = 5.0;
 
-	let entries = $state<DictionaryRow[]>([]);
-	let original = $state<DictionaryRow[]>([]);
+	const form = settingsDraft({ open: frequencyModalOpen, initial: [] as DictionaryRow[] });
+	const entries = $derived(form.value);
 	let loaded = $state(false);
 	let hiddenCollapsed = $state(true);
 
@@ -119,8 +120,7 @@
 
 	async function hydrate() {
 		loaded = false;
-		entries = [];
-		original = [];
+		form.reset([]);
 		const dicts = await ipc.listDictionaries();
 		const weights = $settings?.frequency_weights ?? {};
 		let list: DictionaryRow[];
@@ -143,24 +143,17 @@
 				}))
 				.sort((a, b) => a.name.localeCompare(b.name));
 		}
-		entries = list;
-		original = list.map((e) => ({ ...e }));
+		form.reset(list);
 		loaded = true;
-		guard.disarm();
 	}
 
 	const changedFromOriginal = (e: DictionaryRow, i: number) =>
-		e.weight !== original[i]?.weight ||
-		e.enabled !== original[i]?.enabled ||
-		e.hidden !== original[i]?.hidden;
+		e.weight !== form.saved[i]?.weight ||
+		e.enabled !== form.saved[i]?.enabled ||
+		e.hidden !== form.saved[i]?.hidden;
 
-	const dirty = $derived(entries.some(changedFromOriginal));
 	const visibleRows = $derived(entries.filter((e) => !e.hidden));
 	const hiddenRows = $derived(entries.filter((e) => e.hidden));
-	const guard = dirtyGuard(
-		() => dirty,
-		() => frequencyModalOpen.set(false)
-	);
 
 	// egui's Slider is logarithmic over 0.1..=5.0; map it onto a linear 0..1000 range.
 	const SLIDER_STEPS = 1000;
@@ -189,14 +182,10 @@
 		// subset the minimal equivalent commit.
 		const changed = entries.filter(changedFromOriginal);
 		if (await saveDictionaryStates(changed.map((e) => ({ ...e })))) {
-			original = entries.map((e) => ({ ...e }));
+			form.commit();
 			frequencyModalOpen.set(false);
 		}
 		// On failure the lastError banner shows; staged state stays for a retry.
-	}
-
-	function cancel() {
-		entries = original.map((e) => ({ ...e }));
 	}
 
 	function restoreDefault() {
@@ -228,8 +217,8 @@
 	open={$frequencyModalOpen}
 	title="Frequency Dictionaries"
 	width="min(620px, 92%)"
-	onclose={guard.request}
-	oninteract={guard.disarm}
+	onclose={form.request}
+	oninteract={form.disarm}
 >
 	<section class="recommended">
 		<div class="rec-head">
@@ -356,19 +345,11 @@
 	{/if}
 
 	{#snippet footer()}
-		<hr />
-		<div class="status">
-			{#if guard.armed}⚠ Unsaved changes — dismiss again to discard{:else if dirty}⚠ Settings
-				have been modified{/if}
-		</div>
-		<footer>
-			<button class="primary" disabled={!dirty} onclick={save}>Save Settings</button>
-			<button disabled={!dirty} onclick={cancel}>Cancel</button>
-			<button class="right" disabled={busyTitle !== null} onclick={importFromFile}>
+		<SettingsFooter {form} onsave={save} oncancel={form.revert} onrestore={restoreDefault}>
+			<button disabled={busyTitle !== null} onclick={importFromFile}>
 				{busyTitle === '(import)' ? 'Importing…' : 'Import from file…'}
 			</button>
-			<button onclick={restoreDefault}>Restore Default</button>
-		</footer>
+		</SettingsFooter>
 	{/snippet}
 </Modal>
 
@@ -576,24 +557,5 @@
 		border: none;
 		border-top: 1px solid var(--border);
 		margin: 0 1rem;
-	}
-	.status {
-		min-height: 1.2rem;
-		padding: 0 1rem;
-		font-size: 0.85rem;
-		color: var(--warning);
-	}
-	footer {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0 1rem;
-	}
-	footer .right {
-		margin-left: auto;
-	}
-	button:disabled {
-		opacity: 0.5;
-		cursor: default;
 	}
 </style>

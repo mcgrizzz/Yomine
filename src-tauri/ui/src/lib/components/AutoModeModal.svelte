@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
-	import { dirtyGuard } from '$lib/dirtyGuard.svelte';
+	import { settingsDraft } from '$lib/settingsDraft.svelte';
 	import { DEFAULT_HORIZON, frequencyPoints, pickPoints, POS_ALIASES } from '$lib/autopick';
 	import type { AutoMine } from '$lib/ipc';
 	import Modal from './Modal.svelte';
+	import SettingsFooter from './SettingsFooter.svelte';
 	import {
 		autoModalOpen,
 		defaultSettings,
@@ -20,45 +20,31 @@
 		limit: a.limit,
 		min_score: a.min_score,
 		max_cards: a.max_cards,
-		// Sorted, so `dirty`'s JSON comparison ignores the order word types were added in.
 		pos_points: Object.fromEntries(
-			Object.entries(a.pos_points)
-				.filter(([key]) => !(key in POS_ALIASES))
-				.sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0))
+			Object.entries(a.pos_points).filter(([key]) => !(key in POS_ALIASES))
 		),
 		jlpt_points: Object.fromEntries(JLPT_LEVELS.map((l) => [l, a.jlpt_points[l] ?? 0]))
 	});
 
 	// Replaced from the saved settings each time the dialog opens.
-	const UNLOADED: AutoMine = {
-		stop: 'count',
-		limit: 1,
-		min_score: 0,
-		max_cards: null,
-		pos_points: {},
-		jlpt_points: {}
-	};
-	let draft = $state<AutoMine>(copy(UNLOADED));
-	let original = $state<AutoMine>(copy(UNLOADED));
+	const form = settingsDraft<AutoMine>({
+		open: autoModalOpen,
+		initial: {
+			stop: 'count',
+			limit: 1,
+			min_score: 0,
+			max_cards: null,
+			pos_points: {},
+			jlpt_points: {}
+		},
+		load: () => {
+			const saved = $settings?.auto_mine ?? $defaultSettings?.auto_mine;
+			return saved && copy(saved);
+		}
+	});
+	const draft = $derived(form.value);
 	let adding = $state('');
 
-	$effect(() => {
-		if ($autoModalOpen) untrack(hydrate);
-	});
-
-	function hydrate() {
-		const saved = $settings?.auto_mine ?? $defaultSettings?.auto_mine;
-		if (!saved) return;
-		draft = copy(saved);
-		original = copy(saved);
-		guard.disarm();
-	}
-
-	const dirty = $derived(JSON.stringify(copy(draft)) !== JSON.stringify(copy(original)));
-	const guard = dirtyGuard(
-		() => dirty,
-		() => autoModalOpen.set(false)
-	);
 	const pointsValid = (n: number) => Number.isInteger(n) && n >= -50 && n <= 50;
 	const valid = $derived(
 		Number.isInteger(draft.limit) &&
@@ -103,6 +89,10 @@
 	async function save() {
 		if (await setAutoMine(draft)) autoModalOpen.set(false);
 	}
+
+	function restoreDefault() {
+		if ($defaultSettings) form.value = copy($defaultSettings.auto_mine);
+	}
 </script>
 
 <Modal
@@ -110,8 +100,8 @@
 	title="Auto Mode"
 	width="min(680px, 94%)"
 	maxHeight="94%"
-	onclose={guard.request}
-	oninteract={guard.disarm}
+	onclose={form.request}
+	oninteract={form.disarm}
 >
 	<div class="body">
 		<p class="intro">
@@ -274,21 +264,13 @@
 	</div>
 
 	{#snippet footer()}
-		{#if guard.armed || dirty}
-			<div class="status">
-				{guard.armed ? '⚠ Unsaved changes — dismiss again to discard' : '⚠ Settings have been modified'}
-			</div>
-		{/if}
-		<footer>
-			<button class="primary" disabled={!dirty || !valid} onclick={save}>Save Settings</button>
-			<button disabled={!dirty} onclick={() => (draft = copy(original))}>Cancel</button>
-			<button
-				class="right"
-				disabled={!$defaultSettings}
-				onclick={() => $defaultSettings && (draft = copy($defaultSettings.auto_mine))}
-				>Restore Default</button
-			>
-		</footer>
+		<SettingsFooter
+			{form}
+			invalid={!valid}
+			onsave={save}
+			oncancel={form.revert}
+			onrestore={restoreDefault}
+		/>
 	{/snippet}
 </Modal>
 
@@ -481,25 +463,6 @@
 	.invalid {
 		font-size: 0.85rem;
 		color: var(--danger);
-	}
-	.status {
-		padding: 0 1rem;
-		font-size: 0.85rem;
-		color: var(--warning);
-	}
-	footer {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0 1rem;
-	}
-	footer .right {
-		margin-left: auto;
-	}
-	button:disabled {
-		opacity: 0.5;
-		cursor: default;
 	}
 	@media (max-width: 40rem) {
 		.choices,
