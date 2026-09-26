@@ -19,6 +19,9 @@ pub mod sources;
 
 pub const DB_FILE: &str = "yomine.db";
 
+/// Anki tables hold each Anki profile's collection separately; `collection` is the
+/// profile name. Rows from before profiles were recorded have none (or '' where the
+/// column is required) and count for every profile, until a harvest claims them.
 const SCHEMA: &str = "
 -- A show, movie or book. Empty until sources are matched to TVDB/AniDB/AniList.
 CREATE TABLE works (
@@ -50,9 +53,16 @@ CREATE TABLE sources (
     char_count INTEGER,
     -- The last subtitle line's end, close to the episode's length.
     runtime_ms INTEGER,
-    auto_processed_at INTEGER,
     work_id INTEGER REFERENCES works(id),
     episode_id INTEGER REFERENCES episodes(id)
+);
+
+-- Videos auto mode has mined, per Anki profile.
+CREATE TABLE auto_processed (
+    source_id INTEGER NOT NULL REFERENCES sources(id),
+    collection TEXT NOT NULL,
+    at INTEGER NOT NULL,
+    PRIMARY KEY (source_id, collection)
 );
 
 -- Each load of a file, as the recent-files list shows it. Loads imported from
@@ -82,7 +92,8 @@ CREATE TABLE batches (
     path TEXT NOT NULL,
     started_at INTEGER NOT NULL,
     finished_at INTEGER,
-    auto INTEGER NOT NULL
+    auto INTEGER NOT NULL,
+    collection TEXT
 );
 
 CREATE TABLE batch_items (
@@ -101,15 +112,11 @@ CREATE TABLE notes (
     term TEXT,
     source_id INTEGER REFERENCES sources(id),
     batch_id TEXT REFERENCES batches(id),
+    collection TEXT,
     -- Set by Undo, or when Anki no longer has the note.
     deleted_at INTEGER
 );
-";
 
-/// Anki's cards and sentence fields per collection (the Anki profile name), with the
-/// dates Yomine first and last saw them. Rows imported from the JSON caches start in
-/// the unknown collection '' until the first harvest claims them.
-const SCHEMA_V2: &str = "
 CREATE TABLE meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -158,36 +165,6 @@ CREATE TABLE anki_sentences (
     gone_at INTEGER,
     PRIMARY KEY (collection, note_id)
 );
-
--- Empty for notes mined before collections were recorded.
-ALTER TABLE notes ADD COLUMN collection TEXT;
-";
-
-/// Batches and auto mode's processed videos per Anki profile. Rows from before this
-/// have no profile and count for every one.
-const SCHEMA_V3: &str = "
-ALTER TABLE batches ADD COLUMN collection TEXT;
-
-CREATE TABLE auto_processed (
-    source_id INTEGER NOT NULL REFERENCES sources(id),
-    -- The Anki profile the video was mined into; '' counts for every profile.
-    collection TEXT NOT NULL,
-    at INTEGER NOT NULL,
-    PRIMARY KEY (source_id, collection)
-);
-INSERT INTO auto_processed (source_id, collection, at)
-    SELECT id, '', auto_processed_at FROM sources WHERE auto_processed_at IS NOT NULL;
-ALTER TABLE sources DROP COLUMN auto_processed_at;
-
--- Notes have recorded their profile since v2, which places the batches they came from.
-UPDATE batches SET collection = (
-    SELECT n.collection FROM notes n WHERE n.batch_id = batches.id AND n.collection IS NOT NULL
-);
-UPDATE auto_processed SET collection = coalesce((
-    SELECT b.collection FROM batches b
-    WHERE b.source_id = auto_processed.source_id AND b.auto AND b.collection IS NOT NULL
-    ORDER BY b.started_at DESC LIMIT 1
-), '');
 ";
 
 static DB: Mutex<Option<Connection>> = Mutex::new(None);
@@ -212,24 +189,15 @@ pub fn open(path: &Path, json_dir: &Path) -> rusqlite::Result<Connection> {
     conn.pragma_update(None, "foreign_keys", true)?;
     conn.busy_timeout(std::time::Duration::from_secs(5))?;
     let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
+    // A schema change adds a step here for the versions before it; released steps
+    // never change, since installs that ran them won't again.
     let tx = conn.transaction()?;
-    // Every schema step runs before any import, which writes the latest columns.
     if version < 1 {
         tx.execute_batch(SCHEMA)?;
-    }
-    if version < 2 {
-        tx.execute_batch(SCHEMA_V2)?;
-    }
-    if version < 3 {
-        tx.execute_batch(SCHEMA_V3)?;
-    }
-    if version < 1 {
         import::import_json(&tx, json_dir)?;
-    }
-    if version < 2 {
         import::import_anki_caches(&tx, json_dir)?;
     }
-    tx.pragma_update(None, "user_version", 3)?;
+    tx.pragma_update(None, "user_version", 1)?;
     tx.commit()?;
     Ok(conn)
 }
