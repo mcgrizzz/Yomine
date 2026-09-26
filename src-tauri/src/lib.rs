@@ -31,6 +31,7 @@ pub fn run() {
             commands::lifecycle::load_language_tools,
             commands::lifecycle::get_pos_catalog,
             commands::lifecycle::get_settings,
+            commands::lifecycle::get_default_settings,
             commands::lifecycle::save_settings,
             commands::lifecycle::get_user_themes,
             commands::lifecycle::save_user_themes,

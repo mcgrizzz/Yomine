@@ -145,10 +145,24 @@ impl PartOfSpeech {
     }
 }
 
+/// Why auto mode passes over a term; the table still lists it.
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct AutoSkip {
+    /// An Anki card has this spelling under another reading, and Anki refuses a second note
+    /// with the same first field.
+    pub spelling_in_anki: bool,
+    /// Every occurrence sits inside a name the file's speaker labels use (善 of 善逸).
+    pub speaker_name: bool,
+    /// A phrase of grammatical words only that JMdict gives several senses (ことになる).
+    pub ambiguous_grammar: bool,
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Term {
     #[serde(default)]
     pub possible_known_match: Option<String>,
+    #[serde(default)]
+    pub auto_skip: AutoSkip,
     #[serde(skip)]
     pub lexical_family: Option<crate::dictionary::lexical_evidence::LexicalFamily>,
     /// UniDic's 語彙素 for this occurrence, picked in context (かく in 恥をかく is 掻く).
@@ -183,6 +197,7 @@ impl Term {
         let is_kana = terms.iter().all(|t| t.is_kana);
         Term {
             possible_known_match: None,
+            auto_skip: Default::default(),
             lexical_family: None,
             lexeme: None,
             id: 1,

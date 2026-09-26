@@ -1,36 +1,45 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { dirtyGuard } from '$lib/dirtyGuard.svelte';
-	import { frequencyPoints, pickPoints } from '$lib/autopick';
+	import { DEFAULT_HORIZON, frequencyPoints, pickPoints, POS_ALIASES } from '$lib/autopick';
 	import type { AutoMine } from '$lib/ipc';
 	import Modal from './Modal.svelte';
-	import { autoModalOpen, posCatalog, setAutoMine, settings } from '$lib/stores';
+	import {
+		autoModalOpen,
+		defaultSettings,
+		knowledge,
+		posCatalog,
+		setAutoMine,
+		settings
+	} from '$lib/stores';
 
-	/** `AutoMine::default()` (core/settings.rs). */
-	const DEFAULTS: AutoMine = {
-		limit: 10,
-		pos_points: {
-			Noun: 30,
-			SuruVerb: 30,
-			AdjectivalNoun: 25,
-			Adjective: 20,
-			Verb: 20,
-			Adverb: 0,
-			ProperNoun: -10,
-			Pronoun: -10
-		},
-		jlpt_points: { N5: 15, N4: 20, N3: 20, N2: 20, N1: 20 }
-	};
 	const JLPT_LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
 
 	const copy = (a: AutoMine): AutoMine => ({
+		stop: a.stop,
 		limit: a.limit,
-		pos_points: { ...a.pos_points },
+		min_score: a.min_score,
+		max_cards: a.max_cards,
+		// Sorted, so `dirty`'s JSON comparison ignores the order word types were added in.
+		pos_points: Object.fromEntries(
+			Object.entries(a.pos_points)
+				.filter(([key]) => !(key in POS_ALIASES))
+				.sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0))
+		),
 		jlpt_points: Object.fromEntries(JLPT_LEVELS.map((l) => [l, a.jlpt_points[l] ?? 0]))
 	});
 
-	let draft = $state<AutoMine>(copy(DEFAULTS));
-	let original = $state<AutoMine>(copy(DEFAULTS));
+	// Replaced from the saved settings each time the dialog opens.
+	const UNLOADED: AutoMine = {
+		stop: 'count',
+		limit: 1,
+		min_score: 0,
+		max_cards: null,
+		pos_points: {},
+		jlpt_points: {}
+	};
+	let draft = $state<AutoMine>(copy(UNLOADED));
+	let original = $state<AutoMine>(copy(UNLOADED));
 	let adding = $state('');
 
 	$effect(() => {
@@ -38,13 +47,14 @@
 	});
 
 	function hydrate() {
-		const saved = $settings?.auto_mine ?? DEFAULTS;
+		const saved = $settings?.auto_mine ?? $defaultSettings?.auto_mine;
+		if (!saved) return;
 		draft = copy(saved);
 		original = copy(saved);
 		guard.disarm();
 	}
 
-	const dirty = $derived(JSON.stringify(draft) !== JSON.stringify(original));
+	const dirty = $derived(JSON.stringify(copy(draft)) !== JSON.stringify(copy(original)));
 	const guard = dirtyGuard(
 		() => dirty,
 		() => autoModalOpen.set(false)
@@ -54,14 +64,18 @@
 		Number.isInteger(draft.limit) &&
 			draft.limit >= 1 &&
 			draft.limit <= 50 &&
+			Number.isInteger(draft.min_score) &&
+			(draft.max_cards === null || (Number.isInteger(draft.max_cards) && draft.max_cards >= 1)) &&
 			[...Object.values(draft.pos_points), ...Object.values(draft.jlpt_points)].every(pointsValid)
 	);
 
 	const posName = (key: string) => $posCatalog.find((p) => p.key === key)?.display_name ?? key;
+	const editablePos = $derived($posCatalog.filter((p) => !(p.key in POS_ALIASES)));
 	const posRows = $derived(
-		$posCatalog.map((p) => p.key).filter((key) => key in draft.pos_points)
+		editablePos.map((p) => p.key).filter((key) => key in draft.pos_points)
 	);
-	const addable = $derived($posCatalog.filter((p) => !(p.key in draft.pos_points)));
+	const choose = (stop: AutoMine['stop']) => () => (draft.stop = stop);
+	const addable = $derived(editablePos.filter((p) => !(p.key in draft.pos_points)));
 
 	function addPos() {
 		if (!adding) return;
@@ -73,15 +87,16 @@
 		delete draft.pos_points[key];
 	}
 
+	const horizon = $derived($knowledge?.horizon ?? DEFAULT_HORIZON);
 	const examples = $derived(
 		[
-			{ rank: 3000, pos: 'Verb', jlpt: 'N3' },
-			{ rank: 3000, pos: 'Interjection', jlpt: null }
+			{ rank: Math.round(horizon / 2), pos: 'Verb', jlpt: 'N3' },
+			{ rank: horizon * 10, pos: 'Noun', jlpt: null }
 		].map((e) => ({
 			...e,
 			label: `${posName(e.pos)}${e.jlpt ? `, ${e.jlpt}` : ''}, rank ${e.rank.toLocaleString()}`,
-			freq: Math.round(frequencyPoints(e.rank)),
-			total: Math.round(pickPoints(e.rank, e.pos, e.jlpt, draft))
+			freq: Math.round(frequencyPoints(e.rank, horizon)),
+			total: Math.round(pickPoints(e.rank, e.pos, e.jlpt, horizon, draft))
 		}))
 	);
 
@@ -93,36 +108,99 @@
 <Modal
 	open={$autoModalOpen}
 	title="Auto Mode"
-	width="min(540px, 92%)"
+	width="min(680px, 94%)"
 	maxHeight="94%"
 	onclose={guard.request}
 	oninteract={guard.disarm}
 >
 	<div class="body">
 		<p class="intro">
-			Mines each new asbplayer video as it loads, from the terms your table filters show, and records
-			audio and screenshots in the video tab.
+			Mines each new asbplayer video with your table filters. Cards include audio, a screenshot and
+			the <code>yomine::auto</code> tag.
 		</p>
 
-		<div class="limit">
-			<label for="auto-limit">Cards per video</label>
-			<input id="auto-limit" type="number" min="1" max="50" bind:value={draft.limit} />
-			<span class="hint">Fewer when the filters leave less.</span>
-		</div>
+		<section>
+			<h3>Cards per video</h3>
+			<!-- Each card's radio carries keyboard selection; clicks and typing anywhere in the
+			     card select it too. -->
+			<div class="choices" role="radiogroup" aria-label="Cards per video">
+				<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+				<div
+					class="choice"
+					class:selected={draft.stop === 'count'}
+					onclick={choose('count')}
+					oninput={choose('count')}
+				>
+					<label class="choice-title">
+						<input type="radio" value="count" bind:group={draft.stop} />
+						Fixed count
+					</label>
+					<div class="row">
+						Mine the best
+						<input
+							type="number"
+							min="1"
+							max="50"
+							aria-label="Cards per video"
+							bind:value={draft.limit}
+						/>
+						cards
+					</div>
+				</div>
+				<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+				<div
+					class="choice"
+					class:selected={draft.stop === 'min_score'}
+					onclick={choose('min_score')}
+					oninput={choose('min_score')}
+				>
+					<label class="choice-title">
+						<input type="radio" value="min_score" bind:group={draft.stop} />
+						Score threshold
+					</label>
+					<div class="row">
+						Mine terms scoring at least
+						<input type="number" aria-label="Minimum score" bind:value={draft.min_score} />
+					</div>
+					<div class="row">
+						Up to
+						<input
+							type="number"
+							min="1"
+							aria-label="Card cap"
+							disabled={draft.max_cards === null}
+							value={draft.max_cards ?? ''}
+							oninput={(e) => (draft.max_cards = e.currentTarget.valueAsNumber)}
+						/>
+						cards
+						<label class="check">
+							<input
+								type="checkbox"
+								checked={draft.max_cards === null}
+								onchange={(e) => (draft.max_cards = e.currentTarget.checked ? null : 40)}
+							/>
+							No cap
+						</label>
+					</div>
+				</div>
+			</div>
+		</section>
 
-		<p class="hint">
-			Score = frequency points (20 per tenfold step: rank 1,000 → 40, rank 10,000 → 20) + word type
-			+ JLPT points. The highest total is mined first; negative points lower priority.
-		</p>
-
-		<div class="tables">
-			<table>
-				<thead><tr><th>Word type</th><th>Points</th><th></th></tr></thead>
-				<tbody>
-					{#each posRows as key (key)}
-						<tr>
-							<td>{posName(key)}</td>
-							<td>
+		<section>
+			<div class="section-head">
+				<h3>Scoring</h3>
+				<span class="hint">Score = frequency + word type + JLPT. Higher scores are mined first.</span>
+			</div>
+			<div class="scoring">
+				<div class="group">
+					<div class="group-head">Word type</div>
+					<div
+						class="word-types"
+						style:grid-template-rows="repeat({Math.ceil(posRows.length / 2)}, auto)"
+					>
+						{#each posRows as key (key)}
+							<div class="point-row">
+								<span class="name" title={posName(key)}>{posName(key)}</span>
 								<input
 									type="number"
 									min="-50"
@@ -130,70 +208,72 @@
 									aria-label="{posName(key)} points"
 									bind:value={draft.pos_points[key]}
 								/>
-							</td>
-							<td>
 								<button
 									class="remove"
 									title="Remove {posName(key)}"
 									aria-label="Remove {posName(key)}"
 									onclick={() => removePos(key)}>✕</button
 								>
-							</td>
-						</tr>
-					{/each}
+							</div>
+						{/each}
+					</div>
 					{#if addable.length > 0}
-						<tr>
-							<td colspan="3">
-								<div class="add">
-									<select bind:value={adding} aria-label="Word type to add">
-										<option value="">Add word type…</option>
-										{#each addable as p (p.key)}
-											<option value={p.key}>{p.display_name}</option>
-										{/each}
-									</select>
-									<button disabled={!adding} onclick={addPos}>Add</button>
-								</div>
-							</td>
-						</tr>
+						<div class="add">
+							<select bind:value={adding} aria-label="Word type to add">
+								<option value="">Add word type…</option>
+								{#each addable as p (p.key)}
+									<option value={p.key}>{p.display_name}</option>
+								{/each}
+							</select>
+							<button disabled={!adding} onclick={addPos}>Add</button>
+						</div>
 					{/if}
-				</tbody>
-			</table>
+				</div>
 
-			<table>
-				<thead><tr><th>JLPT level</th><th>Points</th></tr></thead>
-				<tbody>
+				<div class="group">
+					<div class="group-head">JLPT level</div>
 					{#each JLPT_LEVELS as level (level)}
-						<tr>
-							<td>{level}</td>
-							<td>
-								<input
-									type="number"
-									min="-50"
-									max="50"
-									aria-label="{level} points"
-									bind:value={draft.jlpt_points[level]}
-								/>
-							</td>
-						</tr>
+						<div class="point-row">
+							<span class="name">{level}</span>
+							<input
+								type="number"
+								min="-50"
+								max="50"
+								aria-label="{level} points"
+								bind:value={draft.jlpt_points[level]}
+							/>
+						</div>
 					{/each}
-				</tbody>
-			</table>
-		</div>
+				</div>
+			</div>
+
+			<details class="how">
+				<summary>How scoring works</summary>
+				<div class="how-body">
+					<p>
+						Frequency is 40 points up to your horizon, <strong>rank {horizon.toLocaleString()}</strong>,
+						and 20 fewer per tenfold step past it. The horizon grows with your Anki cards. Word types
+						without a row score 0, and a video gets fewer cards when your filters leave fewer terms.
+					</p>
+					<table class="examples">
+						<thead><tr><th>Example</th><th>Frequency</th><th>Score</th></tr></thead>
+						<tbody>
+							{#each examples as e (e.label)}
+								<tr><td>{e.label}</td><td>{e.freq}</td><td>{e.total}</td></tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			</details>
+		</section>
 		{#if !valid}
-			<p class="invalid">⚠ Cards per video must be 1–50 and points between -50 and 50</p>
+			<p class="invalid">
+				⚠ Cards per video must be 1–50, the cap at least 1, and points between -50 and 50
+			</p>
 		{/if}
 	</div>
 
 	{#snippet footer()}
-		<table class="examples">
-			<thead><tr><th>Example</th><th>Frequency</th><th>Total</th></tr></thead>
-			<tbody>
-				{#each examples as e (e.label)}
-					<tr><td>{e.label}</td><td>{e.freq}</td><td>{e.total}</td></tr>
-				{/each}
-			</tbody>
-		</table>
-		<hr />
 		{#if guard.armed || dirty}
 			<div class="status">
 				{guard.armed ? '⚠ Unsaved changes — dismiss again to discard' : '⚠ Settings have been modified'}
@@ -202,7 +282,12 @@
 		<footer>
 			<button class="primary" disabled={!dirty || !valid} onclick={save}>Save Settings</button>
 			<button disabled={!dirty} onclick={() => (draft = copy(original))}>Cancel</button>
-			<button class="right" onclick={() => (draft = copy(DEFAULTS))}>Restore Default</button>
+			<button
+				class="right"
+				disabled={!$defaultSettings}
+				onclick={() => $defaultSettings && (draft = copy($defaultSettings.auto_mine))}
+				>Restore Default</button
+			>
 		</footer>
 	{/snippet}
 </Modal>
@@ -211,9 +296,8 @@
 	.body {
 		display: flex;
 		flex-direction: column;
-		gap: 0.45rem;
-		min-height: 0;
-		padding: 0 1rem;
+		gap: 1rem;
+		padding: 0 1rem 0.5rem;
 	}
 	p {
 		margin: 0;
@@ -221,81 +305,119 @@
 	.intro {
 		font-size: 0.9rem;
 	}
-	.limit {
-		display: flex;
-		align-items: center;
-		gap: 0.6rem;
+	code {
+		font-size: 0.85em;
 	}
-	input[type='number'] {
-		width: 4.5rem;
-		padding: 0.2rem 0.45rem;
-		background: var(--bg-raised);
-		color: var(--text);
-		border: 1px solid var(--border);
-		border-radius: var(--radius-sm);
+	section {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+	h3 {
+		margin: 0;
+		font-size: 0.9rem;
+		font-weight: 600;
+	}
+	.section-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		column-gap: 0.75rem;
 	}
 	.hint {
 		font-size: 0.8rem;
 		color: var(--text-muted);
 	}
-	.invalid {
-		font-size: 0.85rem;
-		color: var(--danger);
-	}
-	/* The one scroll region: the local backgrounds cover the shadows at either end, so a
-	   shadow only shows where more rows are hidden. */
-	.tables {
+	.choices {
 		display: grid;
-		grid-template-columns: 3fr 2fr;
-		gap: 1rem;
-		align-items: start;
-		flex: 1 1 auto;
-		min-height: 9rem;
-		overflow-y: auto;
-		border-bottom: 1px solid var(--border);
-		background:
-			linear-gradient(var(--bg-panel) 30%, transparent) top,
-			linear-gradient(transparent, var(--bg-panel) 70%) bottom,
-			radial-gradient(
-					farthest-side at 50% 0,
-					color-mix(in srgb, var(--text) 20%, transparent),
-					transparent
-				)
-				top,
-			radial-gradient(
-					farthest-side at 50% 100%,
-					color-mix(in srgb, var(--text) 20%, transparent),
-					transparent
-				)
-				bottom;
-		background-repeat: no-repeat;
-		background-size:
-			100% 1.5rem,
-			100% 1.5rem,
-			100% 0.6rem,
-			100% 0.6rem;
-		background-attachment: local, local, scroll, scroll;
+		grid-template-columns: 1fr 1fr;
+		gap: 0.6rem;
 	}
-	table {
-		width: 100%;
-		border-collapse: collapse;
+	.choice {
+		display: flex;
+		flex-direction: column;
+		gap: 0.45rem;
+		padding: 0.6rem 0.75rem;
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		cursor: pointer;
+	}
+	.choice:hover:not(.selected) {
+		border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+	}
+	.choice.selected {
+		border-color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 7%, transparent);
+	}
+	.choice-title {
+		display: flex;
+		align-items: center;
+		gap: 0.45rem;
+		font-weight: 600;
+		cursor: pointer;
+	}
+	.row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.4rem;
+		padding-left: 1.55rem;
+		font-size: 0.875rem;
+	}
+	.check {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		margin-left: 0.4rem;
+		cursor: pointer;
+	}
+	input[type='number'] {
+		width: 4.25rem;
+		padding: 0.2rem 0.45rem;
+		background: var(--bg-raised);
+		color: var(--text);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		font-variant-numeric: tabular-nums;
+		cursor: text;
+	}
+	.scoring {
+		display: grid;
+		grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr);
+		gap: 1.5rem;
+		align-items: start;
+	}
+	.group {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+	}
+	.group-head {
+		padding-bottom: 0.25rem;
+		margin-bottom: 0.2rem;
+		font-size: 0.8rem;
+		color: var(--text-muted);
+		border-bottom: 1px solid var(--border);
+	}
+	.word-types {
+		display: grid;
+		grid-auto-flow: column;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		column-gap: 1rem;
+	}
+	/* Name, points and remove share one track set, so inputs align across every column. */
+	.point-row {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 4.25rem 1.75rem;
+		align-items: center;
+		column-gap: 0.4rem;
+		min-height: 2rem;
 		font-size: 0.85rem;
 	}
-	th {
-		text-align: left;
-		font-weight: normal;
-		color: var(--text-muted);
-	}
-	.tables th {
-		position: sticky;
-		top: 0;
-		z-index: 1;
-		background: var(--bg-panel);
-		box-shadow: inset 0 -1px var(--border);
-	}
-	td,
-	th {
-		padding: 0.18rem 0.3rem;
+	.name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.remove {
 		padding: 0.1rem 0.35rem;
@@ -309,28 +431,56 @@
 	.add {
 		display: flex;
 		gap: 0.4rem;
-		padding: 0.2rem 0 0.3rem;
+		margin-top: 0.35rem;
+		max-width: 20rem;
 	}
 	.add select {
 		flex: 1;
 		min-width: 0;
 	}
+	.how {
+		font-size: 0.8rem;
+		color: var(--text-muted);
+	}
+	.how summary {
+		width: fit-content;
+		cursor: pointer;
+		color: var(--text);
+		font-size: 0.85rem;
+	}
+	.how-body {
+		display: grid;
+		grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+		gap: 1.25rem;
+		align-items: start;
+		padding-top: 0.5rem;
+	}
+	.how strong {
+		color: var(--text);
+		font-weight: 600;
+	}
 	.examples {
-		width: calc(100% - 2rem);
-		margin: 0 1rem;
+		width: 100%;
+		border-collapse: collapse;
 	}
 	.examples th {
+		text-align: left;
+		font-weight: normal;
 		border-bottom: 1px solid var(--border);
+	}
+	.examples td,
+	.examples th {
+		padding: 0.15rem 0.3rem;
+		white-space: nowrap;
 	}
 	.examples td:not(:first-child),
 	.examples th:not(:first-child) {
 		text-align: right;
 		font-variant-numeric: tabular-nums;
 	}
-	hr {
-		border: none;
-		border-top: 1px solid var(--border);
-		margin: 0 1rem;
+	.invalid {
+		font-size: 0.85rem;
+		color: var(--danger);
 	}
 	.status {
 		padding: 0 1rem;
@@ -351,8 +501,10 @@
 		opacity: 0.5;
 		cursor: default;
 	}
-	@media (max-width: 30rem) {
-		.tables {
+	@media (max-width: 40rem) {
+		.choices,
+		.scoring,
+		.how-body {
 			grid-template-columns: 1fr;
 		}
 	}

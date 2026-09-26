@@ -3,7 +3,10 @@
 use std::{
     collections::HashSet,
     sync::{
-        atomic::Ordering,
+        atomic::{
+            AtomicBool,
+            Ordering,
+        },
         Mutex,
     },
     time::Duration,
@@ -21,7 +24,10 @@ use yomine::{
 };
 
 use crate::{
-    commands::file::load_asbplayer_into_state,
+    commands::file::{
+        load_asbplayer_into_state,
+        subtitle_stem,
+    },
     dto::{
         KnowledgeSummaryDto,
         YomitanStatusDto,
@@ -110,10 +116,15 @@ pub(crate) async fn refresh_knowledge_summary(app: &AppHandle) {
     .await
     {
         // Cached for the one-shot pull; pushed to any live webview.
-        let dto = KnowledgeSummaryDto::from_summary(summary);
+        let mut dto = KnowledgeSummaryDto::from_summary(summary);
         {
             let state = app.state::<Mutex<AppState>>();
-            state.lock().unwrap().knowledge_summary = Some(dto.clone());
+            let mut guard = state.lock().unwrap();
+            // The horizon only moves outward: a dip in coverage (a batch of new cards,
+            // retired ones) mustn't pull auto mode back to commoner words.
+            let reached = guard.knowledge_summary.as_ref().and_then(|s| s.horizon);
+            dto.horizon = dto.horizon.max(reached);
+            guard.knowledge_summary = Some(dto.clone());
         }
         let _ = yomine::persistence::save_json(&dto, crate::state::KNOWLEDGE_SUMMARY_CACHE);
         let _ = app.emit(names::KNOWLEDGE_SUMMARY, dto);
@@ -154,6 +165,10 @@ fn asbplayer_context(
     }
 }
 
+/// Set by a manual asbplayer load: follow mode then treats every video already open as
+/// seen, so it doesn't swap the pick for another tab.
+pub static MANUAL_PICK: AtomicBool = AtomicBool::new(false);
+
 /// asbplayer follow mode + the `asbplayer-context` awareness event.
 async fn poll_asbplayer_follow(app: AppHandle) {
     // `None` = disarmed; `Some(ids)` = armed with the media ids already seen.
@@ -162,7 +177,7 @@ async fn poll_asbplayer_follow(app: AppHandle) {
     let mut last_ctx: Option<crate::events::AsbplayerContext> = None;
 
     loop {
-        let (armed, follow_new, follow_active, poll_secs, current_media_id) = {
+        let (armed, follow_new, follow_active, poll_secs, mut current_media_id, subtitle_file) = {
             let state = app.state::<Mutex<AppState>>();
             let guard = state.lock().unwrap();
             let follow_new = guard.settings.asbplayer_follow_new_media
@@ -175,6 +190,7 @@ async fn poll_asbplayer_follow(app: AppHandle) {
                 follow_active,
                 guard.settings.asbplayer_poll_secs.max(1),
                 guard.file.asbplayer_media_id.clone(),
+                guard.file.asbplayer_subtitle_file.clone(),
             )
         };
         tokio::time::sleep(Duration::from_secs(poll_secs as u64)).await;
@@ -204,6 +220,29 @@ async fn poll_asbplayer_follow(app: AppHandle) {
             continue;
         };
 
+        // A reloaded asbplayer gives the same video a new id; the same subtitle file on a new
+        // id means it's still the loaded video, so recording and retries follow it there.
+        if let (Some(current), Some(file)) = (&current_media_id, &subtitle_file) {
+            let same_file = |m: &&yomine::websocket::types::BoundMedia| {
+                m.loaded_subtitles
+                    .iter()
+                    .any(|t| subtitle_stem(&t.file_name) == subtitle_stem(file))
+            };
+            if !media.iter().any(|m| &m.id == current) {
+                if let Some(reloaded) = media.iter().find(same_file) {
+                    let state = app.state::<Mutex<AppState>>();
+                    let mut guard = state.lock().unwrap();
+                    if guard.file.asbplayer_media_id == current_media_id {
+                        guard.file.asbplayer_media_id = Some(reloaded.id.clone());
+                        current_media_id = Some(reloaded.id.clone());
+                        if let Some(seen) = seen.as_mut() {
+                            seen.insert(reloaded.id.clone());
+                        }
+                    }
+                }
+            }
+        }
+
         let actives_now: HashSet<String> = media
             .iter()
             .filter(|m| m.active && !m.loaded_subtitles.is_empty())
@@ -222,6 +261,9 @@ async fn poll_asbplayer_follow(app: AppHandle) {
             continue;
         }
 
+        if MANUAL_PICK.swap(false, Ordering::Relaxed) {
+            seen = None;
+        }
         let actives_changed = prev_actives.as_ref().is_some_and(|p| p != &actives_now);
         let just_armed = seen.is_none();
         prev_actives = Some(actives_now.clone());
@@ -272,15 +314,23 @@ async fn poll_asbplayer_follow(app: AppHandle) {
         if crate::batches::RUNNING.load(Ordering::Relaxed) {
             continue;
         }
-        seen_ids.insert(next.id.clone());
         let title = next.title.clone().unwrap_or_else(|| "asbplayer video".to_string());
         let file_name = next.loaded_subtitles.first().map(|t| t.file_name.clone());
-        // Same subtitle file already loaded (e.g. the same episode in another
-        // tab) → adopt the new media id instead of re-downloading.
         {
             let state = app.state::<Mutex<AppState>>();
             let mut guard = state.lock().unwrap();
-            if file_name.is_some() && guard.file.asbplayer_subtitle_file == file_name {
+            // A video loaded during this poll (a manual pick) makes its target stale.
+            if guard.file.asbplayer_media_id != current_media_id {
+                continue;
+            }
+            seen_ids.insert(next.id.clone());
+            // Same subtitle file already loaded (e.g. the same episode in another
+            // tab) → adopt the new media id instead of re-downloading.
+            if file_name
+                .as_deref()
+                .zip(guard.file.asbplayer_subtitle_file.as_deref())
+                .is_some_and(|(a, b)| subtitle_stem(a) == subtitle_stem(b))
+            {
                 guard.file.asbplayer_media_id = Some(next.id.clone());
                 continue;
             }

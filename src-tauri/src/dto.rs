@@ -355,6 +355,8 @@ pub struct FrequencyBand {
 pub struct KnowledgeSummaryDto {
     pub jlpt: Vec<JlptBand>,
     pub frequency: Vec<FrequencyBand>,
+    #[serde(default)]
+    pub horizon: Option<u32>,
 }
 
 impl KnowledgeSummaryDto {
@@ -370,6 +372,7 @@ impl KnowledgeSummaryDto {
                 .into_iter()
                 .map(|(label, stats)| FrequencyBand { label, stats })
                 .collect(),
+            horizon: s.horizon,
         }
     }
 }
@@ -452,6 +455,7 @@ mod tests {
     fn term(surface: &str, pos: POS, comprehension: f32, start: usize) -> Term {
         Term {
             possible_known_match: None,
+            auto_skip: Default::default(),
             lexical_family: None,
             lexeme: None,
             id: 1,

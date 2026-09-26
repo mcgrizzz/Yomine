@@ -12,7 +12,7 @@ import {
 	type BatchPlan
 } from '$lib/batch';
 import { fileResult } from './file';
-import { asbContext, playerStatus } from './player';
+import { asbContext, backgroundTab, playerStatus } from './player';
 import { adhocQueue, dropAdhoc, queuedMineOptions, queueAdhoc, setSelected } from './selection';
 import {
 	mediaMissing,
@@ -84,6 +84,17 @@ export const batchTarget = targetPrompt.shown;
 export const batchReplace = replacePrompt.shown;
 export const batchSaveError = writable<string | null>(null);
 export const lastBatch = writable<ipc.BatchRecord | null>(null);
+
+export interface AutoLedgerEntry {
+	title: string;
+	/** Null when auto mode found nothing to mine. */
+	batchId: string | null;
+	created: number;
+	undone: boolean;
+}
+
+/** Videos auto mode processed this session, oldest first. */
+export const autoLedger = writable<AutoLedgerEntry[]>([]);
 export const mineQueueState = writable<BatchProgress | null>(null);
 export interface BatchPreview {
 	lemma: string;
@@ -191,7 +202,8 @@ function clearUnchangedSelection(item: ipc.BatchItem): void {
 
 function toBatchItems(items: QueueItem[]): ipc.BatchItem[] {
 	const status = get(playerStatus);
-	const recording = status.mode === 'asbplayer' || get(asbContext).loaded_from_asbplayer;
+	const recording =
+		(status.mode === 'asbplayer' || get(asbContext).loaded_from_asbplayer) && !get(backgroundTab);
 	const adhoc = new Set(get(adhocQueue).map((a) => a.key));
 	const start = (i: QueueItem) => i.timestamp?.start_secs ?? Infinity;
 	return [...items]
@@ -316,7 +328,7 @@ async function run(
 			options.record = answer.record;
 		}
 		if (items) {
-			batch = await ipc.createBatch(file.batch_source, snapshot);
+			batch = await ipc.createBatch(file.batch_source, snapshot, auto);
 			batchSaveError.set(null);
 		}
 		if (!batch) return null;
@@ -366,7 +378,7 @@ async function run(
 		mineQueueState.set(null);
 		batchPreview.set(null);
 		if (batch) {
-			if (!auto || !finished) batchSummaryOpen.set(true);
+			batchSummaryOpen.set(true);
 			void refreshMinedState(true);
 		}
 	}
@@ -435,7 +447,13 @@ export async function undoLastBatch(): Promise<void> {
 		mediaMissing.update((s) => new Set([...s].filter((lemma) => !lemmas.has(lemma))));
 		await refreshMinedState(true);
 		const remaining = result.remaining ? ` · ${result.remaining} could not be deleted` : '';
-		showNotice(`Deleted ${result.deleted} notes · ${result.already_gone} already gone${remaining}`);
+		if (result.reopened) {
+			autoLedger.update((l) => l.map((e) => (e.batchId === batch.id ? { ...e, undone: true } : e)));
+		}
+		const reopened = result.reopened ? ' · auto mode can mine this video again' : '';
+		showNotice(
+			`Deleted ${result.deleted} notes · ${result.already_gone} already gone${remaining}${reopened}`
+		);
 	} catch (error) {
 		report(error);
 	} finally {

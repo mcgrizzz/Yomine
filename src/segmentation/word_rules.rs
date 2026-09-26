@@ -168,7 +168,27 @@ pub fn create_default_rules() -> Vec<Rule> {
             },
         },
         Rule {
-            // Unlike honorifics, the prefix is part of the word (第一, not 一).
+            name: "Prefix Number",
+            current: TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Settouji]),
+                ..Default::default()
+            },
+            next: Some(TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Meishi]),
+                pos2: Matcher::Any(vec![UnidicTag::Suushi]),
+                ..Default::default()
+            }),
+            prev: None,
+            prev_word: WordMatcher::None,
+            action: RuleAction::CreateWord {
+                eat_next: true,
+                eat_next_lemma: true,
+                pos: POS::Number,
+                main_word_policy: None,
+            },
+        },
+        Rule {
+            // Unlike honorifics, the prefix is part of the word (新学期, not 学期).
             name: "Prefix Noun",
             current: TokenMatcher {
                 pos1: Matcher::Any(vec![UnidicTag::Settouji]),

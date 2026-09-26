@@ -22,26 +22,38 @@ def has_kanji(text):
 
 
 def compile_rows(db):
-    """`p\\tform`: a JMdict expression, adverb, conjunction or particle.
+    """`p\\tform`: a JMdict expression, adverb, conjunction or particle, valued by how many
+    senses its entries give it (one byte, capped at 255).
     `e\\tspelling\\treading`: entries listing the spelling under that reading, kept only
     for spellings an entry reads more than one way (明日 as あした and あす)."""
-    phrases = set()
+    # A pair has one row per sense that applies to it.
+    pair_senses = collections.Counter()
+    phrase_pairs = set()
     readings = collections.defaultdict(set)
     for entry, reading, spelling, pos in db.execute("SELECT entry_id,reading,spelling,pos FROM pairs"):
         reading = normalize_long_vowel(reading)
+        # Unfolded, so に+カット can't pass for にかっと.
+        pair = (entry, reading, normalize_long_vowel(unicodedata.normalize("NFKC", spelling)))
+        pair_senses[pair] += 1
         if set(json.loads(pos)) & PHRASE_POS:
-            # Unfolded, so に+カット can't pass for にかっと.
-            phrases.add(normalize_long_vowel(unicodedata.normalize("NFKC", spelling)))
-            phrases.add(reading)
+            phrase_pairs.add(pair)
         spelling = normalize(spelling)
         if has_kanji(spelling):
             readings[(spelling, entry)].add(reading)
+    entry_senses = collections.defaultdict(int)
+    for pair in phrase_pairs:
+        entry, reading, spelling = pair
+        for form in {reading, spelling}:
+            entry_senses[(form, entry)] = max(entry_senses[(form, entry)], pair_senses[pair])
+    phrases = collections.Counter()
+    for (form, _), senses in entry_senses.items():
+        phrases[form] += senses
     entries = collections.defaultdict(set)
     for (spelling, entry), variants in readings.items():
         if len(variants) > 1:
             for reading in variants:
                 entries[(spelling, reading)].add(entry)
-    rows = [(("p\t" + form).encode(), b"") for form in phrases]
+    rows = [(("p\t" + form).encode(), bytes([min(senses, 255)])) for form, senses in phrases.items()]
     rows += [(f"e\t{spelling}\t{reading}".encode(), b"".join(struct.pack("<I", e) for e in sorted(ids)))
              for (spelling, reading), ids in entries.items()]
     return sorted(rows)

@@ -8,6 +8,8 @@ import { type FreqFilterState, posEnabled } from './controls';
 import { refreshMinedState } from './mining';
 
 export const settings = writable<ipc.SettingsData | null>(null);
+/** Every setting's default (`SettingsData::default()`), for Restore Default. */
+export const defaultSettings = writable<ipc.SettingsData | null>(null);
 settings.subscribe((s) => showPossibleKnownMatches.set(s?.show_possible_known_matches ?? true));
 export const setShowPossibleKnownMatches = (show: boolean) => patchSettings({ show_possible_known_matches: show });
 
@@ -77,7 +79,10 @@ export const setAsbplayerFollowActiveTab = (on: boolean) =>
 export const setAutoMine = (prefs: ipc.AutoMine) =>
 	patchSettings({
 		auto_mine: {
+			stop: prefs.stop,
 			limit: Math.min(50, Math.max(1, Math.round(prefs.limit) || 1)),
+			min_score: Math.round(prefs.min_score) || 0,
+			max_cards: prefs.max_cards === null ? null : Math.max(1, Math.round(prefs.max_cards) || 1),
 			pos_points: { ...prefs.pos_points },
 			jlpt_points: { ...prefs.jlpt_points }
 		}

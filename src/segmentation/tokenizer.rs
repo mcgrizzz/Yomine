@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::collections::{
+    HashMap,
+    HashSet,
+};
 
 use vibrato::{
     tokenizer::worker::Worker,
@@ -7,8 +10,10 @@ use vibrato::{
 use wana_kana::IsJapaneseStr;
 
 use super::{
+    grammar,
     nbest::rescue_words,
     rule_matcher::parse_into_words,
+    speaker_labels,
     token_models::UnidicToken,
     unidic_tags::UnidicTag,
     word::{
@@ -74,10 +79,13 @@ pub(super) fn resolve_citation(word: &mut Word, manager: &FrequencyManager) {
         .collect();
     candidates
         .sort_by_key(|(form, reading)| manager.get_harmonic_frequency_for_pair(form, reading));
-    if word.part_of_speech == POS::Verb {
-        retain_verb_final_candidates(&mut candidates, &word.surface_form);
-    }
     let lemma = (word.lemma_form.clone(), word.lemma_hatsuon.clone());
+    match word.part_of_speech {
+        POS::Verb => retain_verb_final_candidates(&mut candidates, &word.surface_form),
+        // An adjective stem can deinflect as a verb (のろ as 乗る's imperative).
+        POS::Adjective => candidates.retain(|pair| pair.0.ends_with('い') || *pair == lemma),
+        _ => {}
+    }
     let selected = exception
         .map(|pair| (pair, CitationProvenance::LexicalException))
         .or_else(|| {
@@ -387,6 +395,7 @@ pub fn extract_words(
     frequency_manager: &FrequencyManager,
 ) -> Vec<Term> {
     let mut terms = Vec::<Term>::new();
+    let mut speaker_names = HashSet::new();
 
     for (ord, sentence) in sentences.iter_mut().enumerate() {
         let words = analyze_sentence(&mut worker, &sentence.text, frequency_manager);
@@ -394,9 +403,11 @@ pub fn extract_words(
         let mut term_spans: Vec<(usize, usize)> = Vec::with_capacity(words.len());
         let mut sentence_terms: Vec<Term> = Vec::with_capacity(words.len());
         let mut rule_citations = Vec::with_capacity(words.len());
+        let mut grammatical = Vec::with_capacity(words.len());
         for word in words {
             let span = word.byte_span();
             rule_citations.push(word.has_rule_citation());
+            grammatical.push(grammar::is_grammatical(&word));
             // The highlight span ends at start + surface_form.len(), so the
             // reference must point at the main word, not the segment.
             let ref_start = word.mining_span().0;
@@ -426,9 +437,44 @@ pub fn extract_words(
         ));
 
         let base_len = sentence_terms.len();
-        // Whitespace keeps its display segment but is never a term.
-        let mut suppressed: Vec<bool> =
-            sentence_terms.iter().map(|t| t.surface_form.trim().is_empty()).collect();
+        let labels: Vec<(usize, usize)> = speaker_labels::bracket_labels(&sentence.text)
+            .into_iter()
+            .filter(|&(_, (start, end))| {
+                let words: Vec<&Term> = sentence_terms
+                    .iter()
+                    .zip(&term_spans)
+                    .filter(|(t, &(s, e))| {
+                        s >= start && e <= end && !t.surface_form.trim().is_empty()
+                    })
+                    .map(|(t, _)| t)
+                    .collect();
+                let name = &sentence.text[start..end];
+                let names = speaker_labels::names_speaker(name, &words, frequency_manager);
+                if names {
+                    speaker_names.insert(name.to_string());
+                }
+                names
+            })
+            .map(|(label, _)| label)
+            .collect();
+        let labelled: Vec<bool> = term_spans
+            .iter()
+            .map(|&(s, e)| labels.iter().any(|&(ls, le)| s >= ls && e <= le))
+            .collect();
+        // A kana noun right before an ellipsis is usually a word cut off mid-way
+        // (お願いしま… as 縞).
+        let cut_off = |i: usize| {
+            sentence_terms[i].is_kana
+                && sentence_terms[i].part_of_speech == POS::Noun
+                && sentence_terms
+                    .get(i + 1)
+                    .is_some_and(|n| n.surface_form.starts_with(['…', '‥', '.', '．']))
+        };
+        // Whitespace, speaker labels and cut-off words keep their display segments but are
+        // never terms.
+        let mut suppressed: Vec<bool> = (0..base_len)
+            .map(|i| labelled[i] || cut_off(i) || sentence_terms[i].surface_form.trim().is_empty())
+            .collect();
         // A phrase that hides its words also hides phrases inside it (にかけて in 気にかける).
         let mut hidden_through = None;
         for start in 0..base_len {
@@ -436,6 +482,9 @@ pub fn extract_words(
                 continue;
             }
             for end in (start + 1..base_len).rev() {
+                if labelled[start..=end].iter().any(|&l| l) {
+                    continue;
+                }
                 let subrange = &sentence_terms[start..=end];
                 // Frequency lists carry particle n-grams (あなたに); JMdict lists only real
                 // phrases that begin or end in one (ついでに, にとって).
@@ -525,6 +574,8 @@ pub fn extract_words(
 
                     phrase.part_of_speech =
                         if all_nouns { POS::NounExpression } else { POS::Expression };
+                    phrase.auto_skip.ambiguous_grammar =
+                        grammar::is_ambiguous(&grammatical[start..=end], &phrase);
 
                     if kanji_noun_compound
                         || listed
@@ -584,6 +635,8 @@ pub fn extract_words(
 
         terms.append(&mut sentence_terms);
     }
+
+    speaker_labels::mark_speaker_names(&mut terms, sentences, &speaker_names);
 
     terms
 }

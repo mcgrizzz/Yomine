@@ -24,6 +24,11 @@
     ],
     "corpus": [
       {
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "形態",
@@ -41,6 +46,11 @@
         "surface_reading": "けいたい"
       },
       {
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "化させて",
@@ -65,6 +75,11 @@
     ],
     "production": [
       {
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 2000,
@@ -90,6 +105,11 @@
         "surface_reading": "けいたい"
       },
       {
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 4000,
@@ -115,6 +135,11 @@
         "surface_reading": "かさせて"
       },
       {
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 10,
@@ -171,6 +196,11 @@
     ],
     "corpus": [
       {
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "要らないです",
@@ -193,6 +223,11 @@
     ],
     "production": [
       {
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 700,
@@ -243,6 +278,11 @@
     ],
     "corpus": [
       {
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "知らなかった",
@@ -265,6 +305,11 @@
     ],
     "production": [
       {
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 100,
@@ -315,6 +360,11 @@
     ],
     "corpus": [
       {
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "つまらなかった",
@@ -337,6 +387,11 @@
     ],
     "production": [
       {
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 1000,
@@ -387,6 +442,11 @@
     ],
     "corpus": [
       {
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "おばさん",
@@ -409,6 +469,11 @@
     ],
     "production": [
       {
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 2000,
@@ -479,6 +544,11 @@
     ],
     "corpus": [
       {
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "なん",
@@ -496,6 +566,11 @@
         "surface_reading": "なん"
       },
       {
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "と",
@@ -513,6 +588,11 @@
         "surface_reading": "と"
       },
       {
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "なく",
@@ -538,6 +618,11 @@
     ],
     "production": [
       {
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 2016,
@@ -650,6 +735,11 @@
     ],
     "corpus": [
       {
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "土曜",
@@ -667,6 +757,11 @@
         "surface_reading": "どよう"
       },
       {
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "日",
@@ -684,6 +779,11 @@
         "surface_reading": "ひ"
       },
       {
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "の",
@@ -701,6 +801,11 @@
         "surface_reading": "の"
       },
       {
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "複合",
@@ -718,6 +823,11 @@
         "surface_reading": "ふくごう"
       },
       {
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "体",
@@ -735,6 +845,11 @@
         "surface_reading": "たい"
       },
       {
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {},
         "full_segment": "複合体",
@@ -759,6 +874,11 @@
     ],
     "production": [
       {
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 4294967295
@@ -783,6 +903,11 @@
         "surface_reading": "の"
       },
       {
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 100,
@@ -808,6 +933,11 @@
         "surface_reading": "どようび"
       },
       {
+        "auto_skip": {
+          "ambiguous_grammar": false,
+          "speaker_name": false,
+          "spelling_in_anki": false
+        },
         "comprehension": 0.0,
         "frequencies": {
           "HARMONIC": 400,

@@ -27,6 +27,15 @@ class LexiconTests(unittest.TestCase):
             self.assertIn(("p\t" + form).encode(), rows)
         self.assertNotIn("p\tあなた".encode(), rows)
 
+    def test_phrases_record_their_sense_count(self):
+        for _ in range(3):
+            self.pair(1, "ことになる", "事になる", '["exp","v5r"]')
+        self.pair(2, "ではない", "では無い", '["exp"]')
+        rows = self.rows()
+        self.assertEqual(rows["p\tことになる".encode()], bytes([3]))
+        self.assertEqual(rows["p\t事になる".encode()], bytes([3]))
+        self.assertEqual(rows["p\tではない".encode()], bytes([1]))
+
     def test_readings_of_one_entry_share_it_and_separate_entries_do_not(self):
         for reading in ["あした", "あす"]:
             self.pair(1, reading, "明日")

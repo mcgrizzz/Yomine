@@ -1,8 +1,8 @@
 import { derived, get, writable } from 'svelte/store';
 import * as ipc from '$lib/ipc';
-import { autoPick } from '$lib/autopick';
+import { autoPick, DEFAULT_HORIZON } from '$lib/autopick';
 import { applyControls } from '$lib/table';
-import { mineQueue } from './batches';
+import { autoLedger, mineQueue } from './batches';
 import { freqFilter, jlptEnabled, posEnabled } from './controls';
 import { fileResult } from './file';
 import { showPossibleKnownMatches } from './knowledgeView';
@@ -19,7 +19,7 @@ import {
 	yomitanReachable
 } from './mining';
 import { playerStatus } from './player';
-import { ankiStatus } from './status';
+import { ankiStatus, knowledge } from './status';
 import { settings } from './settings';
 import { lastError, showNotice } from './ui';
 
@@ -31,6 +31,9 @@ export const autoAvailable = derived(
 );
 
 export const autoCountdown = writable<number | null>(null);
+
+/** Fingerprint of the loaded video auto mode skipped as already mined. */
+export const autoSkipped = writable<string | null>(null);
 
 let picking = false;
 let loadedWhilePicking = false;
@@ -47,10 +50,9 @@ async function countDownCurrent(): Promise<void> {
 	const file = get(fileResult);
 	if (!file?.sentences.some((s) => s.timestamp)) return;
 	const { fingerprint } = file.batch_source;
-	const title = file.source_file.title;
 	try {
 		if (await ipc.isMediaProcessed(fingerprint)) {
-			showNotice(`Auto mode already mined ${title}`);
+			autoSkipped.set(fingerprint);
 			return;
 		}
 	} catch (err) {
@@ -75,6 +77,7 @@ async function countDownCurrent(): Promise<void> {
 
 export async function setAutoMode(on: boolean): Promise<void> {
 	autoMode.set(on);
+	autoSkipped.set(null);
 	if (!on) cancelAutoCountdown();
 	try {
 		await ipc.setAutoMode(on);
@@ -99,14 +102,15 @@ function pick(file: ipc.FileLoadResult, prefs: ipc.AutoMine) {
 	const added = get(addedTerms);
 	return autoPick(terms, file.sentences, {
 		prefs,
+		horizon: get(knowledge)?.horizon ?? DEFAULT_HORIZON,
 		isMined: (t) => isMinedTerm(t, mined, added),
 		minedSentences: new Set([...get(minedSentences), ...get(sessionMinedSentences)]),
 		normalize: normalizeSentence
 	});
 }
 
-/** Mines the loaded asbplayer video once, unless it was already processed. */
-export async function autoMine(): Promise<void> {
+/** Mines the loaded asbplayer video once, unless it was already processed and not `force`d. */
+export async function autoMine(force = false): Promise<void> {
 	if (picking) {
 		loadedWhilePicking = true;
 		return;
@@ -121,9 +125,10 @@ export async function autoMine(): Promise<void> {
 		return;
 	}
 	picking = true;
+	autoSkipped.set(null);
 	try {
-		if (await ipc.isMediaProcessed(fingerprint)) {
-			showNotice(`Auto mode already mined ${title}`);
+		if (!force && (await ipc.isMediaProcessed(fingerprint))) {
+			autoSkipped.set(fingerprint);
 			return;
 		}
 		await refreshMinedState(true);
@@ -132,6 +137,7 @@ export async function autoMine(): Promise<void> {
 		const items = pick(file, prefs);
 		if (items.length === 0) {
 			await ipc.markMediaProcessed(fingerprint);
+			autoLedger.update((l) => [...l, { title, batchId: null, created: 0, undone: false }]);
 			showNotice(`Auto mode found nothing to mine in ${title}`);
 			return;
 		}
@@ -139,7 +145,7 @@ export async function autoMine(): Promise<void> {
 		if (!batch) return;
 		await ipc.markMediaProcessed(fingerprint);
 		const created = batch.items.filter((i) => i.outcome.status === 'created').length;
-		showNotice(`Auto-mined ${created} of ${items.length} cards from ${title}`);
+		autoLedger.update((l) => [...l, { title, batchId: batch.id, created, undone: false }]);
 	} catch (err) {
 		lastError.set({ title: 'Auto mode', message: String(err), detail: null });
 	} finally {

@@ -15,8 +15,16 @@ export type Pos = string;
 
 export type JlptLevel = 'N5' | 'N4' | 'N3' | 'N2' | 'N1';
 
+export interface AutoSkip {
+	spelling_in_anki: boolean;
+	speaker_name: boolean;
+	ambiguous_grammar: boolean;
+}
+
 export interface Term {
 	possible_known_match?: string | null;
+	/** Why auto mode passes over this term (`AutoSkip` in core/models.rs). */
+	auto_skip?: AutoSkip;
 	id: number;
 	lemma_form: string;
 	lemma_reading: string;
@@ -222,7 +230,12 @@ export interface AnkiConnectionSettings {
 
 /** Auto mode's card limit and pick preferences. Points are keyed by POS key and JLPT level. */
 export interface AutoMine {
+	/** `count` stops after `limit` cards; `min_score` once no term left scores `min_score`. */
+	stop: 'count' | 'min_score';
 	limit: number;
+	min_score: number;
+	/** Null mines every term above `min_score`. */
+	max_cards: number | null;
 	pos_points: Record<string, number>;
 	jlpt_points: Record<string, number>;
 }
@@ -317,6 +330,8 @@ export interface BandStats {
 export interface KnowledgeSummary {
 	jlpt: { level: string; stats: BandStats }[];
 	frequency: { label: string; stats: BandStats }[];
+	/** Rank up to which auto mode gives full frequency points; only ever grows. */
+	horizon?: number | null;
 }
 
 // ---- Event payloads (contracts/events.md) ----
@@ -377,6 +392,10 @@ export function getPosCatalog(): Promise<PosInfo[]> {
 
 export function getSettings(): Promise<SettingsData> {
 	return invoke('get_settings');
+}
+
+export function getDefaultSettings(): Promise<SettingsData> {
+	return invoke('get_default_settings');
 }
 
 export function saveSettings(settings: SettingsData): Promise<void> {
@@ -694,6 +713,8 @@ export interface YomitanStatus {
 export function mineTerm(
 	args: {
 		term: string;
+		/** The row's reading, which picks the matching entry when `entryIndex` is null. */
+		reading: string | null;
 		/** The occurrence as tokenized from the text — cloze/bold highlighting. */
 		surface: string;
 		sentence: string;
@@ -781,6 +802,7 @@ export interface BatchRecord {
 	finished_at: number | null;
 	source: BatchSource;
 	items: BatchItem[];
+	auto: boolean;
 }
 
 export interface BatchStep {
@@ -794,6 +816,8 @@ export interface BatchUndoResult {
 	deleted: number;
 	already_gone: number;
 	remaining: number;
+	/** Auto mode can mine the source again. */
+	reopened: boolean;
 }
 
 export interface MineOptions {
@@ -821,8 +845,12 @@ export function getLastBatch(): Promise<BatchRecord | null> {
 	return invoke('get_last_batch');
 }
 
-export function createBatch(source: BatchSource, items: BatchItem[]): Promise<BatchRecord> {
-	return invoke('create_batch', { source, items });
+export function createBatch(
+	source: BatchSource,
+	items: BatchItem[],
+	auto: boolean
+): Promise<BatchRecord> {
+	return invoke('create_batch', { source, items, auto });
 }
 
 export function finishBatch(batchId: string): Promise<BatchRecord> {

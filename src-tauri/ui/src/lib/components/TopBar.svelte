@@ -83,7 +83,7 @@
 			if ($asbContext.loaded_from_asbplayer && !$asbContext.loaded_is_active)
 				return {
 					kind: 'warn',
-					tip: 'asbplayer mode — the loaded video is in a background tab; switch to it before mining (screenshots capture the visible tab)'
+					tip: 'asbplayer mode — the loaded video is in a background tab; switch to it before mining (cards get no audio or screenshot until then)'
 				};
 			const unboundSubs =
 				!$asbContext.loaded_from_asbplayer &&

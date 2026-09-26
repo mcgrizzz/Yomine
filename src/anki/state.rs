@@ -230,6 +230,20 @@ impl AnkiState {
             }) {
                 return MatchResult::Known { card, evidence: MatchEvidence::Lexeme };
             }
+            // A potential verb (勝てる) is filed under its base verb's lexeme (勝つ), which
+            // reads differently; Yomitan builds that base verb's card from it.
+            if *pos == POS::Verb
+                && citation.chars().any(is_kanji_char)
+                && canonical(citation) != lexeme_name(lexeme)
+            {
+                if let Some(card) = self.cards_spelled(lexeme_name(lexeme)).find(|card| {
+                    self.frequency_manager
+                        .lexeme_of(&card.term, &card.reading)
+                        .is_none_or(|other| other == lexeme)
+                }) {
+                    return MatchResult::Known { card, evidence: MatchEvidence::Lexeme };
+                }
+            }
         }
         let contradicts_lexeme = |card: &Vocab| {
             lexeme.is_some_and(|lexeme| card_lexeme(card).is_some_and(|other| other != lexeme))
@@ -398,6 +412,14 @@ impl AnkiState {
             .map(|mut term| {
                 term.possible_known_match = None;
                 term.comprehension = 0.0;
+                // Yomitan heads a kana word's card with its kanji spelling, UniDic's lexeme
+                // (振り for ふり), so that spelling counts too.
+                let spellings =
+                    [Some(term.lemma_form.as_str()), term.lexeme.as_deref().map(lexeme_name)];
+                term.auto_skip.spelling_in_anki = spellings
+                    .into_iter()
+                    .flatten()
+                    .any(|form| self.cards_by_term.contains_key(&normalize_japanese_text(form)));
                 let known = match self.classify_term(&term) {
                     MatchResult::Known { card, evidence: _ } => {
                         term.comprehension =
@@ -629,6 +651,7 @@ mod classification_tests {
     fn term(surface: &str, reading: &str) -> Term {
         Term {
             possible_known_match: None,
+            auto_skip: Default::default(),
             lexical_family: None,
             lexeme: None,
             id: 0,
@@ -1017,6 +1040,7 @@ mod classification_tests {
             ),
             ("考えていきたい", "いきたい", &[("逝く", "いく"), ("行く", "いく")], Some("行く")),
             ("大恥をかいてしまう", "かい", &[("核", "かく"), ("書く", "かく")], None),
+            ("勝てるわけじゃない", "勝てる", &[("勝つ", "かつ"), ("活", "かつ")], Some("勝つ")),
         ] {
             let mut sentences = vec![Sentence {
                 id: 0,
