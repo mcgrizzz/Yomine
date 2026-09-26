@@ -13,7 +13,6 @@ pub use field_guessing::{
 pub use state::{
     get_models,
     get_sample_note_for_model,
-    get_total_vocab,
     wait_awake,
     AnkiState,
 };

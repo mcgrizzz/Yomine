@@ -106,7 +106,7 @@ pub(super) fn import_anki_caches(conn: &Connection, dir: &Path) -> rusqlite::Res
         .unwrap_or_default();
     for card in &cards {
         if let Some(card_id) = card.card_id {
-            anki::insert_card(conn, anki::UNKNOWN, card_id, card, now)?;
+            anki::insert_card(conn, anki::UNKNOWN, card_id, None, card, now)?;
         }
     }
     let sentences: Vec<MinedSentence> = read(dir, "anki_mined_sentences.json")

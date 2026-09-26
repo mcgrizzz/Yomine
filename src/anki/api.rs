@@ -141,7 +141,7 @@ fn build_request(
 
 pub async fn get_version() -> Result<u32, YomineError> {
     let client = AnkiClient::new(CONNECTION.read().unwrap().clone());
-    client.get_version().await
+    client.get_version().await.inspect_err(|_| super::state::anki_unreachable())
 }
 
 pub async fn get_deck_ids() -> Result<Vec<Deck>, reqwest::Error> {

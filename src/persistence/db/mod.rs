@@ -115,9 +115,21 @@ CREATE TABLE meta (
     value TEXT NOT NULL
 );
 
+-- Every note a harvest has seen, vocab or not, so the next one fetches only new and
+-- edited notes.
+CREATE TABLE anki_notes (
+    collection TEXT NOT NULL,
+    note_id INTEGER NOT NULL,
+    first_seen_at INTEGER NOT NULL,
+    gone_at INTEGER,
+    PRIMARY KEY (collection, note_id)
+);
+
 CREATE TABLE anki_cards (
     collection TEXT NOT NULL,
     card_id INTEGER NOT NULL,
+    -- Empty for cards imported from the JSON cache, until a harvest reads their note.
+    note_id INTEGER,
     term TEXT NOT NULL,
     reading TEXT NOT NULL,
     -- Days; fractional while learning.

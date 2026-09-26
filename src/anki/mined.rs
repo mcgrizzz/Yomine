@@ -93,15 +93,6 @@ pub async fn get_recently_added(
     Ok((terms, keys, sentences))
 }
 
-/// Written by the `get_total_vocab` harvest.
-pub fn save_harvested_sentences(collection: &str, entries: &[MinedSentence]) {
-    if let Err(e) =
-        db::with(|conn| db::anki::sync_sentences(conn, collection, entries, db::now_ms()))
-    {
-        eprintln!("Failed to save mined sentence cache: {e}");
-    }
-}
-
 /// Records a note Yomine created; its sentence counts as mined even without a
 /// sentence-field mapping.
 pub fn record_note(
