@@ -1,13 +1,9 @@
-use std::{
-    collections::BTreeSet,
-    path::PathBuf,
-    sync::{
-        atomic::{
-            AtomicBool,
-            Ordering,
-        },
-        Mutex,
+use std::sync::{
+    atomic::{
+        AtomicBool,
+        Ordering,
     },
+    Mutex,
 };
 
 use serde::{
@@ -16,8 +12,15 @@ use serde::{
 };
 use tauri::State;
 use yomine::{
-    anki::api,
-    persistence,
+    anki::{
+        api,
+        mined,
+    },
+    core::{
+        models::SourceFile,
+        Sentence,
+    },
+    persistence::db,
 };
 
 use crate::{
@@ -28,13 +31,9 @@ use crate::{
     },
 };
 
-const FILE: &str = "yomine_last_batch.json";
-static FILE_LOCK: Mutex<()> = Mutex::new(());
 pub static OPERATION: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 pub static RUNNING: AtomicBool = AtomicBool::new(false);
 pub static AUTO: AtomicBool = AtomicBool::new(false);
-const PROCESSED_FILE: &str = "processed_media.json";
-static PROCESSED_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct BatchSource {
@@ -46,8 +45,11 @@ pub struct BatchSource {
 impl BatchSource {
     pub fn from_file(file: &FileData) -> Result<Self, String> {
         let source = file.source_file.as_ref().ok_or("Load the original source first")?;
-        let sentences: Vec<_> = file
-            .sentences
+        Ok(Self::new(source, &file.sentences))
+    }
+
+    pub fn new(source: &SourceFile, sentences: &[Sentence]) -> Self {
+        let sentences: Vec<_> = sentences
             .iter()
             .map(|s| {
                 let times = s.timestamp.as_ref().map(|t| {
@@ -62,11 +64,11 @@ impl BatchSource {
         let hash = bytes
             .iter()
             .fold(0xcbf29ce484222325u64, |h, b| (h ^ u64::from(*b)).wrapping_mul(0x100000001b3));
-        Ok(Self {
+        Self {
             title: source.title.clone(),
             locator: source.original_file.clone(),
             fingerprint: format!("{hash:016x}"),
-        })
+        }
     }
 
     pub fn matches(&self, other: &Self) -> bool {
@@ -180,79 +182,93 @@ pub struct BatchRecord {
     pub items: Vec<BatchItem>,
     #[serde(default)]
     pub auto: bool,
+    /// The Anki profile the batch mines into; empty for batches from before profiles
+    /// were recorded.
+    #[serde(default)]
+    pub collection: Option<String>,
 }
 
-struct BatchFile(PathBuf);
-
-#[derive(Debug)]
-enum LoadError {
-    Io(String),
-    Unreadable(String),
-}
-
-impl From<LoadError> for String {
-    fn from(error: LoadError) -> Self {
-        match error {
-            LoadError::Io(e) => format!("Could not read the last batch: {e}"),
-            LoadError::Unreadable(e) => format!("The last batch record is unreadable: {e}"),
+impl BatchRecord {
+    fn stored(&self) -> db::batches::StoredBatch {
+        db::batches::StoredBatch {
+            id: self.id.clone(),
+            fingerprint: self.source.fingerprint.clone(),
+            title: self.source.title.clone(),
+            path: self.source.locator.clone(),
+            started_at: self.started_at,
+            finished_at: self.finished_at,
+            auto: self.auto,
+            collection: self.collection.clone(),
+            items: self
+                .items
+                .iter()
+                .map(|item| serde_json::to_string(item).expect("batch items are plain data"))
+                .collect(),
         }
     }
-}
 
-enum Stored {
-    Loaded(Option<BatchRecord>),
-    MovedAside(PathBuf),
-}
-
-impl BatchFile {
-    fn load(&self) -> Result<Option<BatchRecord>, LoadError> {
-        let json = match std::fs::read_to_string(&self.0) {
-            Ok(json) => json,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(e) => return Err(LoadError::Io(e.to_string())),
-        };
-        serde_json::from_str(&json).map(Some).map_err(|e| LoadError::Unreadable(e.to_string()))
-    }
-    fn load_or_move_aside(&self) -> Result<Stored, String> {
-        match self.load() {
-            Err(LoadError::Unreadable(_)) => {
-                let moved = self.0.with_file_name(format!(
-                    "yomine_last_batch.unreadable-{}.json",
-                    chrono::Utc::now().timestamp_millis()
-                ));
-                std::fs::rename(&self.0, &moved)
-                    .map_err(|e| format!("Could not move the unreadable batch record: {e}"))?;
-                Ok(Stored::MovedAside(moved))
-            }
-            loaded => Ok(Stored::Loaded(loaded?)),
-        }
-    }
-    fn write(&self, batch: &BatchRecord) -> Result<(), String> {
-        persistence::save_json_at(batch, &self.0)
-            .map_err(|e| format!("Could not save the last batch: {e}"))
-    }
-    fn save(&self, batch: &BatchRecord) -> Result<(), String> {
-        let current = self.load()?.ok_or("No saved batch")?;
-        if current.id != batch.id {
-            return Err("This batch has been replaced by a newer batch".into());
-        }
-        self.write(batch)
+    fn from_stored(stored: db::batches::StoredBatch) -> Result<Self, String> {
+        let items = stored
+            .items
+            .iter()
+            .map(|item| serde_json::from_str(item))
+            .collect::<Result<_, _>>()
+            .map_err(|e| format!("The last batch record is unreadable: {e}"))?;
+        Ok(Self {
+            id: stored.id,
+            started_at: stored.started_at,
+            finished_at: stored.finished_at,
+            source: BatchSource {
+                title: stored.title,
+                locator: stored.path,
+                fingerprint: stored.fingerprint,
+            },
+            items,
+            auto: stored.auto,
+            collection: stored.collection,
+        })
     }
 }
 
-fn file() -> BatchFile {
-    BatchFile(persistence::get_data_file_path(FILE))
-}
-
+/// The batch, if it's still the newest in its Anki profile.
 pub fn load(id: &str) -> Result<BatchRecord, String> {
-    get_last_batch()?
-        .filter(|b| b.id == id)
-        .ok_or_else(|| "This batch is no longer available".into())
+    db::with(|conn| {
+        let Some(batch) = db::batches::read(conn, id)? else { return Ok(None) };
+        let newest = db::batches::latest_id(conn, batch.collection.as_deref())?;
+        Ok((newest.as_deref() == Some(id)).then_some(batch))
+    })?
+    .map(BatchRecord::from_stored)
+    .transpose()?
+    .ok_or_else(|| "This batch is no longer available".into())
+}
+
+/// Refuses to touch a batch's notes from another Anki profile, where its note ids
+/// don't exist.
+pub async fn require_profile(batch: &BatchRecord, action: &str) -> Result<(), String> {
+    let Some(profile) = &batch.collection else { return Ok(()) };
+    let open = api::active_profile().await.map_err(|e| format!("Anki is unreachable: {e}"))?;
+    if open != *profile {
+        return Err(format!(
+            "This batch was mined into the Anki profile \"{profile}\". Switch Anki to it to {action}."
+        ));
+    }
+    Ok(())
+}
+
+/// The open Anki profile, or the last one harvested while Anki is unreachable.
+async fn open_profile() -> Result<String, String> {
+    match api::active_profile().await {
+        Ok(profile) => Ok(profile),
+        Err(_) => db::with(|conn| db::anki::active_collection(conn)),
+    }
 }
 
 pub fn save(batch: &BatchRecord) -> Result<(), Failure> {
-    let _guard = FILE_LOCK.lock().unwrap();
-    file().save(batch).map_err(Failure::storage)
+    match db::with(|conn| db::batches::save_latest(conn, &batch.stored())) {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(Failure::storage("This batch has been replaced by a newer batch")),
+        Err(e) => Err(Failure::storage(e)),
+    }
 }
 
 pub fn checkpoint(batch: &mut BatchRecord, index: usize, outcome: Outcome) -> Result<(), Failure> {
@@ -272,52 +288,32 @@ pub fn set_auto_mode(on: bool) {
     AUTO.store(on, Ordering::Relaxed);
 }
 
-fn processed_media() -> Result<BTreeSet<String>, String> {
-    persistence::load_json(PROCESSED_FILE)
-        .map_err(|e| format!("Could not read the processed video list: {e}"))
+#[tauri::command]
+pub async fn is_media_processed(fingerprint: String) -> Result<bool, String> {
+    let profile = open_profile().await?;
+    db::with(|conn| db::sources::is_auto_processed(conn, &fingerprint, &profile))
 }
 
 #[tauri::command]
-pub fn is_media_processed(fingerprint: String) -> Result<bool, String> {
-    let _lock = PROCESSED_LOCK.lock().unwrap();
-    Ok(processed_media()?.contains(&fingerprint))
+pub async fn mark_media_processed(fingerprint: String) -> Result<(), String> {
+    let profile = open_profile().await?;
+    db::with(|conn| {
+        db::sources::set_auto_processed(conn, &fingerprint, &profile, Some(db::now_ms()))
+    })
 }
 
+/// The open Anki profile's newest batch.
 #[tauri::command]
-pub fn mark_media_processed(fingerprint: String) -> Result<(), String> {
-    let _lock = PROCESSED_LOCK.lock().unwrap();
-    let mut processed = processed_media()?;
-    if processed.insert(fingerprint) {
-        save_processed_media(&processed)?;
-    }
-    Ok(())
-}
-
-fn unmark_media_processed(fingerprint: &str) -> Result<(), String> {
-    let _lock = PROCESSED_LOCK.lock().unwrap();
-    let mut processed = processed_media()?;
-    if processed.remove(fingerprint) {
-        save_processed_media(&processed)?;
-    }
-    Ok(())
-}
-
-fn save_processed_media(processed: &BTreeSet<String>) -> Result<(), String> {
-    persistence::save_json(processed, PROCESSED_FILE)
-        .map_err(|e| format!("Could not save the processed video list: {e}"))
-}
-
-#[tauri::command]
-pub fn get_last_batch() -> Result<Option<BatchRecord>, String> {
-    let _guard = FILE_LOCK.lock().unwrap();
-    match file().load_or_move_aside()? {
-        Stored::Loaded(batch) => Ok(batch),
-        Stored::MovedAside(moved) => Err(format!(
-            "The last batch record was unreadable, so it was moved to {}. New batches will start \
-             a fresh record.",
-            moved.display()
-        )),
-    }
+pub async fn get_last_batch() -> Result<Option<BatchRecord>, String> {
+    let profile = open_profile().await?;
+    db::with(|conn| {
+        db::batches::latest_id(conn, Some(&profile))?
+            .map(|id| db::batches::read(conn, &id))
+            .transpose()
+    })?
+    .flatten()
+    .map(BatchRecord::from_stored)
+    .transpose()
 }
 
 #[tauri::command]
@@ -338,6 +334,7 @@ pub async fn create_batch(
     for item in &mut items {
         item.outcome = Outcome::Unattempted;
     }
+    let profile = api::active_profile().await.map_err(|e| format!("Anki is unreachable: {e}"))?;
     let now = chrono::Utc::now();
     let batch = BatchRecord {
         id: now.timestamp_nanos_opt().ok_or("Could not assign a batch ID")?.to_string(),
@@ -346,10 +343,9 @@ pub async fn create_batch(
         source: current,
         items,
         auto,
+        collection: Some(profile),
     };
-    let _guard = FILE_LOCK.lock().unwrap();
-    file().load_or_move_aside()?;
-    file().write(&batch)?;
+    db::with(|conn| db::batches::write(conn, &batch.stored()))?;
     Ok(batch)
 }
 
@@ -376,6 +372,7 @@ pub struct UndoResult {
 pub async fn undo_batch(batch_id: String) -> Result<UndoResult, String> {
     let _operation = OPERATION.try_lock().map_err(|_| "Mining or undo is already running")?;
     let mut batch = load(&batch_id)?;
+    require_profile(&batch, "undo it").await?;
     let ids: Vec<_> = batch
         .items
         .iter()
@@ -391,9 +388,14 @@ pub async fn undo_batch(batch_id: String) -> Result<UndoResult, String> {
     let remaining = api::existing_note_ids_strict(&existing).await?;
     mark_deleted(&mut batch, &remaining);
     save(&batch).map_err(|e| format!("Anki deletion was checked, but recovery history could not be saved: {}. Retry Undo to reconcile it.", e.message))?;
+    let gone: Vec<u64> = ids.iter().copied().filter(|id| !remaining.contains(id)).collect();
+    mined::mark_notes_deleted(&gone)?;
     let reopened = batch.auto && remaining.is_empty();
     if reopened {
-        unmark_media_processed(&batch.source.fingerprint)?;
+        let profile = batch.collection.as_deref().unwrap_or_default();
+        db::with(|conn| {
+            db::sources::set_auto_processed(conn, &batch.source.fingerprint, profile, None)
+        })?;
     }
     Ok(UndoResult {
         deleted: existing.len() - remaining.len(),
@@ -442,39 +444,19 @@ mod tests {
                 outcome: Outcome::Created { note_id: 42, media: MediaState::Pending, error: None },
             }],
             auto: false,
+            collection: None,
         }
     }
 
     #[test]
-    fn saved_creation_survives_restart_and_stale_updates_cannot_replace_it() {
-        let dir = std::env::temp_dir().join(format!(
-            "yomine-batch-{}-{}",
-            std::process::id(),
-            chrono::Utc::now().timestamp_nanos_opt().unwrap()
-        ));
-        let store = BatchFile(dir.join(FILE));
-        assert!(store.load().unwrap().is_none());
+    fn stored_items_read_back_as_the_same_outcomes() {
         let original = batch();
-        store.write(&original).unwrap();
+        let restored = BatchRecord::from_stored(original.stored()).unwrap();
         assert!(matches!(
-            store.load().unwrap().unwrap().items[0].outcome,
+            restored.items[0].outcome,
             Outcome::Created { note_id: 42, media: MediaState::Pending, .. }
         ));
-        let mut newer = original.clone();
-        newer.id = "second".into();
-        store.write(&newer).unwrap();
-        assert!(store.save(&original).is_err());
-        assert_eq!(store.load().unwrap().unwrap().id, "second");
-        std::fs::write(&store.0, b"broken json").unwrap();
-        assert!(store.load().is_err());
-        assert!(store.save(&newer).is_err());
-        assert_eq!(std::fs::read(&store.0).unwrap(), b"broken json");
-        let Stored::MovedAside(moved) = store.load_or_move_aside().unwrap() else {
-            panic!("not moved")
-        };
-        assert_eq!(std::fs::read(&moved).unwrap(), b"broken json");
-        assert!(matches!(store.load_or_move_aside().unwrap(), Stored::Loaded(None)));
-        std::fs::remove_dir_all(dir).unwrap();
+        assert!(restored.source == original.source);
     }
 
     #[test]

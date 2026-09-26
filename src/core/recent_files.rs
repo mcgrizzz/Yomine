@@ -1,7 +1,4 @@
-use std::{
-    collections::VecDeque,
-    path::Path,
-};
+use std::path::Path;
 
 use serde::{
     Deserialize,
@@ -87,76 +84,6 @@ impl RecentFileEntry {
     }
 }
 
-// Persisted files carry a stale `max_entries: 10` from the egui era — the cap must not deserialize.
-fn default_max_entries() -> usize {
-    50
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RecentFiles {
-    files: VecDeque<RecentFileEntry>,
-    #[serde(skip, default = "default_max_entries")]
-    max_entries: usize,
-}
-
-impl Default for RecentFiles {
-    fn default() -> Self {
-        Self::new(default_max_entries())
-    }
-}
-
-impl RecentFiles {
-    pub fn new(max_entries: usize) -> Self {
-        Self { files: VecDeque::new(), max_entries }
-    }
-
-    pub fn add_file(
-        &mut self,
-        file_path: String,
-        title: String,
-        subtitle: Option<String>,
-        creator: Option<String>,
-        term_count: usize,
-    ) {
-        self.files.retain(|entry| entry.file_path != file_path);
-
-        let new_entry = RecentFileEntry::new(file_path, title, subtitle, creator, term_count);
-        self.files.push_front(new_entry);
-
-        while self.files.len() > self.max_entries {
-            self.files.pop_back();
-        }
-    }
-
-    pub fn get_files(&self) -> &VecDeque<RecentFileEntry> {
-        &self.files
-    }
-
-    pub fn get_valid_files(&self) -> Vec<&RecentFileEntry> {
-        self.files.iter().filter(|entry| entry.file_exists()).collect()
-    }
-
-    pub fn remove_file(&mut self, file_path: &str) {
-        self.files.retain(|entry| entry.file_path != file_path);
-    }
-
-    pub fn clear(&mut self) {
-        self.files.clear();
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.files.is_empty()
-    }
-
-    pub fn len(&self) -> usize {
-        self.files.len()
-    }
-
-    pub fn cleanup_missing_files(&mut self) {
-        self.files.retain(|entry| entry.file_exists());
-    }
-}
-
 impl Default for RecentFileEntry {
     fn default() -> Self {
         Self {
@@ -168,17 +95,5 @@ impl Default for RecentFileEntry {
             file_size: None,
             term_count: None,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn stale_persisted_cap_is_ignored() {
-        let json = r#"{"files": [], "max_entries": 10}"#;
-        let recents: RecentFiles = serde_json::from_str(json).unwrap();
-        assert_eq!(recents.max_entries, default_max_entries());
     }
 }

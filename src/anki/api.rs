@@ -141,7 +141,7 @@ fn build_request(
 
 pub async fn get_version() -> Result<u32, YomineError> {
     let client = AnkiClient::new(CONNECTION.read().unwrap().clone());
-    client.get_version().await
+    client.get_version().await.inspect_err(|_| super::state::anki_unreachable())
 }
 
 pub async fn get_deck_ids() -> Result<Vec<Deck>, reqwest::Error> {
@@ -153,6 +153,12 @@ pub async fn get_deck_ids() -> Result<Vec<Deck>, reqwest::Error> {
         .into_iter()
         .map(|(name, id)| Deck { name, id })
         .collect())
+}
+
+/// The open Anki profile's name, which keys Yomine's copy of its collection.
+pub async fn active_profile() -> Result<String, reqwest::Error> {
+    let response: ApiResponse<String> = make_request("getActiveProfile", None).await?;
+    Ok(response.unwrap_result().unwrap_or_default())
 }
 
 pub async fn get_note_ids(query: &str) -> Result<Vec<u64>, reqwest::Error> {

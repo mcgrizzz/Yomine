@@ -25,9 +25,12 @@ const DEFAULT_SLUG: &str = "default";
 const DEFAULT_DISPLAY: &str = "Default";
 const SLUG_PREFIX: &str = "profile-";
 
-/// `dictionaries/` and `asbplayer_subtitles/` are deliberately absent: shared.
+/// `dictionaries/` and `asbplayer_subtitles/` are deliberately absent: shared. The
+/// history files still copy so a profile never opened since the database arrived
+/// imports them on first open.
 const PROFILE_FILES: &[&str] = &[
     "yomine_last_batch.json",
+    "processed_media.json",
     "settings.json",
     "ignore_list.json",
     "recent_files.json",
@@ -224,6 +227,12 @@ fn new_profile(display_name: &str, from: Option<&str>) -> Result<String, YomineE
                 fs::copy(&from, dst.join(file))
                     .map_err(|e| YomineError::Custom(format!("Failed to copy {file}: {e}")))?;
             }
+        }
+        let db = src.join(super::db::DB_FILE);
+        if db.exists() {
+            super::db::copy(&db, &dst.join(super::db::DB_FILE)).map_err(|e| {
+                YomineError::Custom(format!("Failed to copy the history database: {e}"))
+            })?;
         }
     }
     write_display_name(&dst, name)?;

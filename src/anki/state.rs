@@ -1,9 +1,13 @@
 use std::{
     collections::{
+        BTreeMap,
         HashMap,
         HashSet,
     },
-    sync::Arc,
+    sync::{
+        Arc,
+        Mutex,
+    },
     time::{
         Duration,
         Instant,
@@ -24,10 +28,12 @@ use wana_kana::IsJapaneseStr;
 
 use super::{
     api::{
+        active_profile,
         get_intervals,
         get_note_ids,
         get_notes,
         get_version,
+        Note,
     },
     scoring::{
         MatchEvidence,
@@ -51,10 +57,9 @@ use crate::{
         Term,
     },
     dictionary::frequency_manager::FrequencyManager,
+    persistence::db,
     segmentation::word::lexeme_name,
 };
-
-pub(crate) const ANKI_VOCAB_CACHE: &str = "anki_vocab_cache.json";
 
 pub struct AnkiState {
     vocab: Vec<Vocab>,
@@ -70,59 +75,7 @@ impl AnkiState {
         frequency_manager: Arc<FrequencyManager>,
         known_interval: u32,
     ) -> Result<Self, reqwest::Error> {
-        let start = Instant::now();
-        let mut vocab = get_total_vocab(&model_mapping).await?;
-        println!(
-            "Loaded {} vocab items from Anki ({:.1}s)",
-            vocab.len(),
-            start.elapsed().as_secs_f32()
-        );
-
-        // Fetch card intervals and set them on vocab
-        let card_ids: Vec<u64> = vocab.iter().filter_map(|v| v.card_id).collect();
-
-        let intervals_request_start = Instant::now();
-        let intervals = get_intervals(card_ids.clone()).await?;
-        println!(
-            "  getIntervals request: {} cards ({:.2}s)",
-            card_ids.len(),
-            intervals_request_start.elapsed().as_secs_f32()
-        );
-
-        let processing_start = Instant::now();
-        let card_intervals: HashMap<u64, i32> =
-            card_ids.into_iter().zip(intervals.into_iter()).collect();
-
-        // Set intervals on vocab items
-        let mut intervals_set = 0;
-        for vocab_item in &mut vocab {
-            if let Some(card_id) = vocab_item.card_id {
-                if let Some(&interval) = card_intervals.get(&card_id) {
-                    // Negative intervals are in seconds (learning/relearning), positive in days
-                    vocab_item.interval = Some(if interval >= 0 {
-                        interval as f32
-                    } else {
-                        interval.abs() as f32 / 86400.0
-                    });
-                    intervals_set += 1;
-                }
-            }
-        }
-        println!(
-            "  Processing intervals: {}/{} set ({:.2}s)",
-            intervals_set,
-            vocab.len(),
-            processing_start.elapsed().as_secs_f32()
-        );
-
-        // Persist the freshly fetched vocab so it can be reused offline / for fast loads
-        if vocab.is_empty() {
-            eprintln!("Anki returned no vocab; keeping the existing cache");
-        } else if let Err(e) = crate::persistence::save_json(&vocab, ANKI_VOCAB_CACHE) {
-            eprintln!("Failed to save Anki vocab cache: {}", e);
-        }
-
-        println!("AnkiState initialized ({:.1}s total)", start.elapsed().as_secs_f32());
+        let vocab = harvest(&model_mapping).await.inspect_err(|_| anki_unreachable())?;
         Ok(Self::from_vocab(vocab, frequency_manager, known_interval))
     }
 
@@ -141,13 +94,18 @@ impl AnkiState {
         Self { vocab, frequency_manager, cards_by_reading, cards_by_term, known_interval }
     }
 
-    /// Build an `AnkiState` from the on-disk vocab cache, if one exists. Returns
-    /// `None` when no cache is present so callers can fall back gracefully.
+    /// Build an `AnkiState` from the latest harvested collection's cards, if any.
+    /// Returns `None` when there are none so callers can fall back gracefully.
     pub fn from_cache(
         frequency_manager: Arc<FrequencyManager>,
         known_interval: u32,
     ) -> Option<Self> {
-        let vocab: Vec<Vocab> = crate::persistence::load_json_or_default(ANKI_VOCAB_CACHE);
+        let vocab =
+            db::with(|conn| db::anki::live_cards(conn, &db::anki::active_collection(conn)?))
+                .unwrap_or_else(|e| {
+                    eprintln!("{e}");
+                    Vec::new()
+                });
         if vocab.is_empty() {
             return None;
         }
@@ -472,30 +430,108 @@ impl AnkiState {
     }
 }
 
-pub async fn get_total_vocab(
+/// Collections harvested in full since Yomine started or Anki last stopped answering.
+/// Their next harvests fetch only new and edited notes; intervals refresh with a full one.
+static CURRENT: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// Anki stopped answering, so anything may have changed: the next harvests are full.
+pub(crate) fn anki_unreachable() {
+    CURRENT.lock().unwrap_or_else(|e| e.into_inner()).clear();
+}
+
+/// Reads the active collection's notes into the database and returns its cards.
+async fn harvest(
     model_mapping: &HashMap<String, FieldMapping>,
 ) -> Result<Vec<Vocab>, reqwest::Error> {
-    let deck_query = "deck:*";
+    let start = Instant::now();
+    let collection = active_profile().await?;
+    let mapping = serde_json::to_string(&model_mapping.iter().collect::<BTreeMap<_, _>>())
+        .expect("field mappings are plain data");
+    let note_ids = get_note_ids("deck:*").await?;
+    let now = db::now_ms();
 
-    let note_ids_start = Instant::now();
-    let note_ids = get_note_ids(&deck_query).await?;
+    let current = CURRENT.lock().unwrap_or_else(|e| e.into_inner()).contains(&collection);
+    let stored = db::with(|conn| db::anki::harvest_state(conn, &collection))
+        .inspect_err(|e| eprintln!("{e}"))
+        .ok()
+        .filter(|s| {
+            current && s.mapping.as_deref() == Some(mapping.as_str()) && !s.notes.is_empty()
+        });
+    let fetch: Vec<u64> = match (&stored, stored.as_ref().and_then(|s| s.harvested_at)) {
+        (Some(stored), Some(harvested_at)) => {
+            // edited:N counts back from the start of today, so one extra day covers a
+            // harvest late yesterday.
+            let days = (now - harvested_at) / 86_400_000 + 1;
+            let edited: HashSet<u64> =
+                get_note_ids(&format!("edited:{days}")).await?.into_iter().collect();
+            note_ids
+                .iter()
+                .copied()
+                .filter(|id| !stored.notes.contains(id) || edited.contains(id))
+                .collect()
+        }
+        _ => note_ids.clone(),
+    };
+    let full = fetch.len() == note_ids.len();
+
+    let (mut cards, sentences) = read_notes(model_mapping, get_notes(fetch.clone()).await?);
+    let card_ids: Vec<u64> = cards.iter().filter_map(|(_, card)| card.card_id).collect();
+    let intervals: HashMap<u64, i32> =
+        card_ids.iter().copied().zip(get_intervals(card_ids.clone()).await?).collect();
+    for (_, card) in &mut cards {
+        // Negative intervals are in seconds (learning/relearning), positive in days.
+        card.interval = card.card_id.and_then(|id| intervals.get(&id)).map(|&interval| {
+            if interval >= 0 {
+                interval as f32
+            } else {
+                interval.unsigned_abs() as f32 / 86400.0
+            }
+        });
+    }
     println!(
-        "  findNotes request: {} notes ({:.2}s)",
+        "Harvested {} of {} notes from Anki profile {collection:?} ({:.1}s)",
+        fetch.len(),
         note_ids.len(),
-        note_ids_start.elapsed().as_secs_f32()
+        start.elapsed().as_secs_f32()
     );
 
-    let notes_start = Instant::now();
-    let notes = get_notes(note_ids).await?;
-    let notes_request_time = notes_start.elapsed();
-    println!(
-        "  notesInfo request: {} notes ({:.2}s)",
-        notes.len(),
-        notes_request_time.as_secs_f32()
-    );
+    if full && cards.is_empty() {
+        eprintln!("Anki returned no vocab; keeping the existing cache");
+    } else {
+        let harvest = db::anki::Harvest {
+            note_ids: &note_ids,
+            fetched: &fetch,
+            cards: &cards,
+            sentences: &sentences,
+            full,
+            mapping: &mapping,
+        };
+        match db::with(|conn| db::anki::apply_harvest(conn, &collection, &harvest, now)) {
+            Ok(()) if full => {
+                CURRENT.lock().unwrap_or_else(|e| e.into_inner()).push(collection.clone())
+            }
+            Ok(()) => {}
+            // With the database failing, a full harvest still has every card; an
+            // incremental one has only the changed ones.
+            Err(e) if full => {
+                eprintln!("Failed to save Anki vocab cache: {e}");
+                return Ok(cards.into_iter().map(|(_, card)| card).collect());
+            }
+            Err(e) => eprintln!("Failed to save Anki vocab cache: {e}"),
+        }
+    }
+    Ok(db::with(|conn| db::anki::live_cards(conn, &collection)).unwrap_or_else(|e| {
+        eprintln!("{e}");
+        Vec::new()
+    }))
+}
 
-    // Harvest sentence-field values while every note is in hand (issue #3).
-    let mined_sentences: Vec<super::mined::MinedSentence> = notes
+/// Vocab cards, by note id, and sentence-field values (issue #3) of the given notes.
+fn read_notes(
+    model_mapping: &HashMap<String, FieldMapping>,
+    notes: Vec<Note>,
+) -> (Vec<(u64, Vocab)>, Vec<super::mined::MinedSentence>) {
+    let sentences = notes
         .iter()
         .filter_map(|note| {
             let mapping = model_mapping.get(&note.model_name)?;
@@ -508,43 +544,28 @@ pub async fn get_total_vocab(
             })
         })
         .collect();
-    super::mined::save_harvested_sentences(&mined_sentences);
 
-    let processing_start = Instant::now();
-    let relevant_models: HashSet<&String> = model_mapping.keys().collect();
-    let vocab: Vec<Vocab> = notes
+    let cards = notes
         .into_par_iter()
         .filter_map(|note| {
-            if relevant_models.contains(&note.model_name) {
-                if let Some(field_mapping) = model_mapping.get(&note.model_name) {
-                    let term = note.fields.get(&field_mapping.term_field).map(|f| f.value.clone());
-                    let reading =
-                        note.fields.get(&field_mapping.reading_field).map(|f| f.value.clone());
-                    if let (Some(term), Some(mut reading)) = (term, reading) {
-                        if reading.trim().is_empty() && term.as_str().is_kana() {
-                            reading = term.clone();
-                        }
-
-                        return Some(Vocab {
-                            term,
-                            reading: reading.filter_kana().normalize_long_vowel().into_owned(),
-                            card_id: note.cards.first().copied(),
-                            interval: None, // Will be set after fetching cards
-                        });
-                    }
-                }
+            let field_mapping = model_mapping.get(&note.model_name)?;
+            let term = note.fields.get(&field_mapping.term_field)?.value.clone();
+            let mut reading = note.fields.get(&field_mapping.reading_field)?.value.clone();
+            if reading.trim().is_empty() && term.as_str().is_kana() {
+                reading = term.clone();
             }
-            None
+            Some((
+                note.note_id,
+                Vocab {
+                    term,
+                    reading: reading.filter_kana().normalize_long_vowel().into_owned(),
+                    card_id: note.cards.first().copied(),
+                    interval: None,
+                },
+            ))
         })
         .collect();
-
-    println!(
-        "  Processing notes: {} vocab items ({:.2}s)",
-        vocab.len(),
-        processing_start.elapsed().as_secs_f32()
-    );
-
-    Ok(vocab)
+    (cards, sentences)
 }
 
 pub async fn get_models(
