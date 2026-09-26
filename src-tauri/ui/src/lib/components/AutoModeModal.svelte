@@ -31,7 +31,10 @@
 		limit: a.limit,
 		min_score: a.min_score,
 		max_cards: a.max_cards,
-		pos_points: { ...a.pos_points },
+		// Sorted, so `dirty`'s JSON comparison ignores the order word types were added in.
+		pos_points: Object.fromEntries(
+			Object.entries(a.pos_points).sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0))
+		),
 		jlpt_points: Object.fromEntries(JLPT_LEVELS.map((l) => [l, a.jlpt_points[l] ?? 0]))
 	});
 
@@ -50,7 +53,7 @@
 		guard.disarm();
 	}
 
-	const dirty = $derived(JSON.stringify(draft) !== JSON.stringify(original));
+	const dirty = $derived(JSON.stringify(copy(draft)) !== JSON.stringify(copy(original)));
 	const guard = dirtyGuard(
 		() => dirty,
 		() => autoModalOpen.set(false)
