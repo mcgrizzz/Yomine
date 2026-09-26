@@ -102,145 +102,170 @@
 <Modal
 	open={$autoModalOpen}
 	title="Auto Mode"
-	width="min(540px, 92%)"
+	width="min(760px, 94%)"
 	maxHeight="94%"
 	onclose={guard.request}
 	oninteract={guard.disarm}
 >
 	<div class="body">
 		<p class="intro">
-			Mines each new asbplayer video as it loads, using the terms your table filters show, and records
-			audio and screenshots from the video tab. Its notes are tagged <code>yomine::auto</code>.
+			Mines each new asbplayer video with your current table filters. Cards include audio, a
+			screenshot and the <code>yomine::auto</code> tag.
 		</p>
 
 		<section>
 			<h3>Cards per video</h3>
-			<label class="option">
-				<input type="radio" value="count" bind:group={draft.stop} />
-				<span>Mine the best</span>
-				<input
-					type="number"
-					min="1"
-					max="50"
-					aria-label="Cards per video"
-					disabled={draft.stop !== 'count'}
-					bind:value={draft.limit}
-				/>
-				<span>cards</span>
-			</label>
-			<label class="option">
-				<input type="radio" value="min_score" bind:group={draft.stop} />
-				<span>Mine every term scoring at least</span>
-				<input
-					type="number"
-					aria-label="Minimum score"
-					disabled={draft.stop !== 'min_score'}
-					bind:value={draft.min_score}
-				/>
-			</label>
-			{#if draft.stop === 'min_score'}
-				<div class="option nested">
-					<label for="auto-cap">Up to</label>
-					<input
-						id="auto-cap"
-						type="number"
-						min="1"
-						disabled={draft.max_cards === null}
-						value={draft.max_cards ?? ''}
-						oninput={(e) => (draft.max_cards = e.currentTarget.valueAsNumber)}
-					/>
-					<span>cards</span>
-					<label class="check">
-						<input
-							type="checkbox"
-							checked={draft.max_cards === null}
-							onchange={(e) => (draft.max_cards = e.currentTarget.checked ? null : 40)}
-						/>
-						No cap
+			<div class="choices">
+				<div class="choice" class:selected={draft.stop === 'count'}>
+					<label class="choice-title">
+						<input type="radio" value="count" bind:group={draft.stop} />
+						A fixed number
 					</label>
+					<div class="row">
+						<span>Mine the best</span>
+						<input
+							type="number"
+							min="1"
+							max="50"
+							aria-label="Cards per video"
+							disabled={draft.stop !== 'count'}
+							bind:value={draft.limit}
+						/>
+						<span>cards</span>
+					</div>
 				</div>
-			{/if}
-			<p class="hint">Fewer when your table filters leave less.</p>
+				<div class="choice" class:selected={draft.stop === 'min_score'}>
+					<label class="choice-title">
+						<input type="radio" value="min_score" bind:group={draft.stop} />
+						Everything above a score
+					</label>
+					<div class="row">
+						<span>Score at least</span>
+						<input
+							type="number"
+							aria-label="Minimum score"
+							disabled={draft.stop !== 'min_score'}
+							bind:value={draft.min_score}
+						/>
+					</div>
+					<div class="row">
+						<span>Up to</span>
+						<input
+							type="number"
+							min="1"
+							aria-label="Card cap"
+							disabled={draft.stop !== 'min_score' || draft.max_cards === null}
+							value={draft.max_cards ?? ''}
+							oninput={(e) => (draft.max_cards = e.currentTarget.valueAsNumber)}
+						/>
+						<span>cards</span>
+						<label class="check">
+							<input
+								type="checkbox"
+								disabled={draft.stop !== 'min_score'}
+								checked={draft.max_cards === null}
+								onchange={(e) => (draft.max_cards = e.currentTarget.checked ? null : 40)}
+							/>
+							No cap
+						</label>
+					</div>
+				</div>
+			</div>
 		</section>
 
 		<section>
-			<h3>Scoring</h3>
-			<p class="formula">Score = frequency + word type + JLPT</p>
-			<p class="hint">
-				Frequency is 40 up to your horizon, <strong>rank {horizon.toLocaleString()}</strong>, and 20
-				less per tenfold step past it. The horizon grows with your Anki cards. Highest score is mined
-				first.
-			</p>
-			<table class="examples">
-				<thead><tr><th>Example</th><th>Frequency</th><th>Score</th></tr></thead>
-				<tbody>
-					{#each examples as e (e.label)}
-						<tr><td>{e.label}</td><td>{e.freq}</td><td>{e.total}</td></tr>
-					{/each}
-				</tbody>
-			</table>
-
-			<div class="tables">
-				<table>
-					<thead><tr><th>Word type</th><th>Points</th><th></th></tr></thead>
-					<tbody>
-						{#each posRows as key (key)}
-							<tr>
-								<td>{posName(key)}</td>
-								<td>
-									<input
-										type="number"
-										min="-50"
-										max="50"
-										aria-label="{posName(key)} points"
-										bind:value={draft.pos_points[key]}
-									/>
-								</td>
-								<td>
-									<button
-										class="remove"
-										title="Remove {posName(key)}"
-										aria-label="Remove {posName(key)}"
-										onclick={() => removePos(key)}>✕</button
-									>
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-
-				<table>
-					<thead><tr><th>JLPT level</th><th>Points</th></tr></thead>
-					<tbody>
-						{#each JLPT_LEVELS as level (level)}
-							<tr>
-								<td>{level}</td>
-								<td>
-									<input
-										type="number"
-										min="-50"
-										max="50"
-										aria-label="{level} points"
-										bind:value={draft.jlpt_points[level]}
-									/>
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
+			<div class="section-head">
+				<h3>Scoring</h3>
+				<span class="hint">Score = frequency + word type + JLPT · Higher scores are mined first</span>
 			</div>
-			{#if addable.length > 0}
-				<div class="add">
-					<select bind:value={adding} aria-label="Word type to add">
-						<option value="">Add word type…</option>
-						{#each addable as p (p.key)}
-							<option value={p.key}>{p.display_name}</option>
-						{/each}
-					</select>
-					<button disabled={!adding} onclick={addPos}>Add</button>
+			<div class="scoring">
+				<div>
+					<table>
+						<colgroup><col /><col class="points" /><col class="action" /></colgroup>
+						<thead><tr><th>Word type</th><th>Points</th><th></th></tr></thead>
+						<tbody>
+							{#each posRows as key (key)}
+								<tr>
+									<td>{posName(key)}</td>
+									<td>
+										<input
+											type="number"
+											min="-50"
+											max="50"
+											aria-label="{posName(key)} points"
+											bind:value={draft.pos_points[key]}
+										/>
+									</td>
+									<td>
+										<button
+											class="remove"
+											title="Remove {posName(key)}"
+											aria-label="Remove {posName(key)}"
+											onclick={() => removePos(key)}>✕</button
+										>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+					{#if addable.length > 0}
+						<div class="add">
+							<select bind:value={adding} aria-label="Word type to add">
+								<option value="">Add word type…</option>
+								{#each addable as p (p.key)}
+									<option value={p.key}>{p.display_name}</option>
+								{/each}
+							</select>
+							<button disabled={!adding} onclick={addPos}>Add</button>
+						</div>
+					{/if}
 				</div>
-			{/if}
-			<p class="hint">Word types without a row score 0.</p>
+
+				<div class="side">
+					<table>
+						<colgroup><col /><col class="points" /><col class="action" /></colgroup>
+						<thead><tr><th>JLPT level</th><th>Points</th><th></th></tr></thead>
+						<tbody>
+							{#each JLPT_LEVELS as level (level)}
+								<tr>
+									<td>{level}</td>
+									<td>
+										<input
+											type="number"
+											min="-50"
+											max="50"
+											aria-label="{level} points"
+											bind:value={draft.jlpt_points[level]}
+										/>
+									</td>
+									<td></td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+
+					<details class="how">
+						<summary>How scoring works</summary>
+						<p>
+							Frequency is 40 points up to your horizon, <strong
+								>rank {horizon.toLocaleString()}</strong
+							>, and 20 fewer per tenfold step past it. The horizon grows with your Anki cards.
+						</p>
+						<table class="examples">
+							<thead><tr><th>Example</th><th>Freq.</th><th>Score</th></tr></thead>
+							<tbody>
+								{#each examples as e (e.label)}
+									<tr><td>{e.label}</td><td>{e.freq}</td><td>{e.total}</td></tr>
+								{/each}
+							</tbody>
+						</table>
+						<p>
+							Word types without a row score 0. Either way, a video gets fewer cards when your
+							filters leave fewer terms.
+						</p>
+					</details>
+				</div>
+			</div>
 		</section>
 		{#if !valid}
 			<p class="invalid">
@@ -267,7 +292,7 @@
 	.body {
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
+		gap: 1.1rem;
 		padding: 0 1rem 0.5rem;
 	}
 	p {
@@ -276,13 +301,13 @@
 	.intro {
 		font-size: 0.9rem;
 	}
-	.intro code {
+	code {
 		font-size: 0.85em;
 	}
 	section {
 		display: flex;
 		flex-direction: column;
-		gap: 0.45rem;
+		gap: 0.5rem;
 	}
 	h3 {
 		margin: 0;
@@ -292,20 +317,52 @@
 		text-transform: uppercase;
 		color: var(--text-muted);
 	}
-	.option {
+	.section-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		column-gap: 0.75rem;
+	}
+	.choices {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 0.6rem;
+	}
+	.choice {
+		display: flex;
+		flex-direction: column;
+		gap: 0.45rem;
+		padding: 0.6rem 0.75rem;
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		opacity: 0.6;
+		transition: opacity 0.15s, border-color 0.15s;
+	}
+	.choice.selected {
+		opacity: 1;
+		border-color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 6%, transparent);
+	}
+	.choice-title {
+		display: flex;
+		align-items: center;
+		gap: 0.45rem;
+		font-weight: 600;
+		cursor: pointer;
+	}
+	.row {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
-		gap: 0.5rem;
-	}
-	.nested {
-		padding-left: 1.6rem;
+		gap: 0.45rem;
+		padding-left: 1.55rem;
+		font-size: 0.9rem;
 	}
 	.check {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.3rem;
-		margin-left: 0.4rem;
+		margin-left: 0.3rem;
 	}
 	input[type='number'] {
 		width: 4rem;
@@ -316,32 +373,36 @@
 		border-radius: var(--radius-sm);
 		font-variant-numeric: tabular-nums;
 	}
-	.formula {
-		font-size: 0.9rem;
-		font-weight: 600;
-	}
 	.hint {
 		font-size: 0.8rem;
 		color: var(--text-muted);
-	}
-	.hint strong {
-		color: var(--text);
-		font-weight: 600;
 	}
 	.invalid {
 		font-size: 0.85rem;
 		color: var(--danger);
 	}
-	.tables {
+	.scoring {
 		display: grid;
-		grid-template-columns: 3fr 2fr;
-		gap: 1.25rem;
+		grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+		gap: 1.5rem;
 		align-items: start;
+	}
+	.side {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
 	}
 	table {
 		width: 100%;
 		border-collapse: collapse;
+		table-layout: fixed;
 		font-size: 0.85rem;
+	}
+	col.points {
+		width: 4.75rem;
+	}
+	col.action {
+		width: 2rem;
 	}
 	th {
 		text-align: left;
@@ -351,7 +412,11 @@
 	}
 	td,
 	th {
-		padding: 0.15rem 0.3rem;
+		height: 2rem;
+		padding: 0 0.3rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.remove {
 		padding: 0.1rem 0.35rem;
@@ -365,11 +430,37 @@
 	.add {
 		display: flex;
 		gap: 0.4rem;
-		max-width: 20rem;
+		margin-top: 0.4rem;
+		padding: 0 0.3rem;
 	}
 	.add select {
 		flex: 1;
 		min-width: 0;
+	}
+	.how {
+		font-size: 0.8rem;
+		color: var(--text-muted);
+	}
+	.how summary {
+		cursor: pointer;
+		color: var(--text);
+		font-size: 0.85rem;
+	}
+	.how[open] {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+	.how strong {
+		color: var(--text);
+		font-weight: 600;
+	}
+	.examples {
+		table-layout: auto;
+	}
+	.examples td,
+	.examples th {
+		height: 1.5rem;
 	}
 	.examples td:not(:first-child),
 	.examples th:not(:first-child) {
@@ -395,8 +486,14 @@
 		opacity: 0.5;
 		cursor: default;
 	}
-	@media (max-width: 30rem) {
-		.tables {
+	@media (prefers-reduced-motion: reduce) {
+		.choice {
+			transition: none;
+		}
+	}
+	@media (max-width: 40rem) {
+		.choices,
+		.scoring {
 			grid-template-columns: 1fr;
 		}
 	}
