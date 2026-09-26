@@ -182,6 +182,10 @@ pub struct BatchRecord {
     pub items: Vec<BatchItem>,
     #[serde(default)]
     pub auto: bool,
+    /// The Anki profile the batch mines into; empty for batches from before profiles
+    /// were recorded.
+    #[serde(default)]
+    pub collection: Option<String>,
 }
 
 impl BatchRecord {
@@ -194,6 +198,7 @@ impl BatchRecord {
             started_at: self.started_at,
             finished_at: self.finished_at,
             auto: self.auto,
+            collection: self.collection.clone(),
             items: self
                 .items
                 .iter()
@@ -220,14 +225,42 @@ impl BatchRecord {
             },
             items,
             auto: stored.auto,
+            collection: stored.collection,
         })
     }
 }
 
+/// The batch, if it's still the newest in its Anki profile.
 pub fn load(id: &str) -> Result<BatchRecord, String> {
-    get_last_batch()?
-        .filter(|b| b.id == id)
-        .ok_or_else(|| "This batch is no longer available".into())
+    db::with(|conn| {
+        let Some(batch) = db::batches::read(conn, id)? else { return Ok(None) };
+        let newest = db::batches::latest_id(conn, batch.collection.as_deref())?;
+        Ok((newest.as_deref() == Some(id)).then_some(batch))
+    })?
+    .map(BatchRecord::from_stored)
+    .transpose()?
+    .ok_or_else(|| "This batch is no longer available".into())
+}
+
+/// Refuses to touch a batch's notes from another Anki profile, where its note ids
+/// don't exist.
+pub async fn require_profile(batch: &BatchRecord, action: &str) -> Result<(), String> {
+    let Some(profile) = &batch.collection else { return Ok(()) };
+    let open = api::active_profile().await.map_err(|e| format!("Anki is unreachable: {e}"))?;
+    if open != *profile {
+        return Err(format!(
+            "This batch was mined into the Anki profile \"{profile}\". Switch Anki to it to {action}."
+        ));
+    }
+    Ok(())
+}
+
+/// The open Anki profile, or the last one harvested while Anki is unreachable.
+async fn open_profile() -> Result<String, String> {
+    match api::active_profile().await {
+        Ok(profile) => Ok(profile),
+        Err(_) => db::with(|conn| db::anki::active_collection(conn)),
+    }
 }
 
 pub fn save(batch: &BatchRecord) -> Result<(), Failure> {
@@ -256,19 +289,27 @@ pub fn set_auto_mode(on: bool) {
 }
 
 #[tauri::command]
-pub fn is_media_processed(fingerprint: String) -> Result<bool, String> {
-    db::with(|conn| db::sources::is_auto_processed(conn, &fingerprint))
+pub async fn is_media_processed(fingerprint: String) -> Result<bool, String> {
+    let profile = open_profile().await?;
+    db::with(|conn| db::sources::is_auto_processed(conn, &fingerprint, &profile))
 }
 
 #[tauri::command]
-pub fn mark_media_processed(fingerprint: String) -> Result<(), String> {
-    db::with(|conn| db::sources::set_auto_processed(conn, &fingerprint, Some(db::now_ms())))
-}
-
-#[tauri::command]
-pub fn get_last_batch() -> Result<Option<BatchRecord>, String> {
+pub async fn mark_media_processed(fingerprint: String) -> Result<(), String> {
+    let profile = open_profile().await?;
     db::with(|conn| {
-        db::batches::latest_id(conn)?.map(|id| db::batches::read(conn, &id)).transpose()
+        db::sources::set_auto_processed(conn, &fingerprint, &profile, Some(db::now_ms()))
+    })
+}
+
+/// The open Anki profile's newest batch.
+#[tauri::command]
+pub async fn get_last_batch() -> Result<Option<BatchRecord>, String> {
+    let profile = open_profile().await?;
+    db::with(|conn| {
+        db::batches::latest_id(conn, Some(&profile))?
+            .map(|id| db::batches::read(conn, &id))
+            .transpose()
     })?
     .flatten()
     .map(BatchRecord::from_stored)
@@ -293,6 +334,7 @@ pub async fn create_batch(
     for item in &mut items {
         item.outcome = Outcome::Unattempted;
     }
+    let profile = api::active_profile().await.map_err(|e| format!("Anki is unreachable: {e}"))?;
     let now = chrono::Utc::now();
     let batch = BatchRecord {
         id: now.timestamp_nanos_opt().ok_or("Could not assign a batch ID")?.to_string(),
@@ -301,6 +343,7 @@ pub async fn create_batch(
         source: current,
         items,
         auto,
+        collection: Some(profile),
     };
     db::with(|conn| db::batches::write(conn, &batch.stored()))?;
     Ok(batch)
@@ -329,6 +372,7 @@ pub struct UndoResult {
 pub async fn undo_batch(batch_id: String) -> Result<UndoResult, String> {
     let _operation = OPERATION.try_lock().map_err(|_| "Mining or undo is already running")?;
     let mut batch = load(&batch_id)?;
+    require_profile(&batch, "undo it").await?;
     let ids: Vec<_> = batch
         .items
         .iter()
@@ -348,7 +392,10 @@ pub async fn undo_batch(batch_id: String) -> Result<UndoResult, String> {
     mined::mark_notes_deleted(&gone)?;
     let reopened = batch.auto && remaining.is_empty();
     if reopened {
-        db::with(|conn| db::sources::set_auto_processed(conn, &batch.source.fingerprint, None))?;
+        let profile = batch.collection.as_deref().unwrap_or_default();
+        db::with(|conn| {
+            db::sources::set_auto_processed(conn, &batch.source.fingerprint, profile, None)
+        })?;
     }
     Ok(UndoResult {
         deleted: existing.len() - remaining.len(),
@@ -397,6 +444,7 @@ mod tests {
                 outcome: Outcome::Created { note_id: 42, media: MediaState::Pending, error: None },
             }],
             auto: false,
+            collection: None,
         }
     }
 

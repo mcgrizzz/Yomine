@@ -151,6 +151,7 @@ pub async fn mine_batch_item(
     let _operation =
         batches::OPERATION.try_lock().map_err(|_| "Mining or undo is already running")?;
     let mut batch = batches::load(&batch_id)?;
+    batches::require_profile(&batch, "continue it").await?;
     let item = batch.items.get(item_index).ok_or("Batch item not found")?.clone();
     let (url, loaded_target, lexeme) = {
         let state = state.lock().unwrap();

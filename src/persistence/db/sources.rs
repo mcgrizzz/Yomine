@@ -3,7 +3,6 @@
 use rusqlite::{
     params,
     Connection,
-    OptionalExtension,
 };
 
 use crate::core::recent_files::RecentFileEntry;
@@ -39,25 +38,39 @@ pub fn set_title(conn: &Connection, id: i64, title: &str) -> rusqlite::Result<()
     conn.execute("UPDATE sources SET title = ?2 WHERE id = ?1", params![id, title]).map(|_| ())
 }
 
-pub fn is_auto_processed(conn: &Connection, fingerprint: &str) -> rusqlite::Result<bool> {
+/// Whether auto mode mined the source into this Anki profile.
+pub fn is_auto_processed(
+    conn: &Connection,
+    fingerprint: &str,
+    collection: &str,
+) -> rusqlite::Result<bool> {
     conn.query_row(
-        "SELECT auto_processed_at IS NOT NULL FROM sources WHERE fingerprint = ?1",
-        params![fingerprint],
+        "SELECT EXISTS (SELECT 1 FROM auto_processed a JOIN sources s ON s.id = a.source_id
+                        WHERE s.fingerprint = ?1 AND a.collection IN (?2, ''))",
+        params![fingerprint, collection],
         |r| r.get(0),
     )
-    .optional()
-    .map(|processed| processed.unwrap_or(false))
 }
 
-/// `None` lets auto mode process the source again.
+/// `None` lets auto mode process the source again in that profile.
 pub fn set_auto_processed(
     conn: &Connection,
     fingerprint: &str,
+    collection: &str,
     at: Option<i64>,
 ) -> rusqlite::Result<()> {
     let id = id(conn, fingerprint)?;
-    conn.execute("UPDATE sources SET auto_processed_at = ?2 WHERE id = ?1", params![id, at])
-        .map(|_| ())
+    match at {
+        Some(at) => conn.execute(
+            "INSERT OR REPLACE INTO auto_processed (source_id, collection, at) VALUES (?1, ?2, ?3)",
+            params![id, collection, at],
+        ),
+        None => conn.execute(
+            "DELETE FROM auto_processed WHERE source_id = ?1 AND collection = ?2",
+            params![id, collection],
+        ),
+    }
+    .map(|_| ())
 }
 
 /// One load of a file, as the recent-files list shows it.

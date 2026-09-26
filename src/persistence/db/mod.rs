@@ -163,6 +163,33 @@ CREATE TABLE anki_sentences (
 ALTER TABLE notes ADD COLUMN collection TEXT;
 ";
 
+/// Batches and auto mode's processed videos per Anki profile. Rows from before this
+/// have no profile and count for every one.
+const SCHEMA_V3: &str = "
+ALTER TABLE batches ADD COLUMN collection TEXT;
+
+CREATE TABLE auto_processed (
+    source_id INTEGER NOT NULL REFERENCES sources(id),
+    -- The Anki profile the video was mined into; '' counts for every profile.
+    collection TEXT NOT NULL,
+    at INTEGER NOT NULL,
+    PRIMARY KEY (source_id, collection)
+);
+INSERT INTO auto_processed (source_id, collection, at)
+    SELECT id, '', auto_processed_at FROM sources WHERE auto_processed_at IS NOT NULL;
+ALTER TABLE sources DROP COLUMN auto_processed_at;
+
+-- Notes have recorded their profile since v2, which places the batches they came from.
+UPDATE batches SET collection = (
+    SELECT n.collection FROM notes n WHERE n.batch_id = batches.id AND n.collection IS NOT NULL
+);
+UPDATE auto_processed SET collection = coalesce((
+    SELECT b.collection FROM batches b
+    WHERE b.source_id = auto_processed.source_id AND b.auto AND b.collection IS NOT NULL
+    ORDER BY b.started_at DESC LIMIT 1
+), '');
+";
+
 static DB: Mutex<Option<Connection>> = Mutex::new(None);
 
 /// Runs `f` on the active profile's database, opening it on first use.
@@ -193,13 +220,16 @@ pub fn open(path: &Path, json_dir: &Path) -> rusqlite::Result<Connection> {
     if version < 2 {
         tx.execute_batch(SCHEMA_V2)?;
     }
+    if version < 3 {
+        tx.execute_batch(SCHEMA_V3)?;
+    }
     if version < 1 {
         import::import_json(&tx, json_dir)?;
     }
     if version < 2 {
         import::import_anki_caches(&tx, json_dir)?;
     }
-    tx.pragma_update(None, "user_version", 2)?;
+    tx.pragma_update(None, "user_version", 3)?;
     tx.commit()?;
     Ok(conn)
 }

@@ -67,7 +67,7 @@ pub(super) fn import_json(conn: &Connection, dir: &Path) -> rusqlite::Result<()>
     // Processing times weren't recorded; the import time stands in.
     if let Some(Value::Array(fingerprints)) = read("processed_media.json") {
         for fingerprint in fingerprints.iter().filter_map(Value::as_str) {
-            sources::set_auto_processed(conn, fingerprint, Some(now))?;
+            sources::set_auto_processed(conn, fingerprint, "", Some(now))?;
         }
     }
     // recent_files.json never recorded fingerprints, so these loads have no source.
@@ -133,6 +133,7 @@ fn import_batch(conn: &Connection, batch: &Value, now: i64) -> rusqlite::Result<
         started_at: batch["started_at"].as_i64().unwrap_or(now),
         finished_at: batch["finished_at"].as_i64(),
         auto: batch["auto"].as_bool().unwrap_or(false),
+        collection: None,
         items: items.iter().map(Value::to_string).collect(),
     };
     let source = batches::put(conn, &stored)?;
@@ -218,7 +219,10 @@ mod tests {
             assert_eq!(count(&conn, "SELECT count(*) FROM notes"), 3);
             assert_eq!(count(&conn, "SELECT count(*) FROM notes WHERE batch_id = '7'"), 2);
             assert_eq!(count(&conn, "SELECT count(*) FROM notes WHERE deleted_at IS NOT NULL"), 1);
-            assert_eq!(count(&conn, "SELECT count(*) FROM sources WHERE auto_processed_at > 0"), 2);
+            assert_eq!(
+                count(&conn, "SELECT count(*) FROM auto_processed WHERE collection = ''"),
+                2
+            );
             assert_eq!(count(&conn, "SELECT opened_at FROM opens"), 1_788_256_800_000);
             assert_eq!(count(&conn, "SELECT count(*) FROM epub_parts_seen"), 2);
             assert_eq!(count(&conn, "SELECT count(*) FROM anki_cards WHERE collection = ''"), 2);
