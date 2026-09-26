@@ -1,12 +1,9 @@
 //! File / mining commands (contracts/commands.md "File / mining").
 
-use std::{
-    collections::HashMap,
-    sync::{
-        atomic::Ordering,
-        Arc,
-        Mutex,
-    },
+use std::sync::{
+    atomic::Ordering,
+    Arc,
+    Mutex,
 };
 
 use tauri::{
@@ -25,6 +22,7 @@ use yomine::{
     core::{
         filename_parser,
         models::{
+            Sentence,
             SourceFile,
             SourceFileType,
         },
@@ -34,16 +32,10 @@ use yomine::{
             process_source_file,
             AnkiFilter,
         },
-        recent_files::{
-            RecentFileEntry,
-            RecentFiles,
-        },
+        recent_files::RecentFileEntry,
         text_filter,
     },
-    persistence::{
-        load_json_or_default,
-        save_json,
-    },
+    persistence::db,
 };
 
 use crate::{
@@ -175,25 +167,12 @@ pub async fn get_epub_chapters(path: String) -> Result<EpubBookDto, String> {
     })
 }
 
-/// Part ids already mined for this book (`epub_history.json`, keyed by path).
+/// Part ids already mined for this book.
 fn epub_history(path: &str) -> Vec<usize> {
-    let mut history = load_json_or_default::<HashMap<String, Vec<usize>>>("epub_history.json");
-    history.remove(path).unwrap_or_default()
-}
-
-/// Best-effort like `record_recent_file` — history must never fail a good load.
-fn record_epub_history(path: &str, part_ids: &[usize]) {
-    let mut history = load_json_or_default::<HashMap<String, Vec<usize>>>("epub_history.json");
-    let entry = history.entry(path.to_string()).or_default();
-    for id in part_ids {
-        if !entry.contains(id) {
-            entry.push(*id);
-        }
-    }
-    entry.sort_unstable();
-    if let Err(e) = save_json(&history, "epub_history.json") {
-        eprintln!("Failed to save epub history: {e}");
-    }
+    db::with(|conn| db::sources::epub_parts_seen(conn, path)).unwrap_or_else(|e| {
+        eprintln!("{e}");
+        Vec::new()
+    })
 }
 
 /// Video picker for the MPV launcher (issue #89).
@@ -253,12 +232,7 @@ pub async fn process_file(
             .await
             .map_err(|e| e.to_string())?;
 
-    // Record the file in the shared `recent_files.json` (same store as egui) so it
-    // appears on the landing state, mirroring egui's `add_recent_file`.
-    record_recent_file(&source_file, filter_result.terms.len());
-    if let Some(ids) = &source_file.epub_chapters {
-        record_epub_history(&source_file.original_file, ids);
-    }
+    record_open(&source_file, &sentences, filter_result.terms.len());
 
     // Lemmas Anki already knew — kept so an ignore-list change can re-filter
     // without re-querying Anki.
@@ -461,11 +435,7 @@ pub(crate) async fn load_asbplayer_into_state(
             .await
             .map_err(|e| e.to_string())?;
 
-    // Only a real on-disk file belongs in recent files (reopening goes through
-    // the normal parser; text cleaning matches what we just processed).
-    if std::path::Path::new(&source_file.original_file).exists() {
-        record_recent_file(&source_file, filter_result.terms.len());
-    }
+    record_open(&source_file, &sentences, filter_result.terms.len());
 
     let anki_known_lemmas =
         filter_result.anki_filtered.iter().map(|t| t.lemma_form.clone()).collect();
@@ -718,28 +688,55 @@ pub async fn reload_current_file(
     Ok(payload)
 }
 
-/// Add (or refresh) a file in the shared recent-files store. Failures are logged,
-/// not surfaced — a recent-files write must never fail an otherwise-good load.
-fn record_recent_file(source_file: &SourceFile, term_count: usize) {
-    let mut recent = load_json_or_default::<RecentFiles>("recent_files.json");
-    recent.add_file(
-        source_file.original_file.clone(),
-        source_file.title.clone(),
-        source_file.epub_label.clone(),
-        source_file.creator.clone(),
-        term_count,
-    );
-    if let Err(e) = save_json(&recent, "recent_files.json") {
-        eprintln!("Failed to save recent files: {e}");
+/// Records the load in history: the source, the recent-files entry, and any EPUB
+/// parts. Failures are only logged, so history never fails an otherwise-good load.
+fn record_open(source_file: &SourceFile, sentences: &[Sentence], term_count: usize) {
+    let fingerprint = crate::batches::BatchSource::new(source_file, sentences).fingerprint;
+    let info = db::sources::SourceInfo {
+        fingerprint: &fingerprint,
+        kind: match source_file.file_type {
+            SourceFileType::SRT | SourceFileType::SSA => "subtitles",
+            SourceFileType::TXT => "text",
+            SourceFileType::EPUB => "epub",
+            SourceFileType::Other(_) => "other",
+        },
+        title: &source_file.title,
+        creator: source_file.creator.as_deref(),
+        char_count: sentences.iter().map(|s| s.text.chars().count()).sum(),
+        runtime_ms: sentences
+            .iter()
+            .filter_map(|s| s.timestamp.as_ref())
+            .map(|t| (t.to_secs().1 * 1000.0).round() as i64)
+            .max(),
+    };
+    let path = &source_file.original_file;
+    let open = db::sources::Open {
+        path,
+        title: &source_file.title,
+        label: source_file.epub_label.as_deref(),
+        creator: source_file.creator.as_deref(),
+        term_count: Some(term_count as i64),
+        file_size: std::fs::metadata(path).map(|m| m.len() as i64).ok(),
+        opened_at: db::now_ms(),
+    };
+    let parts = source_file.epub_chapters.as_deref().unwrap_or_default();
+    if let Err(e) = db::with(|conn| db::sources::record_open(conn, &info, &open, parts)) {
+        eprintln!("Failed to record the file in history: {e}");
     }
 }
 
-/// Recent files for the landing state (FR-001), most-recent first. Only entries
-/// whose path still exists are returned (egui's `get_valid_files`).
+/// Recent files for the landing state, most recent first: each path's latest load,
+/// for paths that still exist.
 #[tauri::command]
 pub fn get_recent_files() -> Vec<RecentFileEntry> {
-    let recent = load_json_or_default::<RecentFiles>("recent_files.json");
-    recent.get_valid_files().into_iter().cloned().collect()
+    db::with(|conn| db::sources::recent(conn, 50))
+        .unwrap_or_else(|e| {
+            eprintln!("{e}");
+            Vec::new()
+        })
+        .into_iter()
+        .filter(RecentFileEntry::file_exists)
+        .collect()
 }
 
 /// Write cues to `<app data>/asbplayer_subtitles/<sanitized title>.srt`

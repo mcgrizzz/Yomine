@@ -39,6 +39,7 @@ wana_kana = "4.0.0"
 chrono = { version = "0.4.41", features = ["serde"] }
 rsubs-lib = { git = "https://github.com/mcgrizzz/rsubs-lib", rev = "de70ad3b0e3b31743bdf4d17c10ed20e9beef262" }
 time = "0.3.41"
+rusqlite = { version = "0.40.2", features = ["bundled"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 liblzma = { version = "0.4.1", features = ["static"] }

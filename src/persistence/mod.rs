@@ -12,6 +12,7 @@ use serde::{
     Serialize,
 };
 
+pub mod db;
 pub mod profiles;
 
 const APP_NAME: &str = "yomine";

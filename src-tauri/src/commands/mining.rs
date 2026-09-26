@@ -73,12 +73,13 @@ pub async fn mine_term(
     let _operation =
         batches::OPERATION.try_lock().map_err(|_| "Mining or undo is already running")?;
     let item_key = reading.map(|r| format!("{term} {r}")).unwrap_or_default();
-    let (yomitan_url, media_id, lexeme) = {
+    let (yomitan_url, media_id, lexeme, source) = {
         let guard = state.lock().unwrap();
         (
             guard.settings.yomitan_url.clone(),
             guard.file.asbplayer_media_id.clone(),
             row_lexeme(&guard.file, &item_key),
+            BatchSource::from_file(&guard.file).ok(),
         )
     };
     let item = BatchItem {
@@ -100,8 +101,9 @@ pub async fn mine_term(
         outcome: Outcome::Unattempted,
     };
     let options = MineOptions { record: true, require_dictionary_media: true };
-    let mut result =
-        mine(&yomitan_url, &item, lexeme, options, &progress, None).await.map_err(|e| e.message)?;
+    let mut result = mine(&yomitan_url, &item, lexeme, options, &progress, None, source.as_ref())
+        .await
+        .map_err(|e| e.message)?;
 
     // Enrichment failures don't undo the mine (the note exists) — warn instead.
     if let Some(id) = result.note_id.filter(|_| item.mine_media) {
@@ -166,7 +168,7 @@ pub async fn mine_batch_item(
     let result = async {
         match item.outcome {
             Outcome::Unattempted | Outcome::Failed { .. } => {
-                mine(&url, &item, lexeme, options, &progress, Some((&mut batch, item_index)))
+                mine(&url, &item, lexeme, options, &progress, Some((&mut batch, item_index)), None)
                     .await?;
             }
             Outcome::Created {
@@ -317,6 +319,8 @@ async fn mine(
     options: MineOptions,
     progress: &Channel<LoadingMessage>,
     mut batch: Option<(&mut BatchRecord, usize)>,
+    // The loaded source of a single mine; a batch carries its own.
+    source: Option<&BatchSource>,
 ) -> Result<MineResultDto, Failure> {
     let term = item.scan_text.as_ref().unwrap_or(&item.lemma).clone();
     let surface = item.surface.clone();
@@ -511,7 +515,17 @@ async fn mine(
         )?;
     }
     if let Some(id) = note_id {
-        mined::record_mined_sentence(id, &sentence);
+        let (source, batch_id) = match &batch {
+            Some((record, _)) => (Some(&record.source), Some(record.id.as_str())),
+            None => (source, None),
+        };
+        mined::record_note(
+            id,
+            &sentence,
+            &item.lemma,
+            source.map(|s| s.fingerprint.as_str()),
+            batch_id,
+        );
     }
 
     Ok(MineResultDto {

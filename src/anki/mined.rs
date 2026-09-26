@@ -15,16 +15,16 @@ use super::{
     },
     types::FieldMapping,
 };
-use crate::core::utils::{
-    normalize_japanese_text,
-    FilterKana,
+use crate::{
+    core::utils::{
+        normalize_japanese_text,
+        FilterKana,
+    },
+    persistence::db,
 };
 
 /// Sentence-field harvest, overwritten by each `get_total_vocab` pass.
 pub const MINED_SENTENCE_CACHE: &str = "anki_mined_sentences.json";
-
-/// Sentences Yomine itself mined — survives without a sentence-field mapping.
-const RECORDED_MINES_CACHE: &str = "yomine_mined_notes.json";
 
 /// Note-id-keyed so Anki-side deletions can be pruned between harvests.
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
@@ -99,19 +99,34 @@ pub fn save_harvested_sentences(entries: &[MinedSentence]) {
     }
 }
 
-pub fn record_mined_sentence(note_id: u64, raw: &str) {
-    let normalized = normalize_sentence(raw);
-    if normalized.is_empty() {
-        return;
+/// Records a note Yomine created; its sentence counts as mined even without a
+/// sentence-field mapping.
+pub fn record_note(
+    note_id: u64,
+    raw_sentence: &str,
+    term: &str,
+    fingerprint: Option<&str>,
+    batch_id: Option<&str>,
+) {
+    let result = db::with(|conn| {
+        let source = fingerprint.map(|f| db::sources::id(conn, f)).transpose()?;
+        let note = db::notes::NewNote {
+            note_id,
+            sentence: &normalize_sentence(raw_sentence),
+            term: Some(term),
+            source,
+            batch_id,
+            deleted_at: None,
+        };
+        db::notes::insert(conn, &note)
+    });
+    if let Err(e) = result {
+        eprintln!("Failed to record mined note: {e}");
     }
-    let mut recorded: Vec<MinedSentence> =
-        crate::persistence::load_json_or_default(RECORDED_MINES_CACHE);
-    if !recorded.iter().any(|r| r.note_id == note_id) {
-        recorded.push(MinedSentence { note_id, sentence: normalized });
-        if let Err(e) = crate::persistence::save_json(&recorded, RECORDED_MINES_CACHE) {
-            eprintln!("Failed to update recorded mines cache: {}", e);
-        }
-    }
+}
+
+pub fn mark_notes_deleted(note_ids: &[u64]) -> Result<(), String> {
+    db::with(|conn| db::notes::mark_deleted(conn, note_ids, db::now_ms()))
 }
 
 /// Note ids that still exist in Anki; `None` when unreachable (keep caches).
@@ -128,13 +143,15 @@ async fn existing_note_ids(ids: &[u64]) -> Option<std::collections::HashSet<u64>
     Some(existing)
 }
 
-/// Harvest + recorded mines, minus notes since deleted in Anki (both caches
-/// pruned in passing).
+/// Harvest + recorded mines, minus notes since deleted in Anki (the harvest is
+/// pruned and recorded notes marked deleted in passing).
 pub async fn mined_sentences_pruned() -> Vec<String> {
     let mut harvested: Vec<MinedSentence> =
         crate::persistence::load_json_or_default(MINED_SENTENCE_CACHE);
-    let mut recorded: Vec<MinedSentence> =
-        crate::persistence::load_json_or_default(RECORDED_MINES_CACHE);
+    let mut recorded = db::with(|conn| db::notes::live_sentences(conn)).unwrap_or_else(|e| {
+        eprintln!("{e}");
+        Vec::new()
+    });
 
     let ids: Vec<u64> =
         harvested.iter().chain(recorded.iter()).map(|entry| entry.note_id).collect();
@@ -147,8 +164,10 @@ pub async fn mined_sentences_pruned() -> Vec<String> {
                 save_harvested_sentences(&harvested);
             }
             if recorded.len() != before.1 {
-                if let Err(e) = crate::persistence::save_json(&recorded, RECORDED_MINES_CACHE) {
-                    eprintln!("Failed to prune recorded mines cache: {}", e);
+                let gone: Vec<u64> =
+                    ids.iter().copied().filter(|id| !existing.contains(id)).collect();
+                if let Err(e) = mark_notes_deleted(&gone) {
+                    eprintln!("Failed to mark deleted notes: {e}");
                 }
             }
         }
