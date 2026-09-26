@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { dirtyGuard } from '$lib/dirtyGuard.svelte';
-	import { DEFAULT_HORIZON, frequencyPoints, pickPoints } from '$lib/autopick';
+	import { DEFAULT_HORIZON, frequencyPoints, pickPoints, POS_ALIASES } from '$lib/autopick';
 	import type { AutoMine } from '$lib/ipc';
 	import Modal from './Modal.svelte';
 	import { autoModalOpen, knowledge, posCatalog, setAutoMine, settings } from '$lib/stores';
@@ -33,7 +33,9 @@
 		max_cards: a.max_cards,
 		// Sorted, so `dirty`'s JSON comparison ignores the order word types were added in.
 		pos_points: Object.fromEntries(
-			Object.entries(a.pos_points).sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0))
+			Object.entries(a.pos_points)
+				.filter(([key]) => !(key in POS_ALIASES))
+				.sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0))
 		),
 		jlpt_points: Object.fromEntries(JLPT_LEVELS.map((l) => [l, a.jlpt_points[l] ?? 0]))
 	});
@@ -69,11 +71,12 @@
 	);
 
 	const posName = (key: string) => $posCatalog.find((p) => p.key === key)?.display_name ?? key;
+	const editablePos = $derived($posCatalog.filter((p) => !(p.key in POS_ALIASES)));
 	const posRows = $derived(
-		$posCatalog.map((p) => p.key).filter((key) => key in draft.pos_points)
+		editablePos.map((p) => p.key).filter((key) => key in draft.pos_points)
 	);
 	const choose = (stop: AutoMine['stop']) => () => (draft.stop = stop);
-	const addable = $derived($posCatalog.filter((p) => !(p.key in draft.pos_points)));
+	const addable = $derived(editablePos.filter((p) => !(p.key in draft.pos_points)));
 
 	function addPos() {
 		if (!adding) return;

@@ -12,6 +12,9 @@ const FULL_FREQUENCY_POINTS = 40;
 export const frequencyPoints = (rank: number, horizon: number): number =>
 	FULL_FREQUENCY_POINTS - 20 * Math.max(0, Math.log10(rank / horizon));
 
+/** Word types the UI shows under another's name (both read "Compound Noun"), scored as it. */
+export const POS_ALIASES: Record<string, string> = { NounExpression: 'CompoundNoun' };
+
 export function pickPoints(
 	rank: number,
 	pos: string,
@@ -21,7 +24,7 @@ export function pickPoints(
 ): number {
 	return (
 		frequencyPoints(rank, horizon) +
-		(prefs.pos_points[pos] ?? 0) +
+		(prefs.pos_points[POS_ALIASES[pos] ?? pos] ?? 0) +
 		(prefs.jlpt_points[jlpt ?? ''] ?? 0)
 	);
 }
