@@ -36,3 +36,6 @@ yomine = { path = ".." }
 # from greedily resolving a mismatched pair; bump the set together.
 tauri-runtime = "=2.11.3"
 wry = "=0.55.1"
+# `tauri` 2.11 accepts any `tauri-macros` 2.x, but 2.7 generates code for `tauri` 2.12
+# (E0599 on `Error::UnexpectedMenuKind`); bump with `tauri`.
+tauri-macros = "=2.6.3"
