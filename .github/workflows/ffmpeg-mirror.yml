@@ -1,0 +1,82 @@
+name: Mirror ffmpeg
+
+# Repacks pinned upstream ffmpeg builds into one small zip per platform and publishes them
+# as a release that the app downloads from (src/media/download.rs). Upstream URLs don't
+# last: BtbN prunes dated builds within two years.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag for the repacked builds"
+        required: true
+        default: "ffmpeg-9.0.2"
+
+permissions:
+  contents: write
+
+env:
+  FFMPEG_VERSION: 9.0.2
+  BTBN: https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-27-13-04
+  RIEDL: https://ffmpeg.martin-riedl.de/download/macos
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repack
+        run: |
+          set -euo pipefail
+          # name | upstream archive | its SHA-256 as upstream publishes it | binary | source
+          builds=(
+            "windows-x86_64|$BTBN/ffmpeg-n9.0.2-12-gc867e13549-win64-lgpl-9.0.zip|fcb8fd8a45a39b40a854162363c1b9f279ee8ac9ce9b3c6fa40914621b0f2b32|ffmpeg.exe|https://github.com/FFmpeg/FFmpeg/tree/c867e13549, built by https://github.com/BtbN/FFmpeg-Builds"
+            "linux-x86_64|$BTBN/ffmpeg-n9.0.2-12-gc867e13549-linux64-lgpl-9.0.tar.xz|f555722a6848abfa29b9b78a048e374afa6f7ac79515593567e3d3aab15c8901|ffmpeg|https://github.com/FFmpeg/FFmpeg/tree/c867e13549, built by https://github.com/BtbN/FFmpeg-Builds"
+            "macos-aarch64|$RIEDL/arm64/1789931890_9.0.2/ffmpeg.zip|c8ed4c4e6978a03c485edbfe4e0a5dc2380f8a30bba5150531b31b094492d924|ffmpeg|ffmpeg-$FFMPEG_VERSION.tar.xz in this release, built by https://ffmpeg.martin-riedl.de"
+            "macos-x86_64|$RIEDL/amd64/1789931006_9.0.2/ffmpeg.zip|7c6b4125b191cbf773832dc51f424cf2b6bb7da43007d1e066f95909e47cacd4|ffmpeg|ffmpeg-$FFMPEG_VERSION.tar.xz in this release, built by https://ffmpeg.martin-riedl.de"
+          )
+          mkdir out
+          for build in "${builds[@]}"; do
+            IFS='|' read -r name url sha binary source <<< "$build"
+            work="work/$name"
+            mkdir -p "$work/unpacked" "$work/zip"
+            curl -fsSL --retry 3 -o "$work/archive" "$url"
+            echo "$sha  $work/archive" | sha256sum -c -
+            case "$url" in
+              *.zip) unzip -q "$work/archive" -d "$work/unpacked" ;;
+              *.tar.xz) tar -xJf "$work/archive" -C "$work/unpacked" ;;
+            esac
+            found=$(find "$work/unpacked" -type f -name "$binary" | head -n1)
+            [ -n "$found" ] || { echo "$name: no $binary in $url"; exit 1; }
+            cp "$found" "$work/zip/$binary"
+            chmod 755 "$work/zip/$binary"
+            license=$(find "$work/unpacked" -maxdepth 2 -type f -iname 'LICENSE*' | head -n1)
+            if [ -n "$license" ]; then
+              cp "$license" "$work/zip/LICENSE.txt"
+            else
+              curl -fsSL -o "$work/zip/LICENSE.md" "https://raw.githubusercontent.com/FFmpeg/FFmpeg/n$FFMPEG_VERSION/LICENSE.md"
+              curl -fsSL -o "$work/zip/COPYING.GPLv3" "https://raw.githubusercontent.com/FFmpeg/FFmpeg/n$FFMPEG_VERSION/COPYING.GPLv3"
+            fi
+            printf 'FFmpeg %s, repacked for Yomine.\n\nUpstream build: %s\nUpstream SHA-256: %s\nSource: %s\n' \
+              "$FFMPEG_VERSION" "$url" "$sha" "$source" > "$work/zip/SOURCE.txt"
+            (cd "$work/zip" && zip -q -X "$GITHUB_WORKSPACE/out/ffmpeg-$name.zip" ./*)
+          done
+          curl -fsSL -o "out/ffmpeg-$FFMPEG_VERSION.tar.xz" "https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.xz"
+          (cd out && sha256sum -- * > SHA256SUMS)
+
+      # A prerelease never becomes /releases/latest, which the app updater reads.
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          gh release create "$TAG" out/* --prerelease --latest=false \
+            --title "ffmpeg $FFMPEG_VERSION for Yomine" \
+            --notes "ffmpeg builds Yomine downloads for local mining. Not an app release: install Yomine from the latest v* release."
+          {
+            echo '### Pins for src/media/download.rs'
+            echo '```'
+            for zip in out/ffmpeg-*.zip; do
+              echo "$(basename "$zip") $(sha256sum "$zip" | cut -d' ' -f1)"
+            done
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
