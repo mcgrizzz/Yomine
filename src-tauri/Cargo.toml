@@ -10,14 +10,14 @@ name = "yomine_tauri_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2.6.3", features = [] }
+tauri-build = { version = "2.7.0", features = [] }
 
 [dependencies]
-tauri = { version = "2.11.5", features = [] }
+tauri = { version = "2.12.0", features = [] }
 tauri-plugin-dialog = "2.7.1"
 tauri-plugin-opener = "2.5.4"
 tauri-plugin-process = "2.3.1"
-tauri-plugin-updater = "2.10.1"
+tauri-plugin-updater = "2.12.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1.52.3", features = ["sync", "time", "macros"] }
@@ -29,13 +29,3 @@ chrono = "0.4"
 wana_kana = "5.0.0"
 yomine = { path = ".." }
 
-# Pin the wry runtime stack to a matched set (currently `tauri` 2.11.5 →
-# `tauri-runtime` 2.11.3 / `tauri-runtime-wry` 2.11.4 → `wry` 0.55.1). These must
-# move in lockstep: a `tauri-runtime` vs `tauri-runtime-wry` skew breaks the build
-# (trait-method/`Sync`-bound mismatches → E0046 + E0277). The `=` pins stop cargo
-# from greedily resolving a mismatched pair; bump the set together.
-tauri-runtime = "=2.11.3"
-wry = "=0.55.1"
-# `tauri` 2.11 accepts any `tauri-macros` 2.x, but 2.7 generates code for `tauri` 2.12
-# (E0599 on `Error::UnexpectedMenuKind`); bump with `tauri`.
-tauri-macros = "=2.6.3"
