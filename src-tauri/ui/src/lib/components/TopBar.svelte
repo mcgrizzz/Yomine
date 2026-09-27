@@ -40,7 +40,11 @@
 		launchMpvVideo,
 		locateMpvAndRetry,
 		mpvLocatePrompt,
-		yomitanReachable
+		yomitanReachable,
+		miningMode,
+		setMiningMode,
+		playerBusy,
+		localVideo
 	} from '$lib/stores';
 	import { openThemesWindow } from '$lib/ipc';
 	import { filename } from '$lib/recents';
@@ -115,11 +119,18 @@
 
 	const mpv: { kind: StatusKind; tip: string } = $derived(
 		$playerStatus.mpv_connected
-			? {
-					kind: 'ok',
-					tip: 'MPV mode — seeking works, but mined cards get no audio/screenshot (media capture needs asbplayer)'
-				}
-			: { kind: 'off', tip: 'MPV not detected' }
+			? { kind: 'ok', tip: 'mpv is open — timestamps seek in it' }
+			: { kind: 'off', tip: 'mpv not open (optional, for watching and seeking)' }
+	);
+
+	const modeTip = $derived(
+		$playerBusy
+			? "Wait for mining to finish before switching"
+			: $miningMode === 'local'
+				? $localVideo
+					? 'Local: audio and screenshots are cut from the paired video'
+					: 'Local: pair a video with the loaded file to add audio and screenshots'
+				: 'asbplayer: audio and screenshots are recorded in the browser'
 	);
 
 	const ankiTip = $derived(
@@ -309,112 +320,126 @@
 	{/if}
 
 	<div class="status">
-		<!-- The asbplayer indicator doubles as the follow-mode menu (issue #105). -->
-		<div class="menu" class:open={openMenu === 'asb'}>
-			<button
-				class="indicator status-trigger"
-				class:active-mode={$playerStatus.mode === 'asbplayer' && $playerStatus.ws_clients > 0}
-				title={asbplayer.tip}
-				onclick={(e) => toggleMenu('asb', e)}
-			>
-				<small>asbplayer</small>
-				{@render dot(asbplayer.kind)}
-			</button>
-			{#if openMenu === 'asb'}
-				<!-- Toggling a follow checkbox keeps the menu open; Esc / clicking
-				     elsewhere closes it (the stopPropagation shields the window handler). -->
-				<div
-					class="menu-panel right"
-					role="menu"
-					tabindex="-1"
-					onclick={(e) => e.stopPropagation()}
-					onkeydown={(e) => e.key === 'Escape' && (openMenu = null)}
+		<div class="mode" role="radiogroup" aria-label="Card media from" title={modeTip}>
+			{#each [['local', 'Local'], ['asbplayer', 'asbplayer']] as const as [mode, label]}
+				<button
+					role="radio"
+					aria-checked={$miningMode === mode}
+					class:on={$miningMode === mode}
+					disabled={$playerBusy}
+					onclick={() => $miningMode !== mode && setMiningMode(mode)}>{label}</button
 				>
-					{#if $playerStatus.ws_clients > 0 && asbPolled}
-						<span class="menu-note">
-							{$asbContext.active_title
-								? `Active tab: ${$asbContext.active_title}${$asbContext.active_has_subtitles ? '' : ' — no subtitles'}`
-								: 'No active tab in asbplayer'}
-						</span>
-						{#if $asbContext.loaded_from_asbplayer && !$asbContext.loaded_is_active}
-							<span class="menu-note warn"
-								>Loaded video is in a background tab — switch to it before mining (screenshots
-								capture the visible tab)</span
-							>
-						{/if}
-					{/if}
-					<button
-						onclick={() => run(openAsbplayerModal)}
-						disabled={toolsError || $playerStatus.ws_clients === 0}
-						>Load from asbplayer…</button
-					>
-					<label
-						class="menu-check"
-						title="Automatically load new videos asbplayer picks up (e.g. the next episode)."
-					>
-						<input
-							type="checkbox"
-							checked={$settings?.asbplayer_follow_new_media ?? false}
-							onchange={(e) => setAsbplayerFollowNewMedia(e.currentTarget.checked)}
-						/>
-						Follow new videos
-					</label>
-					<label
-						class="menu-check"
-						title="Switch to the active tab's video (with subtitles) when it isn't the loaded one. Recommended: keeps mined screenshots correct — asbplayer captures the visible tab."
-					>
-						<input
-							type="checkbox"
-							checked={$settings?.asbplayer_follow_active_tab ?? true}
-							onchange={(e) => setAsbplayerFollowActiveTab(e.currentTarget.checked)}
-						/>
-						Follow active tab <em>(recommended)</em>
-					</label>
-				</div>
-			{/if}
+			{/each}
 		</div>
-		<!-- The mpv indicator doubles as the launcher menu (issue #89). -->
-		<div class="menu" class:open={openMenu === 'mpv'}>
-			<button
-				class="indicator status-trigger"
-				class:active-mode={$playerStatus.mpv_connected}
-				title={mpv.tip}
-				onclick={(e) => toggleMenu('mpv', e)}
-			>
-				<small>mpv</small>
-				{@render dot(mpv.kind)}
-			</button>
-			{#if openMenu === 'mpv'}
-				<div
-					class="menu-panel right"
-					role="menu"
-					tabindex="-1"
-					onclick={(e) => e.stopPropagation()}
-					onkeydown={(e) => e.key === 'Escape' && (openMenu = null)}
+		{#if $miningMode === 'asbplayer'}
+			<!-- The asbplayer indicator doubles as the follow-mode menu (issue #105). -->
+			<div class="menu" class:open={openMenu === 'asb'}>
+				<button
+					class="indicator status-trigger"
+					class:active-mode={$playerStatus.mode === 'asbplayer' && $playerStatus.ws_clients > 0}
+					title={asbplayer.tip}
+					onclick={(e) => toggleMenu('asb', e)}
 				>
-					<span class="menu-note">{mpv.tip}</span>
-					<!-- Not run(): the panel must stay open so the not-found row can appear. -->
-					<button
-						onclick={async () => {
-							if (await launchMpvVideo()) openMenu = null;
-						}}
-						disabled={$playerStatus.mpv_connected}
-						title={$playerStatus.mpv_connected
-							? 'MPV is already connected — seeking uses the running instance'
-							: 'Pick a video file and open it in MPV, ready for seeking'}
-						>Launch video in MPV…</button
+					<small>asbplayer</small>
+					{@render dot(asbplayer.kind)}
+				</button>
+				{#if openMenu === 'asb'}
+					<!-- Toggling a follow checkbox keeps the menu open; Esc / clicking
+					     elsewhere closes it (the stopPropagation shields the window handler). -->
+					<div
+						class="menu-panel right"
+						role="menu"
+						tabindex="-1"
+						onclick={(e) => e.stopPropagation()}
+						onkeydown={(e) => e.key === 'Escape' && (openMenu = null)}
 					>
-					{#if $mpvLocatePrompt}
-						<span class="menu-note warn">mpv not found (tried “{$settings?.mpv_path}”)</span>
+						{#if $playerStatus.ws_clients > 0 && asbPolled}
+							<span class="menu-note">
+								{$asbContext.active_title
+									? `Active tab: ${$asbContext.active_title}${$asbContext.active_has_subtitles ? '' : ' — no subtitles'}`
+									: 'No active tab in asbplayer'}
+							</span>
+							{#if $asbContext.loaded_from_asbplayer && !$asbContext.loaded_is_active}
+								<span class="menu-note warn"
+									>Loaded video is in a background tab — switch to it before mining (screenshots
+									capture the visible tab)</span
+								>
+							{/if}
+						{/if}
+						<button
+							onclick={() => run(openAsbplayerModal)}
+							disabled={toolsError || $playerStatus.ws_clients === 0}
+							>Load from asbplayer…</button
+						>
+						<label
+							class="menu-check"
+							title="Automatically load new videos asbplayer picks up (e.g. the next episode)."
+						>
+							<input
+								type="checkbox"
+								checked={$settings?.asbplayer_follow_new_media ?? false}
+								onchange={(e) => setAsbplayerFollowNewMedia(e.currentTarget.checked)}
+							/>
+							Follow new videos
+						</label>
+						<label
+							class="menu-check"
+							title="Switch to the active tab's video (with subtitles) when it isn't the loaded one. Recommended: keeps mined screenshots correct — asbplayer captures the visible tab."
+						>
+							<input
+								type="checkbox"
+								checked={$settings?.asbplayer_follow_active_tab ?? true}
+								onchange={(e) => setAsbplayerFollowActiveTab(e.currentTarget.checked)}
+							/>
+							Follow active tab <em>(recommended)</em>
+						</label>
+					</div>
+				{/if}
+			</div>
+		{:else}
+			<!-- The mpv indicator doubles as the launcher menu (issue #89). -->
+			<div class="menu" class:open={openMenu === 'mpv'}>
+				<button
+					class="indicator status-trigger"
+					class:active-mode={$playerStatus.mpv_connected}
+					title={mpv.tip}
+					onclick={(e) => toggleMenu('mpv', e)}
+				>
+					<small>mpv</small>
+					{@render dot(mpv.kind)}
+				</button>
+				{#if openMenu === 'mpv'}
+					<div
+						class="menu-panel right"
+						role="menu"
+						tabindex="-1"
+						onclick={(e) => e.stopPropagation()}
+						onkeydown={(e) => e.key === 'Escape' && (openMenu = null)}
+					>
+						<span class="menu-note">{mpv.tip}</span>
+						<!-- Not run(): the panel must stay open so the not-found row can appear. -->
 						<button
 							onclick={async () => {
-								if (await locateMpvAndRetry()) openMenu = null;
-							}}>Locate mpv…</button
+								if (await launchMpvVideo()) openMenu = null;
+							}}
+							disabled={$playerStatus.mpv_connected}
+							title={$playerStatus.mpv_connected
+								? 'MPV is already connected — seeking uses the running instance'
+								: 'Pick a video file and open it in MPV, ready for seeking'}
+							>Launch video in MPV…</button
 						>
-					{/if}
-				</div>
-			{/if}
-		</div>
+						{#if $mpvLocatePrompt}
+							<span class="menu-note warn">mpv not found (tried “{$settings?.mpv_path}”)</span>
+							<button
+								onclick={async () => {
+									if (await locateMpvAndRetry()) openMenu = null;
+								}}>Locate mpv…</button
+							>
+						{/if}
+					</div>
+				{/if}
+			</div>
+		{/if}
 		<span class="indicator" title={ankiTip}>
 			<small>Anki</small>
 			{#if $ankiStatus.fetching}
@@ -568,6 +593,31 @@
 		display: flex;
 		align-items: center;
 		gap: 0.6rem;
+	}
+	.mode {
+		display: inline-flex;
+		padding: 2px;
+		border: 1px solid var(--border);
+		border-radius: 999px;
+	}
+	.mode button {
+		padding: 0.1rem 0.6rem;
+		font-size: 0.72rem;
+		color: var(--text-muted);
+		background: transparent;
+		border: none;
+		border-radius: 999px;
+		cursor: pointer;
+	}
+	.mode button.on {
+		color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 15%, transparent);
+	}
+	.mode button:disabled {
+		cursor: default;
+	}
+	.mode button:not(.on):not(:disabled):hover {
+		color: var(--text);
 	}
 	.indicator {
 		display: inline-flex;

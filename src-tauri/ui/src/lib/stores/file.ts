@@ -14,6 +14,21 @@ export const ankiFilterActive = derived(fileResult, ($f) => $f?.anki_filter_acti
 
 export const recentFiles = writable<ipc.RecentFileEntry[]>([]);
 
+/** The video local mining cuts the loaded file's media from. */
+export const localVideo = derived(fileResult, ($f) => $f?.local_video ?? null);
+
+/** Picks a video for the loaded file; `unpair` removes the pairing instead. */
+export async function pairVideo(unpair = false): Promise<void> {
+	try {
+		const path = unpair ? null : await ipc.openVideoDialog();
+		if (!unpair && !path) return;
+		const result = await ipc.pairVideo(path);
+		if (result) fileResult.set(result);
+	} catch (err) {
+		lastError.set({ title: 'Pair video', message: String(err), detail: null });
+	}
+}
+
 /** Mirrors the engine's `SourceFileType::supported_extensions`. */
 const SUPPORTED_EXTENSIONS = ['srt', 'ass', 'ssa', 'txt', 'epub'];
 export const isSupportedPath = (path: string): boolean => {

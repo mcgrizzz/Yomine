@@ -4,7 +4,7 @@ import { autoPick, DEFAULT_HORIZON } from '$lib/autopick';
 import { applyControls } from '$lib/table';
 import { autoLedger, mineQueue } from './batches';
 import { freqFilter, jlptEnabled, posEnabled } from './controls';
-import { fileResult } from './file';
+import { fileResult, localVideo } from './file';
 import { showPossibleKnownMatches } from './knowledgeView';
 import {
 	addedTerms,
@@ -20,14 +20,17 @@ import {
 } from './mining';
 import { playerStatus } from './player';
 import { ankiStatus, knowledge } from './status';
-import { settings } from './settings';
+import { miningMode, settings } from './settings';
 import { lastError, showNotice } from './ui';
 
 export const autoMode = writable(false);
 
 export const autoAvailable = derived(
-	[yomitanReachable, ankiStatus, playerStatus],
-	([$yomitan, $anki, $player]) => $yomitan && $anki.connected && $player.ws_clients > 0
+	[yomitanReachable, ankiStatus, playerStatus, miningMode, localVideo],
+	([$yomitan, $anki, $player, $mode, $video]) =>
+		$yomitan &&
+		$anki.connected &&
+		($mode === 'local' ? $video !== null : $player.ws_clients > 0)
 );
 
 export const autoCountdown = writable<number | null>(null);
@@ -109,7 +112,7 @@ function pick(file: ipc.FileLoadResult, prefs: ipc.AutoMine) {
 	});
 }
 
-/** Mines the loaded asbplayer video once, unless it was already processed and not `force`d. */
+/** Mines the loaded video once, unless it was already processed and not `force`d. */
 export async function autoMine(force = false): Promise<void> {
 	if (picking) {
 		loadedWhilePicking = true;

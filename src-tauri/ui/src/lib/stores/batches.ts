@@ -11,7 +11,8 @@ import {
 	type BatchPhase,
 	type BatchPlan
 } from '$lib/batch';
-import { fileResult } from './file';
+import { fileResult, localVideo } from './file';
+import { miningMode } from './settings';
 import { asbContext, backgroundTab, playerStatus } from './player';
 import { adhocQueue, dropAdhoc, queuedMineOptions, queueAdhoc, setSelected } from './selection';
 import {
@@ -201,9 +202,11 @@ function clearUnchangedSelection(item: ipc.BatchItem): void {
 }
 
 function toBatchItems(items: QueueItem[]): ipc.BatchItem[] {
-	const status = get(playerStatus);
 	const recording =
-		(status.mode === 'asbplayer' || get(asbContext).loaded_from_asbplayer) && !get(backgroundTab);
+		get(miningMode) === 'local'
+			? get(localVideo) !== null
+			: (get(playerStatus).mode === 'asbplayer' || get(asbContext).loaded_from_asbplayer) &&
+				!get(backgroundTab);
 	const adhoc = new Set(get(adhocQueue).map((a) => a.key));
 	const start = (i: QueueItem) => i.timestamp?.start_secs ?? Infinity;
 	return [...items]
@@ -248,6 +251,7 @@ async function run(
 	const options: ipc.MineOptions = { record: true, require_dictionary_media: true };
 	let target: string | null = null;
 	let finished: ipc.BatchRecord | null = null;
+	const local = get(miningMode) === 'local';
 
 	const plan: BatchPlan = {
 		create: { indices: [], done: 0, samples: [] },
@@ -261,7 +265,7 @@ async function run(
 			position: plan[phase].done + 1,
 			count: plan[phase].indices.length,
 			recordsNext: phase === 'create' && plan.record.indices.length > 0,
-			...estimateProgress(batch, plan),
+			...estimateProgress(batch, plan, local),
 			estimatedAt: Date.now(),
 			current: item.lemma,
 			sentence: item.sentence,
@@ -295,7 +299,9 @@ async function run(
 					return;
 				}
 				if (!step.failure) {
-					plan[phase].samples.push(phase === 'record' ? Math.max(0, secs - cueSecs(current)) : secs);
+					plan[phase].samples.push(
+						phase === 'record' && !local ? Math.max(0, secs - cueSecs(current)) : secs
+					);
 				}
 				clearUnchangedSelection(current);
 				if (!step.failure || cancelled) break;
@@ -321,12 +327,14 @@ async function run(
 		const snapshot = items ? toBatchItems(items) : previous!.items;
 		const selected = retry?.indices ?? snapshot.map((_, i) => i);
 		const records = selected.some((i) => snapshot[i].mine_media);
-		if (records && !get(asbContext).loaded_from_asbplayer) {
+		if (records && !local && !get(asbContext).loaded_from_asbplayer) {
 			const answer = await chooseTarget(mediaRun);
 			if (!answer || cancelled) return null;
 			target = answer.target;
 			options.record = answer.record;
 		}
+		if (items && local && get(localVideo) === null && items.some((i) => i.timestamp !== null))
+			showNotice('No video is paired, so these cards get no audio or screenshot. Pair a video to add them.');
 		if (items) {
 			batch = await ipc.createBatch(file.batch_source, snapshot, auto);
 			batchSaveError.set(null);

@@ -8,7 +8,7 @@ import { refreshMinedState } from './mining';
 export const playerStatus = writable<ipc.PlayerStatus>({
 	mpv_connected: false,
 	ws_clients: 0,
-	mode: 'none',
+	mode: 'asbplayer',
 	server_state: 'stopped',
 	server_error: null,
 	confirmed_timestamps: []
@@ -33,8 +33,8 @@ export const asbContext = writable<ipc.AsbplayerContext>({
 /** asbplayer records from the visible tab, so a video bound to a background tab isn't
  * recorded: its cards get no audio or screenshot. */
 export const backgroundTab = derived(
-	asbContext,
-	($c) => $c.loaded_from_asbplayer && !$c.loaded_is_active
+	[asbContext, playerStatus],
+	([$c, $p]) => $p.mode === 'asbplayer' && $c.loaded_from_asbplayer && !$c.loaded_is_active
 );
 
 export async function seekTimestamp(seconds: number, label: string): Promise<void> {

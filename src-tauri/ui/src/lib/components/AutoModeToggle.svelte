@@ -9,6 +9,7 @@
 		autoMode,
 		autoSkipped,
 		fileResult,
+		miningMode,
 		playerBusy,
 		setAutoMode,
 		settings
@@ -22,7 +23,9 @@
 	const tip = $derived(
 		$autoMode
 			? 'Auto mode is on. Click to stop mining new videos automatically.'
-			: `Turn on to mine ${amount} from each new video asbplayer opens, with audio and screenshots, as soon as it loads. Configure it in Mining → Auto Mode.`
+			: $miningMode === 'local'
+				? `Turn on to mine ${amount} from the loaded file, with audio and screenshots cut from its video. Configure it in Mining → Auto Mode.`
+				: `Turn on to mine ${amount} from each new video asbplayer opens, with audio and screenshots, as soon as it loads. Configure it in Mining → Auto Mode.`
 	);
 	// The start screen lines the toggle up with its buttons, so it gets no status line.
 	const waiting = $derived(

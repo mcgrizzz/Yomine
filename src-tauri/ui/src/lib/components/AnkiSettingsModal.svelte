@@ -4,7 +4,13 @@
 	import Modal from './Modal.svelte';
 	import SettingsFooter from './SettingsFooter.svelte';
 	import * as ipc from '$lib/ipc';
-	import { ankiModalOpen, defaultSettings, settings, saveAnkiSettings } from '$lib/stores';
+	import {
+		ankiFocus,
+		ankiModalOpen,
+		defaultSettings,
+		settings,
+		saveAnkiSettings
+	} from '$lib/stores';
 
 	type Draft = Pick<
 		ipc.SettingsData,
@@ -107,6 +113,12 @@
 		const saved = $settings ?? $defaultSettings;
 		if (saved) form.reset(copyDraft(saved));
 		revert();
+		if ($ankiFocus && draft.anki_model_mappings[$ankiFocus]) {
+			expandedModel = $ankiFocus;
+			// Without a cached catalog this returns early; fetchModels loads it instead.
+			void loadSample($ankiFocus);
+		}
+		ankiFocus.set(null);
 	}
 
 	function revert() {
@@ -202,6 +214,7 @@
 			modelIndex = 0;
 			catalogConnection = JSON.stringify(connection);
 			catalogPhase = 'ready';
+			if (expandedModel) void loadSample(expandedModel);
 		} catch (error) {
 			if (generation !== ankiGeneration) return;
 			catalogPhase = 'failed';

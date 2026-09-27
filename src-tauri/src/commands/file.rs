@@ -1,9 +1,12 @@
 //! File / mining commands (contracts/commands.md "File / mining").
 
-use std::sync::{
-    atomic::Ordering,
-    Arc,
-    Mutex,
+use std::{
+    path::PathBuf,
+    sync::{
+        atomic::Ordering,
+        Arc,
+        Mutex,
+    },
 };
 
 use tauri::{
@@ -81,6 +84,7 @@ pub(crate) fn load_result(file: &FileData) -> Option<FileLoadResult> {
         total_terms: file.base_terms.len(),
         ignored_terms: file.ignored_count,
         batch_source: crate::batches::BatchSource::from_file(file).ok()?,
+        local_video: file.local_video.as_ref().map(|p| p.display().to_string()),
     })
 }
 
@@ -232,7 +236,7 @@ pub async fn process_file(
             .await
             .map_err(|e| e.to_string())?;
 
-    record_open(&source_file, &sentences, filter_result.terms.len());
+    let local_video = record_open(&source_file, &sentences, filter_result.terms.len());
 
     // Lemmas Anki already knew — kept so an ignore-list change can re-filter
     // without re-querying Anki.
@@ -254,6 +258,7 @@ pub async fn process_file(
         file_comprehension,
         asbplayer_media_id: None,
         asbplayer_subtitle_file: None,
+        local_video,
     };
     let payload = load_result(&guard.file).expect("file just stored has a source_file");
     drop(guard);
@@ -435,7 +440,7 @@ pub(crate) async fn load_asbplayer_into_state(
             .await
             .map_err(|e| e.to_string())?;
 
-    record_open(&source_file, &sentences, filter_result.terms.len());
+    let local_video = record_open(&source_file, &sentences, filter_result.terms.len());
 
     let anki_known_lemmas =
         filter_result.anki_filtered.iter().map(|t| t.lemma_form.clone()).collect();
@@ -456,6 +461,7 @@ pub(crate) async fn load_asbplayer_into_state(
         file_comprehension,
         asbplayer_media_id: Some(media_id),
         asbplayer_subtitle_file: file_name,
+        local_video,
     };
     let payload = load_result(&guard.file).expect("file just stored has a source_file");
     drop(guard);
@@ -664,6 +670,7 @@ pub async fn reload_current_file(
         file_comprehension,
         asbplayer_media_id: media_id,
         asbplayer_subtitle_file: subtitle_file,
+        local_video: guard.file.local_video.clone(),
     };
     let payload = load_result(&guard.file).expect("file just stored has a source_file");
     drop(guard);
@@ -689,8 +696,13 @@ pub async fn reload_current_file(
 }
 
 /// Records the load in history: the source, the recent-files entry, and any EPUB
-/// parts. Failures are only logged, so history never fails an otherwise-good load.
-fn record_open(source_file: &SourceFile, sentences: &[Sentence], term_count: usize) {
+/// parts, and returns the video paired with the source. Failures are only logged, so
+/// history never fails an otherwise-good load.
+fn record_open(
+    source_file: &SourceFile,
+    sentences: &[Sentence],
+    term_count: usize,
+) -> Option<PathBuf> {
     let fingerprint = crate::batches::BatchSource::new(source_file, sentences).fingerprint;
     let info = db::sources::SourceInfo {
         fingerprint: &fingerprint,
@@ -720,9 +732,33 @@ fn record_open(source_file: &SourceFile, sentences: &[Sentence], term_count: usi
         opened_at: db::now_ms(),
     };
     let parts = source_file.epub_chapters.as_deref().unwrap_or_default();
-    if let Err(e) = db::with(|conn| db::sources::record_open(conn, &info, &open, parts)) {
-        eprintln!("Failed to record the file in history: {e}");
+    let recorded = db::with(|conn| {
+        db::sources::record_open(conn, &info, &open, parts)?;
+        db::sources::video(conn, &fingerprint)
+    });
+    recorded
+        .unwrap_or_else(|e| {
+            eprintln!("Failed to record the file in history: {e}");
+            None
+        })
+        .map(PathBuf::from)
+}
+
+/// Pairs a video with the loaded file, or unpairs it with `None`. The pairing is kept
+/// with the source, so reopening the same subtitles finds the video again.
+#[tauri::command]
+pub fn pair_video(
+    state: State<'_, Mutex<AppState>>,
+    path: Option<String>,
+) -> Result<Option<FileLoadResult>, String> {
+    let mut guard = state.lock().unwrap();
+    let fingerprint = crate::batches::BatchSource::from_file(&guard.file)?.fingerprint;
+    if path.as_ref().is_some_and(|p| !std::path::Path::new(p).is_file()) {
+        return Err("That video no longer exists".into());
     }
+    db::with(|conn| db::sources::set_video(conn, &fingerprint, path.as_deref()))?;
+    guard.file.local_video = path.map(PathBuf::from);
+    Ok(load_result(&guard.file))
 }
 
 /// Recent files for the landing state, most recent first: each path's latest load,

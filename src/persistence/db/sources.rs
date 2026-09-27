@@ -3,6 +3,7 @@
 use rusqlite::{
     params,
     Connection,
+    OptionalExtension,
 };
 
 use crate::core::recent_files::RecentFileEntry;
@@ -32,6 +33,22 @@ fn upsert(conn: &Connection, info: &SourceInfo) -> rusqlite::Result<i64> {
         params![id, info.kind, info.title, info.creator, info.char_count as i64, info.runtime_ms],
     )?;
     Ok(id)
+}
+
+/// The video paired with the source, if it still exists.
+pub fn video(conn: &Connection, fingerprint: &str) -> rusqlite::Result<Option<String>> {
+    let path: Option<String> = conn
+        .query_row("SELECT video FROM sources WHERE fingerprint = ?1", params![fingerprint], |r| {
+            r.get(0)
+        })
+        .optional()?
+        .flatten();
+    Ok(path.filter(|p| std::path::Path::new(p).is_file()))
+}
+
+pub fn set_video(conn: &Connection, fingerprint: &str, path: Option<&str>) -> rusqlite::Result<()> {
+    let id = id(conn, fingerprint)?;
+    conn.execute("UPDATE sources SET video = ?2 WHERE id = ?1", params![id, path]).map(|_| ())
 }
 
 pub fn set_title(conn: &Connection, id: i64, title: &str) -> rusqlite::Result<()> {

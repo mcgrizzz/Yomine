@@ -263,7 +263,7 @@
 				class:confirmed
 				disabled={$playerBusy}
 				title={$playerBusy
-					? 'Waiting for asbplayer to finish recording the mined line…'
+					? 'Wait for the mined card to finish'
 					: `Seek to ${t.start_label}`}
 				onclick={() => seekTimestamp(t.start_secs, t.start_label)}
 			>

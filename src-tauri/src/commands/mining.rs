@@ -4,6 +4,7 @@
 //! `mine-subtitle` update.
 
 use std::{
+    collections::HashMap,
     sync::Mutex,
     time::Duration,
 };
@@ -16,7 +17,9 @@ use yomine::{
     anki::{
         api as anki_api,
         mined,
+        FieldMapping,
     },
+    core::settings::MiningMode,
     yomitan,
 };
 
@@ -27,6 +30,7 @@ use crate::{
         BatchRecord,
         BatchSource,
         Failure,
+        FailureKind,
         FailureScope,
         Fallback,
         MediaState,
@@ -41,7 +45,10 @@ use crate::{
         YomitanStatusDto,
     },
     events::LoadingMessage,
-    media::MediaSource,
+    media::{
+        media_fields,
+        MediaSource,
+    },
     player_task::PlayerHandle,
     state::AppState,
 };
@@ -68,11 +75,12 @@ pub async fn mine_term(
     let _operation =
         batches::OPERATION.try_lock().map_err(|_| "Mining or undo is already running")?;
     let item_key = reading.map(|r| format!("{term} {r}")).unwrap_or_default();
-    let (yomitan_url, media_id, lexeme, source) = {
+    let (yomitan_url, media, local_mappings, lexeme, source) = {
         let guard = state.lock().unwrap();
         (
             guard.settings.yomitan_url.clone(),
-            guard.file.asbplayer_media_id.clone(),
+            MediaSource::for_file(&guard, None),
+            local_mappings(&guard),
             row_lexeme(&guard.file, &item_key),
             BatchSource::from_file(&guard.file).ok(),
         )
@@ -87,34 +95,48 @@ pub async fn mine_term(
         format_name,
         scan_text: None,
         adhoc: false,
-        mine_media: via == "asbplayer",
+        mine_media: via != "direct",
         outcome: Outcome::Unattempted,
     };
     let options = MineOptions { record: true, require_dictionary_media: true };
-    let mut result = mine(&yomitan_url, &item, lexeme, options, &progress, None, source.as_ref())
-        .await
-        .map_err(|e| e.message)?;
+    let mut result = mine(
+        &yomitan_url,
+        &item,
+        lexeme,
+        options,
+        &progress,
+        None,
+        source.as_ref(),
+        local_mappings.as_ref(),
+    )
+    .await
+    .map_err(|e| e.message)?;
 
     // Enrichment failures don't undo the mine (the note exists) — warn instead.
     if let Some(id) = result.note_id.filter(|_| item.mine_media) {
-        let media = MediaSource::Asbplayer { media_id };
-        let warning = if media.lacks_subtitles(&player).await {
-            Some(
+        let warning = match media {
+            Err(reason) => Some(format!("Card created without audio and a screenshot. {reason}.")),
+            Ok(media) if media.lacks_subtitles(&player).await => Some(
                 "asbplayer has no subtitles loaded on the loaded video — card created without \
                  audio/screenshot"
                     .to_string(),
-            )
-        } else {
-            media
+            ),
+            Ok(media) => media
                 .attach(&player, id, item.timestamp.as_ref(), &progress)
                 .await
                 .err()
-                .map(|e| format!("Card created, but media wasn't added: {e}"))
+                .map(|e| format!("Card created, but media wasn't added: {e}")),
         };
         result.media_missing = warning.is_some();
         result.warning = warning;
     }
     Ok(result)
+}
+
+/// The mappings local mining checks before creating a note; `None` in asbplayer mode.
+fn local_mappings(state: &AppState) -> Option<HashMap<String, FieldMapping>> {
+    (state.settings.mining_mode == MiningMode::Local)
+        .then(|| state.settings.anki_model_mappings.clone())
 }
 
 #[derive(serde::Deserialize, Clone, Copy)]
@@ -145,30 +167,42 @@ pub async fn mine_batch_item(
     let mut batch = batches::load(&batch_id)?;
     batches::require_profile(&batch, "continue it").await?;
     let item = batch.items.get(item_index).ok_or("Batch item not found")?.clone();
-    let (url, loaded_target, lexeme) = {
+    let (url, media, local_mappings, lexeme) = {
         let state = state.lock().unwrap();
         if !batch.source.matches(&BatchSource::from_file(&state.file)?) {
             return Err("Load the original source before retrying this batch".into());
         }
         (
             state.settings.yomitan_url.clone(),
-            state.file.asbplayer_media_id.clone(),
+            MediaSource::for_file(&state, media_target),
+            local_mappings(&state).filter(|_| item.mine_media && options.record),
             (!item.adhoc).then(|| row_lexeme(&state.file, &item.key)).flatten(),
         )
     };
-    let media = MediaSource::Asbplayer { media_id: loaded_target.or(media_target) };
     let mut preview_file = None;
     let result = async {
         match item.outcome {
             Outcome::Unattempted | Outcome::Failed { .. } => {
-                mine(&url, &item, lexeme, options, &progress, Some((&mut batch, item_index)), None)
-                    .await?;
+                mine(
+                    &url,
+                    &item,
+                    lexeme,
+                    options,
+                    &progress,
+                    Some((&mut batch, item_index)),
+                    None,
+                    local_mappings.as_ref(),
+                )
+                .await?;
             }
             Outcome::Created {
                 note_id,
                 media: MediaState::Pending | MediaState::Failed | MediaState::Skipped,
                 ..
             } => {
+                let media = media
+                    .as_ref()
+                    .map_err(|reason| Failure::new("Local video", FailureScope::Shared, reason))?;
                 media.validate(&player).await?;
                 batches::checkpoint(
                     &mut batch,
@@ -275,6 +309,7 @@ async fn default_entry(
     .unwrap_or(0)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn mine(
     yomitan_url: &str,
     item: &BatchItem,
@@ -284,6 +319,7 @@ async fn mine(
     mut batch: Option<(&mut BatchRecord, usize)>,
     // The loaded source of a single mine; a batch carries its own.
     source: Option<&BatchSource>,
+    local_mappings: Option<&HashMap<String, FieldMapping>>,
 ) -> Result<MineResultDto, Failure> {
     let term = item.scan_text.as_ref().unwrap_or(&item.lemma).clone();
     let surface = item.surface.clone();
@@ -291,7 +327,7 @@ async fn mine(
     let entry_index = item.entry_index;
     let format_name = item.format_name.clone();
     let timestamp_secs = item.timestamp.as_ref().map(|t| t.start_secs);
-    let via = if item.mine_media { "asbplayer" } else { "direct" }.to_string();
+    let via = if item.mine_media { "media" } else { "direct" }.to_string();
     let entry_index = match entry_index {
         Some(index) => index,
         None => default_entry(yomitan_url, item, &term, lexeme.as_deref()).await,
@@ -317,6 +353,23 @@ async fn mine(
             )
         })?,
     };
+    // Before the note exists, so a missing mapping doesn't leave cards without media.
+    if let Some(mappings) = local_mappings.filter(|_| item.mine_media) {
+        if media_fields(mappings.get(&format.model)).is_none() {
+            let mut failure = Failure::new(
+                "Media fields",
+                FailureScope::Shared,
+                format!(
+                    "Choose where {} keeps sentence audio and screenshots in Anki Settings, then \
+                     mine again.",
+                    format.model
+                ),
+            )
+            .with_kind(FailureKind::MediaFieldsUnset);
+            failure.note_type = Some(format.model.clone());
+            return Err(failure);
+        }
+    }
     let format_markers = yomitan::collect_markers(format);
     let mut markers = format_markers.clone();
     for extra in ["expression", "reading"] {
@@ -516,8 +569,7 @@ pub async fn retry_mine_media(
 ) -> Result<(), String> {
     let _operation =
         batches::OPERATION.try_lock().map_err(|_| "Mining or undo is already running")?;
-    let media_id = { state.lock().unwrap().file.asbplayer_media_id.clone() };
-    let media = MediaSource::Asbplayer { media_id };
+    let media = { MediaSource::for_file(&state.lock().unwrap(), None)? };
     if media.lacks_subtitles(&player).await {
         return Err("asbplayer still has no subtitles loaded on the loaded video".to_string());
     }

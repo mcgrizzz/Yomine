@@ -269,6 +269,8 @@ pub struct SettingsData {
     #[serde(default)]
     pub text_filter_presets: HashMap<String, bool>,
     #[serde(default)]
+    pub mining_mode: MiningMode,
+    #[serde(default)]
     pub media_format: MediaFormat,
     /// Empty finds ffmpeg on PATH or uses the downloaded copy.
     #[serde(default)]
@@ -343,10 +345,22 @@ impl Default for SettingsData {
             table_columns: Vec::new(),
             text_filters: Vec::new(),
             text_filter_presets: HashMap::new(),
+            mining_mode: MiningMode::default(),
             media_format: MediaFormat::default(),
             ffmpeg_path: String::new(),
         }
     }
+}
+
+/// Where mined cards get their sentence audio and screenshot.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MiningMode {
+    /// Cut from the paired video file with ffmpeg.
+    Local,
+    /// Recorded by asbplayer in the browser.
+    #[default]
+    Asbplayer,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

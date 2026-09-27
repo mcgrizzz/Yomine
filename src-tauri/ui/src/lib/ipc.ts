@@ -104,6 +104,8 @@ export interface FileLoadResult {
 	/** Terms hidden by the ignore list — the known-count hover breakdown. */
 	ignored_terms: number;
 	batch_source: BatchSource;
+	/** The video paired with this file, which local mining cuts media from. */
+	local_video: string | null;
 }
 
 /** A previously-opened file for the landing state (mirrors `RecentFileEntry`). */
@@ -218,6 +220,10 @@ export interface SampleNote {
 	fields_differ: boolean;
 }
 
+/** Where mined cards get their audio and screenshot: cut from the paired video, or
+ * recorded by asbplayer. */
+export type MiningMode = 'local' | 'asbplayer';
+
 /** How local mining encodes media (`media::clip::MediaFormat`). */
 export interface MediaFormat {
 	audio: 'mp3' | 'opus';
@@ -305,6 +311,7 @@ export interface SettingsData {
 	text_filters: TextFilterSetting[];
 	/** Preset id → enabled; missing = off. */
 	text_filter_presets: Record<string, boolean>;
+	mining_mode: MiningMode;
 	media_format: MediaFormat;
 	/** Empty finds ffmpeg on PATH or uses the downloaded copy. */
 	ffmpeg_path: string;
@@ -338,7 +345,8 @@ export interface SetupStatus {
 	has_frequency_dict: boolean;
 	/** Loaded dictionary count: ≥1 → item 2 (default) complete, >1 → item 6 (additional). */
 	frequency_dict_count: number;
-	player_connected: boolean;
+	/** asbplayer connected, or ffmpeg found in local mode. */
+	media_ready: boolean;
 	/** yomitan-api reachable (optional item — enables one-click mining). */
 	yomitan_connected: boolean;
 }
@@ -373,7 +381,8 @@ export interface AnkiStatus {
 export interface PlayerStatus {
 	mpv_connected: boolean;
 	ws_clients: number;
-	mode: 'mpv' | 'asbplayer' | 'none';
+	/** The mining mode the player manager is running. */
+	mode: MiningMode;
 	/** WebSocket server state — drives the asbplayer dot's sub-states. */
 	server_state: 'running' | 'starting' | 'error' | 'stopped';
 	/** Error message when `server_state === 'error'`, else null. */
@@ -501,6 +510,11 @@ export function getEpubChapters(path: string): Promise<EpubBook> {
 /** Video picker for the MPV launcher (issue #89). */
 export function openVideoDialog(): Promise<string | null> {
 	return invoke('open_video_dialog');
+}
+
+/** Pairs a video with the loaded file (`null` unpairs); returns the updated result. */
+export function pairVideo(path: string | null): Promise<FileLoadResult | null> {
+	return invoke('pair_video', { path });
 }
 
 /** Executable picker for the "Locate mpv…" flow (issue #89). */
@@ -743,7 +757,7 @@ export function mineTerm(
 		timestampSecs: number | null;
 		timestampEndSecs: number | null;
 		timestampLabel: string | null;
-		via: 'asbplayer' | 'direct';
+		via: 'media' | 'direct';
 		/** Yomitan entry to build the card from (default first). */
 		entryIndex: number | null;
 		/** Yomitan card format to render with (default first term format). */
@@ -793,7 +807,9 @@ export interface BatchFailure {
 	scope: 'item' | 'shared' | 'unknown' | 'stop';
 	message: string;
 	fallback: 'without_dictionary_media' | null;
-	kind: 'media_unverified' | null;
+	kind: 'media_unverified' | 'media_fields_unset' | null;
+	/** With `media_fields_unset`: the note type that needs media fields. */
+	note_type?: string;
 }
 
 export type BatchMedia = 'not_requested' | 'pending' | 'complete' | 'failed' | 'skipped';

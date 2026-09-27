@@ -21,6 +21,7 @@ pub fn run() {
     let settings = yomine::persistence::load_json_or_default::<SettingsData>("settings.json");
     yomine::anki::api::configure_connection(settings.anki_connection.clone());
     let websocket_port = settings.websocket_settings.port;
+    let mining_mode = settings.mining_mode;
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -83,6 +84,7 @@ pub fn run() {
             commands::player::launch_mpv,
             commands::local_media::get_ffmpeg_status,
             commands::local_media::install_ffmpeg,
+            commands::file::pair_video,
             commands::mining::mine_term,
             commands::mining::mine_batch_item,
             commands::mining::get_media_preview,
@@ -127,7 +129,7 @@ pub fn run() {
 
             // The player runs in its own task that solely owns `PlayerManager`;
             // commands reach it through this handle (no shared lock).
-            let player = player_task::spawn(app.handle().clone(), websocket_port);
+            let player = player_task::spawn(app.handle().clone(), websocket_port, mining_mode);
             app.manage(player);
 
             // Ambient Anki/knowledge polling (player connectivity is handled above).

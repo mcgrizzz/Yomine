@@ -20,6 +20,8 @@
 		cardFormats,
 		clearSelection,
 		fileResult,
+		localVideo,
+		miningMode,
 		ignoredLemmas,
 		mediaMissing,
 		mineQueue,
@@ -267,10 +269,13 @@
 		mine(term, occs);
 	}
 
-	// asbplayer enrichment needs asbplayer active (same rule as seeking) + a cue.
-	const viaFor = (ts: TimeStampDto | null): 'asbplayer' | 'direct' =>
-		$playerStatus.mode === 'asbplayer' && $playerStatus.ws_clients > 0 && ts !== null && !$backgroundTab
-			? 'asbplayer'
+	// Media needs a cue, plus a paired video (local) or an active asbplayer tab.
+	const viaFor = (ts: TimeStampDto | null): 'media' | 'direct' =>
+		ts !== null &&
+		($miningMode === 'local'
+			? $localVideo !== null
+			: $playerStatus.ws_clients > 0 && !$backgroundTab)
+			? 'media'
 			: 'direct';
 
 	function mine(
@@ -418,13 +423,16 @@
 		$miningTerm !== null
 			? 'Mining in progress — wait for the current card to finish'
 			: $playerBusy
-				? 'Waiting for asbplayer to finish recording the mined line…'
+				? $miningMode === 'local'
+					? 'Adding audio and a screenshot to the mined card…'
+					: 'Waiting for asbplayer to finish recording the mined line…'
 				: null
 	);
-	// Only asbplayer can record audio/screenshots onto the mined card, and it
-	// records from its ACTIVE tab.
+	// asbplayer records from its ACTIVE tab; local mining cuts from the paired video.
 	const mediaNote = $derived.by(() => {
-		if ($playerStatus.mode !== 'asbplayer' || $playerStatus.ws_clients === 0)
+		if ($miningMode === 'local')
+			return $localVideo === null ? ' — pair a video to add audio and a screenshot' : '';
+		if ($playerStatus.ws_clients === 0)
 			return ' — no audio/screenshot without asbplayer';
 		if ($asbContext.loaded_from_asbplayer && !$asbContext.loaded_has_subtitles)
 			return ' — the loaded video has no subtitles in asbplayer; card will get no audio/screenshot';

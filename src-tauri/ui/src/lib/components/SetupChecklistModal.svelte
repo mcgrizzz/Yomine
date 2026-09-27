@@ -8,6 +8,8 @@
 		refreshSetupStatus,
 		openAnkiModal,
 		openWebsocketModal,
+		openLocalMediaModal,
+		miningMode,
 		openFrequencyModal,
 		ankiModalOpen,
 		websocketModalOpen,
@@ -85,15 +87,25 @@
 				action: openAnkiModal,
 				actionText: 'Setup Anki'
 			},
-			{
-				title: 'asbplayer or mpv detected',
-				description: 'Required for video timestamp integration',
-				status: s(st?.player_connected ?? false),
-				optional: false,
-				helpUrl: null,
-				action: openWebsocketModal,
-				actionText: 'Configure WebSocket'
-			},
+			$miningMode === 'local'
+				? {
+						title: 'ffmpeg found',
+						description: 'Cuts audio and screenshots from your videos',
+						status: s(st?.media_ready ?? false),
+						optional: false,
+						helpUrl: null,
+						action: openLocalMediaModal,
+						actionText: 'Local Media'
+					}
+				: {
+						title: 'asbplayer connected',
+						description: 'Records audio and screenshots for mined cards',
+						status: s(st?.media_ready ?? false),
+						optional: false,
+						helpUrl: null,
+						action: openWebsocketModal,
+						actionText: 'Configure WebSocket'
+					},
 			{
 				title: 'Yomitan API Detected [Optional]',
 				description: 'Enables one-click mining — Anki cards rendered with your Yomitan templates',

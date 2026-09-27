@@ -30,7 +30,10 @@
 		settings,
 		ankiStatus,
 		yomitanReachable,
-		backgroundTab
+		backgroundTab,
+		miningMode,
+		localVideo,
+		pairVideo
 	} from '$lib/stores';
 	import BatchRecovery from '$lib/components/BatchRecovery.svelte';
 	import TopBar from '$lib/components/TopBar.svelte';
@@ -70,6 +73,9 @@
 			$playerStatus.ws_clients > 0 &&
 			($fileResult?.source_file.file_type === 'SRT' ||
 				$fileResult?.source_file.file_type === 'SSA')
+	);
+	const timed = $derived(
+		$fileResult?.source_file.file_type === 'SRT' || $fileResult?.source_file.file_type === 'SSA'
 	);
 	const toolsError = $derived(
 		typeof $languageToolsStatus === 'object' ? $languageToolsStatus.error : null
@@ -115,46 +121,71 @@
 							>
 						{/if}
 						<span class="chips">
-							{#if followOn && $asbContext.has_active_tab && !$asbContext.active_has_subtitles}
-								<span
-									class="tab-chip warn"
-									title="Follow can't switch until subtitles are loaded on the active video in asbplayer"
-									>● no subtitles on active video</span
-								>
-							{/if}
-							{#if $asbContext.loaded_from_asbplayer && !$asbContext.loaded_has_subtitles}
-								<button
-									class="tab-chip warn"
-									title="asbplayer has no subtitles loaded on this video — cards will mine without audio/screenshot. Click to open the picker."
-									onclick={openAsbplayerModal}>● no subtitles in asbplayer ⇄</button
-								>
-							{:else if $asbContext.loaded_from_asbplayer && $asbContext.loaded_is_active}
-								<button
-									class="tab-chip ok"
-									title="Mining captures media from this video — it's asbplayer's active tab. Click to open the video picker."
-									onclick={openAsbplayerModal}>● active tab ⇄</button
-								>
-							{:else if $asbContext.loaded_from_asbplayer}
-								<button
-									class="tab-chip danger"
-									title="This video's tab isn't active, so mined cards get no audio or screenshot (asbplayer records the visible tab). Switch to its tab before mining. Click to open the video picker."
-									onclick={openAsbplayerModal}>⚠ background tab ⇄</button
-								>
-							{:else if minesActiveTab}
-								<button
-									class="tab-chip warn"
-									title="These subtitles aren't bound to a video — mining captures from whatever tab is active in asbplayer. Click to pick one."
-									onclick={openAsbplayerModal}>● mines active tab ⇄</button
-								>
-							{/if}
-							{#if $asbContext.loaded_from_asbplayer || minesActiveTab}
-								{@const note = $ankiStatus.connected && $yomitanReachable}
-								<MineAbility
-									{note}
-									media={note &&
-										!$backgroundTab &&
-										!($asbContext.loaded_from_asbplayer && !$asbContext.loaded_has_subtitles)}
-								/>
+							{#if $miningMode === 'local'}
+								{#if $localVideo}
+									<button
+										class="tab-chip ok video"
+										title={`Audio and screenshots are cut from ${$localVideo}. Click to pair a different video.`}
+										onclick={() => pairVideo()}>● {filename($localVideo)} ⇄</button
+									><button
+										class="tab-chip unpair"
+										title="Unpair the video"
+										aria-label="Unpair the video"
+										onclick={() => pairVideo(true)}>×</button
+									>
+								{:else if timed}
+									<button
+										class="tab-chip warn"
+										title="Pick the video these subtitles belong to, so mined cards get its audio and a screenshot"
+										onclick={() => pairVideo()}>● Pair video…</button
+									>
+								{/if}
+								{#if timed}
+									{@const note = $ankiStatus.connected && $yomitanReachable}
+									<MineAbility {note} media={note && $localVideo !== null} />
+								{/if}
+							{:else}
+								{#if followOn && $asbContext.has_active_tab && !$asbContext.active_has_subtitles}
+									<span
+										class="tab-chip warn"
+										title="Follow can't switch until subtitles are loaded on the active video in asbplayer"
+										>● no subtitles on active video</span
+									>
+								{/if}
+								{#if $asbContext.loaded_from_asbplayer && !$asbContext.loaded_has_subtitles}
+									<button
+										class="tab-chip warn"
+										title="asbplayer has no subtitles loaded on this video — cards will mine without audio/screenshot. Click to open the picker."
+										onclick={openAsbplayerModal}>● no subtitles in asbplayer ⇄</button
+									>
+								{:else if $asbContext.loaded_from_asbplayer && $asbContext.loaded_is_active}
+									<button
+										class="tab-chip ok"
+										title="Mining captures media from this video — it's asbplayer's active tab. Click to open the video picker."
+										onclick={openAsbplayerModal}>● active tab ⇄</button
+									>
+								{:else if $asbContext.loaded_from_asbplayer}
+									<button
+										class="tab-chip danger"
+										title="This video's tab isn't active, so mined cards get no audio or screenshot (asbplayer records the visible tab). Switch to its tab before mining. Click to open the video picker."
+										onclick={openAsbplayerModal}>⚠ background tab ⇄</button
+									>
+								{:else if minesActiveTab}
+									<button
+										class="tab-chip warn"
+										title="These subtitles aren't bound to a video — mining captures from whatever tab is active in asbplayer. Click to pick one."
+										onclick={openAsbplayerModal}>● mines active tab ⇄</button
+									>
+								{/if}
+								{#if $asbContext.loaded_from_asbplayer || minesActiveTab}
+									{@const note = $ankiStatus.connected && $yomitanReachable}
+									<MineAbility
+										{note}
+										media={note &&
+											!$backgroundTab &&
+											!($asbContext.loaded_from_asbplayer && !$asbContext.loaded_has_subtitles)}
+									/>
+								{/if}
 							{/if}
 						</span>
 					</div>
@@ -227,7 +258,7 @@
 				<p class="landing-hint">ℹ You can drag and drop a file at any time to load it.</p>
 				<div class="landing-actions">
 					<button class="landing-open" onclick={openAndProcessFile}>Open File…</button>
-					{#if $playerStatus.ws_clients > 0}
+					{#if $miningMode === 'asbplayer' && $playerStatus.ws_clients > 0}
 						<!-- Only offered while asbplayer is actually connected (issue #105). -->
 						<button class="landing-open asb" onclick={openAsbplayerModal}
 							>▶ Load from asbplayer</button
@@ -386,6 +417,18 @@
 	.tab-chip.warn {
 		color: var(--warning);
 		background: color-mix(in srgb, var(--warning) 10%, transparent);
+	}
+	.tab-chip.video {
+		max-width: 18rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	button.tab-chip.unpair {
+		margin-left: -0.3rem;
+		padding: 0.05rem 0.3rem;
+		color: var(--text-muted);
+		background: transparent;
+		border-color: transparent;
 	}
 	.tab-chip.danger {
 		color: var(--danger);

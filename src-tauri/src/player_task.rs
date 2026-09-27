@@ -14,6 +14,7 @@ use tokio::sync::{
     oneshot,
 };
 use yomine::{
+    core::settings::MiningMode,
     mpv::MpvManager,
     player::PlayerManager,
     websocket::{
@@ -48,6 +49,7 @@ pub enum PlayerCommand {
         reply: oneshot::Sender<PlayerStatus>,
     },
     SetPort(u16),
+    SetMode(MiningMode),
     /// asbplayer `get-bound-media` (issue #105). Runs on `spawn_blocking` off
     /// the task loop — the request blocks up to its timeout.
     GetBoundMedia {
@@ -100,6 +102,10 @@ impl PlayerHandle {
         let _ = self.0.send(PlayerCommand::SetPort(port));
     }
 
+    pub fn set_mode(&self, mode: MiningMode) {
+        let _ = self.0.send(PlayerCommand::SetMode(mode));
+    }
+
     pub async fn get_bound_media(&self) -> Result<Vec<BoundMedia>, String> {
         let (reply, rx) = oneshot::channel();
         self.0
@@ -142,21 +148,18 @@ impl PlayerHandle {
 }
 
 /// Spawn the player task and return a handle to it. Call once at app setup.
-pub fn spawn(app: AppHandle, websocket_port: u16) -> PlayerHandle {
+pub fn spawn(app: AppHandle, websocket_port: u16, mode: MiningMode) -> PlayerHandle {
     let (tx, rx) = mpsc::unbounded_channel();
-    tauri::async_runtime::spawn(run(app, websocket_port, rx));
+    tauri::async_runtime::spawn(run(app, websocket_port, mode, rx));
     PlayerHandle(tx)
 }
 
 fn current_status(player: &PlayerManager) -> PlayerStatus {
-    let mpv_connected = player.mpv.is_connected();
+    let mpv_connected = player.mpv_connected();
     let has_clients = player.ws.has_clients();
-    let mode = if mpv_connected {
-        "mpv"
-    } else if player.ws.server.is_some() {
-        "asbplayer"
-    } else {
-        "none"
+    let mode = match player.mode {
+        MiningMode::Local => "local",
+        MiningMode::Asbplayer => "asbplayer",
     };
     // Include the server's own state so the asbplayer dot can show
     // Starting/Error/Stopped, not just "waiting".
@@ -179,10 +182,15 @@ fn current_status(player: &PlayerManager) -> PlayerStatus {
     }
 }
 
-async fn run(app: AppHandle, mut port: u16, mut rx: mpsc::UnboundedReceiver<PlayerCommand>) {
+async fn run(
+    app: AppHandle,
+    mut port: u16,
+    mode: MiningMode,
+    mut rx: mpsc::UnboundedReceiver<PlayerCommand>,
+) {
     let mpv = MpvManager::new();
     let ws = WebSocketManager::new(port);
-    let mut player = PlayerManager::new(mpv, ws);
+    let mut player = PlayerManager::new(mpv, ws, mode);
 
     let mut last_status: Option<PlayerStatus> = None;
     let mut tick = tokio::time::interval(UPDATE_INTERVAL);
@@ -262,6 +270,7 @@ async fn run(app: AppHandle, mut port: u16, mut rx: mpsc::UnboundedReceiver<Play
                         let _ = reply.send(result);
                     });
                 }
+                PlayerCommand::SetMode(mode) => player.mode = mode,
                 PlayerCommand::SetPort(new_port) => {
                     if port != new_port {
                         port = new_port;

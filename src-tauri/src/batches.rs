@@ -95,6 +95,8 @@ pub enum Fallback {
 #[serde(rename_all = "snake_case")]
 pub enum FailureKind {
     MediaUnverified,
+    /// Local mining has nowhere to put media for `note_type`.
+    MediaFieldsUnset,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -104,6 +106,8 @@ pub struct Failure {
     pub message: String,
     pub fallback: Option<Fallback>,
     pub kind: Option<FailureKind>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note_type: Option<String>,
 }
 
 impl Failure {
@@ -114,6 +118,7 @@ impl Failure {
             message: message.to_string(),
             fallback: None,
             kind: None,
+            note_type: None,
         }
     }
     pub fn with_kind(self, kind: FailureKind) -> Self {

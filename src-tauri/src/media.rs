@@ -2,11 +2,26 @@
 
 use std::{
     collections::HashMap,
+    path::{
+        Path,
+        PathBuf,
+    },
     time::Duration,
 };
 
+use base64::Engine;
 use tauri::ipc::Channel;
-use yomine::anki::api as anki_api;
+use yomine::{
+    anki::{
+        api as anki_api,
+        FieldMapping,
+    },
+    core::settings::MiningMode,
+    media::{
+        clip::MediaFormat,
+        ffmpeg,
+    },
+};
 
 use crate::{
     batches::{
@@ -17,6 +32,7 @@ use crate::{
     dto::TimeStampDto,
     events::LoadingMessage,
     player_task::PlayerHandle,
+    state::AppState,
 };
 
 const SEEK_CONFIRM_TIMEOUT: Duration = Duration::from_secs(3);
@@ -27,13 +43,56 @@ const MEDIA_VERIFY_TIMEOUT: Duration = Duration::from_secs(6);
 const MEDIA_VERIFY_POLL: Duration = Duration::from_millis(500);
 
 pub enum MediaSource {
-    Asbplayer { media_id: Option<String> },
+    Asbplayer {
+        media_id: Option<String>,
+    },
+    LocalFile {
+        video: PathBuf,
+        ffmpeg_path: String,
+        format: MediaFormat,
+        mappings: HashMap<String, FieldMapping>,
+    },
+}
+
+/// The fields a note type's media go in; `None` when neither is chosen.
+pub fn media_fields(mapping: Option<&FieldMapping>) -> Option<(Option<&str>, Option<&str>)> {
+    fn field(f: &Option<String>) -> Option<&str> {
+        f.as_deref().filter(|f| !f.is_empty())
+    }
+    let mapping = mapping?;
+    let fields = (field(&mapping.sentence_audio_field), field(&mapping.picture_field));
+    (fields.0.is_some() || fields.1.is_some()).then_some(fields)
 }
 
 impl MediaSource {
+    /// The source the mining mode setting picks for the loaded file. `asbplayer_target` is
+    /// the tab to record from when the file didn't come from asbplayer.
+    pub fn for_file(state: &AppState, asbplayer_target: Option<String>) -> Result<Self, String> {
+        match state.settings.mining_mode {
+            MiningMode::Asbplayer => Ok(Self::Asbplayer {
+                media_id: state.file.asbplayer_media_id.clone().or(asbplayer_target),
+            }),
+            MiningMode::Local => Ok(Self::LocalFile {
+                video: state
+                    .file
+                    .local_video
+                    .clone()
+                    .ok_or("Pair a video with this file to add audio and a screenshot")?,
+                ffmpeg_path: state.settings.ffmpeg_path.clone(),
+                format: state.settings.media_format.clone(),
+                mappings: state.settings.anki_model_mappings.clone(),
+            }),
+        }
+    }
+
     /// Checked before a batch records an item, so it pauses instead of failing each one.
     pub async fn validate(&self, player: &PlayerHandle) -> Result<(), Failure> {
-        let Self::Asbplayer { media_id } = self;
+        let media_id = match self {
+            Self::Asbplayer { media_id } => media_id,
+            Self::LocalFile { video, ffmpeg_path, .. } => {
+                return validate_local(video, ffmpeg_path).await
+            }
+        };
         let status = player
             .status()
             .await
@@ -71,7 +130,7 @@ impl MediaSource {
     /// enriching against one can only fail — detect it up front. Unknown states
     /// (no target id, pre-v1.20 extension) fall through to the normal attempt.
     pub async fn lacks_subtitles(&self, player: &PlayerHandle) -> bool {
-        let Self::Asbplayer { media_id } = self;
+        let Self::Asbplayer { media_id } = self else { return false };
         let Some(id) = media_id else { return false };
         let Ok(media) = player.get_bound_media().await else { return false };
         !media.iter().any(|m| &m.id == id && !m.loaded_subtitles.is_empty())
@@ -85,9 +144,116 @@ impl MediaSource {
         timestamp: Option<&TimeStampDto>,
         progress: &Channel<LoadingMessage>,
     ) -> Result<Option<String>, EnrichError> {
-        let Self::Asbplayer { media_id } = self;
-        enrich_and_verify(player, note_id, media_id.clone(), timestamp, progress).await
+        match self {
+            Self::Asbplayer { media_id } => {
+                enrich_and_verify(player, note_id, media_id.clone(), timestamp, progress).await
+            }
+            Self::LocalFile { video, ffmpeg_path, format, mappings } => {
+                let timestamp =
+                    timestamp.ok_or("This line has no timestamp to cut media from".to_string())?;
+                let _ = progress.send(LoadingMessage::new("Cutting audio & screenshot…"));
+                attach_local(note_id, timestamp, video, ffmpeg_path, format, mappings).await
+            }
+        }
     }
+}
+
+const NO_FFMPEG: &str =
+    "ffmpeg wasn't found. Install it, or download it in Settings → Local Media, then retry.";
+
+async fn validate_local(video: &Path, ffmpeg_path: &str) -> Result<(), Failure> {
+    if !video.is_file() {
+        return Err(Failure::new(
+            "Local video",
+            FailureScope::Shared,
+            format!("{} no longer exists. Pair the video again, then retry.", video.display()),
+        ));
+    }
+    let configured = ffmpeg_path.to_string();
+    let found = tauri::async_runtime::spawn_blocking(move || find_ffmpeg(&configured).is_some())
+        .await
+        .unwrap_or(false);
+    if !found {
+        return Err(Failure::new("ffmpeg", FailureScope::Shared, NO_FFMPEG));
+    }
+    Ok(())
+}
+
+fn find_ffmpeg(configured: &str) -> Option<ffmpeg::Ffmpeg> {
+    ffmpeg::find(Some(configured.trim()).filter(|p| !p.is_empty()).map(Path::new))
+}
+
+async fn attach_local(
+    note_id: u64,
+    timestamp: &TimeStampDto,
+    video: &Path,
+    ffmpeg_path: &str,
+    format: &MediaFormat,
+    mappings: &HashMap<String, FieldMapping>,
+) -> Result<Option<String>, EnrichError> {
+    let note = anki_api::get_notes(vec![note_id])
+        .await
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .next()
+        .ok_or("Anki no longer has this note".to_string())?;
+    let (audio_field, picture_field) =
+        media_fields(mappings.get(&note.model_name)).ok_or_else(|| {
+            format!(
+                "Choose where {} keeps sentence audio and screenshots in Anki Settings",
+                note.model_name
+            )
+        })?;
+
+    let (video, configured, format) =
+        (video.to_path_buf(), ffmpeg_path.to_string(), format.clone());
+    let cue = (f64::from(timestamp.start_secs), f64::from(timestamp.end_secs));
+    let (want_audio, want_picture) = (audio_field.is_some(), picture_field.is_some());
+    let encoded = tauri::async_runtime::spawn_blocking(move || {
+        let ff = find_ffmpeg(&configured).ok_or(NO_FFMPEG.to_string())?;
+        let info = ff.probe(&video).map_err(|e| e.to_string())?;
+        let read = |file: ffmpeg::Encoded| {
+            std::fs::read(&file.path)
+                .map(|bytes| (bytes, file.extension))
+                .map_err(|e| e.to_string())
+        };
+        let audio = want_audio
+            .then(|| ff.encode_audio(&video, &info, cue, &format).map_err(|e| e.to_string()))
+            .transpose()?
+            .map(read)
+            .transpose()?;
+        let picture = want_picture
+            .then(|| ff.encode_frame(&video, &info, cue, &format).map_err(|e| e.to_string()))
+            .transpose()?
+            .map(read)
+            .transpose()?;
+        Ok::<_, String>((audio, picture))
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+
+    let mut fields: HashMap<String, String> = HashMap::new();
+    let mut picture_name = None;
+    for (field, file, is_picture) in
+        [(audio_field, encoded.0, false), (picture_field, encoded.1, true)]
+    {
+        let (Some(field), Some((bytes, extension))) = (field, file) else { continue };
+        let name = format!("yomine-{note_id}.{extension}");
+        let data = base64::engine::general_purpose::STANDARD.encode(bytes);
+        let stored = anki_api::store_media_file(&name, &data).await.map_err(|e| e.to_string())?;
+        if let Some(error) = stored.error {
+            return Err(EnrichError::Failed(format!("Anki didn't store {name}: {error}")));
+        }
+        let value =
+            if is_picture { format!("<img src=\"{name}\">") } else { format!("[sound:{name}]") };
+        // Both can go in one field.
+        fields.entry(field.to_string()).or_default().push_str(&value);
+        if is_picture {
+            picture_name = Some(name);
+        }
+    }
+    anki_api::update_note_fields(note_id, &fields).await?;
+    Ok(picture_name)
 }
 
 pub enum EnrichError {

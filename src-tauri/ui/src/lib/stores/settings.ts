@@ -1,7 +1,7 @@
 import { showPossibleKnownMatches } from './knowledgeView';
 // The backend owns settings; this store is a local mirror synced on each save.
 
-import { get, writable } from 'svelte/store';
+import { derived, get, writable } from 'svelte/store';
 import * as ipc from '$lib/ipc';
 import { lastError } from './ui';
 import { type FreqFilterState, posEnabled } from './controls';
@@ -67,6 +67,9 @@ export async function saveAppearance(
 }
 
 export const setMpvPath = (path: string) => patchSettings({ mpv_path: path });
+
+export const miningMode = derived(settings, ($s) => $s?.mining_mode ?? 'asbplayer');
+export const setMiningMode = (mode: ipc.MiningMode) => patchSettings({ mining_mode: mode });
 
 export const setTableColumns = (columns: { id: string; visible: boolean }[]) =>
 	patchSettings({ table_columns: columns.map((c) => ({ ...c })) });

@@ -262,6 +262,7 @@ pub fn save_user_themes(app: AppHandle, themes: Vec<UserTheme>) -> Result<(), St
 pub fn save_settings(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
+    player: State<'_, crate::player_task::PlayerHandle>,
     mut settings: SettingsData,
 ) -> Result<(), String> {
     let mut guard = state.lock().unwrap();
@@ -270,6 +271,9 @@ pub fn save_settings(
     settings.frequency_weights = guard.settings.frequency_weights.clone();
     let summary_changed = guard.settings.anki_interval != settings.anki_interval;
     let connection_changed = guard.settings.anki_connection != settings.anki_connection;
+    if guard.settings.mining_mode != settings.mining_mode {
+        player.set_mode(settings.mining_mode);
+    }
     let matching_changed = summary_changed
         || connection_changed
         || guard.settings.anki_model_mappings != settings.anki_model_mappings;

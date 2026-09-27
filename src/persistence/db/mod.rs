@@ -197,7 +197,11 @@ pub fn open(path: &Path, json_dir: &Path) -> rusqlite::Result<Connection> {
         import::import_json(&tx, json_dir)?;
         import::import_anki_caches(&tx, json_dir)?;
     }
-    tx.pragma_update(None, "user_version", 1)?;
+    if version < 2 {
+        // The video paired with a source, which local mining cuts media from.
+        tx.execute_batch("ALTER TABLE sources ADD COLUMN video TEXT;")?;
+    }
+    tx.pragma_update(None, "user_version", 2)?;
     tx.commit()?;
     Ok(conn)
 }

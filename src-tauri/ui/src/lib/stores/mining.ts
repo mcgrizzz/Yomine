@@ -82,7 +82,7 @@ async function mineOne(
 	surface: string,
 	sentence: string,
 	timestamp: ipc.TimeStampDto | null,
-	via: 'asbplayer' | 'direct',
+	via: 'media' | 'direct',
 	entryIndex?: number,
 	formatName?: string,
 	scanText?: string,
@@ -126,7 +126,7 @@ export async function mineTerm(
 	lemma: string,
 	sentence: string,
 	timestamp: ipc.TimeStampDto | null,
-	via: 'asbplayer' | 'direct',
+	via: 'media' | 'direct',
 	surface: string,
 	entryIndex?: number,
 	formatName?: string,
@@ -148,11 +148,21 @@ export async function mineTerm(
 			scanText,
 			reading
 		);
+		// Dynamic: static imports close the file.ts → settings.ts → controls.ts cycle
+		// (see locateMpvAndRetry in player.ts).
+		const [{ miningMode }, { localVideo }] = await Promise.all([
+			import('./settings'),
+			import('./file')
+		]);
+		const unpaired =
+			get(miningMode) === 'local' && timestamp !== null && get(localVideo) === null;
 		showNotice(
 			result.warning ??
 				(result.status === 'duplicate'
 					? `「${lemma}」 is already in Anki`
-					: `Added 「${lemma}」 to Anki`)
+					: unpaired
+						? `Added 「${lemma}」 without audio or a screenshot. Pair a video to add them.`
+						: `Added 「${lemma}」 to Anki`)
 		);
 		setTimeout(() => void refreshMinedState(true), 2000);
 	} catch (err) {

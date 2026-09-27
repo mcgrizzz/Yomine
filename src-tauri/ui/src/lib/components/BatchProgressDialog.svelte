@@ -2,6 +2,7 @@
 	import Modal from './Modal.svelte';
 	import type { BatchRecord } from '$lib/ipc';
 	import { cancelQueue, type BatchPreview, type BatchProgress } from '$lib/stores/batches';
+	import { miningMode } from '$lib/stores/settings';
 
 	interface Props {
 		progress: BatchProgress;
@@ -59,7 +60,9 @@
 			{creating ? 'Creating' : 'Recording'} card {progress.position} of {progress.count}
 		</p>
 		<p class="muted explain">
-			{#if !creating}
+			{#if !creating && $miningMode === 'local'}
+				Cutting each line's audio and a screenshot from the video.
+			{:else if !creating}
 				asbplayer plays each line in the video tab to record it. Keep that tab open.
 			{:else if progress.recordsNext}
 				Adding the cards to Anki first. Audio and screenshots are recorded once every card exists.

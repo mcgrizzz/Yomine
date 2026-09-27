@@ -227,6 +227,7 @@ pub struct FileLoadResult {
     /// Terms hidden by the ignore list — the known-count hover breakdown.
     pub ignored_terms: usize,
     pub batch_source: crate::batches::BatchSource,
+    pub local_video: Option<String>,
 }
 
 /// Persisted `IgnoreFile` fields plus the display-only `exists` + `term_count`.
@@ -329,7 +330,8 @@ pub struct SetupStatus {
     pub has_frequency_dict: bool,
     /// ≥1 answers "default dict installed"; >1 answers "additional dicts installed".
     pub frequency_dict_count: usize,
-    pub player_connected: bool,
+    /// What the mining mode needs for card media: asbplayer connected, or ffmpeg found.
+    pub media_ready: bool,
     /// yomitan-api reachable (optional item — enables one-click mining).
     pub yomitan_connected: bool,
 }

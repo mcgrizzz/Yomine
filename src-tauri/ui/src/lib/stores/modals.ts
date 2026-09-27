@@ -22,6 +22,12 @@ export const autoModalOpen = writable(false);
 export const openIgnoreModal = (): void => ignoreModalOpen.set(true);
 export const openWebsocketModal = (): void => websocketModalOpen.set(true);
 export const openAnkiModal = (): void => ankiModalOpen.set(true);
+/** The note type Anki Settings opens expanded, then clears. */
+export const ankiFocus = writable<string | null>(null);
+export const openAnkiModalAt = (noteType: string): void => {
+	ankiFocus.set(noteType);
+	ankiModalOpen.set(true);
+};
 export const openLocalMediaModal = (): void => localMediaModalOpen.set(true);
 export const openFrequencyModal = (): void => frequencyModalOpen.set(true);
 export const openPosModal = (): void => posModalOpen.set(true);

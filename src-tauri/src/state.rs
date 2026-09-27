@@ -5,6 +5,7 @@
 
 use std::{
     collections::HashSet,
+    path::PathBuf,
     sync::{
         atomic::AtomicBool,
         Arc,
@@ -51,6 +52,8 @@ pub struct FileData {
     pub asbplayer_media_id: Option<String>,
     /// Loaded track's file name — dedupes re-loads of the same subtitles.
     pub asbplayer_subtitle_file: Option<String>,
+    /// The video local mining cuts media from, paired with this source.
+    pub local_video: Option<PathBuf>,
 }
 
 pub struct AppState {

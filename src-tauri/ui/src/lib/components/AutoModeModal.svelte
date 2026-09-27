@@ -105,7 +105,7 @@
 >
 	<div class="body">
 		<p class="intro">
-			Mines each new asbplayer video with your table filters. Cards include audio, a screenshot and
+			Mines each video you load with your table filters. Cards include audio, a screenshot and
 			the <code>yomine::auto</code> tag.
 		</p>
 
