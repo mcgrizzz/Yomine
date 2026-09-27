@@ -41,6 +41,7 @@
 	import AppearanceModal from '$lib/components/AppearanceModal.svelte';
 	import AboutModal from '$lib/components/AboutModal.svelte';
 	import AnkiSettingsModal from '$lib/components/AnkiSettingsModal.svelte';
+	import LocalMediaModal from '$lib/components/LocalMediaModal.svelte';
 	import FrequencyWeightsModal from '$lib/components/FrequencyWeightsModal.svelte';
 	import PosFiltersModal from '$lib/components/PosFiltersModal.svelte';
 	import SetupBanner from '$lib/components/SetupBanner.svelte';
@@ -283,6 +284,7 @@
 	<AppearanceModal />
 	<AboutModal />
 	<AnkiSettingsModal />
+	<LocalMediaModal />
 	<FrequencyWeightsModal />
 	<PosFiltersModal />
 	<TextFiltersModal />

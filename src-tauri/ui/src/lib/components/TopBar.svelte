@@ -18,6 +18,7 @@
 		openRecentFilesModal,
 		recentFiles,
 		openAnkiModal,
+		openLocalMediaModal,
 		openIgnoreModal,
 		openTextFiltersModal,
 		openWebsocketModal,
@@ -272,6 +273,7 @@
 		{#if openMenu === 'settings'}
 			<div class="menu-panel">
 				<button onclick={() => run(openAnkiModal)}>Anki</button>
+				<button onclick={() => run(openLocalMediaModal)}>Local Media</button>
 				<button onclick={() => run(openWebsocketModal)}>WebSocket Server</button>
 				<button onclick={() => run(openProfilesModal)}>Profiles…</button>
 				<div class="menu-sep"></div>

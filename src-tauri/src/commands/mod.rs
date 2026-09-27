@@ -11,6 +11,7 @@ pub mod file;
 pub mod ignore;
 pub mod knowledge;
 pub mod lifecycle;
+pub mod local_media;
 pub mod mining;
 pub mod player;
 pub mod profiles;

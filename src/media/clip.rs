@@ -5,7 +5,13 @@ use std::{
     path::Path,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+use serde::{
+    Deserialize,
+    Serialize,
+};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum AudioFormat {
     Mp3,
     Opus,
@@ -35,7 +41,8 @@ impl AudioFormat {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum ImageFormat {
     Jpeg,
     Png,
@@ -51,7 +58,8 @@ impl ImageFormat {
 }
 
 /// Defaults match asbplayer's, so cards look the same whichever made them.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct MediaFormat {
     pub audio: AudioFormat,
     pub image: ImageFormat,

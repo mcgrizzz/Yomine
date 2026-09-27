@@ -81,6 +81,8 @@ pub fn run() {
             commands::player::set_websocket_port,
             commands::player::get_asbplayer_media,
             commands::player::launch_mpv,
+            commands::local_media::get_ffmpeg_status,
+            commands::local_media::install_ffmpeg,
             commands::mining::mine_term,
             commands::mining::mine_batch_item,
             commands::mining::get_media_preview,

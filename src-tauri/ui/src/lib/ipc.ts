@@ -192,6 +192,9 @@ export interface FieldMapping {
 	reading_field: string;
 	/** Sentence field for already-mined detection (issue #3); optional. */
 	sentence_field?: string | null;
+	/** Where local mining writes the sentence audio and screenshot. */
+	sentence_audio_field?: string | null;
+	picture_field?: string | null;
 }
 
 /** A note type with its fields (`core::settings::AnkiModelInfo`). `sample_note`
@@ -202,12 +205,28 @@ export interface AnkiModelInfo {
 	sample_note: Record<string, string> | null;
 }
 
-/** A model's sample note + the engine's term/reading/sentence field guesses. */
+/** A model's sample note + the engine's field guesses. */
 export interface SampleNote {
 	sample_note: Record<string, string> | null;
 	guessed_term: string | null;
 	guessed_reading: string | null;
 	guessed_sentence: string | null;
+	guessed_sentence_audio: string | null;
+	guessed_picture: string | null;
+	/** A known note type ("Lapis") the guesses came from. */
+	detected: string | null;
+	fields_differ: boolean;
+}
+
+/** How local mining encodes media (`media::clip::MediaFormat`). */
+export interface MediaFormat {
+	audio: 'mp3' | 'opus';
+	image: 'jpeg' | 'png';
+	pad_start_ms: number;
+	pad_end_ms: number;
+	/** 0 means no limit. */
+	max_width: number;
+	max_height: number;
 }
 
 export interface FrequencyDictionarySetting {
@@ -286,6 +305,9 @@ export interface SettingsData {
 	text_filters: TextFilterSetting[];
 	/** Preset id → enabled; missing = off. */
 	text_filter_presets: Record<string, boolean>;
+	media_format: MediaFormat;
+	/** Empty finds ffmpeg on PATH or uses the downloaded copy. */
+	ffmpeg_path: string;
 }
 
 export interface TextFilterSetting {
@@ -960,9 +982,28 @@ export function listAnkiModels(connection: AnkiConnectionSettings): Promise<Anki
 export function getAnkiSampleNote(
 	modelName: string,
 	fields: string[],
-	connection: AnkiConnectionSettings
+	connection: AnkiConnectionSettings,
+	yomitanUrl: string
 ): Promise<SampleNote> {
-	return invoke('get_anki_sample_note', { modelName, fields, connection });
+	return invoke('get_anki_sample_note', { modelName, fields, connection, yomitanUrl });
+}
+
+export interface FfmpegStatus {
+	/** The ffmpeg local mining would run, if any. */
+	path: string | null;
+	/** Whether Yomine can download a build for this system. */
+	downloadable: boolean;
+}
+
+export function getFfmpegStatus(configured: string): Promise<FfmpegStatus> {
+	return invoke('get_ffmpeg_status', { configured });
+}
+
+/** Resolves to the installed ffmpeg's path. */
+export function installFfmpeg(onProgress: (msg: LoadingMessage) => void): Promise<string> {
+	const channel = new Channel<LoadingMessage>();
+	channel.onmessage = onProgress;
+	return invoke('install_ffmpeg', { progress: channel });
 }
 
 /** One row of the frequency-dictionary list (`DictionaryStateDto`). */

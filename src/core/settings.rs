@@ -13,7 +13,10 @@ use std::{
     num::NonZeroU16,
 };
 
-use crate::anki::FieldMapping;
+use crate::{
+    anki::FieldMapping,
+    media::clip::MediaFormat,
+};
 
 #[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize, Debug)]
 pub struct FrequencyDictionarySetting {
@@ -265,6 +268,11 @@ pub struct SettingsData {
     /// Preset id → enabled (`text_filter::presets`); missing = off.
     #[serde(default)]
     pub text_filter_presets: HashMap<String, bool>,
+    #[serde(default)]
+    pub media_format: MediaFormat,
+    /// Empty finds ffmpeg on PATH or uses the downloaded copy.
+    #[serde(default)]
+    pub ffmpeg_path: String,
 }
 
 const fn default_font_scale() -> f32 {
@@ -335,6 +343,8 @@ impl Default for SettingsData {
             table_columns: Vec::new(),
             text_filters: Vec::new(),
             text_filter_presets: HashMap::new(),
+            media_format: MediaFormat::default(),
+            ffmpeg_path: String::new(),
         }
     }
 }

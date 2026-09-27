@@ -542,6 +542,8 @@ fn timestamp(
     })
 }
 
+/// A file from Anki's media folder as a data URI; `None` for a type the webview can't show
+/// or play.
 #[tauri::command]
 pub async fn get_media_preview(filename: String) -> Result<Option<String>, String> {
     let extension = filename.rsplit_once('.').map(|(_, ext)| ext.to_ascii_lowercase());
@@ -551,6 +553,12 @@ pub async fn get_media_preview(filename: String) -> Result<Option<String>, Strin
         Some("webp") => "image/webp",
         Some("gif") => "image/gif",
         Some("avif") => "image/avif",
+        Some("mp3") => "audio/mpeg",
+        Some("ogg" | "oga" | "opus") => "audio/ogg",
+        Some("m4a" | "aac") => "audio/mp4",
+        Some("wav") => "audio/wav",
+        Some("flac") => "audio/flac",
+        Some("webm") => "audio/webm",
         _ => return Ok(None),
     };
     let data = anki_api::retrieve_media_file(&filename).await.map_err(|e| e.to_string())?;

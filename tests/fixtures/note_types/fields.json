@@ -1,0 +1,42 @@
+[
+  {
+    "name": "Kaishi 1.5k",
+    "source": "https://github.com/donkuri/Kaishi/releases/download/v2.4.3/Kaishi.1.5k.v2.4.3.apkg",
+    "fields": ["Word", "Word Reading", "Word Meaning", "Word Furigana", "Word Audio", "Sentence", "Sentence Meaning", "Sentence Furigana", "Sentence Audio", "Notes", "Pitch Accent", "Pitch Accent Notes", "Frequency", "Picture"]
+  },
+  {
+    "name": "Lapis",
+    "source": "https://github.com/donkuri/lapis/releases/download/1.7.0/Lapis.apkg",
+    "fields": ["Expression", "ExpressionFurigana", "ExpressionReading", "ExpressionAudio", "SelectionText", "MainDefinition", "DefinitionPicture", "Sentence", "SentenceFurigana", "SentenceAudio", "Picture", "Glossary", "Hint", "IsWordAndSentenceCard", "IsClickCard", "IsSentenceCard", "IsAudioCard", "PitchPosition", "PitchCategories", "Frequency", "FreqSort", "MiscInfo"]
+  },
+  {
+    "name": "Lapis",
+    "source": "Lapis 1.0.0 (https://github.com/donkuri/lapis/releases/tag/1.0.0)",
+    "fields": ["Expression", "ExpressionFurigana", "ExpressionReading", "ExpressionAudio", "SelectionText", "MainDefinition", "Sentence", "SentenceFurigana", "SentenceAudio", "Picture", "Glossary", "Hint", "IsHintCard", "IsClickCard", "IsSentenceCard", "PitchPosition", "Frequency", "FreqSort", "MiscInfo"]
+  },
+  {
+    "name": "Lapis Simplified",
+    "source": "https://github.com/friedrich-de/lapis-simplified/releases/download/1.1.0/Lapis-Simplified-1.1.0.apkg (named Lapis before 2026-01-24)",
+    "fields": ["Expression", "ExpressionReading", "ExpressionAudio", "SelectionText", "MainDefinition", "DefinitionPicture", "Sentence", "SentenceAudio", "Picture", "Glossary", "Hint", "PitchPosition", "PitchCategories", "Frequency", "FreqSort", "MiscInfo"]
+  },
+  {
+    "name": "Kiku",
+    "source": "https://github.com/youyoumu/kiku/releases/download/v2.1.0/Kiku_v2.1.0.apkg",
+    "fields": ["Expression", "ExpressionFurigana", "ExpressionReading", "ExpressionAudio", "RelatedExpression", "SelectionText", "MainDefinition", "DefinitionPicture", "Sentence", "SentenceFurigana", "SentenceTranslation", "SentenceAudio", "Picture", "Glossary", "Hint", "IsWordAndSentenceCard", "IsClickCard", "IsSentenceCard", "IsAudioCard", "PitchPosition", "PitchCategories", "Frequency", "FreqSort", "MiscInfo"]
+  },
+  {
+    "name": "Senren",
+    "source": "https://github.com/BrenoAqua/Senren/releases/download/v5.1.0/Senren.v5.1.0.apkg",
+    "fields": ["word", "reading", "sentence", "sentenceFurigana", "sentenceTranslation", "sentenceCard", "audioCard", "notes", "hint", "picture", "wordAudio", "sentenceAudio", "selectionText", "definition", "glossary", "pitchAccents", "pitchPositions", "pitchCategories", "frequencies", "freqSort", "miscInfo", "dictionaryPreference"]
+  },
+  {
+    "name": "Senren",
+    "source": "Senren v4.7.1 (https://github.com/BrenoAqua/Senren/releases/tag/v4.7.1)",
+    "fields": ["word", "sentence", "sentenceFurigana", "sentenceEng", "reading", "sentenceCard", "audioCard", "notes", "hint", "picture", "wordAudio", "sentenceAudio", "selectionText", "definition", "glossary", "pitchPosition", "pitch", "frequency", "freqSort", "miscInfo", "dictionaryPreference"]
+  },
+  {
+    "name": "Anime Cards",
+    "source": "README field table of https://github.com/friedrich-de/Basic-Mining-Deck at 6787f53 (AnkiWeb 151553357); field order unverified",
+    "fields": ["Word", "Reading", "Glossary", "Sentence", "Picture", "Audio", "SentenceAudio", "Graph", "Hint"]
+  }
+]

@@ -127,6 +127,9 @@ export async function saveAnkiSettings(
 	void refreshMinedState(true);
 }
 
+export const saveLocalMedia = (format: ipc.MediaFormat, ffmpegPath: string) =>
+	patchSettings({ media_format: { ...format }, ffmpeg_path: ffmpegPath });
+
 export const saveJlptFilters = (filters: Record<string, boolean>) =>
 	patchSettings({ jlpt_filters: { ...filters } });
 
