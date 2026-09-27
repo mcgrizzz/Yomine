@@ -1,0 +1,120 @@
+name: Mirror ffmpeg
+
+# Repacks the current upstream ffmpeg release builds into one small zip per platform and
+# publishes them as a release that the app downloads from (src/media/download.rs).
+# Upstream URLs don't last: BtbN prunes dated builds within two years.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (default: ffmpeg-<version>)"
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RIEDL: https://ffmpeg.martin-riedl.de
+    steps:
+      # macOS builds come from martin-riedl, whose latest release sets the version. Windows
+      # and Linux come from BtbN's newest dated build of the same release branch.
+      - name: Find builds
+        run: |
+          set -euo pipefail
+          # martin-riedl answers some requests with a 404, so every fetch retries.
+          fetch() { curl -fsS --retry 5 --retry-all-errors "$@"; }
+          riedl() {
+            fetch -o /dev/null -w '%{redirect_url}' "$RIEDL/redirect/latest/macos/$1/release/ffmpeg.zip"
+          }
+          mac_arm=$(riedl arm64)
+          mac_x64=$(riedl amd64)
+          # .../macos/arm64/1789931890_9.0.2/ffmpeg.zip
+          version=$(basename "$(dirname "$mac_arm")" | cut -d_ -f2)
+          x64_version=$(basename "$(dirname "$mac_x64")" | cut -d_ -f2)
+          [ "$version" = "$x64_version" ] || { echo "macOS builds differ: $version, $x64_version"; exit 1; }
+          branch=$(echo "$version" | cut -d. -f1,2)
+
+          btbn_tag=$(gh api 'repos/BtbN/FFmpeg-Builds/releases?per_page=30' \
+            --jq '[.[] | select(.tag_name | startswith("autobuild-"))][0].tag_name')
+          btbn="https://github.com/BtbN/FFmpeg-Builds/releases/download/$btbn_tag"
+          assets=$(gh api "repos/BtbN/FFmpeg-Builds/releases/tags/$btbn_tag" --jq '.assets[].name')
+          fetch -L -o btbn.sha256 "$btbn/checksums.sha256"
+          b=${branch//./\\.}
+          # ffmpeg-n9.0.2-12-gc867e13549-win64-lgpl-9.0.zip; the -12-g<commit> part is absent on a tag.
+          win=$(grep -E "^ffmpeg-n${b}[.0-9]*(-[0-9]+-g[0-9a-f]+)?-win64-lgpl-${b}\.zip$" <<< "$assets" || true)
+          linux=$(grep -E "^ffmpeg-n${b}[.0-9]*(-[0-9]+-g[0-9a-f]+)?-linux64-lgpl-${b}\.tar\.xz$" <<< "$assets" || true)
+          if [ -z "$win" ] || [ -z "$linux" ]; then
+            echo "$btbn_tag has no $branch build"
+            exit 1
+          fi
+          commit=$(sed -nE 's/.*-g([0-9a-f]+)-win64.*/\1/p' <<< "$win")
+          btbn_source="https://github.com/FFmpeg/FFmpeg/tree/${commit:-n$version}, built by https://github.com/BtbN/FFmpeg-Builds"
+          riedl_source="ffmpeg-$version.tar.xz in this release, built by $RIEDL"
+          sha() { awk -v f="$1" '$2 == f { print $1 }' btbn.sha256; }
+
+          # name | upstream archive | its SHA-256 as upstream publishes it | binary | source
+          {
+            echo "windows-x86_64|$btbn/$win|$(sha "$win")|ffmpeg.exe|$btbn_source"
+            echo "linux-x86_64|$btbn/$linux|$(sha "$linux")|ffmpeg|$btbn_source"
+            echo "macos-aarch64|$mac_arm|$(fetch -L "$mac_arm.sha256" | cut -d' ' -f1)|ffmpeg|$riedl_source"
+            echo "macos-x86_64|$mac_x64|$(fetch -L "$mac_x64.sha256" | cut -d' ' -f1)|ffmpeg|$riedl_source"
+          } > builds.txt
+          cat builds.txt
+          while IFS='|' read -r name url sha rest; do
+            [ -n "$sha" ] || { echo "$name: no upstream SHA-256 for $url"; exit 1; }
+          done < builds.txt
+          echo "FFMPEG_VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Repack
+        run: |
+          set -euo pipefail
+          mkdir out
+          while IFS='|' read -r name url sha binary source <&3; do
+            work="work/$name"
+            mkdir -p "$work/unpacked" "$work/zip"
+            curl -fsSL --retry 5 --retry-all-errors -o "$work/archive" "$url"
+            echo "$sha  $work/archive" | sha256sum -c -
+            case "$url" in
+              *.zip) unzip -q "$work/archive" -d "$work/unpacked" ;;
+              *.tar.xz) tar -xJf "$work/archive" -C "$work/unpacked" ;;
+            esac
+            found=$(find "$work/unpacked" -type f -name "$binary" | head -n1)
+            [ -n "$found" ] || { echo "$name: no $binary in $url"; exit 1; }
+            cp "$found" "$work/zip/$binary"
+            chmod 755 "$work/zip/$binary"
+            license=$(find "$work/unpacked" -maxdepth 2 -type f -iname 'LICENSE*' | head -n1)
+            if [ -n "$license" ]; then
+              cp "$license" "$work/zip/LICENSE.txt"
+            else
+              curl -fsSL -o "$work/zip/LICENSE.md" "https://raw.githubusercontent.com/FFmpeg/FFmpeg/n$FFMPEG_VERSION/LICENSE.md"
+              curl -fsSL -o "$work/zip/COPYING.GPLv3" "https://raw.githubusercontent.com/FFmpeg/FFmpeg/n$FFMPEG_VERSION/COPYING.GPLv3"
+            fi
+            printf 'FFmpeg %s, repacked for Yomine.\n\nUpstream build: %s\nUpstream SHA-256: %s\nSource: %s\n' \
+              "$FFMPEG_VERSION" "$url" "$sha" "$source" > "$work/zip/SOURCE.txt"
+            (cd "$work/zip" && zip -q -X "$GITHUB_WORKSPACE/out/ffmpeg-$name.zip" ./*)
+          done 3< builds.txt
+          curl -fsSL -o "out/ffmpeg-$FFMPEG_VERSION.tar.xz" "https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.xz"
+          (cd out && sha256sum -- * > SHA256SUMS)
+
+      # A prerelease never becomes /releases/latest, which the app updater reads.
+      - name: Publish
+        env:
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          tag=${TAG:-ffmpeg-$FFMPEG_VERSION}
+          gh release create "$tag" out/* --prerelease --latest=false \
+            --title "ffmpeg $FFMPEG_VERSION for Yomine" \
+            --notes "ffmpeg builds Yomine downloads for local mining. Not an app release: install Yomine from the latest v* release."
+          {
+            echo "### Pins for src/media/download.rs ($tag)"
+            echo '```'
+            for zip in out/ffmpeg-*.zip; do
+              echo "$(basename "$zip") $(sha256sum "$zip" | cut -d' ' -f1)"
+            done
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

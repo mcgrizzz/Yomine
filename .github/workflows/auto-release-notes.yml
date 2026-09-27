@@ -16,6 +16,8 @@ permissions:
 jobs:
   generate-release-notes:
     runs-on: ubuntu-latest
+    # The ffmpeg mirror is a release too, but not an app release.
+    if: ${{ github.event_name != 'release' || startsWith(github.event.release.tag_name, 'v') }}
     steps:      
       - name: Checkout repository
         uses: actions/checkout@v4

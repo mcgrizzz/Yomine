@@ -117,6 +117,8 @@ jobs:
   # that release; in build_only mode it just builds and we attach artifacts.
   build-tauri:
     name: ${{ inputs.build_only && 'Build' || 'Release' }} - Tauri ${{ matrix.platform.os-name }}
+    # The ffmpeg mirror is a release too, but not an app release.
+    if: ${{ github.event_name != 'release' || startsWith(github.event.release.tag_name, 'v') }}
     strategy:
       fail-fast: false
       matrix:
