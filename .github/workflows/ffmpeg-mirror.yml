@@ -47,7 +47,10 @@ jobs:
           # ffmpeg-n9.0.2-12-gc867e13549-win64-lgpl-9.0.zip; the -12-g<commit> part is absent on a tag.
           win=$(grep -E "^ffmpeg-n${b}[.0-9]*(-[0-9]+-g[0-9a-f]+)?-win64-lgpl-${b}\.zip$" <<< "$assets" || true)
           linux=$(grep -E "^ffmpeg-n${b}[.0-9]*(-[0-9]+-g[0-9a-f]+)?-linux64-lgpl-${b}\.tar\.xz$" <<< "$assets" || true)
-          [ -n "$win" ] && [ -n "$linux" ] || { echo "$btbn_tag has no $branch build"; exit 1; }
+          if [ -z "$win" ] || [ -z "$linux" ]; then
+            echo "$btbn_tag has no $branch build"
+            exit 1
+          fi
           commit=$(sed -nE 's/.*-g([0-9a-f]+)-win64.*/\1/p' <<< "$win")
           btbn_source="https://github.com/FFmpeg/FFmpeg/tree/${commit:-n$version}, built by https://github.com/BtbN/FFmpeg-Builds"
           riedl_source="ffmpeg-$version.tar.xz in this release, built by $RIEDL"
