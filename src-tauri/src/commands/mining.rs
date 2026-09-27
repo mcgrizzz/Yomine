@@ -27,7 +27,6 @@ use crate::{
         BatchRecord,
         BatchSource,
         Failure,
-        FailureKind,
         FailureScope,
         Fallback,
         MediaState,
@@ -38,19 +37,15 @@ use crate::{
         DefinitionEntryDto,
         MineResultDto,
         MinedStateDto,
+        TimeStampDto,
         YomitanStatusDto,
     },
     events::LoadingMessage,
+    media::MediaSource,
     player_task::PlayerHandle,
     state::AppState,
 };
 
-const SEEK_CONFIRM_TIMEOUT: Duration = Duration::from_secs(3);
-const SEEK_CONFIRM_POLL: Duration = Duration::from_millis(250);
-/// Extra wait past the cue's duration for asbplayer to finish recording.
-const RECORD_BUFFER: Duration = Duration::from_millis(1500);
-const MEDIA_VERIFY_TIMEOUT: Duration = Duration::from_secs(6);
-const MEDIA_VERIFY_POLL: Duration = Duration::from_millis(500);
 /// Cloze refinement is optional; this caps how long it can delay a mine.
 const MATCH_LOOKUP_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -87,12 +82,7 @@ pub async fn mine_term(
         lemma: term,
         surface,
         sentence,
-        timestamp: timestamp_secs.map(|start_secs| crate::dto::TimeStampDto {
-            start_secs,
-            end_secs: timestamp_end_secs.unwrap_or(start_secs),
-            start_label: timestamp_label.unwrap_or_default(),
-            end_label: String::new(),
-        }),
+        timestamp: timestamp(timestamp_secs, timestamp_end_secs, timestamp_label),
         entry_index,
         format_name,
         scan_text: None,
@@ -107,14 +97,16 @@ pub async fn mine_term(
 
     // Enrichment failures don't undo the mine (the note exists) — warn instead.
     if let Some(id) = result.note_id.filter(|_| item.mine_media) {
-        let warning = if target_lacks_subtitles(&player, media_id.as_deref()).await {
+        let media = MediaSource::Asbplayer { media_id };
+        let warning = if media.lacks_subtitles(&player).await {
             Some(
                 "asbplayer has no subtitles loaded on the loaded video — card created without \
                  audio/screenshot"
                     .to_string(),
             )
         } else {
-            record_item(&player, id, media_id, &item, &progress)
+            media
+                .attach(&player, id, item.timestamp.as_ref(), &progress)
                 .await
                 .err()
                 .map(|e| format!("Card created, but media wasn't added: {e}"))
@@ -164,7 +156,7 @@ pub async fn mine_batch_item(
             (!item.adhoc).then(|| row_lexeme(&state.file, &item.key)).flatten(),
         )
     };
-    let target = loaded_target.or(media_target);
+    let media = MediaSource::Asbplayer { media_id: loaded_target.or(media_target) };
     let mut preview_file = None;
     let result = async {
         match item.outcome {
@@ -177,13 +169,14 @@ pub async fn mine_batch_item(
                 media: MediaState::Pending | MediaState::Failed | MediaState::Skipped,
                 ..
             } => {
-                validate_media_target(&player, target.as_deref()).await?;
+                media.validate(&player).await?;
                 batches::checkpoint(
                     &mut batch,
                     item_index,
                     Outcome::Created { note_id, media: MediaState::Pending, error: None },
                 )?;
-                let result = record_item(&player, note_id, target, &item, &progress).await;
+                let result =
+                    media.attach(&player, note_id, item.timestamp.as_ref(), &progress).await;
                 let failure = match result {
                     Ok(image) => {
                         preview_file = image;
@@ -241,37 +234,6 @@ pub async fn mine_batch_item(
         }
     }
     Ok(BatchStep { batch, failure, preview_file })
-}
-
-async fn validate_media_target(player: &PlayerHandle, target: Option<&str>) -> Result<(), Failure> {
-    let status =
-        player.status().await.map_err(|e| Failure::new("asbplayer", FailureScope::Shared, e))?;
-    if status.ws_clients == 0 {
-        return Err(Failure::new(
-            "asbplayer",
-            FailureScope::Shared,
-            "asbplayer is disconnected. Open the video and reconnect the extension, then retry.",
-        ));
-    }
-    let media = player
-        .get_bound_media()
-        .await
-        .map_err(|e| Failure::new("asbplayer", FailureScope::Unknown, e))?;
-    let target = media.iter().find(|m| Some(m.id.as_str()) == target).ok_or_else(|| {
-        Failure::new(
-            "asbplayer",
-            FailureScope::Shared,
-            "The original video is not available. Reopen it in asbplayer before retrying.",
-        )
-    })?;
-    if !target.active || target.loaded_subtitles.is_empty() {
-        return Err(Failure::new(
-            "asbplayer",
-            FailureScope::Shared,
-            "Activate the video's tab and load its subtitles in asbplayer, then retry.",
-        ));
-    }
-    Ok(())
 }
 
 /// UniDic's lexeme for a row, keyed by `termKey`: "{lemma} {reading}".
@@ -555,170 +517,29 @@ pub async fn retry_mine_media(
     let _operation =
         batches::OPERATION.try_lock().map_err(|_| "Mining or undo is already running")?;
     let media_id = { state.lock().unwrap().file.asbplayer_media_id.clone() };
-    if target_lacks_subtitles(&player, media_id.as_deref()).await {
+    let media = MediaSource::Asbplayer { media_id };
+    if media.lacks_subtitles(&player).await {
         return Err("asbplayer still has no subtitles loaded on the loaded video".to_string());
     }
-    let record_secs = cue_duration_secs(timestamp_secs, timestamp_end_secs);
-    enrich_and_verify(
-        &player,
-        note_id,
-        media_id,
-        timestamp_secs,
-        timestamp_label,
-        record_secs,
-        &progress,
-    )
-    .await
-    .map(|_| ())
-    .map_err(|e| e.to_string())
+    let timestamp = timestamp(timestamp_secs, timestamp_end_secs, timestamp_label);
+    media
+        .attach(&player, note_id, timestamp.as_ref(), &progress)
+        .await
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
-/// asbplayer's `mine-subtitle` drops targets without loaded subtitles, so
-/// enriching against one can only fail — detect it up front. Unknown states
-/// (no target id, pre-v1.20 extension) fall through to the normal attempt.
-async fn target_lacks_subtitles(player: &PlayerHandle, media_id: Option<&str>) -> bool {
-    let Some(id) = media_id else { return false };
-    let Ok(media) = player.get_bound_media().await else { return false };
-    !media.iter().any(|m| m.id == id && !m.loaded_subtitles.is_empty())
-}
-
-async fn record_item(
-    player: &PlayerHandle,
-    note_id: u64,
-    media_id: Option<String>,
-    item: &BatchItem,
-    progress: &Channel<LoadingMessage>,
-) -> Result<Option<String>, EnrichError> {
-    let start = item.timestamp.as_ref().map(|t| t.start_secs);
-    let end = item.timestamp.as_ref().map(|t| t.end_secs);
-    let label = item.timestamp.as_ref().map(|t| t.start_label.clone());
-    enrich_and_verify(
-        player,
-        note_id,
-        media_id,
-        start,
-        label,
-        cue_duration_secs(start, end),
-        progress,
-    )
-    .await
-}
-
-fn cue_duration_secs(start: Option<f32>, end: Option<f32>) -> f32 {
-    match (start, end) {
-        (Some(s), Some(e)) => (e - s).max(0.0),
-        _ => 0.0,
-    }
-}
-
-enum EnrichError {
-    Unverified,
-    Failed(String),
-}
-
-impl From<String> for EnrichError {
-    fn from(error: String) -> Self {
-        Self::Failed(error)
-    }
-}
-
-impl std::fmt::Display for EnrichError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Unverified => f.write_str(
-                "asbplayer didn't update the card. In a new tab, audio recording usually has to be \
-                 enabled first: open the video tab, click the asbplayer button in the browser \
-                 toolbar and allow recording, then retry. If recording is already enabled, check \
-                 asbplayer's Anki settings (deck, note type, and field mappings).",
-            ),
-            Self::Failed(error) => f.write_str(error),
-        }
-    }
-}
-
-impl EnrichError {
-    fn failure(&self) -> Failure {
-        let failure = Failure::new("Recording media", FailureScope::Unknown, self);
-        match self {
-            Self::Unverified => failure.with_kind(FailureKind::MediaUnverified),
-            Self::Failed(_) => failure,
-        }
-    }
-}
-
-/// The note's current field values, or `None` when AnkiConnect can't serve it.
-async fn snapshot_fields(note_id: u64) -> Option<std::collections::HashMap<String, String>> {
-    let notes = anki_api::get_notes(vec![note_id]).await.ok()?;
-    let note = notes.into_iter().next()?;
-    Some(note.fields.into_iter().map(|(name, field)| (name, field.value)).collect())
-}
-
-/// Seek, mine, then verify the enrichment actually changed the note: asbplayer's
-/// `published: true` only means the command was broadcast — recording and the
-/// note update happen asynchronously afterwards. Verification also catches a
-/// pre-v1.20 extension ignoring `noteId` and updating the last-added note.
-async fn enrich_and_verify(
-    player: &PlayerHandle,
-    note_id: u64,
-    media_id: Option<String>,
-    timestamp_secs: Option<f32>,
-    timestamp_label: Option<String>,
-    record_secs: f32,
-    progress: &Channel<LoadingMessage>,
-) -> Result<Option<String>, EnrichError> {
-    let _ = progress.send(LoadingMessage::new("Adding audio & screenshot via asbplayer…"));
-    let baseline = snapshot_fields(note_id).await;
-
-    if let Some(secs) = timestamp_secs {
-        player.seek(secs, timestamp_label.unwrap_or_default(), media_id.clone()).await?;
-        wait_for_seek_confirmation(player, secs).await;
-    }
-    player.mine_subtitle(std::collections::HashMap::new(), 2, media_id, Some(note_id)).await?;
-
-    let Some(baseline) = baseline else {
-        return Err(EnrichError::Failed(
-            "Recording was requested, but Anki could not be read to verify the media".into(),
-        ));
-    };
-
-    let _ = progress.send(LoadingMessage::new("Waiting for asbplayer to record the cue…"));
-    tokio::time::sleep(Duration::from_secs_f32(record_secs) + RECORD_BUFFER).await;
-
-    let _ = progress.send(LoadingMessage::new("Verifying the media landed in Anki…"));
-    let deadline = std::time::Instant::now() + MEDIA_VERIFY_TIMEOUT;
-    loop {
-        if let Some(now) = snapshot_fields(note_id).await.filter(|now| *now != baseline) {
-            return Ok(new_image(&baseline, &now));
-        }
-        if std::time::Instant::now() >= deadline {
-            return Err(EnrichError::Unverified);
-        }
-        tokio::time::sleep(MEDIA_VERIFY_POLL).await;
-    }
-}
-
-fn new_image(
-    before: &std::collections::HashMap<String, String>,
-    after: &std::collections::HashMap<String, String>,
-) -> Option<String> {
-    after.iter().find_map(|(field, value)| {
-        let old = before.get(field).map(String::as_str).unwrap_or_default();
-        image_sources(value).into_iter().find(|src| !old.contains(src)).map(str::to_string)
+fn timestamp(
+    start_secs: Option<f32>,
+    end_secs: Option<f32>,
+    label: Option<String>,
+) -> Option<TimeStampDto> {
+    start_secs.map(|start_secs| TimeStampDto {
+        start_secs,
+        end_secs: end_secs.unwrap_or(start_secs),
+        start_label: label.unwrap_or_default(),
+        end_label: String::new(),
     })
-}
-
-fn image_sources(html: &str) -> Vec<&str> {
-    html.split("<img")
-        .skip(1)
-        .filter_map(|tag| {
-            let src = tag.split('>').next()?.split_once("src=")?.1;
-            match src.chars().next()? {
-                quote @ ('"' | '\'') => src[1..].split(quote).next(),
-                _ => src.split(char::is_whitespace).next(),
-            }
-        })
-        .filter(|src| !src.is_empty())
-        .collect()
 }
 
 #[tauri::command]
@@ -763,20 +584,6 @@ pub async fn open_notes_in_anki(note_ids: Vec<u64>) -> Result<(), String> {
     match response.error {
         None => Ok(()),
         Some(err) => Err(err),
-    }
-}
-
-/// Best-effort seek-ack wait so asbplayer records the right cue; proceeds on
-/// timeout rather than failing.
-async fn wait_for_seek_confirmation(player: &PlayerHandle, secs: f32) {
-    let deadline = std::time::Instant::now() + SEEK_CONFIRM_TIMEOUT;
-    while std::time::Instant::now() < deadline {
-        if let Ok(status) = player.status().await {
-            if status.confirmed_timestamps.iter().any(|t| (t - secs).abs() < 0.01) {
-                return;
-            }
-        }
-        tokio::time::sleep(SEEK_CONFIRM_POLL).await;
     }
 }
 

@@ -3,6 +3,7 @@ mod batches;
 mod commands;
 mod dto;
 mod events;
+mod media;
 mod player_task;
 mod recommended;
 mod state;
