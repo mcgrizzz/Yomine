@@ -347,6 +347,11 @@ async fn poll_asbplayer_follow(app: AppHandle) {
         .await
         {
             Ok(payload) => {
+                // Auto mode mines as soon as the load event lands and decides recording from
+                // this context, so it has to describe the new video first.
+                let ctx = asbplayer_context(&media, Some(&next.id));
+                let _ = app.emit(names::ASBPLAYER_CONTEXT, ctx.clone());
+                last_ctx = Some(ctx);
                 let _ = app.emit(names::ASBPLAYER_MEDIA_LOADED, payload);
             }
             Err(e) => {
