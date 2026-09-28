@@ -3,7 +3,6 @@
 
 import { writable } from 'svelte/store';
 import * as ipc from '$lib/ipc';
-import { playerStatus } from './player';
 import { lastError } from './ui';
 
 /** Lemmas mined this session (optimistic, until the next refresh). */

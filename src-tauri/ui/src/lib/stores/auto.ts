@@ -191,18 +191,9 @@ async function exclusive(run: () => Promise<void>): Promise<void> {
 /** Selects the loaded video's picks and opens the review dialog, unless it was processed. */
 function reviewVideo(force = false): Promise<void> {
 	return exclusive(async () => {
-		const loaded = get(fileResult);
-		if (get(autoMode) !== 'review' || !loaded) return;
+		const loaded = await claimVideo('review', force);
+		if (!loaded) return;
 		const { fingerprint } = loaded.batch_source;
-		if (get(playerBusy) || get(miningTerm) !== null) {
-			showNotice(`Auto mode skipped ${loaded.source_file.title}: a mine was already running`);
-			return;
-		}
-		autoSkipped.set(null);
-		if (!force && (await ipc.isMediaProcessed(fingerprint))) {
-			autoSkipped.set(fingerprint);
-			return;
-		}
 		const result = await selectPicks();
 		if (!result || get(autoMode) !== 'review') return;
 		if (get(fileResult)?.batch_source.fingerprint !== fingerprint) return;
@@ -236,52 +227,59 @@ export function skipReview(): void {
 	reviewDialogOpen.set(false);
 }
 
+/** The loaded video, if `mode` is on, nothing is mining, and it wasn't processed (unless
+ * `force`d). */
+async function claimVideo(mode: AutoMode, force: boolean): Promise<ipc.FileLoadResult | null> {
+	const loaded = get(fileResult);
+	if (get(autoMode) !== mode || !loaded) return null;
+	if (get(playerBusy) || get(miningTerm) !== null) {
+		showNotice(`Auto mode skipped ${loaded.source_file.title}: a mine was already running`);
+		return null;
+	}
+	const { fingerprint } = loaded.batch_source;
+	autoSkipped.set(null);
+	if (!force && (await ipc.isMediaProcessed(fingerprint))) {
+		autoSkipped.set(fingerprint);
+		return null;
+	}
+	return loaded;
+}
+
+async function recordProcessed(fingerprint: string, title: string, batch: ipc.BatchRecord | null) {
+	await ipc.markMediaProcessed(fingerprint);
+	const created = batch?.items.filter((i) => i.outcome.status === 'created').length ?? 0;
+	autoLedger.update((l) => [...l, { title, batchId: batch?.id ?? null, created, undone: false }]);
+}
+
 /** Mining a waiting review's picks marks its video processed. */
 export async function mineSelection(items: QueueItem[]): Promise<void> {
 	const pending = get(autoReview);
 	const batch = await mineQueue(items, pending !== null);
 	if (!pending || !batch) return;
 	review.set(null);
-	try {
-		await ipc.markMediaProcessed(pending.fingerprint);
-	} catch (err) {
-		lastError.set({ title: 'Auto mode', message: String(err), detail: null });
-	}
-	const created = batch.items.filter((i) => i.outcome.status === 'created').length;
-	autoLedger.update((l) => [...l, { title: pending.title, batchId: batch.id, created, undone: false }]);
+	await recordProcessed(pending.fingerprint, pending.title, batch).catch((err) =>
+		lastError.set({ title: 'Auto mode', message: String(err), detail: null })
+	);
 }
 
 /** Mines the loaded video once, unless it was already processed and not `force`d. */
 export function autoMine(force = false): Promise<void> {
 	return exclusive(async () => {
-		const loaded = get(fileResult);
 		const prefs = get(settings)?.auto_mine;
-		if (get(autoMode) !== 'mine' || !loaded || !prefs) return;
+		const loaded = prefs ? await claimVideo('mine', force) : null;
+		if (!prefs || !loaded) return;
 		const { fingerprint } = loaded.batch_source;
 		const title = loaded.source_file.title;
-		if (get(playerBusy) || get(miningTerm) !== null) {
-			showNotice(`Auto mode skipped ${title}: a mine was already running`);
-			return;
-		}
-		autoSkipped.set(null);
-		if (!force && (await ipc.isMediaProcessed(fingerprint))) {
-			autoSkipped.set(fingerprint);
-			return;
-		}
 		await refreshMinedState(true);
 		const file = get(fileResult);
 		if (get(autoMode) !== 'mine' || file?.batch_source.fingerprint !== fingerprint) return;
 		const items = pick(file, prefs).picks.map((p) => p.item);
 		if (items.length === 0) {
-			await ipc.markMediaProcessed(fingerprint);
-			autoLedger.update((l) => [...l, { title, batchId: null, created: 0, undone: false }]);
+			await recordProcessed(fingerprint, title, null);
 			showNotice(`Auto mode found nothing to mine in ${title}`);
 			return;
 		}
 		const batch = await mineQueue(items, true);
-		if (!batch) return;
-		await ipc.markMediaProcessed(fingerprint);
-		const created = batch.items.filter((i) => i.outcome.status === 'created').length;
-		autoLedger.update((l) => [...l, { title, batchId: batch.id, created, undone: false }]);
+		if (batch) await recordProcessed(fingerprint, title, batch);
 	});
 }

@@ -12,7 +12,7 @@
 	import {
 		getDefaultEntry,
 		getLineMedia,
-		prepareLineMedia,
+		prepareMedia,
 		type DefinitionEntry,
 		type SentenceDto,
 		type Term,
@@ -306,7 +306,7 @@
 		const fresh = cues.filter((c) => !requestedFrames.has(cueKey(c)));
 		if (fresh.length === 0) return;
 		for (const c of fresh) requestedFrames.add(cueKey(c));
-		void prepareLineMedia(fresh)
+		void prepareMedia(fresh)
 			.catch(() => {})
 			.then(async () => {
 				// One at a time, so they don't all start ffmpeg at once.
@@ -386,6 +386,10 @@
 	const formatNames = $derived($cardFormats.map((f) => f.name));
 </script>
 
+{#snippet highlighted(row: Row)}{#each sentenceParts(row) as part, i (i)}{#if part.hit}<mark
+			>{part.text}</mark
+		>{:else}{part.text}{/if}{/each}{/snippet}
+
 <svelte:window
 	onkeydown={(e) => {
 		trackShift(e);
@@ -447,8 +451,7 @@
 								</span>
 								<span class="line context">
 									<span class="sentence" lang="ja"
-										>{#each sentenceParts(row) as part, i (i)}{#if part.hit}<mark>{part.text}</mark
-												>{:else}{part.text}{/if}{/each}</span
+										>{@render highlighted(row)}</span
 									>
 									{#if row.sentence?.timestamp}<span class="time"
 											>{row.sentence.timestamp.start_label}</span
@@ -531,8 +534,7 @@
 							</span>
 						</div>
 						<p class="detail-sentence" lang="ja">
-							{#each sentenceParts(row) as part, i (i)}{#if part.hit}<mark>{part.text}</mark
-									>{:else}{part.text}{/if}{/each}
+							{@render highlighted(row)}
 						</p>
 						<div class="where">
 							{#if cue && (showFrames || $playerConnected)}

@@ -202,19 +202,14 @@ pub async fn mine_batch_item(
     Ok(BatchStep { batch, failure, preview_file, preview_image })
 }
 
-/// Starts cutting local media for the items a batch will record.
-#[tauri::command]
-pub async fn prepare_batch_media(
-    state: State<'_, Mutex<AppState>>,
-    batch_id: String,
-    indices: Vec<usize>,
-) -> Result<(), String> {
-    let batch = batches::load(&batch_id)?;
-    let cues = indices.iter().filter_map(|&i| batch.items.get(i)?.timestamp.clone()).collect();
-    if let Ok(source) = MediaSource::for_file(&state.lock().unwrap(), None) {
-        crate::media::prepare(&source, cues);
-    }
-    Ok(())
+/// UniDic's lexeme for a row, keyed by `termKey`: "{lemma} {reading}".
+fn row_lexeme(file: &crate::state::FileData, key: &str) -> Option<String> {
+    let (lemma, reading) = key.split_once(' ')?;
+    file.base_terms
+        .iter()
+        .find(|t| t.lemma_form == lemma && t.lemma_reading == reading)?
+        .lexeme
+        .clone()
 }
 
 /// A render request that failed outright. It pauses the batch only when Yomitan has stopped
@@ -231,19 +226,9 @@ async fn request_failure(yomitan_url: &str, term: &str, error: YomineError) -> F
     Failure::new("Rendering card", FailureScope::Unknown, message).with_kind(FailureKind::Transient)
 }
 
-/// UniDic's lexeme for a row, keyed by `termKey`: "{lemma} {reading}".
-fn row_lexeme(file: &crate::state::FileData, key: &str) -> Option<String> {
-    let (lemma, reading) = key.split_once(' ')?;
-    file.base_terms
-        .iter()
-        .find(|t| t.lemma_form == lemma && t.lemma_reading == reading)?
-        .lexeme
-        .clone()
-}
-
-/// Cuts local media for lines under review; mining reuses the clips.
+/// Cuts these lines' media in the background, for review frames and a batch's record step.
 #[tauri::command]
-pub fn prepare_line_media(
+pub fn prepare_media(
     state: State<'_, Mutex<AppState>>,
     cues: Vec<TimeStampDto>,
 ) -> Result<(), String> {

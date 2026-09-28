@@ -848,19 +848,14 @@ export function getDefaultEntry(key: string, lemma: string, scanText: string | n
 	return invoke('get_default_entry', { key, lemma, scanText });
 }
 
-/** Cuts local media for lines under review; mining reuses the clips. */
-export function prepareLineMedia(cues: TimeStampDto[]): Promise<void> {
-	return invoke('prepare_line_media', { cues });
+/** Cuts these lines' media in the background, for review frames and a batch's record step. */
+export function prepareMedia(cues: TimeStampDto[]): Promise<void> {
+	return invoke('prepare_media', { cues });
 }
 
 /** A `data:` URI; null without a paired video or in asbplayer mode. */
 export function getLineMedia(cue: TimeStampDto, kind: 'frame' | 'audio'): Promise<string | null> {
 	return invoke('get_line_media', { cue, kind });
-}
-
-/** Starts cutting local media for the items a batch will record. */
-export function prepareBatchMedia(batchId: string, indices: number[]): Promise<void> {
-	return invoke('prepare_batch_media', { batchId, indices });
 }
 
 export function setBatchRunning(running: boolean): Promise<void> {

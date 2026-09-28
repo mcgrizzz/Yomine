@@ -364,8 +364,8 @@ async function run(
 			plan.create.indices = selected;
 			if (options.record) plan.record.indices = selected.filter((i) => snapshot[i].mine_media);
 		}
-		if (local && plan.record.indices.length > 0)
-			void ipc.prepareBatchMedia(batch.id, plan.record.indices).catch(() => {});
+		const cues = plan.record.indices.flatMap((i) => batch!.items[i].timestamp ?? []);
+		if (local && cues.length > 0) void ipc.prepareMedia(cues).catch(() => {});
 		if (!mediaRun) {
 			await runPhase('create');
 			const created = batch.items;
