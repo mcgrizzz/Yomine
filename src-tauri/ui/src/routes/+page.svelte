@@ -33,7 +33,8 @@
 		backgroundTab,
 		miningMode,
 		localVideo,
-		pairVideo
+		pairVideo,
+		switchSubtitleTrack
 	} from '$lib/stores';
 	import BatchRecovery from '$lib/components/BatchRecovery.svelte';
 	import TopBar from '$lib/components/TopBar.svelte';
@@ -121,19 +122,36 @@
 							>
 						{/if}
 						<span class="chips">
+							{#if $fileResult.subtitle_tracks.length > 1}
+								<select
+									class="tab-chip track"
+									title="Subtitles loaded from this video"
+									aria-label="Subtitle track"
+									value={$fileResult.subtitle_track}
+									onchange={(e) => switchSubtitleTrack(e.currentTarget.value)}
+								>
+									{#each $fileResult.subtitle_tracks as track (track.id)}
+										<option value={track.id} disabled={track.path === null}
+											>{track.label}{track.path === null
+												? ` (${track.unusable})`
+												: `, ${track.lines} lines`}</option
+										>
+									{/each}
+								</select>
+							{/if}
 							{#if $miningMode === 'local'}
-								{#if $localVideo}
+								{#if $localVideo && $fileResult.subtitle_tracks.length === 0}
 									<button
-										class="tab-chip ok video"
+										class="tab-chip ok"
 										title={`Audio and screenshots are cut from ${$localVideo}. Click to pair a different video.`}
-										onclick={() => pairVideo()}>● {filename($localVideo)} ⇄</button
+										onclick={() => pairVideo()}>● Video ⇄</button
 									><button
 										class="tab-chip unpair"
 										title="Unpair the video"
 										aria-label="Unpair the video"
 										onclick={() => pairVideo(true)}>×</button
 									>
-								{:else if timed}
+								{:else if !$localVideo && timed}
 									<button
 										class="tab-chip warn"
 										title="Pick the video these subtitles belong to, so mined cards get its audio and a screenshot"
@@ -418,10 +436,12 @@
 		color: var(--warning);
 		background: color-mix(in srgb, var(--warning) 10%, transparent);
 	}
-	.tab-chip.video {
-		max-width: 18rem;
-		overflow: hidden;
-		text-overflow: ellipsis;
+	select.tab-chip.track {
+		max-width: 16rem;
+		color: var(--text);
+		background: var(--bg-raised);
+		border: 1px solid var(--border);
+		cursor: pointer;
 	}
 	button.tab-chip.unpair {
 		margin-left: -0.3rem;

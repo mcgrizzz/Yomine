@@ -1,6 +1,6 @@
 import { derived, get, writable } from 'svelte/store';
 import * as ipc from '$lib/ipc';
-import { lastError, overlay } from './ui';
+import { lastError, overlay, showNotice } from './ui';
 import { ensureToolsReady, languageToolsStatus } from './status';
 import { refreshMinedState } from './mining';
 import { epubChapterModalOpen } from './modals';
@@ -17,6 +17,30 @@ export const recentFiles = writable<ipc.RecentFileEntry[]>([]);
 /** The video local mining cuts the loaded file's media from. */
 export const localVideo = derived(fileResult, ($f) => $f?.local_video ?? null);
 
+/** A video is opened for local mining. Dynamic: a static './settings' import closes the
+ * file.ts → settings.ts → controls.ts cycle (see locateMpvAndRetry in player.ts). */
+async function useLocalMode(): Promise<void> {
+	const { miningMode, setMiningMode } = await import('./settings');
+	if (get(miningMode) === 'local') return;
+	await setMiningMode('local');
+	showNotice('Switched to Local: audio and screenshots come from the video');
+}
+
+/** Reloads the loaded video with another of its subtitle tracks. */
+export async function switchSubtitleTrack(track: string): Promise<void> {
+	const video = get(fileResult)?.local_video;
+	if (!video) return;
+	try {
+		overlay.set('Loading subtitles…');
+		fileResult.set(await ipc.openVideo(video, track, (msg) => overlay.set(msg.message)));
+		void refreshMinedState(true);
+	} catch (err) {
+		lastError.set({ title: 'Failed to switch subtitles', message: String(err), detail: null });
+	} finally {
+		overlay.set(null);
+	}
+}
+
 /** Picks a video for the loaded file; `unpair` removes the pairing instead. */
 export async function pairVideo(unpair = false): Promise<void> {
 	try {
@@ -29,12 +53,13 @@ export async function pairVideo(unpair = false): Promise<void> {
 	}
 }
 
-/** Mirrors the engine's `SourceFileType::supported_extensions`. */
+/** Mirror the engine's `SourceFileType::supported_extensions` and `VIDEO_EXTENSIONS`. */
 const SUPPORTED_EXTENSIONS = ['srt', 'ass', 'ssa', 'txt', 'epub'];
-export const isSupportedPath = (path: string): boolean => {
-	const ext = path.split('.').pop()?.toLowerCase();
-	return ext !== undefined && SUPPORTED_EXTENSIONS.includes(ext);
-};
+const VIDEO_EXTENSIONS = ['mkv', 'mp4', 'avi', 'webm', 'mov', 'm4v', 'ts'];
+const extensionOf = (path: string) => path.split('.').pop()?.toLowerCase() ?? '';
+export const isVideoPath = (path: string): boolean => VIDEO_EXTENSIONS.includes(extensionOf(path));
+export const isSupportedPath = (path: string): boolean =>
+	SUPPORTED_EXTENSIONS.includes(extensionOf(path)) || isVideoPath(path);
 
 /** The book behind the open chapter-picker modal, or `null`. */
 export const epubPicker = writable<{ path: string; book: ipc.EpubBook } | null>(null);
@@ -67,13 +92,11 @@ export async function loadAndStore(
 	}
 	try {
 		overlay.set('Processing file…');
-		const result = await ipc.processFile(
-			path,
-			(msg) => overlay.set(msg.message),
-			epubChapters,
-			epubLabel
-		);
+		const result = isVideoPath(path)
+			? await ipc.openVideo(path, null, (msg) => overlay.set(msg.message))
+			: await ipc.processFile(path, (msg) => overlay.set(msg.message), epubChapters, epubLabel);
 		fileResult.set(result);
+		if (isVideoPath(path)) void useLocalMode();
 		void refreshMinedState(true);
 		recentFiles.set(await ipc.getRecentFiles());
 	} catch (err) {

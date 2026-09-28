@@ -23,6 +23,7 @@ use yomine::{
         settings::SettingsData,
         LanguageTools,
     },
+    media::subtitles::SubtitleChoice,
     tools::analysis::FrequencyAnalysisResult,
 };
 
@@ -54,6 +55,10 @@ pub struct FileData {
     pub asbplayer_subtitle_file: Option<String>,
     /// The video local mining cuts media from, paired with this source.
     pub local_video: Option<PathBuf>,
+    /// When the file was opened as a video: the subtitles it could load, and the id of
+    /// the one loaded.
+    pub subtitle_tracks: Vec<SubtitleChoice>,
+    pub subtitle_track: Option<String>,
 }
 
 pub struct AppState {

@@ -85,6 +85,7 @@ pub fn run() {
             commands::local_media::get_ffmpeg_status,
             commands::local_media::install_ffmpeg,
             commands::file::pair_video,
+            commands::file::open_video,
             commands::mining::mine_term,
             commands::mining::mine_batch_item,
             commands::mining::get_media_preview,

@@ -134,12 +134,19 @@ pub fn record_open(
     mark_parts_seen(conn, open.path, epub_parts.iter().map(|p| *p as i64))
 }
 
-/// Each path's latest load, most recent first.
+/// Each source's latest load, most recent first. A video and the subtitles it loads are
+/// one source, so opening the episode either way leaves one entry.
 pub fn recent(conn: &Connection, limit: usize) -> rusqlite::Result<Vec<RecentFileEntry>> {
     // SQLite takes the other columns from the row holding max(opened_at).
     conn.prepare(
-        "SELECT path, title, label, creator, max(opened_at), file_size, term_count
-         FROM opens GROUP BY path ORDER BY max(opened_at) DESC LIMIT ?1",
+        "WITH latest AS (
+             SELECT path, title, label, creator, max(opened_at) AS opened_at, file_size,
+                    term_count, source_id
+             FROM opens GROUP BY path)
+         SELECT path, title, label, creator, opened_at, file_size, term_count FROM latest AS l
+         WHERE source_id IS NULL
+            OR opened_at = (SELECT max(opened_at) FROM latest WHERE source_id = l.source_id)
+         ORDER BY opened_at DESC LIMIT ?1",
     )?
     .query_map(params![limit as i64], |r| {
         Ok(RecentFileEntry {

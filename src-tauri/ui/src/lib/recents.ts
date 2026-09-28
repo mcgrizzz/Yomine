@@ -9,6 +9,13 @@ export function fileIcon(path: string): string {
 		case 'srt':
 		case 'ass':
 		case 'ssa':
+		case 'mkv':
+		case 'mp4':
+		case 'avi':
+		case 'webm':
+		case 'mov':
+		case 'm4v':
+		case 'ts':
 			return '🎬';
 		default:
 			return '📄';

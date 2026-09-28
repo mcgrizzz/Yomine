@@ -24,6 +24,8 @@ pub struct Stream {
     pub default: bool,
     /// Cover art, which files store as a one-frame video stream.
     pub attached_pic: bool,
+    /// For a subtitle, its number of cues, when the muxer recorded it (mkvmerge does).
+    pub frames: Option<usize>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -54,6 +56,8 @@ static STREAM: LazyLock<Regex> = LazyLock::new(|| {
 static DURATION: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^Duration: (\d+):(\d{2}):(\d{2}(?:\.\d+)?)").unwrap());
 static TITLE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^title\s*: (.*)$").unwrap());
+static FRAMES: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^NUMBER_OF_FRAMES(?:-\w+)?\s*:\s*(\d+)").unwrap());
 
 pub fn parse(stderr: &str) -> MediaInfo {
     let mut info = MediaInfo::default();
@@ -82,12 +86,17 @@ pub fn parse(stderr: &str) -> MediaInfo {
                 title: None,
                 default: line.contains("(default)"),
                 attached_pic: line.contains("(attached pic)"),
+                frames: None,
             });
         } else if line.starts_with("Chapter") {
             in_stream = false;
         } else if let Some(c) = TITLE.captures(line).filter(|_| in_stream) {
             if let Some(stream) = info.streams.last_mut() {
                 stream.title.get_or_insert_with(|| c[1].trim().to_string());
+            }
+        } else if let Some(c) = FRAMES.captures(line).filter(|_| in_stream) {
+            if let Some(stream) = info.streams.last_mut() {
+                stream.frames = c[1].parse().ok();
             }
         }
     }
@@ -145,6 +154,20 @@ mod tests {
         );
         assert_eq!(info.streams[2].codec, "mov_text");
         assert_eq!(info.audio_stream().map(|s| s.index), Some(1));
+    }
+
+    #[test]
+    fn reads_cue_counts_mkvmerge_records() {
+        let info = parse(include_str!("../../tests/fixtures/ffmpeg/mkv_statistics_tags_6.1.txt"));
+        let subtitles: Vec<_> = info
+            .streams
+            .iter()
+            .filter(|s| s.kind == StreamKind::Subtitle)
+            .map(|s| (s.language.as_deref(), s.frames.is_some()))
+            .collect();
+        assert_eq!(subtitles.len(), 12);
+        assert!(subtitles.iter().all(|(language, counted)| language.is_some() && *counted));
+        assert_eq!(info.streams[2].frames, Some(8250));
     }
 
     #[test]

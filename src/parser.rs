@@ -134,12 +134,28 @@ fn read_ssa(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
     let raw_file = fs::read_to_string(&source_file.original_file)?;
     let raw_file = raw_file.trim_start_matches('\u{feff}');
 
-    let ssa = SSA::parse_lenient(raw_file)
+    let ssa = SSA::parse_lenient(without_empty_blocks(raw_file))
         .map_err(|err| YomineError::Custom(format!("Error Parsing SSA/ASS File: {}", err)))?;
 
     let srt = ssa.to_srt();
 
     parse_srt(srt, source_file)
+}
+
+/// rsubs-lib splits a file into sections at blank lines and rejects an empty one, which a
+/// trailing blank line (as ffmpeg writes) or two blank lines in a row produce.
+fn without_empty_blocks(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    let mut after_blank = true;
+    for line in raw.lines() {
+        let blank = line.trim().is_empty();
+        if !(blank && after_blank) {
+            out.push_str(line);
+            out.push('\n');
+        }
+        after_blank = blank;
+    }
+    out.trim_end().to_string()
 }
 
 fn sentences_from_lines<'a>(
@@ -230,10 +246,13 @@ pub fn read(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
 
 #[cfg(test)]
 mod tests {
+    use rsubs_lib::SSA;
+
     use super::{
         clean_subtitle_text,
         read_txt,
         sentences_from_lines,
+        without_empty_blocks,
     };
     use crate::core::SourceFile;
 
@@ -255,6 +274,14 @@ mod tests {
         for (a, b) in from_file.iter().zip(&from_lines) {
             assert_eq!((a.id, &a.text), (b.id, &b.text));
         }
+    }
+
+    #[test]
+    fn ass_ending_in_a_blank_line_parses() {
+        // The start of a track ffmpeg extracted from an mkv, which ends with a blank line.
+        let ass = include_str!("../tests/fixtures/ass/trailing_blank_line.ass");
+        assert!(SSA::parse_lenient(ass).is_err());
+        assert!(SSA::parse_lenient(without_empty_blocks(ass)).is_ok());
     }
 
     #[test]

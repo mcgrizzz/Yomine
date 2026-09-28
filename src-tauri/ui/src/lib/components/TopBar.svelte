@@ -120,7 +120,9 @@
 	const mpv: { kind: StatusKind; tip: string } = $derived(
 		$playerStatus.mpv_connected
 			? { kind: 'ok', tip: 'mpv is open — timestamps seek in it' }
-			: { kind: 'off', tip: 'mpv not open (optional, for watching and seeking)' }
+			: $localVideo
+				? { kind: 'off', tip: 'Open the video in mpv, with the loaded subtitles' }
+				: { kind: 'off', tip: 'Open a video to watch it in mpv' }
 	);
 
 	const modeTip = $derived(
@@ -397,18 +399,25 @@
 				{/if}
 			</div>
 		{:else}
-			<!-- The mpv indicator doubles as the launcher menu (issue #89). -->
+			<!-- Clicking opens the loaded video in mpv; a panel appears only to locate mpv. -->
 			<div class="menu" class:open={openMenu === 'mpv'}>
 				<button
 					class="indicator status-trigger"
 					class:active-mode={$playerStatus.mpv_connected}
+					class:idle={!$playerStatus.mpv_connected && !$localVideo}
 					title={mpv.tip}
-					onclick={(e) => toggleMenu('mpv', e)}
+					aria-disabled={$playerStatus.mpv_connected || !$localVideo}
+					onclick={async (e) => {
+						e.stopPropagation();
+						if ($playerStatus.mpv_connected || !$localVideo) return;
+						await launchMpvVideo();
+						openMenu = $mpvLocatePrompt ? 'mpv' : null;
+					}}
 				>
 					<small>mpv</small>
 					{@render dot(mpv.kind)}
 				</button>
-				{#if openMenu === 'mpv'}
+				{#if openMenu === 'mpv' && $mpvLocatePrompt}
 					<div
 						class="menu-panel right"
 						role="menu"
@@ -416,26 +425,12 @@
 						onclick={(e) => e.stopPropagation()}
 						onkeydown={(e) => e.key === 'Escape' && (openMenu = null)}
 					>
-						<span class="menu-note">{mpv.tip}</span>
-						<!-- Not run(): the panel must stay open so the not-found row can appear. -->
+						<span class="menu-note warn">mpv wasn't found (tried “{$settings?.mpv_path}”)</span>
 						<button
 							onclick={async () => {
-								if (await launchMpvVideo()) openMenu = null;
-							}}
-							disabled={$playerStatus.mpv_connected}
-							title={$playerStatus.mpv_connected
-								? 'MPV is already connected — seeking uses the running instance'
-								: 'Pick a video file and open it in MPV, ready for seeking'}
-							>Launch video in MPV…</button
+								if (await locateMpvAndRetry()) openMenu = null;
+							}}>Locate mpv…</button
 						>
-						{#if $mpvLocatePrompt}
-							<span class="menu-note warn">mpv not found (tried “{$settings?.mpv_path}”)</span>
-							<button
-								onclick={async () => {
-									if (await locateMpvAndRetry()) openMenu = null;
-								}}>Locate mpv…</button
-							>
-						{/if}
 					</div>
 				{/if}
 			</div>
@@ -654,6 +649,15 @@
 	}
 	.status-trigger.active-mode small {
 		color: var(--accent);
+	}
+	.status-trigger[aria-disabled='true'] {
+		cursor: default;
+	}
+	.status-trigger.idle {
+		opacity: 0.55;
+	}
+	.status-trigger.idle:hover {
+		background: transparent;
 	}
 	/* Right-anchored panel so it doesn't overflow the window edge. */
 	.menu-panel.right {

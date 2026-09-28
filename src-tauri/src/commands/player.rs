@@ -67,24 +67,27 @@ pub enum MpvLaunchOutcome {
     NotFound,
 }
 
-/// Launch mpv on the IPC endpoint `MpvManager` polls (issue #89); detection
-/// flips the mode to "mpv" within ~1s. Refuses while an mpv is already
-/// connected — a second instance would fight over the socket.
+/// Launch mpv on the IPC endpoint `MpvManager` polls (issue #89), so timestamps seek in
+/// it within ~1s. `subtitle_path` is the file Yomine loaded, so mpv shows the same lines.
+/// Refuses while an mpv is already connected — a second instance would fight over the
+/// socket.
 #[tauri::command]
 pub async fn launch_mpv(
     state: State<'_, Mutex<AppState>>,
     player: State<'_, PlayerHandle>,
     video_path: String,
+    subtitle_path: Option<String>,
 ) -> Result<MpvLaunchOutcome, String> {
     if player.status().await?.mpv_connected {
         return Err("MPV is already connected".to_string());
     }
     let mpv_path = { state.lock().unwrap().settings.mpv_path.clone() };
-    match std::process::Command::new(&mpv_path)
-        .arg(format!("--input-ipc-server={}", yomine::mpv::default_mpv_endpoint()))
-        .arg(&video_path)
-        .spawn()
-    {
+    let mut command = std::process::Command::new(&mpv_path);
+    command.arg(format!("--input-ipc-server={}", yomine::mpv::default_mpv_endpoint()));
+    if let Some(subtitles) = &subtitle_path {
+        command.arg(format!("--sub-file={subtitles}"));
+    }
+    match command.arg(&video_path).spawn() {
         Ok(mut child) => {
             // Reap in the background so an exited mpv never lingers as a zombie.
             tauri::async_runtime::spawn_blocking(move || {

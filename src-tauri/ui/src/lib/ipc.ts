@@ -106,6 +106,20 @@ export interface FileLoadResult {
 	batch_source: BatchSource;
 	/** The video paired with this file, which local mining cuts media from. */
 	local_video: string | null;
+	/** When opened as a video: the subtitles it could load, and the id of the loaded one. */
+	subtitle_tracks: SubtitleChoice[];
+	subtitle_track: string | null;
+}
+
+/** A subtitle file beside a video, or a track embedded in it (`media::subtitles`). */
+export interface SubtitleChoice {
+	id: string;
+	label: string;
+	language: string | null;
+	lines: number;
+	/** `null` for a track that can't be loaded, with the reason in `unusable`. */
+	path: string | null;
+	unusable: string | null;
 }
 
 /** A previously-opened file for the landing state (mirrors `RecentFileEntry`). */
@@ -525,6 +539,17 @@ export function openExecutableDialog(): Promise<string | null> {
 /** Parse + segment + filter a file; streams progress; returns the minable terms.
  * `epubChapters` = selected part ids for EPUBs (`null` = whole book);
  * `epubLabel` = the picker's human-readable selection summary. */
+/** Loads a video's subtitles with the video paired; `track` picks one by id. */
+export async function openVideo(
+	path: string,
+	track: string | null,
+	onProgress: (msg: LoadingMessage) => void
+): Promise<FileLoadResult> {
+	const channel = new Channel<LoadingMessage>();
+	channel.onmessage = onProgress;
+	return invoke('open_video', { path, track, progress: channel });
+}
+
 export async function processFile(
 	path: string,
 	onProgress: (msg: LoadingMessage) => void,
@@ -669,8 +694,11 @@ export function seekTimestamp(seconds: number, label: string): Promise<void> {
 export type MpvLaunchOutcome = 'launched' | 'not_found';
 
 /** Launch mpv on the IPC endpoint the app polls; detection connects within ~1s. */
-export function launchMpv(videoPath: string): Promise<MpvLaunchOutcome> {
-	return invoke('launch_mpv', { videoPath });
+export function launchMpv(
+	videoPath: string,
+	subtitlePath: string | null = null
+): Promise<MpvLaunchOutcome> {
+	return invoke('launch_mpv', { videoPath, subtitlePath });
 }
 
 /** One subtitle track loaded for a bound media (issue #105). */

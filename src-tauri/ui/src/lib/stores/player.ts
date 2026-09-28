@@ -45,13 +45,13 @@ export async function seekTimestamp(seconds: number, label: string): Promise<voi
 	}
 }
 
-/** Video path awaiting an mpv executable — drives the panel's "Locate mpv…" row. */
-export const mpvLocatePrompt = writable<string | null>(null);
+/** Video (and subtitles) awaiting an mpv executable — drives the panel's "Locate mpv…" row. */
+export const mpvLocatePrompt = writable<{ video: string; subtitles: string | null } | null>(null);
 
-async function tryLaunchMpv(video: string): Promise<boolean> {
+async function tryLaunchMpv(video: string, subtitles: string | null = null): Promise<boolean> {
 	try {
-		const outcome = await ipc.launchMpv(video);
-		mpvLocatePrompt.set(outcome === 'not_found' ? video : null);
+		const outcome = await ipc.launchMpv(video, subtitles);
+		mpvLocatePrompt.set(outcome === 'not_found' ? { video, subtitles } : null);
 		return outcome === 'launched';
 	} catch (err) {
 		lastError.set({ title: 'MPV', message: 'Failed to launch mpv', detail: String(err) });
@@ -59,11 +59,13 @@ async function tryLaunchMpv(video: string): Promise<boolean> {
 	}
 }
 
-/** Pick a video and launch mpv on it; returns true when mpv launched. */
+/** Launch mpv on the loaded file's video with the subtitles Yomine loaded; returns true
+ * when mpv launched. */
 export async function launchMpvVideo(): Promise<boolean> {
-	const video = await ipc.openVideoDialog();
-	if (!video) return false;
-	return tryLaunchMpv(video);
+	const file = get(fileResult);
+	if (!file?.local_video) return false;
+	const timed = file.source_file.file_type === 'SRT' || file.source_file.file_type === 'SSA';
+	return tryLaunchMpv(file.local_video, timed ? file.source_file.original_file : null);
 }
 
 /** Persist a user-located mpv executable, then retry the pending launch. */
@@ -74,9 +76,9 @@ export async function locateMpvAndRetry(): Promise<boolean> {
 	// controls.ts's top-level fileResult.subscribe before file.ts initializes.
 	const { setMpvPath } = await import('./settings');
 	await setMpvPath(exe);
-	const video = get(mpvLocatePrompt);
-	if (!video) return false;
-	return tryLaunchMpv(video);
+	const pending = get(mpvLocatePrompt);
+	if (!pending) return false;
+	return tryLaunchMpv(pending.video, pending.subtitles);
 }
 
 /** Returns success so the picker can close. Cue timestamps come through, so

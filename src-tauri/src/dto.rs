@@ -228,6 +228,8 @@ pub struct FileLoadResult {
     pub ignored_terms: usize,
     pub batch_source: crate::batches::BatchSource,
     pub local_video: Option<String>,
+    pub subtitle_tracks: Vec<yomine::media::subtitles::SubtitleChoice>,
+    pub subtitle_track: Option<String>,
 }
 
 /// Persisted `IgnoreFile` fields plus the display-only `exists` + `term_count`.
