@@ -104,6 +104,22 @@ export interface FileLoadResult {
 	/** Terms hidden by the ignore list — the known-count hover breakdown. */
 	ignored_terms: number;
 	batch_source: BatchSource;
+	/** The video paired with this file, which local mining cuts media from. */
+	local_video: string | null;
+	/** When opened as a video: the subtitles it could load, and the id of the loaded one. */
+	subtitle_tracks: SubtitleChoice[];
+	subtitle_track: string | null;
+}
+
+/** A subtitle file beside a video, or a track embedded in it (`media::subtitles`). */
+export interface SubtitleChoice {
+	id: string;
+	label: string;
+	language: string | null;
+	lines: number;
+	/** `null` for a track that can't be loaded, with the reason in `unusable`. */
+	path: string | null;
+	unusable: string | null;
 }
 
 /** A previously-opened file for the landing state (mirrors `RecentFileEntry`). */
@@ -192,6 +208,9 @@ export interface FieldMapping {
 	reading_field: string;
 	/** Sentence field for already-mined detection (issue #3); optional. */
 	sentence_field?: string | null;
+	/** Where local mining writes the sentence audio and screenshot. */
+	sentence_audio_field?: string | null;
+	picture_field?: string | null;
 }
 
 /** A note type with its fields (`core::settings::AnkiModelInfo`). `sample_note`
@@ -202,12 +221,32 @@ export interface AnkiModelInfo {
 	sample_note: Record<string, string> | null;
 }
 
-/** A model's sample note + the engine's term/reading/sentence field guesses. */
+/** A model's sample note + the engine's field guesses. */
 export interface SampleNote {
 	sample_note: Record<string, string> | null;
 	guessed_term: string | null;
 	guessed_reading: string | null;
 	guessed_sentence: string | null;
+	guessed_sentence_audio: string | null;
+	guessed_picture: string | null;
+	/** A known note type ("Lapis") the guesses came from. */
+	detected: string | null;
+	fields_differ: boolean;
+}
+
+/** Where mined cards get their audio and screenshot: cut from the paired video, or
+ * recorded by asbplayer. */
+export type MiningMode = 'local' | 'asbplayer';
+
+/** How local mining encodes media (`media::clip::MediaFormat`). */
+export interface MediaFormat {
+	audio: 'mp3' | 'opus';
+	image: 'jpeg' | 'png';
+	pad_start_ms: number;
+	pad_end_ms: number;
+	/** 0 means no limit. */
+	max_width: number;
+	max_height: number;
 }
 
 export interface FrequencyDictionarySetting {
@@ -266,6 +305,8 @@ export interface SettingsData {
 	/** Follow-mode poll cadence in seconds (≥1). */
 	asbplayer_poll_secs: number;
 	auto_mine: AutoMine;
+	/** Restores Review at startup; Mine comes back as Review. */
+	auto_review: boolean;
 	/** Whole-UI scale factor (1.0 = 100%), applied as CSS zoom on the root. */
 	font_scale: number;
 	/** Definition popover scale factor (issue #113), independent of font_scale. */
@@ -286,6 +327,10 @@ export interface SettingsData {
 	text_filters: TextFilterSetting[];
 	/** Preset id → enabled; missing = off. */
 	text_filter_presets: Record<string, boolean>;
+	mining_mode: MiningMode;
+	media_format: MediaFormat;
+	/** Empty finds ffmpeg on PATH or uses the downloaded copy. */
+	ffmpeg_path: string;
 }
 
 export interface TextFilterSetting {
@@ -316,7 +361,8 @@ export interface SetupStatus {
 	has_frequency_dict: boolean;
 	/** Loaded dictionary count: ≥1 → item 2 (default) complete, >1 → item 6 (additional). */
 	frequency_dict_count: number;
-	player_connected: boolean;
+	/** asbplayer connected, or ffmpeg found in local mode. */
+	media_ready: boolean;
 	/** yomitan-api reachable (optional item — enables one-click mining). */
 	yomitan_connected: boolean;
 }
@@ -351,7 +397,8 @@ export interface AnkiStatus {
 export interface PlayerStatus {
 	mpv_connected: boolean;
 	ws_clients: number;
-	mode: 'mpv' | 'asbplayer' | 'none';
+	/** The mining mode the player manager is running. */
+	mode: MiningMode;
 	/** WebSocket server state — drives the asbplayer dot's sub-states. */
 	server_state: 'running' | 'starting' | 'error' | 'stopped';
 	/** Error message when `server_state === 'error'`, else null. */
@@ -378,9 +425,7 @@ export interface ExportCompletePayload {
 // ---------------------------------------------------------------------------
 
 /** Load tokenizer + freq dicts + ignore list; streams progress over `onProgress`. */
-export async function loadLanguageTools(
-	onProgress: (msg: LoadingMessage) => void
-): Promise<void> {
+export async function loadLanguageTools(onProgress: (msg: LoadingMessage) => void): Promise<void> {
 	const channel = new Channel<LoadingMessage>();
 	channel.onmessage = onProgress;
 	await invoke('load_language_tools', { progress: channel });
@@ -447,9 +492,25 @@ export function saveUserThemes(themes: UserTheme[]): Promise<void> {
 	return invoke('save_user_themes', { themes });
 }
 
-/** Native open dialog; resolves to the chosen path or `null`. */
-export function openFileDialog(): Promise<string | null> {
+/** Native open dialog; resolves to the chosen paths, empty if cancelled. */
+export function openFileDialog(): Promise<string[]> {
 	return invoke('open_file_dialog');
+}
+
+export function openFolderDialog(): Promise<string | null> {
+	return invoke('open_folder_dialog');
+}
+
+/** A queued video, with the show and episode (`S01E05`) its file name gives, if any. */
+export interface QueuedVideo {
+	path: string;
+	show: string | null;
+	episode: string | null;
+}
+
+/** The videos among `paths`, folders expanded to their top-level videos, in play order. */
+export function listVideos(paths: string[]): Promise<QueuedVideo[]> {
+	return invoke('list_videos', { paths });
 }
 
 /** One selectable chapter slice; `id` is what `processFile` takes back, `seen` = mined before. */
@@ -481,6 +542,11 @@ export function openVideoDialog(): Promise<string | null> {
 	return invoke('open_video_dialog');
 }
 
+/** Pairs a video with the loaded file (`null` unpairs); returns the updated result. */
+export function pairVideo(path: string | null): Promise<FileLoadResult | null> {
+	return invoke('pair_video', { path });
+}
+
 /** Executable picker for the "Locate mpv…" flow (issue #89). */
 export function openExecutableDialog(): Promise<string | null> {
 	return invoke('open_executable_dialog');
@@ -489,6 +555,17 @@ export function openExecutableDialog(): Promise<string | null> {
 /** Parse + segment + filter a file; streams progress; returns the minable terms.
  * `epubChapters` = selected part ids for EPUBs (`null` = whole book);
  * `epubLabel` = the picker's human-readable selection summary. */
+/** Loads a video's subtitles with the video paired; `track` picks one by id. */
+export async function openVideo(
+	path: string,
+	track: string | null,
+	onProgress: (msg: LoadingMessage) => void
+): Promise<FileLoadResult> {
+	const channel = new Channel<LoadingMessage>();
+	channel.onmessage = onProgress;
+	return invoke('open_video', { path, track, progress: channel });
+}
+
 export async function processFile(
 	path: string,
 	onProgress: (msg: LoadingMessage) => void,
@@ -633,8 +710,11 @@ export function seekTimestamp(seconds: number, label: string): Promise<void> {
 export type MpvLaunchOutcome = 'launched' | 'not_found';
 
 /** Launch mpv on the IPC endpoint the app polls; detection connects within ~1s. */
-export function launchMpv(videoPath: string): Promise<MpvLaunchOutcome> {
-	return invoke('launch_mpv', { videoPath });
+export function launchMpv(
+	videoPath: string,
+	subtitlePath: string | null = null
+): Promise<MpvLaunchOutcome> {
+	return invoke('launch_mpv', { videoPath, subtitlePath });
 }
 
 /** One subtitle track loaded for a bound media (issue #105). */
@@ -684,18 +764,6 @@ export async function loadAsbplayerMedia(
 	});
 }
 
-/** `mine_term` outcome; `warning` = note created but enrichment failed;
- * `media_missing` = enrichment verifiably didn't land (drives the retry chip). */
-export interface MineResult {
-	status: 'created' | 'duplicate';
-	via: string;
-	warning: string | null;
-	note_id: number | null;
-	media_missing: boolean;
-	/** `anki::mined::entry_key` of the entry that was mined. */
-	key: string;
-}
-
 /** Already-mined state (issue #3); sentences are `normalizeSentence` keys. */
 export interface MinedState {
 	added_terms: string[];
@@ -707,47 +775,6 @@ export interface MinedState {
 export interface YomitanStatus {
 	reachable: boolean;
 	version: string | null;
-}
-
-/** One-click mine (issue #105); stage updates stream through `onProgress`. */
-export function mineTerm(
-	args: {
-		term: string;
-		/** The row's reading, which picks the matching entry when `entryIndex` is null. */
-		reading: string | null;
-		/** The occurrence as tokenized from the text — cloze/bold highlighting. */
-		surface: string;
-		sentence: string;
-		timestampSecs: number | null;
-		timestampEndSecs: number | null;
-		timestampLabel: string | null;
-		via: 'asbplayer' | 'direct';
-		/** Yomitan entry to build the card from (default first). */
-		entryIndex: number | null;
-		/** Yomitan card format to render with (default first term format). */
-		formatName: string | null;
-	},
-	onProgress: (msg: LoadingMessage) => void
-): Promise<MineResult> {
-	const channel = new Channel<LoadingMessage>();
-	channel.onmessage = onProgress;
-	return invoke('mine_term', { ...args, progress: channel });
-}
-
-/** Re-run asbplayer enrichment on a media-missing note. Rejects when the note
- * is no longer Anki's newest ("update last card" can't target a specific note). */
-export function retryMineMedia(
-	args: {
-		noteId: number;
-		timestampSecs: number | null;
-		timestampEndSecs: number | null;
-		timestampLabel: string | null;
-	},
-	onProgress: (msg: LoadingMessage) => void
-): Promise<void> {
-	const channel = new Channel<LoadingMessage>();
-	channel.onmessage = onProgress;
-	return invoke('retry_mine_media', { ...args, progress: channel });
 }
 
 /** Open Anki's browser on recent adds with the mined note's card selected. */
@@ -771,7 +798,9 @@ export interface BatchFailure {
 	scope: 'item' | 'shared' | 'unknown' | 'stop';
 	message: string;
 	fallback: 'without_dictionary_media' | null;
-	kind: 'media_unverified' | null;
+	kind: 'media_unverified' | 'media_fields_unset' | 'transient' | null;
+	/** With `media_fields_unset`: the note type that needs media fields. */
+	note_type?: string;
 }
 
 export type BatchMedia = 'not_requested' | 'pending' | 'complete' | 'failed' | 'skipped';
@@ -808,7 +837,10 @@ export interface BatchRecord {
 export interface BatchStep {
 	batch: BatchRecord;
 	failure: BatchFailure | null;
+	/** A screenshot in Anki's media folder (asbplayer). */
 	preview_file: string | null;
+	/** A `data:` URI of the screenshot just cut (local). */
+	preview_image: string | null;
 }
 
 export interface BatchUndoResult {
@@ -823,6 +855,25 @@ export interface BatchUndoResult {
 export interface MineOptions {
 	record: boolean;
 	require_dictionary_media: boolean;
+}
+
+/** The entry mining picks when none was chosen, as an index into the scan of `scanText`. */
+export function getDefaultEntry(
+	key: string,
+	lemma: string,
+	scanText: string | null
+): Promise<number> {
+	return invoke('get_default_entry', { key, lemma, scanText });
+}
+
+/** Cuts these lines' media in the background, for review frames and a batch's record step. */
+export function prepareMedia(cues: TimeStampDto[]): Promise<void> {
+	return invoke('prepare_media', { cues });
+}
+
+/** A `data:` URI; null without a paired video or in asbplayer mode. */
+export function getLineMedia(cue: TimeStampDto, kind: 'frame' | 'audio'): Promise<string | null> {
+	return invoke('get_line_media', { cue, kind });
 }
 
 export function setBatchRunning(running: boolean): Promise<void> {
@@ -901,7 +952,7 @@ export function getCardFormats(): Promise<CardFormat[]> {
 /** One Yomitan dictionary entry for the definition popover (issue #113).
  * The `*_html` fields are Yomitan-rendered markers; sanitize before {@html}. */
 export interface DefinitionEntry {
-	/** Position in Yomitan's entry list (pre-filter) — mine_term's entryIndex. */
+	/** Position in Yomitan's entry list (pre-filter) — a batch item's entry_index. */
 	index: number;
 	expression: string;
 	reading: string;
@@ -960,9 +1011,28 @@ export function listAnkiModels(connection: AnkiConnectionSettings): Promise<Anki
 export function getAnkiSampleNote(
 	modelName: string,
 	fields: string[],
-	connection: AnkiConnectionSettings
+	connection: AnkiConnectionSettings,
+	yomitanUrl: string
 ): Promise<SampleNote> {
-	return invoke('get_anki_sample_note', { modelName, fields, connection });
+	return invoke('get_anki_sample_note', { modelName, fields, connection, yomitanUrl });
+}
+
+export interface FfmpegStatus {
+	/** The ffmpeg local mining would run, if any. */
+	path: string | null;
+	/** Whether Yomine can download a build for this system. */
+	downloadable: boolean;
+}
+
+export function getFfmpegStatus(configured: string): Promise<FfmpegStatus> {
+	return invoke('get_ffmpeg_status', { configured });
+}
+
+/** Resolves to the installed ffmpeg's path. */
+export function installFfmpeg(onProgress: (msg: LoadingMessage) => void): Promise<string> {
+	const channel = new Channel<LoadingMessage>();
+	channel.onmessage = onProgress;
+	return invoke('install_ffmpeg', { progress: channel });
 }
 
 /** One row of the frequency-dictionary list (`DictionaryStateDto`). */
@@ -1158,6 +1228,8 @@ function listenTo<T>(event: string, cb: (payload: T) => void): Promise<UnlistenF
 }
 
 /** Apply one complete dictionary-settings batch and refresh the loaded file. */
-export function setDictionaryStates(updates: Record<string, FrequencyDictionarySetting>): Promise<void> {
-    return invoke('set_dictionary_states', { updates });
+export function setDictionaryStates(
+	updates: Record<string, FrequencyDictionarySetting>
+): Promise<void> {
+	return invoke('set_dictionary_states', { updates });
 }

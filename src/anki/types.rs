@@ -13,6 +13,11 @@ pub struct FieldMapping {
     /// Sentence field for already-mined detection (issue #3).
     #[serde(default)]
     pub sentence_field: Option<String>,
+    /// Where local mining writes the sentence audio and screenshot.
+    #[serde(default)]
+    pub sentence_audio_field: Option<String>,
+    #[serde(default)]
+    pub picture_field: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

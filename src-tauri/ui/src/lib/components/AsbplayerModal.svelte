@@ -83,8 +83,7 @@
 		<p class="error">{error}</p>
 	{:else if media.length === 0}
 		<p class="hint">
-			asbplayer isn't tracking any media. Open a video in a tab asbplayer is bound
-			to, then refresh.
+			asbplayer isn't tracking any media. Open a video in a tab asbplayer is bound to, then refresh.
 		</p>
 	{:else}
 		<ul class="media-list">
@@ -104,10 +103,8 @@
 						<span class="badge" class:active={m.active}
 							>{m.active ? 'active tab' : 'background tab'}</span
 						>
-						<button
-							class="load"
-							disabled={!hasSubs || busyId !== null}
-							onclick={() => load(m)}>{busyId === m.id ? 'Loading…' : 'Load'}</button
+						<button class="load" disabled={!hasSubs || busyId !== null} onclick={() => load(m)}
+							>{busyId === m.id ? 'Loading…' : 'Load'}</button
 						>
 					</div>
 					{#if !hasSubs}
@@ -149,7 +146,10 @@
 	     opening a regular file disarms until the next asbplayer load. Also
 	     exposed in the top bar's asbplayer status menu. -->
 	<div class="follow-box">
-		<label class="follow" title="Automatically load new videos asbplayer picks up (e.g. the next episode). Switching between already-open tabs does nothing.">
+		<label
+			class="follow"
+			title="Automatically load new videos asbplayer picks up (e.g. the next episode). Switching between already-open tabs does nothing."
+		>
 			<input
 				type="checkbox"
 				checked={$settings?.asbplayer_follow_new_media ?? false}

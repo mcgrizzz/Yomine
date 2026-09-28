@@ -177,16 +177,13 @@
 	flush
 	onclose={close}
 >
-
 	<div class="body">
 		{#if phase === 'selecting'}
 			<h3>Step 1 · Select files</h3>
 			<div class="row">
 				<button onclick={addFiles}>Add Files…</button>
 				<button onclick={addFolder}>Add Folder…</button>
-				<button onclick={clearAll} disabled={selectedPaths.length === 0}
-					>Clear all</button
-				>
+				<button onclick={clearAll} disabled={selectedPaths.length === 0}>Clear all</button>
 				<span class="count">{checkedCount} of {selectedPaths.length} files selected</span>
 			</div>
 
@@ -215,8 +212,7 @@
 			<h3>Step 2 · Analyzing</h3>
 			<div class="progress-bar">
 				<div class="progress-fill" style:width={`${progressFraction * 100}%`}></div>
-				<span class="progress-text"
-					>{progress?.current_file ?? 0}/{progress?.total_files ?? 0}</span
+				<span class="progress-text">{progress?.current_file ?? 0}/{progress?.total_files ?? 0}</span
 				>
 			</div>
 			<p class="message">{progress?.message ?? 'Starting…'}</p>
@@ -229,8 +225,7 @@
 		{:else if phase === 'results'}
 			<div class="results-head">
 				<h3>Step 3 · Results &amp; export</h3>
-				<button class="ghost" onclick={() => (phase = 'selecting')}
-					>← Back to file selection</button
+				<button class="ghost" onclick={() => (phase = 'selecting')}>← Back to file selection</button
 				>
 			</div>
 			<p class="hint">
@@ -243,7 +238,12 @@
 					<div class="show-toggle">
 						<span>Show:</span>
 						<label class="cb"
-							><input type="radio" name="show-slice" checked={showTop} onchange={() => (showTop = true)} />
+							><input
+								type="radio"
+								name="show-slice"
+								checked={showTop}
+								onchange={() => (showTop = true)}
+							/>
 							Top 250</label
 						>
 						<label class="cb"
@@ -256,26 +256,26 @@
 						>
 					</div>
 					<div class="results-table-wrap">
-					<table class="results-table">
-						<thead>
-							<tr>
-								<th class="rank">#</th>
-								<th>Term</th>
-								<th>Reading</th>
-								<th class="num">Freq</th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each displayedEntries as e, i (e.term + (e.reading ?? '') + i)}
+						<table class="results-table">
+							<thead>
 								<tr>
-									<td class="rank">{i + 1}</td>
-									<td class="jp">{e.term}</td>
-									<td class="jp reading">{e.reading ?? ''}</td>
-									<td class="num">{e.frequency}</td>
+									<th class="rank">#</th>
+									<th>Term</th>
+									<th>Reading</th>
+									<th class="num">Freq</th>
 								</tr>
-							{/each}
-						</tbody>
-					</table>
+							</thead>
+							<tbody>
+								{#each displayedEntries as e, i (e.term + (e.reading ?? '') + i)}
+									<tr>
+										<td class="rank">{i + 1}</td>
+										<td class="jp">{e.term}</td>
+										<td class="jp reading">{e.reading ?? ''}</td>
+										<td class="num">{e.frequency}</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
 					</div>
 				</div>
 
@@ -284,17 +284,13 @@
 					<label>Title<input type="text" bind:value={opts.dict_name} /></label>
 					<label>Author<input type="text" bind:value={opts.dict_author} /></label>
 					<label>URL<input type="text" bind:value={opts.dict_url} /></label>
-					<label
-						>Revision prefix<input type="text" bind:value={opts.revision_prefix} /></label
-					>
-					<label
-						>Description<textarea rows="2" bind:value={opts.dict_description}></textarea></label
+					<label>Revision prefix<input type="text" bind:value={opts.revision_prefix} /></label>
+					<label>Description<textarea rows="2" bind:value={opts.dict_description}></textarea></label
 					>
 
 					<div class="checks">
 						<label class="cb"
-							><input type="checkbox" bind:checked={opts.export_yomitan} /> Export as Yomitan
-							ZIP</label
+							><input type="checkbox" bind:checked={opts.export_yomitan} /> Export as Yomitan ZIP</label
 						>
 						<label class="cb"
 							><input type="checkbox" bind:checked={opts.export_csv} /> Export as CSV</label
@@ -303,8 +299,7 @@
 							><input type="checkbox" bind:checked={opts.pretty_json} /> Pretty JSON output</label
 						>
 						<label class="cb"
-							><input type="checkbox" bind:checked={opts.exclude_hapax} /> Exclude hapax
-							(occurrences=1)</label
+							><input type="checkbox" bind:checked={opts.exclude_hapax} /> Exclude hapax (occurrences=1)</label
 						>
 					</div>
 

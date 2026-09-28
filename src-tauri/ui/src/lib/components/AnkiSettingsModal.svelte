@@ -4,7 +4,13 @@
 	import Modal from './Modal.svelte';
 	import SettingsFooter from './SettingsFooter.svelte';
 	import * as ipc from '$lib/ipc';
-	import { ankiModalOpen, defaultSettings, settings, saveAnkiSettings } from '$lib/stores';
+	import {
+		ankiFocus,
+		ankiModalOpen,
+		defaultSettings,
+		settings,
+		saveAnkiSettings
+	} from '$lib/stores';
 
 	type Draft = Pick<
 		ipc.SettingsData,
@@ -17,7 +23,12 @@
 			anki_model_mappings: Object.fromEntries(
 				Object.entries(s.anki_model_mappings).map(([name, fields]) => [
 					name,
-					{ ...fields, sentence_field: fields.sentence_field ?? null }
+					{
+						...fields,
+						sentence_field: fields.sentence_field ?? null,
+						sentence_audio_field: fields.sentence_audio_field ?? null,
+						picture_field: fields.picture_field ?? null
+					}
 				])
 			),
 			anki_interval: s.anki_interval,
@@ -94,6 +105,7 @@
 		return () => {
 			ankiGeneration++;
 			yomitanGeneration++;
+			stopAudio();
 		};
 	});
 
@@ -101,6 +113,12 @@
 		const saved = $settings ?? $defaultSettings;
 		if (saved) form.reset(copyDraft(saved));
 		revert();
+		if ($ankiFocus && draft.anki_model_mappings[$ankiFocus]) {
+			expandedModel = $ankiFocus;
+			// Without a cached catalog this returns early; fetchModels loads it instead.
+			void loadSample($ankiFocus);
+		}
+		ankiFocus.set(null);
 	}
 
 	function revert() {
@@ -196,6 +214,7 @@
 			modelIndex = 0;
 			catalogConnection = JSON.stringify(connection);
 			catalogPhase = 'ready';
+			if (expandedModel) void loadSample(expandedModel);
 		} catch (error) {
 			if (generation !== ankiGeneration) return;
 			catalogPhase = 'failed';
@@ -241,7 +260,12 @@
 		try {
 			const result =
 				samples[name] ??
-				(await ipc.getAnkiSampleNote(name, model.fields, { ...draft.anki_connection }));
+				(await ipc.getAnkiSampleNote(
+					name,
+					model.fields,
+					{ ...draft.anki_connection },
+					draft.yomitan_url.trim()
+				));
 			if (generation !== ankiGeneration || draft.anki_model_mappings[name] !== mapping) return;
 			samples[name] = result;
 			delete sampleErrors[name];
@@ -249,6 +273,11 @@
 				mapping.term_field = result.guessed_term ?? '';
 				mapping.reading_field = result.guessed_reading ?? '';
 				mapping.sentence_field = result.guessed_sentence;
+			}
+			// Mappings saved before local mining have neither media field.
+			if (!mapping.sentence_audio_field && !mapping.picture_field) {
+				mapping.sentence_audio_field = result.guessed_sentence_audio;
+				mapping.picture_field = result.guessed_picture;
 			}
 		} catch (error) {
 			if (generation === ankiGeneration) sampleErrors[name] = String(error);
@@ -273,7 +302,8 @@
 			const width = Math.min(420, window.innerWidth / zoom - 16);
 			const below = (window.innerHeight - anchor.bottom) / zoom - 14;
 			const above = below < 280 && anchor.top / zoom > below;
-			pickerStyle = `width: ${width}px; left: ${Math.max(8, anchor.right / zoom - width)}px; ` +
+			pickerStyle =
+				`width: ${width}px; left: ${Math.max(8, anchor.right / zoom - width)}px; ` +
 				(above
 					? `bottom: ${(window.innerHeight - anchor.top) / zoom + 6}px; max-height: ${anchor.top / zoom - 14}px;`
 					: `top: ${anchor.bottom / zoom + 6}px; max-height: ${below}px;`);
@@ -285,7 +315,11 @@
 	$effect(() => {
 		if (!adding) return;
 		function dismissPicker(event: Event) {
-			if (event.target instanceof Element && event.target.closest('#anki-model-picker, #anki-add-model')) return;
+			if (
+				event.target instanceof Element &&
+				event.target.closest('#anki-model-picker, #anki-add-model')
+			)
+				return;
 			adding = false;
 		}
 		const events = ['pointerdown', 'focusin', 'scroll', 'resize'];
@@ -311,14 +345,16 @@
 				Math.min(filteredModels.length - 1, modelIndex + (event.key === 'ArrowDown' ? 1 : -1))
 			);
 			await tick();
-			document.getElementById(`anki-model-option-${modelIndex}`)?.scrollIntoView({ block: 'nearest' });
+			document
+				.getElementById(`anki-model-option-${modelIndex}`)
+				?.scrollIntoView({ block: 'nearest' });
 		}
 	}
 
 	async function addMapping(name: string) {
 		if (!availableModels.some((model) => model.name === name)) return;
 		if (removed?.name === name) removed = null;
-		draft.anki_model_mappings[name] = { term_field: '', reading_field: '', sentence_field: null };
+		draft.anki_model_mappings[name] = emptyMapping();
 		modelSearch = '';
 		modelIndex = 0;
 		adding = false;
@@ -326,6 +362,16 @@
 		void loadSample(name, true);
 		await tick();
 		document.getElementById(`anki-term-${name}`)?.focus();
+	}
+
+	function emptyMapping(): ipc.FieldMapping {
+		return {
+			term_field: '',
+			reading_field: '',
+			sentence_field: null,
+			sentence_audio_field: null,
+			picture_field: null
+		};
 	}
 
 	function removeMapping(name: string) {
@@ -341,6 +387,55 @@
 				...(value ? [value] : [])
 			])
 		];
+	}
+
+	// Anki stores media in fields as [sound:clip.mp3] and <img src="shot.jpg">.
+	function soundFile(value: string) {
+		return value.match(/\[sound:([^\]]+)\]/)?.[1] ?? null;
+	}
+	function imageFile(value: string) {
+		const src = value.match(/<img[^>]*?\ssrc=["']?([^"'\s>]+)/i)?.[1];
+		if (!src) return null;
+		try {
+			return decodeURIComponent(src.replace(/&amp;/g, '&'));
+		} catch {
+			return src;
+		}
+	}
+
+	const mediaUris = new Map<string, Promise<string | null>>();
+	function mediaUri(file: string) {
+		let uri = mediaUris.get(file);
+		if (!uri) {
+			uri = ipc.getMediaPreview(file).catch(() => null);
+			mediaUris.set(file, uri);
+		}
+		return uri;
+	}
+
+	let audio: HTMLAudioElement | null = null;
+	let playing = $state<string | null>(null);
+	async function togglePlay(file: string) {
+		const wasPlaying = playing === file;
+		stopAudio();
+		if (wasPlaying) return;
+		playing = file;
+		const uri = await mediaUri(file);
+		if (playing !== file) return;
+		if (!uri) {
+			playing = null;
+			return;
+		}
+		audio = new Audio(uri);
+		audio.onended = () => {
+			if (playing === file) playing = null;
+		};
+		audio.play().catch(() => (playing = null));
+	}
+	function stopAudio() {
+		audio?.pause();
+		audio = null;
+		playing = null;
 	}
 
 	function preview(value: string) {
@@ -414,6 +509,21 @@
 			phase
 		];
 </script>
+
+{#snippet fieldSelect(
+	name: string,
+	mapping: ipc.FieldMapping,
+	field: keyof ipc.FieldMapping,
+	id: string
+)}
+	{@const optional = field !== 'term_field' && field !== 'reading_field'}
+	<select id={`anki-${id}-${name}`} bind:value={mapping[field]}
+		><option value={optional ? null : ''} disabled={!optional}
+			>{optional ? 'None' : 'Choose a field…'}</option
+		>{#each fieldOptions(name, mapping[field]) as option}<option value={option}>{option}</option
+			>{/each}</select
+	>
+{/snippet}
 
 <Modal
 	open={$ankiModalOpen}
@@ -598,7 +708,10 @@
 						onclick={toggleAdding}>+ Add note type</button
 					>
 				</div>
-				<p class="hint">Choose which fields identify words and sentences already in Anki.</p>
+				<p class="hint">
+					Choose which fields identify words and sentences already in Anki, and where local mining
+					puts sentence audio and screenshots.
+				</p>
 				<div class="catalog-status">
 					<span class="hint"
 						>{catalogPhase === 'loading'
@@ -645,7 +758,12 @@
 							/>
 							<button type="button" class="quiet" onclick={toggleAdding}>Dismiss</button>
 						</div>
-						<div id="anki-model-options" class="model-options" role="listbox" aria-label="Note types">
+						<div
+							id="anki-model-options"
+							class="model-options"
+							role="listbox"
+							aria-label="Note types"
+						>
 							{#each filteredModels as model, index (model.name)}
 								<button
 									id={`anki-model-option-${index}`}
@@ -658,7 +776,9 @@
 								>
 							{/each}
 						</div>
-						{#if !filteredModels.length}<p class="hint" role="status">No matching note types.</p>{/if}
+						{#if !filteredModels.length}<p class="hint" role="status">
+								No matching note types.
+							</p>{/if}
 					</div>{/if}
 				{#each Object.entries(draft.anki_model_mappings) as [name, mapping] (name)}
 					<div class="mapping">
@@ -686,24 +806,57 @@
 								{#if !models.some((m) => m.name === name)}<p class="hint">
 										Field choices are unavailable. Reconnect and refresh to load this note type.
 									</p>{/if}
+								{#if samples[name]?.detected}<p class="hint recognised">
+										{samples[name].fields_differ
+											? `Recognised as ${samples[name].detected}, but some of its usual fields are missing. Check the ones below.`
+											: `Recognised as ${samples[name].detected}.`}
+									</p>{/if}
+								<h4>Cards already in Anki</h4>
 								<div class="mapping-fields">
 									{#each [['term_field', 'Term', 'term'], ['reading_field', 'Reading', 'reading'], ['sentence_field', 'Sentence (optional)', 'sentence']] as [key, label, id]}
 										{@const field = key as keyof ipc.FieldMapping}
 										{@const value = mapping[field]}
 										{@const example = value ? samples[name]?.sample_note?.[value] : undefined}
 										<div class="field">
-											<label for={`anki-${id}-${name}`}>{label}</label><select
-												id={`anki-${id}-${name}`}
-												bind:value={mapping[field]}
-												><option
-													value={field === 'sentence_field' ? null : ''}
-													disabled={field !== 'sentence_field'}
-													>{field === 'sentence_field' ? 'None' : 'Choose a field…'}</option
-												>{#each fieldOptions(name, value) as option}<option value={option}
-														>{option}</option
-													>{/each}</select
-											>{#if example !== undefined}<span class="example" title={example}
+											<label for={`anki-${id}-${name}`}>{label}</label>
+											{@render fieldSelect(name, mapping, field, id)}
+											{#if example !== undefined}<span class="example" title={example}
 													>{preview(example)}</span
+												>{/if}
+										</div>
+									{/each}
+								</div>
+								<h4 class="media-heading">Local mining</h4>
+								<div class="media-rows">
+									{#each [['sentence_audio_field', 'Sentence audio', 'sentence-audio'], ['picture_field', 'Picture', 'picture']] as [key, label, id]}
+										{@const field = key as keyof ipc.FieldMapping}
+										{@const value = mapping[field]}
+										{@const example = value ? samples[name]?.sample_note?.[value] : undefined}
+										{@const sound =
+											field === 'sentence_audio_field' && example ? soundFile(example) : null}
+										{@const image =
+											field === 'picture_field' && example ? imageFile(example) : null}
+										<label for={`anki-${id}-${name}`}>{label}</label>
+										{@render fieldSelect(name, mapping, field, id)}
+										<div class="sample">
+											{#if sound}<button
+													type="button"
+													class="play"
+													title={sound}
+													aria-pressed={playing === sound}
+													onclick={() => togglePlay(sound)}
+													><span aria-hidden="true">{playing === sound ? '■' : '▶'}</span
+													>{playing === sound ? 'Stop' : 'Play sample'}</button
+												>{:else if image}{#await mediaUri(image)}<span class="frame"
+													></span>{:then uri}{#if uri}<img
+															class="frame"
+															src={uri}
+															alt="Sample note's screenshot"
+															title={image}
+														/>{:else}<span class="example">{image}</span
+														>{/if}{/await}{:else if example}<span class="example" title={example}
+													>{preview(example)}</span
+												>{:else if example === ''}<span class="hint">Empty in the sample note</span
 												>{/if}
 										</div>
 									{/each}
@@ -952,6 +1105,22 @@
 	}
 	.example {
 		overflow-wrap: anywhere;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+	.play {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+		padding: 0.3rem 0.75rem 0.3rem 0.6rem;
+		border-radius: 999px;
+		font-size: 0.8rem;
+	}
+	.play span {
+		font-size: 0.65rem;
 	}
 	.mapping-actions {
 		margin-top: 0.7rem;
@@ -998,6 +1167,41 @@
 		background: var(--bg-hover);
 		border-color: var(--accent);
 	}
+	.recognised {
+		margin: 0 0 0.8rem;
+	}
+	h4 {
+		margin: 0 0 0.5rem;
+		font-size: 0.8rem;
+		font-weight: 600;
+		color: var(--text-muted);
+	}
+	.media-heading {
+		margin-top: 1rem;
+		padding-top: 0.8rem;
+		border-top: 1px dashed var(--border);
+	}
+	.media-rows {
+		display: grid;
+		grid-template-columns: 7rem minmax(0, 15rem) minmax(0, 1fr);
+		align-items: center;
+		gap: 0.65rem 0.9rem;
+	}
+	.sample {
+		display: flex;
+		align-items: center;
+		min-width: 0;
+		min-height: 2.2rem;
+	}
+	.frame {
+		display: block;
+		width: 8.5rem;
+		aspect-ratio: 16 / 9;
+		object-fit: cover;
+		background: var(--bg-raised);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+	}
 	.estimate {
 		display: flex;
 		align-items: center;
@@ -1022,7 +1226,8 @@
 			grid-row: 1 / 3;
 		}
 		.connection-fields,
-		.mapping-fields {
+		.mapping-fields,
+		.media-rows {
 			grid-template-columns: 1fr;
 		}
 		.estimate {

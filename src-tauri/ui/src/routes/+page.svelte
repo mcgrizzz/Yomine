@@ -6,6 +6,7 @@
 	import {
 		hydrate,
 		openAndProcessFile,
+		openFolder,
 		openRecentFile,
 		openAsbplayerModal,
 		asbContext,
@@ -30,7 +31,11 @@
 		settings,
 		ankiStatus,
 		yomitanReachable,
-		backgroundTab
+		backgroundTab,
+		miningMode,
+		localVideo,
+		pairVideo,
+		switchSubtitleTrack
 	} from '$lib/stores';
 	import BatchRecovery from '$lib/components/BatchRecovery.svelte';
 	import TopBar from '$lib/components/TopBar.svelte';
@@ -41,6 +46,7 @@
 	import AppearanceModal from '$lib/components/AppearanceModal.svelte';
 	import AboutModal from '$lib/components/AboutModal.svelte';
 	import AnkiSettingsModal from '$lib/components/AnkiSettingsModal.svelte';
+	import LocalMediaModal from '$lib/components/LocalMediaModal.svelte';
 	import FrequencyWeightsModal from '$lib/components/FrequencyWeightsModal.svelte';
 	import PosFiltersModal from '$lib/components/PosFiltersModal.svelte';
 	import SetupBanner from '$lib/components/SetupBanner.svelte';
@@ -55,7 +61,14 @@
 	import AutoModeModal from '$lib/components/AutoModeModal.svelte';
 	import AutoModeToggle from '$lib/components/AutoModeToggle.svelte';
 	import MineAbility from '$lib/components/MineAbility.svelte';
-	import { fileIcon, filename, formatTermCount, formatFileSize, formatLastOpened } from '$lib/recents';
+	import QueueStepper from '$lib/components/QueueStepper.svelte';
+	import {
+		fileIcon,
+		filename,
+		formatTermCount,
+		formatFileSize,
+		formatLastOpened
+	} from '$lib/recents';
 
 	onMount(hydrate);
 
@@ -67,8 +80,10 @@
 	const minesActiveTab = $derived(
 		$playerStatus.mode === 'asbplayer' &&
 			$playerStatus.ws_clients > 0 &&
-			($fileResult?.source_file.file_type === 'SRT' ||
-				$fileResult?.source_file.file_type === 'SSA')
+			($fileResult?.source_file.file_type === 'SRT' || $fileResult?.source_file.file_type === 'SSA')
+	);
+	const timed = $derived(
+		$fileResult?.source_file.file_type === 'SRT' || $fileResult?.source_file.file_type === 'SSA'
 	);
 	const toolsError = $derived(
 		typeof $languageToolsStatus === 'object' ? $languageToolsStatus.error : null
@@ -102,6 +117,7 @@
 			<div class="header-row">
 				<div class="header-left">
 					<div class="title-row">
+						<QueueStepper />
 						<h2
 							class="title"
 							title={`${$fileResult.source_file.title}\n${filename($fileResult.source_file.original_file)}`}
@@ -114,69 +130,111 @@
 							>
 						{/if}
 						<span class="chips">
-							{#if followOn && $asbContext.has_active_tab && !$asbContext.active_has_subtitles}
-								<span
-									class="tab-chip warn"
-									title="Follow can't switch until subtitles are loaded on the active video in asbplayer"
-									>● no subtitles on active video</span
+							{#if $fileResult.subtitle_tracks.length > 1}
+								<select
+									class="tab-chip track"
+									title="Subtitles loaded from this video"
+									aria-label="Subtitle track"
+									value={$fileResult.subtitle_track}
+									onchange={(e) => switchSubtitleTrack(e.currentTarget.value)}
 								>
+									{#each $fileResult.subtitle_tracks as track (track.id)}
+										<option value={track.id} disabled={track.path === null}
+											>{track.label}{track.path === null
+												? ` (${track.unusable})`
+												: `, ${track.lines} lines`}</option
+										>
+									{/each}
+								</select>
 							{/if}
-							{#if $asbContext.loaded_from_asbplayer && !$asbContext.loaded_has_subtitles}
-								<button
-									class="tab-chip warn"
-									title="asbplayer has no subtitles loaded on this video — cards will mine without audio/screenshot. Click to open the picker."
-									onclick={openAsbplayerModal}>● no subtitles in asbplayer ⇄</button
-								>
-							{:else if $asbContext.loaded_from_asbplayer && $asbContext.loaded_is_active}
-								<button
-									class="tab-chip ok"
-									title="Mining captures media from this video — it's asbplayer's active tab. Click to open the video picker."
-									onclick={openAsbplayerModal}>● active tab ⇄</button
-								>
-							{:else if $asbContext.loaded_from_asbplayer}
-								<button
-									class="tab-chip danger"
-									title="This video's tab isn't active, so mined cards get no audio or screenshot (asbplayer records the visible tab). Switch to its tab before mining. Click to open the video picker."
-									onclick={openAsbplayerModal}>⚠ background tab ⇄</button
-								>
-							{:else if minesActiveTab}
-								<button
-									class="tab-chip warn"
-									title="These subtitles aren't bound to a video — mining captures from whatever tab is active in asbplayer. Click to pick one."
-									onclick={openAsbplayerModal}>● mines active tab ⇄</button
-								>
-							{/if}
-							{#if $asbContext.loaded_from_asbplayer || minesActiveTab}
-								{@const note = $ankiStatus.connected && $yomitanReachable}
-								<MineAbility
-									{note}
-									media={note &&
-										!$backgroundTab &&
-										!($asbContext.loaded_from_asbplayer && !$asbContext.loaded_has_subtitles)}
-								/>
+							{#if $miningMode === 'local'}
+								{#if $localVideo && $fileResult.subtitle_tracks.length === 0}
+									<button
+										class="tab-chip ok"
+										title={`Audio and screenshots are cut from ${$localVideo}. Click to pair a different video.`}
+										onclick={() => pairVideo()}>● Video ⇄</button
+									><button
+										class="tab-chip unpair"
+										title="Unpair the video"
+										aria-label="Unpair the video"
+										onclick={() => pairVideo(true)}>×</button
+									>
+								{:else if !$localVideo && timed}
+									<button
+										class="tab-chip warn"
+										title="Pick the video these subtitles belong to, so mined cards get its audio and a screenshot"
+										onclick={() => pairVideo()}>● Pair video…</button
+									>
+								{/if}
+								{#if timed}
+									{@const note = $ankiStatus.connected && $yomitanReachable}
+									<MineAbility {note} media={note && $localVideo !== null} />
+								{/if}
+							{:else}
+								{#if followOn && $asbContext.has_active_tab && !$asbContext.active_has_subtitles}
+									<span
+										class="tab-chip warn"
+										title="Follow can't switch until subtitles are loaded on the active video in asbplayer"
+										>● no subtitles on active video</span
+									>
+								{/if}
+								{#if $asbContext.loaded_from_asbplayer && !$asbContext.loaded_has_subtitles}
+									<button
+										class="tab-chip warn"
+										title="asbplayer has no subtitles loaded on this video — cards will mine without audio/screenshot. Click to open the picker."
+										onclick={openAsbplayerModal}>● no subtitles in asbplayer ⇄</button
+									>
+								{:else if $asbContext.loaded_from_asbplayer && $asbContext.loaded_is_active}
+									<button
+										class="tab-chip ok"
+										title="Mining captures media from this video — it's asbplayer's active tab. Click to open the video picker."
+										onclick={openAsbplayerModal}>● active tab ⇄</button
+									>
+								{:else if $asbContext.loaded_from_asbplayer}
+									<button
+										class="tab-chip danger"
+										title="This video's tab isn't active, so mined cards get no audio or screenshot (asbplayer records the visible tab). Switch to its tab before mining. Click to open the video picker."
+										onclick={openAsbplayerModal}>⚠ background tab ⇄</button
+									>
+								{:else if minesActiveTab}
+									<button
+										class="tab-chip warn"
+										title="These subtitles aren't bound to a video — mining captures from whatever tab is active in asbplayer. Click to pick one."
+										onclick={openAsbplayerModal}>● mines active tab ⇄</button
+									>
+								{/if}
+								{#if $asbContext.loaded_from_asbplayer || minesActiveTab}
+									{@const note = $ankiStatus.connected && $yomitanReachable}
+									<MineAbility
+										{note}
+										media={note &&
+											!$backgroundTab &&
+											!($asbContext.loaded_from_asbplayer && !$asbContext.loaded_has_subtitles)}
+									/>
+								{/if}
 							{/if}
 						</span>
 					</div>
-			{#if $ankiFilterActive && $fileResult.sentences.length > 0}
-				<p
-					class="comprehension"
-					style:color={comprehensionColor(pct)}
-					title="Overall estimated comprehension across all sentences"
-				>
-					Comprehension estimate: {pct.toFixed(1)}%
-				</p>
-			{/if}
-			<p class="counts">
-				{$visibleTerms.length} shown
-				{#if known > 0}
-					· <span
-						class="excluded"
-						title={`Ignore list: ${$fileResult.ignored_terms}\nAnki filtered: ${known - $fileResult.ignored_terms}`}
-						>{known} excluded</span
-					>
-				{/if}
-				· {total} total
-			</p>
+					{#if $ankiFilterActive && $fileResult.sentences.length > 0}
+						<p
+							class="comprehension"
+							style:color={comprehensionColor(pct)}
+							title="Overall estimated comprehension across all sentences"
+						>
+							Comprehension estimate: {pct.toFixed(1)}%
+						</p>
+					{/if}
+					<p class="counts">
+						{$visibleTerms.length} shown
+						{#if known > 0}
+							· <span
+								class="excluded"
+								title={`Ignore list: ${$fileResult.ignored_terms}\nAnki filtered: ${known - $fileResult.ignored_terms}`}
+								>{known} excluded</span
+							>
+						{/if}
+						· {total} total
+					</p>
 				</div>
 				<div class="header-right">
 					<AutoModeToggle />
@@ -226,7 +284,8 @@
 				<p class="landing-hint">ℹ You can drag and drop a file at any time to load it.</p>
 				<div class="landing-actions">
 					<button class="landing-open" onclick={openAndProcessFile}>Open File…</button>
-					{#if $playerStatus.ws_clients > 0}
+					<button class="landing-open" onclick={openFolder}>Open Folder…</button>
+					{#if $miningMode === 'asbplayer' && $playerStatus.ws_clients > 0}
 						<!-- Only offered while asbplayer is actually connected (issue #105). -->
 						<button class="landing-open asb" onclick={openAsbplayerModal}
 							>▶ Load from asbplayer</button
@@ -275,7 +334,7 @@
 	<!-- First: every backdrop shares --z-modal, so paint order is DOM order, and the
 	     checklist is the one modal that opens others on top of itself. -->
 	<SetupChecklistModal />
-<ProfilesModal />
+	<ProfilesModal />
 	<IgnoreListModal />
 	<AsbplayerModal />
 	<WebsocketSettingsModal />
@@ -283,6 +342,7 @@
 	<AppearanceModal />
 	<AboutModal />
 	<AnkiSettingsModal />
+	<LocalMediaModal />
 	<FrequencyWeightsModal />
 	<PosFiltersModal />
 	<TextFiltersModal />
@@ -324,6 +384,7 @@
 		align-items: flex-start;
 		justify-content: space-between;
 		gap: 1rem;
+		margin-bottom: 0.75rem;
 	}
 	.header-left {
 		min-width: 0;
@@ -384,6 +445,20 @@
 	.tab-chip.warn {
 		color: var(--warning);
 		background: color-mix(in srgb, var(--warning) 10%, transparent);
+	}
+	select.tab-chip.track {
+		max-width: 16rem;
+		color: var(--text);
+		background: var(--bg-raised);
+		border: 1px solid var(--border);
+		cursor: pointer;
+	}
+	button.tab-chip.unpair {
+		margin-left: -0.3rem;
+		padding: 0.05rem 0.3rem;
+		color: var(--text-muted);
+		background: transparent;
+		border-color: transparent;
 	}
 	.tab-chip.danger {
 		color: var(--danger);

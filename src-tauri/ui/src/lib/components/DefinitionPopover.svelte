@@ -41,46 +41,12 @@
 		}
 		return [...groups.entries()].map(([name, values]) => ({ name, values: values.join(', ') }));
 	}
-
-	/** Anki-media refs can never resolve here (and every DOM insert re-requests
-	 * them, spamming 404s), so anything that isn't a data: URI becomes `none`. */
-	function scrubCssUrls(css: string): string {
-		return css
-			.replace(/@import[^;]*(;|$)/gi, '')
-			.replace(/url\(\s*(?!['"]?data:)[^)]*\)/gi, 'none');
-	}
-
-	/** Defang third-party dictionary HTML. Embedded style tags are kept — Yomitan
-	 * scopes them under `.yomitan-glossary` — but purged of external loads. */
-	function sanitize(html: string): string {
-		const doc = new DOMParser().parseFromString(html, 'text/html');
-		doc.querySelectorAll('script, iframe, object, embed, link, meta').forEach((el) =>
-			el.remove()
-		);
-		doc.querySelectorAll('style').forEach((el) => {
-			el.textContent = scrubCssUrls(el.textContent ?? '');
-		});
-		for (const el of doc.body.querySelectorAll('*')) {
-			for (const attr of [...el.attributes]) {
-				const name = attr.name.toLowerCase();
-				if (name.startsWith('on')) el.removeAttribute(attr.name);
-				else if ((name === 'src' || name === 'href') && /^\s*javascript:/i.test(attr.value))
-					el.removeAttribute(attr.name);
-				else if (name === 'style' && /url\(/i.test(attr.value))
-					el.setAttribute(attr.name, scrubCssUrls(attr.value));
-			}
-			if (el.tagName === 'A') el.removeAttribute('href');
-			// An unresolvable image must take its Yomitan container along —
-			// the styled wrapper alone renders as an empty white box.
-			if (el.tagName === 'IMG' && !/^(https?:|data:)/i.test(el.getAttribute('src') ?? ''))
-				(el.closest('a.gloss-image-link, span.gloss-image-container') ?? el).remove();
-		}
-		return doc.body.innerHTML;
-	}
 </script>
 
 <script lang="ts">
 	import { cachedEntries, fetchEntries } from '$lib/definitions';
+	import { sanitize } from '$lib/sanitize';
+	import Glossary from './Glossary.svelte';
 	import { type CardFormat, type DefinitionEntry } from '$lib/ipc';
 
 	let {
@@ -91,11 +57,8 @@
 		canMine = false,
 		canQueue,
 		isDuplicate,
-		mineDisabled,
-		mineTitle,
 		formats = [],
 		pickedIndex,
-		onmine,
 		onqueue,
 		onpick,
 		onclose
@@ -108,12 +71,9 @@
 		canMine?: boolean;
 		canQueue?: (entry: DefinitionEntry) => boolean;
 		isDuplicate?: (entry: DefinitionEntry) => boolean;
-		mineDisabled?: (entry: DefinitionEntry) => boolean;
-		mineTitle?: (entry: DefinitionEntry) => string;
 		/** Yomitan term card formats; >1 renders per-format buttons. */
 		formats?: CardFormat[];
 		pickedIndex?: number;
-		onmine?: (entry: DefinitionEntry, formatName?: string) => void;
 		onqueue?: (entry: DefinitionEntry, formatName?: string) => void;
 		/** Set to pick an entry for an already-queued term instead of mining. */
 		onpick?: (entry: DefinitionEntry) => void;
@@ -272,45 +232,21 @@
 									}}>{current ? 'Current' : 'Use this entry'}</button
 								>
 							</span>
-						{:else if canMine && onmine}
+						{:else if canMine && onqueue && canQueue?.(entry)}
 							{@const dupe = isDuplicate?.(entry) ?? false}
 							<span class="actions">
 								<button
 									class="mine-btn"
 									class:primary={!dupe}
-									disabled={mineDisabled?.(entry) ?? false}
 									title={(dupe
-										? 'Already in Anki — mine again to add another card'
-										: (mineTitle?.(entry) ?? '')) +
+										? 'Already in Anki — select to add another card'
+										: 'Select for mining using this definition') +
 										(multiFormat ? ` — format: ${activeFormat}` : '')}
 									onclick={() => {
-										onmine(entry, multiFormat ? activeFormat : undefined);
+										onqueue(entry, multiFormat ? activeFormat : undefined);
 										onclose();
-									}}
-									><svg
-											class="pick-icon"
-											viewBox="0 0 24 24"
-											fill="none"
-											stroke="currentColor"
-											stroke-width="2.4"
-											stroke-linecap="round"
-											aria-hidden="true"
-										>
-											<path d="M3 21 L13.5 10.5" />
-											<path d="M10 4 Q 17.8 6.2 20 14" />
-										</svg> {dupe ? 'Mine again' : 'Mine'}</button
+									}}>Queue</button
 								>
-								{#if onqueue && canQueue?.(entry)}
-									<button
-										class="mine-btn"
-										title={'Select for batch mining using this definition' +
-											(multiFormat ? ` — format: ${activeFormat}` : '')}
-										onclick={() => {
-											onqueue(entry, multiFormat ? activeFormat : undefined);
-											onclose();
-										}}>Queue</button
-									>
-								{/if}
 							</span>
 						{/if}
 					</div>
@@ -327,10 +263,7 @@
 							</div>
 						{/if}
 					{/if}
-					<div class="glossary" lang="ja">
-						<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized above -->
-						{@html sanitize(entry.glossary_html)}
-					</div>
+					<Glossary html={entry.glossary_html} />
 				</div>
 			{/each}
 		{/if}
@@ -448,44 +381,8 @@
 		padding: 0.05rem 0.4rem;
 		background: var(--bg-raised);
 	}
-	.glossary {
+	.entry :global(.glossary) {
 		font-size: 0.95rem;
-	}
-	.glossary :global(ul),
-	.glossary :global(ol) {
-		margin: 0.2em 0;
-		padding-left: 1.4em;
-	}
-	.glossary :global(img) {
-		max-width: 100%;
-	}
-	/* The <i>(tags, Dictionary)</i> annotation Yomitan prefixes each sense with. */
-	.glossary :global(.yomitan-glossary > i),
-	.glossary :global(.yomitan-glossary ol > li > i) {
-		color: var(--text-muted);
-		font-size: 0.85em;
-	}
-	/* Mirrors the compact-glossary rules in Yomitan's structured-content.css:
-	 * gloss alternatives inline, |-separated. */
-	.glossary :global(ul[data-sc-content='glossary']),
-	.glossary :global(.yomitan-glossary > ul),
-	.glossary :global(.yomitan-glossary > ol > li > ul) {
-		display: inline;
-		margin: 0;
-		padding-left: 0;
-		list-style: none;
-	}
-	.glossary :global(ul[data-sc-content='glossary'] > li),
-	.glossary :global(.yomitan-glossary > ul > li),
-	.glossary :global(.yomitan-glossary > ol > li > ul > li) {
-		display: inline;
-	}
-	.glossary :global(ul[data-sc-content='glossary'] > li:not(:first-child))::before,
-	.glossary :global(.yomitan-glossary > ul > li:not(:first-child))::before,
-	.glossary :global(.yomitan-glossary > ol > li > ul > li:not(:first-child))::before {
-		content: ' | ';
-		white-space: pre-wrap;
-		color: var(--text-muted);
 	}
 	.actions {
 		display: inline-flex;
@@ -502,10 +399,5 @@
 	.mine-btn:disabled {
 		opacity: 0.5;
 		cursor: default;
-	}
-	.pick-icon {
-		width: 1em;
-		height: 1em;
-		vertical-align: -0.125em;
 	}
 </style>

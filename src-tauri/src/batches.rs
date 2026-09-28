@@ -95,6 +95,11 @@ pub enum Fallback {
 #[serde(rename_all = "snake_case")]
 pub enum FailureKind {
     MediaUnverified,
+    /// Local mining has nowhere to put media for `note_type`.
+    MediaFieldsUnset,
+    /// A Yomitan request for this item failed while Yomitan still answers, so it may pass
+    /// on a later attempt.
+    Transient,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -104,6 +109,8 @@ pub struct Failure {
     pub message: String,
     pub fallback: Option<Fallback>,
     pub kind: Option<FailureKind>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note_type: Option<String>,
 }
 
 impl Failure {
@@ -114,6 +121,7 @@ impl Failure {
             message: message.to_string(),
             fallback: None,
             kind: None,
+            note_type: None,
         }
     }
     pub fn with_kind(self, kind: FailureKind) -> Self {
@@ -281,6 +289,9 @@ pub fn checkpoint(batch: &mut BatchRecord, index: usize, outcome: Outcome) -> Re
 #[tauri::command]
 pub fn set_batch_running(running: bool) {
     RUNNING.store(running, Ordering::Relaxed);
+    if !running {
+        crate::media::stop_preparing();
+    }
 }
 
 #[tauri::command]

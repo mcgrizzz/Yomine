@@ -1,45 +1,48 @@
 use crate::{
-    core::errors::YomineError,
+    core::{
+        errors::YomineError,
+        settings::MiningMode,
+    },
     mpv::MpvManager,
     websocket::WebSocketManager,
 };
 
+/// Runs only the mining mode's player: the WebSocket server for asbplayer, or mpv
+/// detection for local mining, where mpv is only for watching.
 pub struct PlayerManager {
     pub mpv: MpvManager,
     pub ws: WebSocketManager,
+    pub mode: MiningMode,
 }
 
 impl PlayerManager {
-    pub fn new(mpv: MpvManager, ws: WebSocketManager) -> Self {
-        Self { mpv, ws }
+    pub fn new(mpv: MpvManager, ws: WebSocketManager, mode: MiningMode) -> Self {
+        Self { mpv, ws, mode }
     }
 
     pub fn update(&mut self, websocket_port: u16) {
-        self.mpv.update();
-        self.ws.update();
-
-        match (self.mpv.is_connected(), self.ws.server.is_some()) {
-            (true, true) => {
-                //Prefer mpv to websocket server
-                if let Err(e) = self.ws.shutdown_server() {
-                    eprintln!("[Player] Failed to shutdown WebSocket server: {}", e);
-                } else {
-                    println!(
-                        "[Player] MPV detected. WebSocket server stopped; switched to MPV mode."
-                    );
+        match self.mode {
+            MiningMode::Asbplayer => {
+                self.ws.update();
+                if self.ws.server.is_none() {
+                    if let Err(e) = self.ws.restart_server(websocket_port) {
+                        eprintln!("[Player] Failed to start WebSocket server: {}", e);
+                    }
                 }
             }
-            // Both disconnected -> start WebSocket
-            (false, false) => {
-                //Mpv is not connected so make sure we have websocket server
-                if let Err(e) = self.ws.restart_server(websocket_port) {
-                    eprintln!("[Player] Failed to restart WebSocket server: {}", e);
-                } else {
-                    println!("[Player] MPV not detected. WebSocket server restarted; switched to asbplayer mode.");
+            MiningMode::Local => {
+                self.mpv.update();
+                if self.ws.server.is_some() {
+                    if let Err(e) = self.ws.shutdown_server() {
+                        eprintln!("[Player] Failed to stop WebSocket server: {}", e);
+                    }
                 }
             }
-            _ => {}
         }
+    }
+
+    pub fn mpv_connected(&self) -> bool {
+        self.mode == MiningMode::Local && self.mpv.is_connected()
     }
 
     pub fn seek_timestamp(
@@ -48,7 +51,7 @@ impl PlayerManager {
         timestamp_str: &str,
         media_id: Option<&str>,
     ) -> Result<(), YomineError> {
-        if self.mpv.is_connected() {
+        if self.mpv_connected() {
             self.mpv.seek_timestamp(seconds, timestamp_str)
         } else if let Some(server) = &self.ws.server {
             server.seek_timestamp(seconds, timestamp_str, media_id)
@@ -60,7 +63,7 @@ impl PlayerManager {
     }
 
     pub fn is_connected(&self) -> bool {
-        self.mpv.is_connected() || self.ws.has_clients()
+        self.mpv_connected() || self.ws.has_clients()
     }
 
     pub fn get_confirmed_timestamps(&self) -> Vec<f32> {

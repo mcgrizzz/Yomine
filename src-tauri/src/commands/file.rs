@@ -1,9 +1,12 @@
 //! File / mining commands (contracts/commands.md "File / mining").
 
-use std::sync::{
-    atomic::Ordering,
-    Arc,
-    Mutex,
+use std::{
+    path::PathBuf,
+    sync::{
+        atomic::Ordering,
+        Arc,
+        Mutex,
+    },
 };
 
 use tauri::{
@@ -20,7 +23,10 @@ use yomine::{
         AnkiState,
     },
     core::{
-        filename_parser,
+        filename_parser::{
+            self,
+            MediaType,
+        },
         models::{
             Sentence,
             SourceFile,
@@ -35,6 +41,13 @@ use yomine::{
         recent_files::RecentFileEntry,
         text_filter,
     },
+    media::{
+        ffmpeg,
+        subtitles::{
+            self,
+            SubtitleChoice,
+        },
+    },
     persistence::db,
 };
 
@@ -45,6 +58,7 @@ use crate::{
         EpubChapterDto,
         EpubPartDto,
         FileLoadResult,
+        QueuedVideoDto,
         SentenceDto,
     },
     events::{
@@ -81,6 +95,9 @@ pub(crate) fn load_result(file: &FileData) -> Option<FileLoadResult> {
         total_terms: file.base_terms.len(),
         ignored_terms: file.ignored_count,
         batch_source: crate::batches::BatchSource::from_file(file).ok()?,
+        local_video: file.local_video.as_ref().map(|p| p.display().to_string()),
+        subtitle_tracks: file.subtitle_tracks.clone(),
+        subtitle_track: file.subtitle_track.clone(),
     })
 }
 
@@ -132,13 +149,60 @@ async fn pick_path(
     Ok(chosen.and_then(|p| p.into_path().ok()).map(|p| p.display().to_string()))
 }
 
-/// Native open dialog (FR: file selection). Returns the chosen path or `null`.
+/// Native open dialog (FR: file selection). Returns the chosen paths, empty if cancelled.
 #[tauri::command]
-pub async fn open_file_dialog(app: AppHandle) -> Result<Option<String>, String> {
-    pick_path(
-        app.dialog().file().add_filter("Subtitles & text", SourceFileType::supported_extensions()),
-    )
-    .await
+pub async fn open_file_dialog(app: AppHandle) -> Result<Vec<String>, String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .add_filter(
+            "Videos, subtitles & text",
+            &[SourceFileType::supported_extensions(), subtitles::VIDEO_EXTENSIONS].concat(),
+        )
+        .add_filter("Videos", subtitles::VIDEO_EXTENSIONS)
+        .add_filter("Subtitles & text", SourceFileType::supported_extensions())
+        .pick_files(move |paths| {
+            let _ = tx.send(paths);
+        });
+    let chosen = rx.await.map_err(|_| "file dialog closed unexpectedly".to_string())?;
+    Ok(chosen
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|p| p.into_path().ok())
+        .map(|p| p.display().to_string())
+        .collect())
+}
+
+#[tauri::command]
+pub async fn open_folder_dialog(app: AppHandle) -> Result<Option<String>, String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog().file().pick_folder(move |path| {
+        let _ = tx.send(path);
+    });
+    let chosen = rx.await.map_err(|_| "folder dialog closed unexpectedly".to_string())?;
+    Ok(chosen.and_then(|p| p.into_path().ok()).map(|p| p.display().to_string()))
+}
+
+/// The videos among opened files and folders, in the order the queue plays them.
+#[tauri::command]
+pub async fn list_videos(paths: Vec<PathBuf>) -> Vec<QueuedVideoDto> {
+    subtitles::videos_in(&paths)
+        .iter()
+        .map(|path| {
+            let path = path.display().to_string();
+            match filename_parser::parse_filename(&path) {
+                MediaType::TvShow { title, season, episode: Some(e), .. } => QueuedVideoDto {
+                    path,
+                    show: Some(title),
+                    episode: Some(match season {
+                        Some(s) => format!("S{s:02}E{e:02}"),
+                        None => format!("Episode {e}"),
+                    }),
+                },
+                _ => QueuedVideoDto { path, show: None, episode: None },
+            }
+        })
+        .collect()
 }
 
 /// Book title + pickable chapters for the EPUB chapter picker.
@@ -207,6 +271,102 @@ pub async fn process_file(
     epub_label: Option<String>,
     progress: Channel<LoadingMessage>,
 ) -> Result<FileLoadResult, String> {
+    let source_file = source_file_from_path(&path, epub_chapters, epub_label);
+    load_file(app, state, source_file, None, progress).await
+}
+
+/// A file opened as a video: its subtitles, and the id of the one to load.
+struct OpenedVideo {
+    path: PathBuf,
+    tracks: Vec<SubtitleChoice>,
+    track: String,
+}
+
+/// Opens a video by loading its subtitles (a file beside it, or an embedded track) with the
+/// video paired. `track` picks a subtitle by id; `None` takes the Japanese one with the most
+/// lines.
+#[tauri::command]
+pub async fn open_video(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    path: String,
+    track: Option<String>,
+    progress: Channel<LoadingMessage>,
+) -> Result<FileLoadResult, String> {
+    let _ = progress.send(LoadingMessage::new("Reading the video's subtitles..."));
+    let ffmpeg_path = { state.lock().unwrap().settings.ffmpeg_path.clone() };
+    let video = PathBuf::from(&path);
+    let found = video.clone();
+    let wanted = track.clone();
+    // Extracting an embedded track reads the whole video, so files beside it come first,
+    // then the probe's language and cue counts decide, and only the chosen track is
+    // extracted.
+    let (all, tracks, chosen) = tauri::async_runtime::spawn_blocking(move || {
+        let beside = subtitles::sidecars(&found);
+        let (all, ffmpeg) = if beside.iter().any(subtitles::is_candidate) {
+            (beside, None)
+        } else {
+            let configured = Some(ffmpeg_path.trim()).filter(|p| !p.is_empty());
+            let ffmpeg = ffmpeg::find(configured.map(std::path::Path::new)).ok_or(
+                "Opening a video needs ffmpeg. Download it in Settings → Local Media.".to_string(),
+            )?;
+            let info = ffmpeg.probe(&found).map_err(|e| e.to_string())?;
+            let mut all = beside;
+            all.extend(subtitles::embedded(&found, &info).map_err(|e| e.to_string())?);
+            (all, Some(ffmpeg))
+        };
+        let mut tracks: Vec<SubtitleChoice> =
+            all.iter().filter(|t| subtitles::is_candidate(t)).cloned().collect();
+        let loadable = || tracks.iter().filter(|t| t.path.is_some());
+        let uncounted = loadable().count() > 1 && loadable().any(|t| t.lines == 0);
+        if let (Some(ffmpeg), true, None) = (&ffmpeg, uncounted, &wanted) {
+            subtitles::extract(ffmpeg, &found, &mut tracks).map_err(|e| e.to_string())?;
+        }
+        let chosen = match &wanted {
+            Some(id) => tracks.iter().position(|t| &t.id == id && t.path.is_some()),
+            None => subtitles::default_choice(&tracks)
+                .and_then(|c| tracks.iter().position(|t| t.id == c.id)),
+        };
+        if let (Some(ffmpeg), Some(i)) = (&ffmpeg, chosen) {
+            subtitles::extract(ffmpeg, &found, &mut tracks[i..=i]).map_err(|e| e.to_string())?;
+        }
+        Ok::<_, String>((all, tracks, chosen))
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+
+    let chosen = chosen.map(|i| &tracks[i]);
+    let Some(chosen) = chosen else {
+        let name = video.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or(path);
+        let others = subtitles::other_languages(&all);
+        let has = if others.is_empty() {
+            "no .srt or .ass file beside it with the same name, and no embedded text track".into()
+        } else {
+            format!("only {} subtitles", others.join(", "))
+        };
+        return Err(format!(
+            "{name} has no Japanese subtitles to mine ({has}). Put a Japanese .srt or .ass \
+             beside it with the same name."
+        ));
+    };
+    let subtitle_path =
+        chosen.path.clone().expect("chosen tracks have a file").display().to_string();
+    let mut source_file = source_file_from_path(&subtitle_path, None, None);
+    let named = source_file_from_path(&path, None, None);
+    source_file.title = named.title;
+    source_file.creator = named.creator;
+    let track = chosen.id.clone();
+    load_file(app, state, source_file, Some(OpenedVideo { path: video, tracks, track }), progress)
+        .await
+}
+
+async fn load_file(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    source_file: SourceFile,
+    video: Option<OpenedVideo>,
+    progress: Channel<LoadingMessage>,
+) -> Result<FileLoadResult, String> {
     let (tools, filters, anki_state, input_revision) = {
         let mut guard = state.lock().unwrap();
         let tools = guard
@@ -223,7 +383,6 @@ pub async fn process_file(
     };
 
     let _ = progress.send(LoadingMessage::new("Processing file..."));
-    let source_file = source_file_from_path(&path, epub_chapters, epub_label);
 
     // Segmentation blocks the async runtime briefly, but the UI is a separate
     // webview process — nothing user-visible freezes.
@@ -232,7 +391,20 @@ pub async fn process_file(
             .await
             .map_err(|e| e.to_string())?;
 
-    record_open(&source_file, &sentences, filter_result.terms.len());
+    let opened =
+        video.as_ref().map_or(source_file.original_file.clone(), |v| v.path.display().to_string());
+    let paired = record_open(&source_file, &sentences, filter_result.terms.len(), &opened);
+    let local_video = match &video {
+        Some(video) => Some(video.path.clone()),
+        None => paired
+            .clone()
+            .or_else(|| subtitles::sibling_video(std::path::Path::new(&source_file.original_file))),
+    };
+    if local_video.is_some() && local_video != paired {
+        remember_video(&source_file, &sentences, local_video.as_deref());
+    }
+    let (subtitle_tracks, subtitle_track) =
+        video.map_or((Vec::new(), None), |v| (v.tracks, Some(v.track)));
 
     // Lemmas Anki already knew — kept so an ignore-list change can re-filter
     // without re-querying Anki.
@@ -254,6 +426,9 @@ pub async fn process_file(
         file_comprehension,
         asbplayer_media_id: None,
         asbplayer_subtitle_file: None,
+        local_video,
+        subtitle_tracks,
+        subtitle_track,
     };
     let payload = load_result(&guard.file).expect("file just stored has a source_file");
     drop(guard);
@@ -435,7 +610,12 @@ pub(crate) async fn load_asbplayer_into_state(
             .await
             .map_err(|e| e.to_string())?;
 
-    record_open(&source_file, &sentences, filter_result.terms.len());
+    let local_video = record_open(
+        &source_file,
+        &sentences,
+        filter_result.terms.len(),
+        &source_file.original_file,
+    );
 
     let anki_known_lemmas =
         filter_result.anki_filtered.iter().map(|t| t.lemma_form.clone()).collect();
@@ -456,6 +636,9 @@ pub(crate) async fn load_asbplayer_into_state(
         file_comprehension,
         asbplayer_media_id: Some(media_id),
         asbplayer_subtitle_file: file_name,
+        local_video,
+        subtitle_tracks: Vec::new(),
+        subtitle_track: None,
     };
     let payload = load_result(&guard.file).expect("file just stored has a source_file");
     drop(guard);
@@ -664,6 +847,9 @@ pub async fn reload_current_file(
         file_comprehension,
         asbplayer_media_id: media_id,
         asbplayer_subtitle_file: subtitle_file,
+        local_video: guard.file.local_video.clone(),
+        subtitle_tracks: guard.file.subtitle_tracks.clone(),
+        subtitle_track: guard.file.subtitle_track.clone(),
     };
     let payload = load_result(&guard.file).expect("file just stored has a source_file");
     drop(guard);
@@ -689,8 +875,15 @@ pub async fn reload_current_file(
 }
 
 /// Records the load in history: the source, the recent-files entry, and any EPUB
-/// parts. Failures are only logged, so history never fails an otherwise-good load.
-fn record_open(source_file: &SourceFile, sentences: &[Sentence], term_count: usize) {
+/// parts, and returns the video paired with the source. Failures are only logged, so
+/// history never fails an otherwise-good load.
+fn record_open(
+    source_file: &SourceFile,
+    sentences: &[Sentence],
+    term_count: usize,
+    // What the user opened: the video, for subtitles loaded from one.
+    opened: &str,
+) -> Option<PathBuf> {
     let fingerprint = crate::batches::BatchSource::new(source_file, sentences).fingerprint;
     let info = db::sources::SourceInfo {
         fingerprint: &fingerprint,
@@ -709,7 +902,7 @@ fn record_open(source_file: &SourceFile, sentences: &[Sentence], term_count: usi
             .map(|t| (t.to_secs().1 * 1000.0).round() as i64)
             .max(),
     };
-    let path = &source_file.original_file;
+    let path = opened;
     let open = db::sources::Open {
         path,
         title: &source_file.title,
@@ -720,9 +913,45 @@ fn record_open(source_file: &SourceFile, sentences: &[Sentence], term_count: usi
         opened_at: db::now_ms(),
     };
     let parts = source_file.epub_chapters.as_deref().unwrap_or_default();
-    if let Err(e) = db::with(|conn| db::sources::record_open(conn, &info, &open, parts)) {
-        eprintln!("Failed to record the file in history: {e}");
+    let recorded = db::with(|conn| {
+        db::sources::record_open(conn, &info, &open, parts)?;
+        db::sources::video(conn, &fingerprint)
+    });
+    recorded
+        .unwrap_or_else(|e| {
+            eprintln!("Failed to record the file in history: {e}");
+            None
+        })
+        .map(PathBuf::from)
+}
+
+fn remember_video(
+    source_file: &SourceFile,
+    sentences: &[Sentence],
+    video: Option<&std::path::Path>,
+) {
+    let fingerprint = crate::batches::BatchSource::new(source_file, sentences).fingerprint;
+    let path = video.map(|v| v.display().to_string());
+    if let Err(e) = db::with(|conn| db::sources::set_video(conn, &fingerprint, path.as_deref())) {
+        eprintln!("Failed to remember the paired video: {e}");
     }
+}
+
+/// Pairs a video with the loaded file, or unpairs it with `None`. The pairing is kept
+/// with the source, so reopening the same subtitles finds the video again.
+#[tauri::command]
+pub fn pair_video(
+    state: State<'_, Mutex<AppState>>,
+    path: Option<String>,
+) -> Result<Option<FileLoadResult>, String> {
+    let mut guard = state.lock().unwrap();
+    let fingerprint = crate::batches::BatchSource::from_file(&guard.file)?.fingerprint;
+    if path.as_ref().is_some_and(|p| !std::path::Path::new(p).is_file()) {
+        return Err("That video no longer exists".into());
+    }
+    db::with(|conn| db::sources::set_video(conn, &fingerprint, path.as_deref()))?;
+    guard.file.local_video = path.map(PathBuf::from);
+    Ok(load_result(&guard.file))
 }
 
 /// Recent files for the landing state, most recent first: each path's latest load,

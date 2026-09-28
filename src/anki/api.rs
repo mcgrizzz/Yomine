@@ -253,6 +253,20 @@ pub async fn add_note(
     make_request("addNote", Some(params)).await
 }
 
+/// Replaces only the named fields of a note.
+pub async fn update_note_fields(
+    note_id: u64,
+    fields: &HashMap<String, String>,
+) -> Result<(), String> {
+    let params = serde_json::json!({ "note": { "id": note_id, "fields": fields } });
+    let response: ApiResponse<serde_json::Value> =
+        make_request("updateNoteFields", Some(params)).await.map_err(|e| e.to_string())?;
+    match response.error {
+        Some(error) => Err(error),
+        None => Ok(()),
+    }
+}
+
 /// Open Anki's card browser on a search (e.g. `nid:123`) — the "open the card
 /// I just mined" affordance.
 pub async fn gui_browse(query: &str) -> Result<ApiResponse<Vec<u64>>, reqwest::Error> {

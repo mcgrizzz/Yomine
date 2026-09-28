@@ -159,7 +159,8 @@
 	const SLIDER_STEPS = 1000;
 	const LOG_SPAN = Math.log(MAX_WEIGHT / MIN_WEIGHT);
 	const toSlider = (w: number) => Math.round((Math.log(w / MIN_WEIGHT) / LOG_SPAN) * SLIDER_STEPS);
-	const fromSlider = (t: number) => clampWeight(MIN_WEIGHT * Math.exp((t / SLIDER_STEPS) * LOG_SPAN));
+	const fromSlider = (t: number) =>
+		clampWeight(MIN_WEIGHT * Math.exp((t / SLIDER_STEPS) * LOG_SPAN));
 
 	function clampWeight(w: number): number {
 		if (!Number.isFinite(w)) return MIN_WEIGHT;

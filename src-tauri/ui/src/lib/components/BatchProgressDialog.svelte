@@ -1,15 +1,28 @@
 <script lang="ts">
+	import { fade } from 'svelte/transition';
 	import Modal from './Modal.svelte';
 	import type { BatchRecord } from '$lib/ipc';
-	import { cancelQueue, type BatchPreview, type BatchProgress } from '$lib/stores/batches';
+	import {
+		cancelQueue,
+		PREVIEW_SLOTS,
+		type BatchPreview,
+		type BatchProgress
+	} from '$lib/stores/batches';
+	import { miningMode } from '$lib/stores/settings';
 
 	interface Props {
 		progress: BatchProgress;
 		batch: BatchRecord | null;
-		preview: BatchPreview | null;
+		previews: (BatchPreview | null)[];
 	}
 
-	let { progress, batch, preview }: Props = $props();
+	let { progress, batch, previews }: Props = $props();
+
+	const slots = $derived(Array.from({ length: PREVIEW_SLOTS }, (_, i) => previews[i] ?? null));
+	const latest = $derived(
+		slots.reduce<BatchPreview | null>((a, b) => (b && (!a || b.id > a.id) ? b : a), null)
+	);
+	const motionMs = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 120;
 
 	let stopping = $state(false);
 	let now = $state(Date.now());
@@ -33,16 +46,17 @@
 	});
 	const counts = $derived.by(() => {
 		const outcomes = batch?.items.map((i) => i.outcome) ?? [];
-		const created = outcomes.filter((o) => o.status === 'created');
+		// Only what the "card N of M" heading doesn't already say.
 		const parts = creating
 			? [
-					[created.length, 'created'],
 					[outcomes.filter((o) => o.status === 'duplicate').length, 'already in Anki'],
 					[outcomes.filter((o) => o.status === 'failed').length, 'not created']
 				]
 			: [
-					[created.filter((o) => o.media === 'complete').length, 'recorded'],
-					[created.filter((o) => o.media === 'failed').length, 'not recorded']
+					[
+						outcomes.filter((o) => o.status === 'created' && o.media === 'failed').length,
+						'not recorded'
+					]
 				];
 		return parts.filter(([n]) => n).map(([n, label]) => `${n} ${label}`);
 	});
@@ -53,13 +67,20 @@
 	}
 </script>
 
-<Modal title="Mining batch" width="min(32rem, calc(100vw - 2rem))" dismissible={false} onclose={stop}>
+<Modal
+	title="Mining batch"
+	width="min(32rem, calc(100vw - 2rem))"
+	dismissible={false}
+	onclose={stop}
+>
 	<div class="body">
 		<p class="step">
 			{creating ? 'Creating' : 'Recording'} card {progress.position} of {progress.count}
 		</p>
 		<p class="muted explain">
-			{#if !creating}
+			{#if !creating && $miningMode === 'local'}
+				Cutting each line's audio and a screenshot from the video.
+			{:else if !creating}
 				asbplayer plays each line in the video tab to record it. Keep that tab open.
 			{:else if progress.recordsNext}
 				Adding the cards to Anki first. Audio and screenshots are recorded once every card exists.
@@ -90,15 +111,32 @@
 			</span>
 		</div>
 
-		{#if preview && !creating}
-			<figure class="last">
-				<img src={preview.src} alt="Screenshot recorded for {preview.lemma}" />
+		{#if latest && !creating && $miningMode !== 'local'}
+			<figure class="single">
+				<img src={latest.src} alt="Screenshot recorded for {latest.lemma}" />
 				<figcaption>
 					<span class="eyebrow">Last recorded</span>
-					<strong class="last-word" lang="ja">{preview.lemma}</strong>
-					<span class="last-sentence" lang="ja" title={preview.sentence}>{preview.sentence}</span>
+					<strong class="last-word" lang="ja">{latest.lemma}</strong>
+					<span class="last-sentence" lang="ja" title={latest.sentence}>{latest.sentence}</span>
 				</figcaption>
 			</figure>
+		{:else if latest && !creating}
+			<div class="shots" role="list" aria-label="Recorded screenshots">
+				{#each slots as shot, i (i)}
+					<div class="shot" role="listitem" class:latest={shot?.id === latest.id}>
+						{#if shot}
+							{#key shot.id}
+								<img
+									src={shot.src}
+									alt="Screenshot recorded for {shot.lemma}"
+									title={shot.lemma}
+									transition:fade={{ duration: motionMs }}
+								/>
+							{/key}
+						{/if}
+					</div>
+				{/each}
+			</div>
 		{/if}
 
 		{#if counts.length > 0}
@@ -108,7 +146,9 @@
 	{#snippet footer()}
 		<footer>
 			<span class="muted">
-				{stopping ? 'Stopping after the current card…' : 'Stopping finishes the current card first.'}
+				{stopping
+					? 'Stopping after the current card…'
+					: 'Stopping finishes the current card first.'}
 			</span>
 			<button disabled={stopping} onclick={stop}>Stop</button>
 		</footer>
@@ -198,11 +238,38 @@
 		.pulse {
 			animation: none;
 		}
-		.fill {
+		.fill,
+		.shot {
 			transition: none;
 		}
 	}
-	.last {
+	.shots {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 0.3rem;
+		margin-top: 0.6rem;
+	}
+	.shot {
+		position: relative;
+		aspect-ratio: 16 / 9;
+		overflow: hidden;
+		border-radius: var(--radius-sm);
+		background: var(--bg-raised);
+		outline: 2px solid transparent;
+		outline-offset: -2px;
+		transition: outline-color 0.12s;
+	}
+	.shot.latest {
+		outline-color: var(--accent);
+	}
+	.shot img {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+	.single {
 		display: flex;
 		align-items: center;
 		gap: 0.85rem;
@@ -211,7 +278,7 @@
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 	}
-	.last img {
+	.single img {
 		flex-shrink: 0;
 		width: 7.5rem;
 		aspect-ratio: 16 / 9;
@@ -219,7 +286,7 @@
 		border-radius: var(--radius-sm);
 		background: var(--bg-deep);
 	}
-	.last figcaption {
+	.single figcaption {
 		display: grid;
 		gap: 0.15rem;
 		min-width: 0;

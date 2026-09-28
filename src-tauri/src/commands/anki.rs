@@ -11,6 +11,7 @@ use yomine::{
             AnkiModelInfo,
         },
     },
+    yomitan,
 };
 
 use crate::events::AnkiStatus;
@@ -77,31 +78,49 @@ pub async fn test_anki_connection(
     })
 }
 
-/// A model's sample note plus the engine's term/reading/sentence field guesses.
+/// A model's sample note plus the engine's field guesses.
 #[derive(serde::Serialize)]
 pub struct SampleNote {
     pub sample_note: Option<HashMap<String, String>>,
     pub guessed_term: Option<String>,
     pub guessed_reading: Option<String>,
     pub guessed_sentence: Option<String>,
+    pub guessed_sentence_audio: Option<String>,
+    pub guessed_picture: Option<String>,
+    /// A known note type ("Lapis") the guesses came from.
+    pub detected: Option<String>,
+    pub fields_differ: bool,
 }
 
-/// Sample note and field guesses for the supplied connection.
+/// Sample note and field guesses for the supplied connection. Yomitan's card formats
+/// for the note type show which field it fills with a screenshot or word audio.
 #[tauri::command]
 pub async fn get_anki_sample_note(
     connection: AnkiConnectionSettings,
+    yomitan_url: String,
     model_name: String,
     fields: Vec<String>,
 ) -> Result<SampleNote, String> {
     let client = anki::api::AnkiClient::new(connection);
     let sample_note =
         anki::get_sample_note_for_model(&client, &model_name).await.map_err(|e| e.to_string())?;
-    let (guessed_term, guessed_reading) = sample_note
-        .as_ref()
-        .map(|note| anki::guess_field_mappings(note, &fields))
-        .unwrap_or((None, None));
-    let guessed_sentence =
-        sample_note.as_ref().and_then(|note| anki::guess_sentence_field(note, &fields));
+    let templates: HashMap<String, String> = yomitan::get_term_card_formats(&yomitan_url)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|format| format.model == model_name)
+        .flat_map(|format| format.fields.into_iter().map(|(name, field)| (name, field.value)))
+        .collect();
+    let guess = anki::guess_mapping(&model_name, &fields, sample_note.as_ref(), &templates);
 
-    Ok(SampleNote { sample_note, guessed_term, guessed_reading, guessed_sentence })
+    Ok(SampleNote {
+        sample_note,
+        guessed_term: guess.term,
+        guessed_reading: guess.reading,
+        guessed_sentence: guess.sentence,
+        guessed_sentence_audio: guess.sentence_audio,
+        guessed_picture: guess.picture,
+        detected: guess.detected.map(str::to_string),
+        fields_differ: guess.fields_differ,
+    })
 }

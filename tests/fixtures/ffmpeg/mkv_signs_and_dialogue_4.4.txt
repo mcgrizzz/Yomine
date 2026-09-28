@@ -1,0 +1,32 @@
+Input #0, matroska,webm, from 'テスト 第1話.mkv':
+  Metadata:
+    ENCODER         : Lavf58.76.100
+  Duration: 00:00:10.02, start: 0.000000, bitrate: 187 kb/s
+  Stream #0:0: Video: h264 (High 4:4:4 Predictive), yuv444p(tv, progressive), 320x240 [SAR 1:1 DAR 4:3], 24 fps, 24 tbr, 1k tbn, 48 tbc (default)
+    Metadata:
+      ENCODER         : Lavc58.134.100 libx264
+      DURATION        : 00:00:10.023000000
+  Stream #0:1(eng): Audio: aac (LC), 44100 Hz, mono, fltp (default)
+    Metadata:
+      ENCODER         : Lavc58.134.100 aac
+      DURATION        : 00:00:10.023000000
+  Stream #0:2(jpn): Audio: aac (LC), 44100 Hz, mono, fltp
+    Metadata:
+      title           : 日本語
+      ENCODER         : Lavc58.134.100 aac
+      DURATION        : 00:00:10.023000000
+  Stream #0:3(jpn): Subtitle: subrip (default)
+    Metadata:
+      title           : Signs
+      ENCODER         : Lavc58.134.100 srt
+      DURATION        : 00:00:06.023000000
+  Stream #0:4(jpn): Subtitle: ass
+    Metadata:
+      title           : Dialogue
+      ENCODER         : Lavc58.134.100 ass
+      DURATION        : 00:00:09.023000000
+  Stream #0:5(eng): Subtitle: subrip
+    Metadata:
+      ENCODER         : Lavc58.134.100 srt
+      DURATION        : 00:00:02.523000000
+At least one output file must be specified

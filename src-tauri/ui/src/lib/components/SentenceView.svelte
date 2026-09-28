@@ -227,7 +227,8 @@
 	{#each occ.sentence.segments as seg, i (i)}
 		{@const isTerm = isTermSeg(seg)}
 		{@const know = mark(seg)}
-		{#if i > 0}<wbr />{/if}<!-- svelte-ignore a11y_no_static_element_interactions -- Shift+Hover
+		{#if i > 0}<wbr
+			/>{/if}<!-- svelte-ignore a11y_no_static_element_interactions -- Shift+Hover
 			lookup is a mouse-only affordance; keyboard browsing is issue #91. --><span
 			class:term={isTerm}
 			class:know-unknown={know === 'unknown'}
@@ -246,8 +247,12 @@
 	<!-- svelte-ignore a11y_no_static_element_interactions -- mouse-only layout
 	     affordance; keyboard navigation never shifts the pointer target. -->
 	<span class="nav" onmouseleave={() => (heldHeight = 0)}>
-		<button type="button" class="nav-btn" disabled={count <= 1} title="Previous sentence" onclick={prev}
-			>⏮</button
+		<button
+			type="button"
+			class="nav-btn"
+			disabled={count <= 1}
+			title="Previous sentence"
+			onclick={prev}>⏮</button
 		>
 		<span class="counter">{current + 1}/{count}</span>
 		<button type="button" class="nav-btn" disabled={count <= 1} title="Next sentence" onclick={next}
@@ -262,12 +267,11 @@
 				class="ts"
 				class:confirmed
 				disabled={$playerBusy}
-				title={$playerBusy
-					? 'Waiting for asbplayer to finish recording the mined line…'
-					: `Seek to ${t.start_label}`}
+				title={$playerBusy ? 'Wait for the mined card to finish' : `Seek to ${t.start_label}`}
 				onclick={() => seekTimestamp(t.start_secs, t.start_label)}
 			>
-				{confirmed ? '👁' : '▶'} {t.start_label}
+				{confirmed ? '👁' : '▶'}
+				{t.start_label}
 			</button>
 		{:else}
 			<span class="ts-label">{t.start_label}</span>
@@ -275,9 +279,7 @@
 	{/if}
 
 	{#if sentenceMined}
-		<span class="sentence-mined" title="This sentence is already in one of your Anki notes"
-			>✓</span
-		>
+		<span class="sentence-mined" title="This sentence is already in one of your Anki notes">✓</span>
 	{/if}
 
 	{#if $ankiFilterActive}

@@ -148,8 +148,16 @@
 						<span class="file-name">📄 {fileName(file.path)}</span>
 						{#if !file.exists}<span class="missing-tag">(missing)</span>{/if}
 						<span class="file-count">{file.term_count}</span>
-						<button class="icon" aria-label="Refresh {fileName(file.path)}" onclick={() => refreshFile(i)}>↻</button>
-						<button class="icon remove" aria-label="Remove {fileName(file.path)}" onclick={() => removeFile(i)}>✕</button>
+						<button
+							class="icon"
+							aria-label="Refresh {fileName(file.path)}"
+							onclick={() => refreshFile(i)}>↻</button
+						>
+						<button
+							class="icon remove"
+							aria-label="Remove {fileName(file.path)}"
+							onclick={() => removeFile(i)}>✕</button
+						>
 					</span>
 				{/each}
 				{#if search === ''}
@@ -168,7 +176,11 @@
 					{#each filteredTerms as term (term)}
 						<span class="term-pill">
 							<span class="term" lang="ja">{term}</span>
-							<button class="icon remove" aria-label="Remove {term}" onclick={() => removeTerm(term)}>✕</button>
+							<button
+								class="icon remove"
+								aria-label="Remove {term}"
+								onclick={() => removeTerm(term)}>✕</button
+							>
 						</span>
 					{/each}
 				</div>
@@ -179,7 +191,8 @@
 	{#snippet footer()}
 		{#if exportMessage}
 			<p class="export-msg" class:ok={exportMessage.ok}>
-				{exportMessage.ok ? '✓' : '⚠'} {exportMessage.text}
+				{exportMessage.ok ? '✓' : '⚠'}
+				{exportMessage.text}
 			</p>
 		{/if}
 		<SettingsFooter {form} onsave={save} oncancel={form.revert} onrestore={restoreDefault}>

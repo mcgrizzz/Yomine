@@ -1,6 +1,6 @@
 <script lang="ts">
 	import UncertainMatch from './UncertainMatch.svelte';
-	import type { DefinitionEntry, SentenceDto, Term, TimeStampDto } from '$lib/ipc';
+	import type { DefinitionEntry, SentenceDto, Term } from '$lib/ipc';
 	import {
 		defaultDir,
 		harmonic,
@@ -20,13 +20,13 @@
 		cardFormats,
 		clearSelection,
 		fileResult,
+		localVideo,
+		miningMode,
 		ignoredLemmas,
-		mediaMissing,
-		mineQueue,
+		missingMedia,
+		mineSelection,
 		mineQueueState,
-		mineTerm,
 		addedKeys,
-		minedKeys,
 		minedNoteIds,
 		isMinedTerm,
 		minedTerms,
@@ -41,10 +41,11 @@
 		queuedMineOptions,
 		queueAdhoc,
 		queueWithEntry,
-		retryMedia,
+		retryItemMedia,
 		selectedTerms,
 		setSelected,
 		setTableColumns,
+		reviewDialogOpen,
 		settings,
 		tableSearch,
 		tableSort,
@@ -59,7 +60,7 @@
 	import { furiganaText } from '$lib/furigana';
 	import DefinitionPopover from './DefinitionPopover.svelte';
 	import Furigana from './Furigana.svelte';
-	import MiningQueueModal from './MiningQueueModal.svelte';
+	import ReviewDialog from './ReviewDialog.svelte';
 	import SentenceConflictModal, { type BatchEntry } from './SentenceConflictModal.svelte';
 	import SentenceView, {
 		termCoversSegment,
@@ -123,8 +124,7 @@
 				{
 					id: 'copy-furigana',
 					text: 'Copy with furigana',
-					action: () =>
-						void navigator.clipboard.writeText(furiganaText(lemma, term.lemma_reading))
+					action: () => void navigator.clipboard.writeText(furiganaText(lemma, term.lemma_reading))
 				},
 				{ item: 'Separator' },
 				{
@@ -199,7 +199,6 @@
 		if (e.key === 'Shift' && e.shiftKey && !e.repeat && hovered) hovered();
 		if (e.key === 'Escape') {
 			editColumns = false;
-			confirmMine = null;
 		}
 	}
 
@@ -251,50 +250,16 @@
 		}
 	});
 
+	// Show sentences pinned in the review dialog or by auto mode's picks.
+	$effect(() => {
+		for (const [key, option] of Object.entries($queuedMineOptions)) {
+			if (!$selectedTerms.has(key)) continue;
+			if (option.occIdx !== undefined && untrack(() => occIdx[key]) !== option.occIdx)
+				occIdx[key] = option.occIdx;
+		}
+	});
+
 	const isMined = (t: Term): boolean => isMinedTerm(t, $minedTerms, $addedTerms);
-
-	let confirmMine = $state<{ term: Term; occs: Occurrence[] } | null>(null);
-
-	function mineClicked(term: Term, occs: Occurrence[]) {
-		if ($queuedCount > 0) confirmMine = { term, occs };
-		else mine(term, occs);
-	}
-
-	function confirmedMine() {
-		if (!confirmMine) return;
-		const { term, occs } = confirmMine;
-		confirmMine = null;
-		mine(term, occs);
-	}
-
-	// asbplayer enrichment needs asbplayer active (same rule as seeking) + a cue.
-	const viaFor = (ts: TimeStampDto | null): 'asbplayer' | 'direct' =>
-		$playerStatus.mode === 'asbplayer' && $playerStatus.ws_clients > 0 && ts !== null && !$backgroundTab
-			? 'asbplayer'
-			: 'direct';
-
-	function mine(
-		term: Term,
-		occs: Occurrence[],
-		entryIndex?: number,
-		formatName?: string,
-		scanText?: string
-	) {
-		const occ = occs[Math.min(occIdx[termKey(term)] ?? 0, occs.length - 1)];
-		const ts = occ?.sentence.timestamp ?? null;
-		const surface = occ ? termHighlightText(term, occ) : term.surface_form;
-		void mineTerm(
-			term.lemma_form,
-			occ?.sentence.text ?? '',
-			ts,
-			viaFor(ts),
-			surface,
-			entryIndex,
-			formatName,
-			scanText,
-			term.lemma_reading
-		);
-	}
 
 	/** Only the row whose term IS this entry — `termCoversSegment` merely overlaps. */
 	function rowFor(entry: DefinitionEntry): { term: Term; occs: Occurrence[] } | null {
@@ -312,31 +277,6 @@
 	function queueable(entry: DefinitionEntry): boolean {
 		const row = rowFor(entry);
 		return row ? !isMined(row.term) : defPopover?.segment != null;
-	}
-
-	/** Mine a hovered span that no table row represents. */
-	function mineSegment(
-		segment: { sentence: SentenceDto; surface: string },
-		entry: DefinitionEntry,
-		formatName?: string,
-		scanText?: string
-	) {
-		const ts = segment.sentence.timestamp ?? null;
-		void mineTerm(
-			entry.expression,
-			segment.sentence.text,
-			ts,
-			viaFor(ts),
-			segment.surface,
-			entry.index,
-			formatName,
-			scanText
-		);
-	}
-
-	function retry(term: Term, occs: Occurrence[]) {
-		const occ = occs[Math.min(occIdx[termKey(term)] ?? 0, occs.length - 1)];
-		void retryMedia(term, occ?.sentence.timestamp ?? null);
 	}
 
 	const COLUMN_TRACKS: Record<ColumnId, string> = {
@@ -408,9 +348,7 @@
 	const commitColumns = () => void setTableColumns(editCols);
 
 	const renderCols = $derived(editColumns ? editCols.map((c) => c.id) : visibleCols);
-	const gridTemplate = $derived(
-		['1.5rem', ...renderCols.map((id) => COLUMN_TRACKS[id])].join(' ')
-	);
+	const gridTemplate = $derived(['1.5rem', ...renderCols.map((id) => COLUMN_TRACKS[id])].join(' '));
 
 	// Mining needs Yomitan (renders the card) + AnkiConnect (stores it).
 	const canMine = $derived($yomitanReachable && $ankiStatus.connected);
@@ -418,22 +356,23 @@
 		$miningTerm !== null
 			? 'Mining in progress — wait for the current card to finish'
 			: $playerBusy
-				? 'Waiting for asbplayer to finish recording the mined line…'
+				? $miningMode === 'local'
+					? 'Adding audio and a screenshot to the mined card…'
+					: 'Waiting for asbplayer to finish recording the mined line…'
 				: null
 	);
-	// Only asbplayer can record audio/screenshots onto the mined card, and it
-	// records from its ACTIVE tab.
+	// asbplayer records from its ACTIVE tab; local mining cuts from the paired video.
 	const mediaNote = $derived.by(() => {
-		if ($playerStatus.mode !== 'asbplayer' || $playerStatus.ws_clients === 0)
-			return ' — no audio/screenshot without asbplayer';
+		if ($miningMode === 'local')
+			return $localVideo === null ? ' — pair a video to add audio and a screenshot' : '';
+		if ($playerStatus.ws_clients === 0) return ' — no audio/screenshot without asbplayer';
 		if ($asbContext.loaded_from_asbplayer && !$asbContext.loaded_has_subtitles)
-			return ' — the loaded video has no subtitles in asbplayer; card will get no audio/screenshot';
+			return ' — the loaded video has no subtitles in asbplayer; cards will get no audio/screenshot';
 		if ($backgroundTab)
-			return " — ⚠ the video's tab isn't active; card will get no audio/screenshot";
+			return " — ⚠ the video's tab isn't active; cards will get no audio/screenshot";
 		// Timestamp-less sources (EPUB/TXT) never enrich, so no target note.
 		const subtitleFile =
-			$fileResult?.source_file.file_type === 'SRT' ||
-			$fileResult?.source_file.file_type === 'SSA';
+			$fileResult?.source_file.file_type === 'SRT' || $fileResult?.source_file.file_type === 'SSA';
 		if (!$asbContext.loaded_from_asbplayer && subtitleFile)
 			return " — captures media from asbplayer's active tab";
 		return '';
@@ -453,7 +392,11 @@
 		// Text wrappers and their padding belong to the row; only actual controls
 		// own their clicks. Dragging to select text is handled below.
 		const target = e.target as Element;
-		if (target.closest('button, input, select, textarea, a, summary, [contenteditable], [role="tooltip"]'))
+		if (
+			target.closest(
+				'button, input, select, textarea, a, summary, [contenteditable], [role="tooltip"]'
+			)
+		)
 			return;
 		if (window.getSelection()?.toString()) return;
 		const key = termKey(term);
@@ -468,15 +411,16 @@
 		$selectedTerms.size - terms.filter((t) => $selectedTerms.has(termKey(t))).length
 	);
 
-	let showQueueDetails = $state(false);
 	$effect(() => {
-		if ($queuedCount === 0 || $mineQueueState !== null) showQueueDetails = false;
+		if ($mineQueueState !== null) reviewDialogOpen.set(false);
 	});
 
 	$effect(() => {
 		if ($mineQueueState?.key === undefined) return;
 		requestAnimationFrame(() => {
-			document.querySelector('.row.mining')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+			document
+				.querySelector('.row.mining')
+				?.scrollIntoView({ block: 'center', behavior: 'smooth' });
 		});
 	});
 
@@ -532,7 +476,7 @@
 		const entries = [...rows, ...adhoc];
 		const keys = entries.map((e) => normalizeSentence(e.sentence)).filter((s) => s !== '');
 		if (new Set(keys).size === keys.length) {
-			void mineQueue(
+			void mineSelection(
 				entries.map(
 					({ lemma, key, surface, sentence, timestamp, entryIndex, formatName, scanText }) => ({
 						lemma,
@@ -559,7 +503,7 @@
 			pinOccurrence(key, { occIdx: idx, userChosen: userChosen[key] ?? false });
 		}
 		batchEntries = null;
-		void mineQueue(items);
+		void mineSelection(items);
 	}
 </script>
 
@@ -581,50 +525,25 @@
 	/>
 {/if}
 
-{#if confirmMine}
-	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions --
-	     Escape closes it via the window handler below. -->
-	<div class="backdrop" onclick={() => (confirmMine = null)}>
-		<div
-			class="dialog"
-			role="dialog"
-			aria-modal="true"
-			aria-label="Mine individually"
-			tabindex="-1"
-			onclick={(e) => e.stopPropagation()}
-		>
-			<p class="dialog-body">
-				You have {$queuedCount} term{$queuedCount === 1 ? '' : 's'} selected for batch
-				mining. Mine 「<span lang="ja">{confirmMine.term.lemma_form}</span>」 individually now?
-			</p>
-			<footer class="dialog-footer">
-				<button class="bulk-btn primary" onclick={confirmedMine}>Mine individually</button>
-				<button class="bulk-btn" onclick={() => (confirmMine = null)}>Cancel</button>
-			</footer>
-		</div>
-	</div>
+{#if $reviewDialogOpen && !$mineQueueState}
+	<ReviewDialog {canMine} onmine={startBatch} onclose={() => reviewDialogOpen.set(false)} />
 {/if}
 
 {#if !$mineQueueState && canMine && $queuedCount > 0}
-	{#if showQueueDetails}
-		<MiningQueueModal {terms} onclose={() => (showQueueDetails = false)} />
-	{/if}
 	<div class="bulk-bar">
 		<span class="bulk-info">
-			{$queuedCount} selected{hiddenSelected > 0
-				? ` · ${hiddenSelected} hidden by filters`
-				: ''}
+			{$queuedCount} selected{hiddenSelected > 0 ? ` · ${hiddenSelected} hidden by filters` : ''}
 		</span>
 		<button
 			class="bulk-btn"
-			title="Review the queued terms — entry, card format, and what to drop"
-			onclick={() => (showQueueDetails = true)}>Details…</button
+			title="Check each term's sentence, definition and card format before mining"
+			onclick={() => reviewDialogOpen.set(true)}>Review…</button
 		>
 		{#if canMine}
 			<button
 				class="bulk-btn primary"
 				disabled={$miningTerm !== null || $playerBusy}
-				title={busyReason ?? 'Mine the selected terms one by one, in timestamp order'}
+				title={busyReason ?? 'Mine the selected terms one by one, in timestamp order' + mediaNote}
 				onclick={startBatch}>Mine {$queuedCount}</button
 			>
 		{/if}
@@ -770,39 +689,40 @@
 				{#if id === 'term'}
 					<span class="term-cell">
 						<span class="term-copy">
-						<!-- svelte-ignore a11y_click_events_have_key_events -- Ctrl/Cmd+Click is a
+							<!-- svelte-ignore a11y_click_events_have_key_events -- Ctrl/Cmd+Click is a
 						     mouse-modifier ignore toggle (egui parity); no keyboard equivalent. -->
-						<span
-							class="term"
-							class:mined-term={isMined(term)}
-							class:ignored={$ignoredLemmas.has(term.lemma_form)}
-							class:ignorable={ctrlHeld}
-							lang="ja"
-							role="button"
-							tabindex="-1"
-							title={($yomitanReachable ? 'Shift+Hover for definition · ' : '') +
-								($ignoredLemmas.has(term.lemma_form)
-									? 'Ctrl+Click to UNDO ignore'
-									: 'Ctrl+Click to ignore')}
-							onclick={(e) => termClick(e, term)}
-							oncontextmenu={(e) => openMenu(e, term)}
-							onmouseenter={(e) => termEnter(e, term)}
-							onmouseleave={() => (hovered = null)}
-							><Furigana surface={term.lemma_form} reading={term.lemma_reading} /></span
-						>
-						{#if term.possible_known_match}
-							<UncertainMatch match={term.possible_known_match} />
-						{/if}
+							<span
+								class="term"
+								class:mined-term={isMined(term)}
+								class:ignored={$ignoredLemmas.has(term.lemma_form)}
+								class:ignorable={ctrlHeld}
+								lang="ja"
+								role="button"
+								tabindex="-1"
+								title={($yomitanReachable ? 'Shift+Hover for definition · ' : '') +
+									($ignoredLemmas.has(term.lemma_form)
+										? 'Ctrl+Click to UNDO ignore'
+										: 'Ctrl+Click to ignore')}
+								onclick={(e) => termClick(e, term)}
+								oncontextmenu={(e) => openMenu(e, term)}
+								onmouseenter={(e) => termEnter(e, term)}
+								onmouseleave={() => (hovered = null)}
+								><Furigana surface={term.lemma_form} reading={term.lemma_reading} /></span
+							>
+							{#if term.possible_known_match}
+								<UncertainMatch match={term.possible_known_match} />
+							{/if}
 						</span>
 						{#if isMined(term)}
 							{@const noteId = $minedNoteIds[term.lemma_form]}
-							{#if noteId !== undefined && $mediaMissing.has(term.lemma_form)}
+							{@const missing = $missingMedia.get(term.lemma_form)}
+							{#if missing !== undefined}
 								<button
 									class="chip warn"
 									disabled={$miningTerm !== null || $playerBusy}
 									title={busyReason ??
-										'Card is in Anki, but asbplayer never added the audio/screenshot — click to retry'}
-									onclick={() => retry(term, occs)}
+										'Card is in Anki without audio or a screenshot — click to add them'}
+									onclick={() => void retryItemMedia(missing)}
 								>
 									{$miningTerm === term.lemma_form ? '…' : '⚠'}
 								</button>
@@ -815,29 +735,6 @@
 							{:else}
 								<span class="chip mined" title="This term already has a recent Anki card">✓</span>
 							{/if}
-						{:else if canMine}
-							<button
-								class="chip mine"
-								disabled={$miningTerm !== null || $playerBusy}
-								title={busyReason ?? 'Create an Anki card from the displayed sentence' + mediaNote}
-								onclick={() => mineClicked(term, occs)}
-							>
-								{#if $miningTerm === term.lemma_form}…{:else}
-									<svg
-										viewBox="0 0 24 24"
-										width="1em"
-										height="1em"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2.4"
-										stroke-linecap="round"
-										aria-hidden="true"
-									>
-										<path d="M3 21 L13.5 10.5" />
-										<path d="M10 4 Q 17.8 6.2 20 14" />
-									</svg>
-								{/if}
-							</button>
 						{/if}
 					</span>
 				{:else if id === 'jlpt'}
@@ -882,20 +779,8 @@
 		scale={$settings?.definition_scale ?? 1}
 		canMine={canMine && (mineable !== null || defPopover.segment !== null)}
 		canQueue={queueable}
-		isDuplicate={(entry) => entry.known || $minedKeys.has(entry.key) || $addedKeys.has(entry.key)}
-		mineDisabled={(entry) =>
-			$miningTerm !== null || $playerBusy || ($queuedCount > 0 && queueable(entry))}
-		mineTitle={(entry) =>
-			$queuedCount > 0 && queueable(entry)
-				? 'A batch selection is active — Queue this term instead, or clear the selection'
-				: 'Create an Anki card from the displayed sentence' + mediaNote}
+		isDuplicate={(entry) => entry.known || $addedKeys.has(entry.key)}
 		formats={$cardFormats}
-		onmine={(entry, formatName) => {
-			const row = rowFor(entry);
-			if (row) mine(row.term, row.occs, entry.index, formatName, defPopover?.text);
-			else if (defPopover?.segment)
-				mineSegment(defPopover.segment, entry, formatName, defPopover.text);
-		}}
 		onqueue={(entry, formatName) => {
 			const row = rowFor(entry);
 			if (row) {
@@ -1089,20 +974,6 @@
 		line-height: 1;
 		border-radius: var(--radius);
 	}
-	.mine {
-		color: var(--accent);
-		background: var(--bg-raised);
-		border: 1px solid var(--border);
-		cursor: pointer;
-	}
-	.mine:hover:not(:disabled) {
-		background: var(--bg-hover);
-		border-color: var(--accent);
-	}
-	.mine:disabled {
-		opacity: 0.5;
-		cursor: default;
-	}
 	.mined {
 		color: var(--success);
 		background: color-mix(in srgb, var(--success) 12%, transparent);
@@ -1177,35 +1048,6 @@
 	.bulk-btn:disabled {
 		opacity: 0.5;
 		cursor: default;
-	}
-	.backdrop {
-		position: fixed;
-		inset: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
-		z-index: var(--z-modal);
-	}
-	.dialog {
-		display: flex;
-		flex-direction: column;
-		gap: 0.6rem;
-		width: min(420px, 92%);
-		padding: 1rem;
-		background: var(--bg-panel);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		box-shadow: var(--shadow-modal);
-	}
-	.dialog-body {
-		margin: 0;
-		font-size: 0.9rem;
-	}
-	.dialog-footer {
-		display: flex;
-		gap: 0.5rem;
-		justify-content: flex-end;
 	}
 	.empty {
 		color: var(--text-muted);

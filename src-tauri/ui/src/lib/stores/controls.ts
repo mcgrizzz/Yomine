@@ -53,7 +53,15 @@ fileResult.subscribe((r) => {
 
 /** The filtered + sorted term list the table renders. */
 export const visibleTerms = derived(
-	[fileResult, tableSearch, tableSort, posEnabled, freqFilter, jlptEnabled, showPossibleKnownMatches],
+	[
+		fileResult,
+		tableSearch,
+		tableSort,
+		posEnabled,
+		freqFilter,
+		jlptEnabled,
+		showPossibleKnownMatches
+	],
 	([$file, $search, $sort, $pos, $freq, $jlpt, $showPossible]) =>
 		$file
 			? applyControls($file.terms, $file.sentences, {

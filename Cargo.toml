@@ -29,6 +29,7 @@ regex = "1.11.1"
 reqwest = { version = "0.12.10", features = ["blocking", "json"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.141"
+sha2 = "0.10"
 tar = "0.4.43"
 thiserror = "2.0.12"
 tokio = { version = "1.47.0", features = ["full"] }
@@ -37,7 +38,7 @@ uuid = { version = "1.7.0", features = ["v4", "serde"] }
 vibrato = { package = "vibrato-rkyv", version = "0.7.12", default-features = false, features = ["legacy"] }
 wana_kana = "4.0.0"
 chrono = { version = "0.4.41", features = ["serde"] }
-rsubs-lib = { git = "https://github.com/mcgrizzz/rsubs-lib", rev = "de70ad3b0e3b31743bdf4d17c10ed20e9beef262" }
+rsubs-lib = { git = "https://github.com/mcgrizzz/rsubs-lib", rev = "da2b241f22950912d24fffef8e7688bde1af342d" }
 time = "0.3.41"
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 

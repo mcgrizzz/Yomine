@@ -3,6 +3,7 @@ mod batches;
 mod commands;
 mod dto;
 mod events;
+mod media;
 mod player_task;
 mod recommended;
 mod state;
@@ -20,6 +21,7 @@ pub fn run() {
     let settings = yomine::persistence::load_json_or_default::<SettingsData>("settings.json");
     yomine::anki::api::configure_connection(settings.anki_connection.clone());
     let websocket_port = settings.websocket_settings.port;
+    let mining_mode = settings.mining_mode;
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -42,6 +44,8 @@ pub fn run() {
             commands::lifecycle::export_theme_file,
             commands::lifecycle::import_theme_file,
             commands::file::open_file_dialog,
+            commands::file::open_folder_dialog,
+            commands::file::list_videos,
             commands::file::get_epub_chapters,
             commands::file::open_video_dialog,
             commands::file::open_executable_dialog,
@@ -80,8 +84,14 @@ pub fn run() {
             commands::player::set_websocket_port,
             commands::player::get_asbplayer_media,
             commands::player::launch_mpv,
-            commands::mining::mine_term,
+            commands::local_media::get_ffmpeg_status,
+            commands::local_media::install_ffmpeg,
+            commands::file::pair_video,
+            commands::file::open_video,
             commands::mining::mine_batch_item,
+            commands::mining::get_default_entry,
+            commands::mining::prepare_media,
+            commands::mining::get_line_media,
             commands::mining::get_media_preview,
             batches::create_batch,
             batches::get_last_batch,
@@ -91,7 +101,6 @@ pub fn run() {
             batches::mark_media_processed,
             batches::finish_batch,
             batches::undo_batch,
-            commands::mining::retry_mine_media,
             commands::mining::get_mined_state,
             commands::mining::get_yomitan_status,
             commands::mining::render_definition,
@@ -122,9 +131,11 @@ pub fn run() {
                 }
             }
 
+            tauri::async_runtime::spawn_blocking(yomine::media::ffmpeg::remove_leftovers);
+
             // The player runs in its own task that solely owns `PlayerManager`;
             // commands reach it through this handle (no shared lock).
-            let player = player_task::spawn(app.handle().clone(), websocket_port);
+            let player = player_task::spawn(app.handle().clone(), websocket_port, mining_mode);
             app.manage(player);
 
             // Ambient Anki/knowledge polling (player connectivity is handled above).

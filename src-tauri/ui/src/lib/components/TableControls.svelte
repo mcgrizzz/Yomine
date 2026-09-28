@@ -1,6 +1,6 @@
 <script lang="ts">
-    import { showPossibleKnownMatches } from '$lib/stores/knowledgeView';
-    import { setShowPossibleKnownMatches } from '$lib/stores/settings';
+	import { showPossibleKnownMatches } from '$lib/stores/knowledgeView';
+	import { setShowPossibleKnownMatches } from '$lib/stores/settings';
 	// Sorting lives in the table's column headers; POS gets a single modal here
 	// (deliberate deviation from egui's per-header popovers).
 	import { get } from 'svelte/store';
@@ -103,72 +103,71 @@
 		title="Include words with an uncertain Anki match in the table"
 		onclick={() => void setShowPossibleKnownMatches(!$showPossibleKnownMatches)}
 	>
-		<span class="switch-track" class:on={$showPossibleKnownMatches} aria-hidden="true"><span class="switch-thumb"></span></span>
+		<span class="switch-track" class:on={$showPossibleKnownMatches} aria-hidden="true"
+			><span class="switch-thumb"></span></span
+		>
 		Show uncertain matches
 	</button>
 	<div class="filters">
+		{#if hasJlpt}
+			<div class="group">
+				<span class="lbl">JLPT</span>
+				{#each jlptChips as key (key)}
+					<button
+						class="jlpt"
+						class:off={$jlptEnabled[key] === false}
+						aria-pressed={$jlptEnabled[key] !== false}
+						title={`Show only ${jlptLabel(key)} — Ctrl+Click to combine, Shift+Click for a range`}
+						onclick={(e) => jlptClick(e, key)}
+					>
+						{jlptLabel(key)}
+					</button>
+				{/each}
+			</div>
+		{/if}
 
-	{#if hasJlpt}
-		<div class="group">
-			<span class="lbl">JLPT</span>
-			{#each jlptChips as key (key)}
-				<button
-					class="jlpt"
-					class:off={$jlptEnabled[key] === false}
-					aria-pressed={$jlptEnabled[key] !== false}
-					title={`Show only ${jlptLabel(key)} — Ctrl+Click to combine, Shift+Click for a range`}
-					onclick={(e) => jlptClick(e, key)}
-				>
-					{jlptLabel(key)}
-				</button>
-			{/each}
-		</div>
-	{/if}
-
-	{#if $freqFilter && $freqFilter.hi > $freqFilter.lo}
-		<div class="group freq">
-			<span class="lbl">Freq</span>
-			<DualSlider
-				lo={$freqFilter.lo}
-				hi={$freqFilter.hi}
-				min={$freqFilter.min}
-				max={$freqFilter.max}
-				onchange={setRange}
-				oncommit={persistFreq}
-			/>
-			<input
-				class="bound"
-				type="number"
-				min={$freqFilter.lo}
-				max={$freqFilter.hi}
-				value={$freqFilter.min}
-				onchange={(e) => commitMin(e.currentTarget.valueAsNumber)}
-				aria-label="Minimum frequency"
-			/>
-			<span class="dash">–</span>
-			<input
-				class="bound"
-				type="number"
-				min={$freqFilter.lo}
-				max={$freqFilter.hi}
-				value={$freqFilter.max}
-				onchange={(e) => commitMax(e.currentTarget.valueAsNumber)}
-				aria-label="Maximum frequency"
-			/>
-			<label class="unknown" title="Include entries without frequency data">
-				<input
-					type="checkbox"
-					checked={$freqFilter.includeUnknown}
-					onchange={(e) => setUnknown(e.currentTarget.checked)}
+		{#if $freqFilter && $freqFilter.hi > $freqFilter.lo}
+			<div class="group freq">
+				<span class="lbl">Freq</span>
+				<DualSlider
+					lo={$freqFilter.lo}
+					hi={$freqFilter.hi}
+					min={$freqFilter.min}
+					max={$freqFilter.max}
+					onchange={setRange}
+					oncommit={persistFreq}
 				/>
-				Unranked
-			</label>
-		</div>
-	{:else if $freqFilter}
-		<span class="no-freq">No frequency data</span>
-	{/if}
-
-
+				<input
+					class="bound"
+					type="number"
+					min={$freqFilter.lo}
+					max={$freqFilter.hi}
+					value={$freqFilter.min}
+					onchange={(e) => commitMin(e.currentTarget.valueAsNumber)}
+					aria-label="Minimum frequency"
+				/>
+				<span class="dash">–</span>
+				<input
+					class="bound"
+					type="number"
+					min={$freqFilter.lo}
+					max={$freqFilter.hi}
+					value={$freqFilter.max}
+					onchange={(e) => commitMax(e.currentTarget.valueAsNumber)}
+					aria-label="Maximum frequency"
+				/>
+				<label class="unknown" title="Include entries without frequency data">
+					<input
+						type="checkbox"
+						checked={$freqFilter.includeUnknown}
+						onchange={(e) => setUnknown(e.currentTarget.checked)}
+					/>
+					Unranked
+				</label>
+			</div>
+		{:else if $freqFilter}
+			<span class="no-freq">No frequency data</span>
+		{/if}
 	</div>
 
 	<span class="count">{$visibleTerms.length} / {$fileResult?.terms.length ?? 0} shown</span>
@@ -271,7 +270,9 @@
 		background: var(--text-muted);
 		transition: background 120ms ease;
 	}
-	.switch-track.on { background: var(--accent); }
+	.switch-track.on {
+		background: var(--accent);
+	}
 	.switch-thumb {
 		display: block;
 		width: 0.9rem;
@@ -281,20 +282,33 @@
 		box-shadow: 0 1px 2px #0004;
 		transition: transform 120ms ease;
 	}
-	.switch-track.on .switch-thumb { transform: translateX(0.85rem); }
+	.switch-track.on .switch-thumb {
+		transform: translateX(0.85rem);
+	}
 	.possible-toggle:focus-visible {
 		outline: 2px solid var(--accent);
 		outline-offset: 3px;
 		border-radius: var(--radius);
 	}
 	@media (prefers-reduced-motion: reduce) {
-		.switch-track, .switch-thumb { transition: none; }
+		.switch-track,
+		.switch-thumb {
+			transition: none;
+		}
 	}
 	@media (max-width: 720px) {
-		.controls { grid-template-columns: minmax(0, 1fr) auto; }
-		.search { grid-column: 1 / -1; }
-		.filters { grid-row: auto; }
-		.count { grid-column: 1 / -1; }
+		.controls {
+			grid-template-columns: minmax(0, 1fr) auto;
+		}
+		.search {
+			grid-column: 1 / -1;
+		}
+		.filters {
+			grid-row: auto;
+		}
+		.count {
+			grid-column: 1 / -1;
+		}
 	}
 	.count {
 		color: var(--text-muted);

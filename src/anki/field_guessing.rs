@@ -4,6 +4,8 @@
 //! egui modal and the Tauri `get_anki_sample_note` command call this one
 //! implementation (Constitution: single source of truth).
 
+use std::collections::HashMap;
+
 use wana_kana::{
     utils::{
         is_char_kana,
@@ -18,9 +20,6 @@ pub fn guess_sentence_field(
     sample_note: &std::collections::HashMap<String, String>,
     available_fields: &[String],
 ) -> Option<String> {
-    fn norm(s: &str) -> String {
-        s.to_lowercase().replace([' ', '_', '-'], "")
-    }
     // "SentenceAudio" etc. are metadata ABOUT the sentence, not its text.
     const EXCLUDED: &[&str] = &[
         "audio",
@@ -62,6 +61,104 @@ pub fn guess_sentence_field(
     available_fields
         .iter()
         .find(|f| sample_note.get(*f).is_some_and(|v| is_likely_sentence(v)))
+        .cloned()
+}
+
+#[derive(Debug, Default)]
+pub struct MappingGuess {
+    pub term: Option<String>,
+    pub reading: Option<String>,
+    pub sentence: Option<String>,
+    pub sentence_audio: Option<String>,
+    pub picture: Option<String>,
+    pub detected: Option<&'static str>,
+    /// The detected note type lacks some of its usual fields, so those were guessed.
+    pub fields_differ: bool,
+}
+
+/// A known note type's fields where they exist, otherwise the general guesses.
+pub fn guess_mapping(
+    model_name: &str,
+    available_fields: &[String],
+    sample_note: Option<&HashMap<String, String>>,
+    templates: &HashMap<String, String>,
+) -> MappingGuess {
+    let empty = HashMap::new();
+    let sample = sample_note.unwrap_or(&empty);
+    let (term, reading) = guess_field_mappings(sample, available_fields);
+    let mut guess = MappingGuess {
+        term,
+        reading,
+        sentence: guess_sentence_field(sample, available_fields),
+        sentence_audio: guess_sentence_audio_field(available_fields, templates),
+        picture: guess_picture_field(available_fields, templates),
+        ..Default::default()
+    };
+    if let Some(known) = super::known_note_types::detect(model_name, available_fields) {
+        guess.detected = Some(known.name);
+        let slots = [
+            (&mut guess.term, known.term),
+            (&mut guess.reading, known.reading),
+            (&mut guess.sentence, known.sentence),
+            (&mut guess.sentence_audio, known.sentence_audio),
+            (&mut guess.picture, known.picture),
+        ];
+        for (slot, field) in slots {
+            if available_fields.iter().any(|f| f == field) {
+                *slot = Some(field.to_string());
+            } else {
+                guess.fields_differ = true;
+            }
+        }
+    }
+    guess
+}
+
+fn norm(s: &str) -> String {
+    s.to_lowercase().replace([' ', '_', '-'], "")
+}
+
+/// `templates` maps a field to the Yomitan template that fills it, for this note type.
+pub fn guess_sentence_audio_field(
+    available_fields: &[String],
+    templates: &HashMap<String, String>,
+) -> Option<String> {
+    // Yomitan's {audio} is the word read aloud, not the sentence.
+    let candidates = || {
+        available_fields
+            .iter()
+            .filter(|f| !templates.get(*f).is_some_and(|t| t.contains("{audio}")))
+    };
+    candidates()
+        .find(|f| {
+            let name = norm(f);
+            (name.contains("audio") && (name.contains("sentence") || name.starts_with("sent")))
+                || name.contains("例文音声")
+        })
+        .or_else(|| candidates().find(|f| norm(f) == "audio"))
+        .cloned()
+}
+
+pub fn guess_picture_field(
+    available_fields: &[String],
+    templates: &HashMap<String, String>,
+) -> Option<String> {
+    const NAMES: &[&str] = &["picture", "image", "screenshot", "snapshot", "画像"];
+    available_fields
+        .iter()
+        .find(|f| {
+            templates
+                .get(*f)
+                .is_some_and(|t| t.contains("{screenshot}") || t.contains("{clipboard-image}"))
+        })
+        .or_else(|| available_fields.iter().find(|f| NAMES.contains(&norm(f).as_str())))
+        // DefinitionPicture holds a dictionary image, not the scene.
+        .or_else(|| {
+            available_fields.iter().find(|f| {
+                let name = norm(f);
+                NAMES.iter().any(|n| name.contains(n)) && !name.contains("definition")
+            })
+        })
         .cloned()
 }
 

@@ -84,16 +84,17 @@
 		const chosen = chapters
 			.map((chapter) => ({
 				chapter,
-				picked: chapter.parts
-					.map((p, i) => (selected.has(p.id) ? i + 1 : 0))
-					.filter((n) => n > 0)
+				picked: chapter.parts.map((p, i) => (selected.has(p.id) ? i + 1 : 0)).filter((n) => n > 0)
 			}))
 			.filter(({ picked }) => picked.length > 0);
 
 		const partsText = (c: EpubChapter, picked: number[]) =>
 			`Parts ${partRanges(picked)} of ${c.parts.length}`;
 
-		if (chosen.length === chapters.length && chosen.every(({ chapter, picked }) => picked.length === chapter.parts.length)) {
+		if (
+			chosen.length === chapters.length &&
+			chosen.every(({ chapter, picked }) => picked.length === chapter.parts.length)
+		) {
 			return 'All chapters';
 		}
 		if (chosen.length === 1 && chosen[0].chapter.title.trim() === bookTitle) {
@@ -161,9 +162,7 @@
 							onclick={() => toggleExpanded(chapterIndex)}
 						>
 							{picked > 0 ? `${picked}/${chapter.parts.length}` : chapter.parts.length} parts
-							<span class="expand small" class:open={expandedChapters.has(chapterIndex)}
-								>▶</span
-							>
+							<span class="expand small" class:open={expandedChapters.has(chapterIndex)}>▶</span>
 						</button>
 					{:else}
 						<button class="title" onclick={() => toggleChapter(chapter)}>{chapter.title}</button>
@@ -171,7 +170,9 @@
 					{#if seenCount === chapter.parts.length}
 						<span class="seen" title="Mined before">✓</span>
 					{:else if seenCount > 0}
-						<span class="seen partial" title="Partially mined ({seenCount}/{chapter.parts.length})">✓</span>
+						<span class="seen partial" title="Partially mined ({seenCount}/{chapter.parts.length})"
+							>✓</span
+						>
 					{/if}
 					<span class="chars">{chapter.char_count.toLocaleString()} chars</span>
 				</div>

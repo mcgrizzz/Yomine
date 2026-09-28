@@ -5,6 +5,7 @@ import { writable } from 'svelte/store';
 export const ignoreModalOpen = writable(false);
 export const websocketModalOpen = writable(false);
 export const ankiModalOpen = writable(false);
+export const localMediaModalOpen = writable(false);
 export const frequencyModalOpen = writable(false);
 export const posModalOpen = writable(false);
 export const analyzerModalOpen = writable(false);
@@ -21,6 +22,13 @@ export const autoModalOpen = writable(false);
 export const openIgnoreModal = (): void => ignoreModalOpen.set(true);
 export const openWebsocketModal = (): void => websocketModalOpen.set(true);
 export const openAnkiModal = (): void => ankiModalOpen.set(true);
+/** The note type Anki Settings opens expanded, then clears. */
+export const ankiFocus = writable<string | null>(null);
+export const openAnkiModalAt = (noteType: string): void => {
+	ankiFocus.set(noteType);
+	ankiModalOpen.set(true);
+};
+export const openLocalMediaModal = (): void => localMediaModalOpen.set(true);
 export const openFrequencyModal = (): void => frequencyModalOpen.set(true);
 export const openPosModal = (): void => posModalOpen.set(true);
 export const openAnalyzerModal = (): void => analyzerModalOpen.set(true);
@@ -33,6 +41,9 @@ export const openRecentFilesModal = (): void => recentFilesModalOpen.set(true);
 export const openEpubChapterModal = (): void => epubChapterModalOpen.set(true);
 export const openProfilesModal = (): void => profilesModalOpen.set(true);
 export const openAutoModal = (): void => autoModalOpen.set(true);
+
+/** The review dialog: auto mode's picks, or the selection before mining. */
+export const reviewDialogOpen = writable(false);
 
 export const batchSummaryOpen = writable(false);
 export const openBatchSummary = (): void => batchSummaryOpen.set(true);

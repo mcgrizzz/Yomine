@@ -1,7 +1,13 @@
 <script lang="ts">
 	import Modal from './Modal.svelte';
 	import { recentFiles, recentFilesModalOpen, openRecentFile } from '$lib/stores';
-	import { fileIcon, filename, formatTermCount, formatFileSize, formatLastOpened } from '$lib/recents';
+	import {
+		fileIcon,
+		filename,
+		formatTermCount,
+		formatFileSize,
+		formatLastOpened
+	} from '$lib/recents';
 
 	function open(path: string) {
 		recentFilesModalOpen.set(false);

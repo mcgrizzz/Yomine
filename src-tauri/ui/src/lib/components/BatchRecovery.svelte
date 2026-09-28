@@ -5,7 +5,7 @@
 	import BatchSummary from './BatchSummary.svelte';
 	import {
 		batchPause,
-		batchPreview,
+		batchPreviews,
 		batchReplace,
 		batchTarget,
 		confirmReplaceBatch,
@@ -101,9 +101,13 @@
 		{/snippet}
 	</Modal>
 {:else if $batchPause}
-	<BatchPauseDialog pause={$batchPause} choices={pauseChoices($batchPause)} onchoose={resumeBatch} />
+	<BatchPauseDialog
+		pause={$batchPause}
+		choices={pauseChoices($batchPause)}
+		onchoose={resumeBatch}
+	/>
 {:else if $mineQueueState}
-	<BatchProgressDialog progress={$mineQueueState} batch={$lastBatch} preview={$batchPreview} />
+	<BatchProgressDialog progress={$mineQueueState} batch={$lastBatch} previews={$batchPreviews} />
 {:else if $batchSummaryOpen && $lastBatch}
 	<BatchSummary batch={$lastBatch} onclose={() => batchSummaryOpen.set(false)} />
 {/if}

@@ -62,7 +62,7 @@ pub struct AnkiStatus {
 pub struct PlayerStatus {
     pub mpv_connected: bool,
     pub ws_clients: usize,
-    /// `"mpv"` | `"asbplayer"` | `"none"`.
+    /// The mining mode: `"local"` | `"asbplayer"`.
     pub mode: String,
     /// WebSocket server state: `"running"` | `"starting"` | `"error"` | `"stopped"`.
     /// Lets the asbplayer dot distinguish a bind failure from "waiting".

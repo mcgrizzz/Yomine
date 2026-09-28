@@ -1,0 +1,299 @@
+[matroska,webm @ 000001bc8ad3b240] Could not find codec parameters for stream 14 (Attachment: none): unknown codec
+Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
+[matroska,webm @ 000001bc8ad3b240] Could not find codec parameters for stream 15 (Attachment: none): unknown codec
+Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
+[matroska,webm @ 000001bc8ad3b240] Could not find codec parameters for stream 16 (Attachment: none): unknown codec
+Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
+[matroska,webm @ 000001bc8ad3b240] Could not find codec parameters for stream 17 (Attachment: none): unknown codec
+Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
+[matroska,webm @ 000001bc8ad3b240] Could not find codec parameters for stream 18 (Attachment: none): unknown codec
+Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
+[matroska,webm @ 000001bc8ad3b240] Could not find codec parameters for stream 19 (Attachment: none): unknown codec
+Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
+[matroska,webm @ 000001bc8ad3b240] Could not find codec parameters for stream 20 (Attachment: none): unknown codec
+Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
+[matroska,webm @ 000001bc8ad3b240] Could not find codec parameters for stream 21 (Attachment: none): unknown codec
+Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
+Input #0, matroska,webm, from 'Frieren.S01E01.mkv':
+  Metadata:
+    title           : Frieren: Beyond Journey's End - S01E01 - The Journey's End
+    ENCODER         : Lavf60.16.100
+  Duration: 00:25:59.98, start: 0.000000, bitrate: 2701 kb/s
+  Chapters:
+    Chapter #0:0: start 0.000000, end 90.007000
+      Metadata:
+        title           : Opening
+    Chapter #0:1: start 90.007000, end 1136.969000
+      Metadata:
+        title           : Part A
+    Chapter #0:2: start 1136.969000, end 1459.958000
+      Metadata:
+        title           : Part B
+    Chapter #0:3: start 1459.958000, end 1549.965000
+      Metadata:
+        title           : Ending
+    Chapter #0:4: start 1549.965000, end 1559.986000
+      Metadata:
+        title           : Preview
+  Stream #0:0(jpn): Video: hevc (Main 10), yuv420p10le(tv, bt709, progressive), 1920x1080 [SAR 1:1 DAR 16:9], 23.98 fps, 23.98 tbr, 1k tbn (default)
+    Metadata:
+      title           : HEVC 10-bit
+      _STATISTICS_TAGS: BPS DURATION NUMBER_OF_FRAMES NUMBER_OF_BYTES
+      BPS             : 17513276
+      NUMBER_OF_FRAMES: 37401
+      NUMBER_OF_BYTES : 3414942269
+      _STATISTICS_WRITING_APP: mkvpropedit v77.0 ('Elemental') 64-bit
+      _STATISTICS_WRITING_DATE_UTC: 2023-10-13 21:59:11
+      ENCODER         : Lavc60.31.102 hevc_nvenc
+      DURATION        : 00:25:59.934000000
+  Stream #0:1(jpn): Audio: eac3, 48000 Hz, stereo, fltp, 224 kb/s (default)
+    Metadata:
+      title           : E-AC-3 2.0 @ 224 kb/s
+      BPS             : 224000
+      NUMBER_OF_FRAMES: 48749
+      NUMBER_OF_BYTES : 43679104
+      _STATISTICS_WRITING_APP: mkvpropedit v77.0 ('Elemental') 64-bit
+      _STATISTICS_WRITING_DATE_UTC: 2023-10-13 21:59:11
+      _STATISTICS_TAGS: BPS DURATION NUMBER_OF_FRAMES NUMBER_OF_BYTES
+      DURATION        : 00:25:59.968000000
+  Stream #0:2(eng): Subtitle: ass (default)
+    Metadata:
+      title           : English [9volt]
+      BPS             : 6836
+      NUMBER_OF_FRAMES: 8250
+      NUMBER_OF_BYTES : 1333032
+      _STATISTICS_WRITING_APP: mkvpropedit v77.0 ('Elemental') 64-bit
+      _STATISTICS_WRITING_DATE_UTC: 2023-10-13 21:59:11
+      _STATISTICS_TAGS: BPS DURATION NUMBER_OF_FRAMES NUMBER_OF_BYTES
+      DURATION        : 00:25:59.910000000
+  Stream #0:3(eng): Subtitle: ass (forced)
+    Metadata:
+      title           : English Forced [9volt]
+      BPS             : 6747
+      NUMBER_OF_FRAMES: 7987
+      NUMBER_OF_BYTES : 1315633
+      _STATISTICS_WRITING_APP: mkvpropedit v77.0 ('Elemental') 64-bit
+      _STATISTICS_WRITING_DATE_UTC: 2023-10-13 21:59:11
+      _STATISTICS_TAGS: BPS DURATION NUMBER_OF_FRAMES NUMBER_OF_BYTES
+      DURATION        : 00:25:59.910000000
+  Stream #0:4(eng): Subtitle: ass
+    Metadata:
+      title           : English [CR]
+      BPS             : 123
+      NUMBER_OF_FRAMES: 320
+      NUMBER_OF_BYTES : 24026
+      _STATISTICS_WRITING_APP: mkvpropedit v77.0 ('Elemental') 64-bit
+      _STATISTICS_WRITING_DATE_UTC: 2023-10-13 21:59:11
+      _STATISTICS_TAGS: BPS DURATION NUMBER_OF_FRAMES NUMBER_OF_BYTES
+      DURATION        : 00:25:59.950000000
+  Stream #0:5(eng): Subtitle: ass
+    Metadata:
+      title           : English Forced [CR]
+      BPS             : 23
+      NUMBER_OF_FRAMES: 57
+      NUMBER_OF_BYTES : 4580
+      _STATISTICS_WRITING_APP: mkvpropedit v77.0 ('Elemental') 64-bit
+      _STATISTICS_WRITING_DATE_UTC: 2023-10-13 21:59:11
+      _STATISTICS_TAGS: BPS DURATION NUMBER_OF_FRAMES NUMBER_OF_BYTES
+      DURATION        : 00:25:59.950000000
+  Stream #0:6(spa): Subtitle: ass
+    Metadata:
+      title           : Spanish (Latin) [CR]
+      BPS             : 120
+      NUMBER_OF_FRAMES: 274
+      NUMBER_OF_BYTES : 22203
+      _STATISTICS_WRITING_APP: mkvpropedit v77.0 ('Elemental') 64-bit
+      _STATISTICS_WRITING_DATE_UTC: 2023-10-13 21:59:11
+      _STATISTICS_TAGS: BPS DURATION NUMBER_OF_FRAMES NUMBER_OF_BYTES
+      DURATION        : 00:25:59.910000000
+  Stream #0:7(spa): Subtitle: ass
+    Metadata:
+      title           : Spanish [CR]
+      BPS             : 115
+      NUMBER_OF_FRAMES: 266
+      NUMBER_OF_BYTES : 21147
+      _STATISTICS_WRITING_APP: mkvpropedit v77.0 ('Elemental') 64-bit
+      _STATISTICS_WRITING_DATE_UTC: 2023-10-13 21:59:11
+      _STATISTICS_TAGS: BPS DURATION NUMBER_OF_FRAMES NUMBER_OF_BYTES
+      DURATION        : 00:25:59.910000000
+  Stream #0:8(por): Subtitle: ass
+    Metadata:
+      title           : Portuguese (Brazil) [CR]
+      BPS             : 130
+      NUMBER_OF_FRAMES: 340
+      NUMBER_OF_BYTES : 25531
+      _STATISTICS_WRITING_APP: mkvpropedit v77.0 ('Elemental') 64-bit
+      _STATISTICS_WRITING_DATE_UTC: 2023-10-13 21:59:11
+      _STATISTICS_TAGS: BPS DURATION NUMBER_OF_FRAMES NUMBER_OF_BYTES
+      DURATION        : 00:25:59.910000000
+  Stream #0:9(fre): Subtitle: ass
+    Metadata:
+      title           : French [CR]
+      BPS             : 119
+      NUMBER_OF_FRAMES: 282
+      NUMBER_OF_BYTES : 21876
+      _STATISTICS_WRITING_APP: mkvpropedit v77.0 ('Elemental') 64-bit
+      _STATISTICS_WRITING_DATE_UTC: 2023-10-13 21:59:11
+      _STATISTICS_TAGS: BPS DURATION NUMBER_OF_FRAMES NUMBER_OF_BYTES
+      DURATION        : 00:25:59.910000000
+  Stream #0:10(ger): Subtitle: ass
+    Metadata:
+      title           : German [CR]
+      BPS             : 133
+      NUMBER_OF_FRAMES: 304
+      NUMBER_OF_BYTES : 25745
+      _STATISTICS_WRITING_APP: mkvpropedit v77.0 ('Elemental') 64-bit
+      _STATISTICS_WRITING_DATE_UTC: 2023-10-13 21:59:11
+      _STATISTICS_TAGS: BPS DURATION NUMBER_OF_FRAMES NUMBER_OF_BYTES
+      DURATION        : 00:25:59.910000000
+  Stream #0:11(ara): Subtitle: ass
+    Metadata:
+      title           : Arabic [CR]
+      BPS             : 126
+      NUMBER_OF_FRAMES: 269
+      NUMBER_OF_BYTES : 24285
+      _STATISTICS_WRITING_APP: mkvpropedit v77.0 ('Elemental') 64-bit
+      _STATISTICS_WRITING_DATE_UTC: 2023-10-13 21:59:11
+      _STATISTICS_TAGS: BPS DURATION NUMBER_OF_FRAMES NUMBER_OF_BYTES
+      DURATION        : 00:25:59.930000000
+  Stream #0:12(ita): Subtitle: ass
+    Metadata:
+      title           : Italian [CR]
+      BPS             : 124
+      NUMBER_OF_FRAMES: 341
+      NUMBER_OF_BYTES : 24041
+      _STATISTICS_WRITING_APP: mkvpropedit v77.0 ('Elemental') 64-bit
+      _STATISTICS_WRITING_DATE_UTC: 2023-10-13 21:59:11
+      _STATISTICS_TAGS: BPS DURATION NUMBER_OF_FRAMES NUMBER_OF_BYTES
+      DURATION        : 00:25:59.910000000
+  Stream #0:13(rus): Subtitle: ass
+    Metadata:
+      title           : Russian [CR]
+      BPS             : 183
+      NUMBER_OF_FRAMES: 290
+      NUMBER_OF_BYTES : 35338
+      _STATISTICS_WRITING_APP: mkvpropedit v77.0 ('Elemental') 64-bit
+      _STATISTICS_WRITING_DATE_UTC: 2023-10-13 21:59:11
+      _STATISTICS_TAGS: BPS DURATION NUMBER_OF_FRAMES NUMBER_OF_BYTES
+      DURATION        : 00:25:59.980000000
+  Stream #0:14: Attachment: none
+    Metadata:
+      filename        : aver.ttf
+      mimetype        : font/ttf
+  Stream #0:15: Attachment: none
+    Metadata:
+      filename        : Aver.ttf.ttf
+      mimetype        : font/ttf
+  Stream #0:16: Attachment: none
+    Metadata:
+      filename        : FootlightMtLight-Light.ttf
+      mimetype        : font/ttf
+  Stream #0:17: Attachment: none
+    Metadata:
+      filename        : grain.ttf
+      mimetype        : font/ttf
+  Stream #0:18: Attachment: none
+    Metadata:
+      filename        : TimesNewRoman.ttf
+      mimetype        : font/ttf
+  Stream #0:19: Attachment: none
+    Metadata:
+      filename        : Fot-マティスProDb-SemiBold.otf
+      mimetype        : font/otf
+  Stream #0:20: Attachment: none
+    Metadata:
+      filename        : hiroshige-Medium.otf
+      mimetype        : font/otf
+  Stream #0:21: Attachment: none
+    Metadata:
+      filename        : MasqualeroProStencil-Medium.otf
+      mimetype        : font/otf
+  Stream #0:22: Attachment: ttf
+    Metadata:
+      filename        : trebuc.ttf
+      mimetype        : application/x-truetype-font
+  Stream #0:23: Attachment: ttf
+    Metadata:
+      filename        : trebucbd.ttf
+      mimetype        : application/x-truetype-font
+  Stream #0:24: Attachment: ttf
+    Metadata:
+      filename        : trebucbi.ttf
+      mimetype        : application/x-truetype-font
+  Stream #0:25: Attachment: ttf
+    Metadata:
+      filename        : trebucit.ttf
+      mimetype        : application/x-truetype-font
+  Stream #0:26: Attachment: ttf
+    Metadata:
+      filename        : arial.ttf
+      mimetype        : application/x-truetype-font
+  Stream #0:27: Attachment: ttf
+    Metadata:
+      filename        : arialbd.ttf
+      mimetype        : application/x-truetype-font
+  Stream #0:28: Attachment: ttf
+    Metadata:
+      filename        : arialbi.ttf
+      mimetype        : application/x-truetype-font
+  Stream #0:29: Attachment: ttf
+    Metadata:
+      filename        : ariali.ttf
+      mimetype        : application/x-truetype-font
+  Stream #0:30: Attachment: ttf
+    Metadata:
+      filename        : times.ttf
+      mimetype        : application/x-truetype-font
+  Stream #0:31: Attachment: ttf
+    Metadata:
+      filename        : timesbd.ttf
+      mimetype        : application/x-truetype-font
+  Stream #0:32: Attachment: ttf
+    Metadata:
+      filename        : timesbi.ttf
+      mimetype        : application/x-truetype-font
+  Stream #0:33: Attachment: ttf
+    Metadata:
+      filename        : timesi.ttf
+      mimetype        : application/x-truetype-font
+  Stream #0:34: Attachment: ttf
+    Metadata:
+      filename        : verdana.ttf
+      mimetype        : application/x-truetype-font
+  Stream #0:35: Attachment: ttf
+    Metadata:
+      filename        : verdanab.ttf
+      mimetype        : application/x-truetype-font
+  Stream #0:36: Attachment: ttf
+    Metadata:
+      filename        : verdanai.ttf
+      mimetype        : application/x-truetype-font
+  Stream #0:37: Attachment: ttf
+    Metadata:
+      filename        : verdanaz.ttf
+      mimetype        : application/x-truetype-font
+  Stream #0:38: Attachment: ttf
+    Metadata:
+      filename        : tahoma.ttf
+      mimetype        : application/x-truetype-font
+  Stream #0:39: Attachment: otf
+    Metadata:
+      filename        : AdobeArabic-Bold.otf
+      mimetype        : application/vnd.ms-opentype
+  Stream #0:40: Attachment: ttf
+    Metadata:
+      filename        : georgia.ttf
+      mimetype        : application/x-truetype-font
+  Stream #0:41: Attachment: ttf
+    Metadata:
+      filename        : georgiab.ttf
+      mimetype        : application/x-truetype-font
+  Stream #0:42: Attachment: ttf
+    Metadata:
+      filename        : georgiai.ttf
+      mimetype        : application/x-truetype-font
+  Stream #0:43: Attachment: ttf
+    Metadata:
+      filename        : georgiaz.ttf
+      mimetype        : application/x-truetype-font
+At least one output file must be specified

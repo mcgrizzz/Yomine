@@ -163,12 +163,15 @@
 		<ul class="legend">
 			{#each SEGMENTS as s (s.group)}
 				{#if groups[s.group].length > 0}
-					<li><span class="dot {s.tone}"></span><strong>{groups[s.group].length}</strong> {s.label}</li>
+					<li>
+						<span class="dot {s.tone}"></span><strong>{groups[s.group].length}</strong>
+						{s.label}
+					</li>
 				{/if}
 			{/each}
 		</ul>
 
-		{#if batch.auto && $autoMode}
+		{#if batch.auto && $autoMode !== 'off'}
 			<details class="auto">
 				<summary><AutoWaiting /></summary>
 				<AutoLedger />
@@ -208,7 +211,11 @@
 									: 'Open a tag to see why a card failed.'}
 							</p>
 						</div>
-						<button class="primary" disabled={blocked || retryCount === 0} onclick={() => retryBatch()}>
+						<button
+							class="primary"
+							disabled={blocked || retryCount === 0}
+							onclick={() => retryBatch()}
+						>
 							Mine {plural(retryCount, 'card')}
 						</button>
 					</div>
@@ -223,7 +230,11 @@
 							<h3>{plural(groups.noMedia.length, 'card')} without audio or screenshot</h3>
 							<p>These cards are in Anki. Retry media adds the recording to the same cards.</p>
 						</div>
-						<button class="primary" disabled={blocked || mediaCount === 0} onclick={() => retryBatch(true)}>
+						<button
+							class="primary"
+							disabled={blocked || mediaCount === 0}
+							onclick={() => retryBatch(true)}
+						>
 							Retry media
 						</button>
 					</div>

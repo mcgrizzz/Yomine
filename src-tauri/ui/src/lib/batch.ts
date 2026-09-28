@@ -55,27 +55,32 @@ export type BatchPlan = Record<BatchPhase, PhasePlan>;
 
 const CREATE_GUESS_SECS = 2;
 const RECORD_OVERHEAD_GUESS_SECS = 3;
+const LOCAL_RECORD_GUESS_SECS = 1;
 
 export function cueSecs(item: BatchItem): number {
 	const t = item.timestamp;
 	return t ? Math.max(0, t.end_secs - t.start_secs) : 0;
 }
 
-/** Record-phase samples are the overhead beyond each cue's own length. */
+/** asbplayer plays each line to record it, so its record samples are the overhead beyond
+ * the cue's own length. Cutting from a local file doesn't depend on the cue's length. */
 export function estimateProgress(
 	batch: BatchRecord,
-	plan: BatchPlan
+	plan: BatchPlan,
+	local = false
 ): { doneSecs: number; currentSecs: number; totalSecs: number } {
 	const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 	const average = (xs: number[], guess: number) => (xs.length ? sum(xs) / xs.length : guess);
 	const create = average(plan.create.samples, CREATE_GUESS_SECS);
-	const overhead = average(plan.record.samples, RECORD_OVERHEAD_GUESS_SECS);
+	const overhead = average(
+		plan.record.samples,
+		local ? LOCAL_RECORD_GUESS_SECS : RECORD_OVERHEAD_GUESS_SECS
+	);
 	const createCosts = plan.create.indices.map(() => create);
-	const recordCosts = plan.record.indices.map((i) => cueSecs(batch.items[i]) + overhead);
-	const costs = [
-		...createCosts.slice(plan.create.done),
-		...recordCosts.slice(plan.record.done)
-	];
+	const recordCosts = plan.record.indices.map(
+		(i) => (local ? 0 : cueSecs(batch.items[i])) + overhead
+	);
+	const costs = [...createCosts.slice(plan.create.done), ...recordCosts.slice(plan.record.done)];
 	const totalSecs = sum(createCosts) + sum(recordCosts);
 	return { doneSecs: totalSecs - sum(costs), currentSecs: costs[0] ?? 0, totalSecs };
 }

@@ -1,4 +1,4 @@
-import { get, writable, type Writable } from 'svelte/store';
+import { derived, get, writable, type Writable } from 'svelte/store';
 import * as ipc from '$lib/ipc';
 import {
 	cueSecs,
@@ -11,11 +11,11 @@ import {
 	type BatchPhase,
 	type BatchPlan
 } from '$lib/batch';
-import { fileResult } from './file';
+import { fileResult, localVideo } from './file';
+import { miningMode } from './settings';
 import { asbContext, backgroundTab, playerStatus } from './player';
 import { adhocQueue, dropAdhoc, queuedMineOptions, queueAdhoc, setSelected } from './selection';
 import {
-	mediaMissing,
 	minedNoteIds,
 	minedTerms,
 	miningTerm,
@@ -97,12 +97,29 @@ export interface AutoLedgerEntry {
 export const autoLedger = writable<AutoLedgerEntry[]>([]);
 export const mineQueueState = writable<BatchProgress | null>(null);
 export interface BatchPreview {
+	id: number;
 	lemma: string;
 	sentence: string;
 	src: string;
 }
 
-export const batchPreview = writable<BatchPreview | null>(null);
+/** The progress dialog's grid of recorded screenshots, by slot. */
+export const batchPreviews = writable<(BatchPreview | null)[]>([]);
+export const PREVIEW_SLOTS = 9;
+let previewId = 0;
+let lastSlot = -1;
+
+/** Fills empty slots first, then replaces a random one other than the last changed. */
+function placePreview(preview: BatchPreview): void {
+	batchPreviews.update((slots) => {
+		const next = Array.from({ length: PREVIEW_SLOTS }, (_, i) => slots[i] ?? null);
+		const empty = next.flatMap((shot, i) => (shot ? [] : [i]));
+		const choices = empty.length > 0 ? empty : next.map((_, i) => i).filter((i) => i !== lastSlot);
+		lastSlot = choices[Math.floor(Math.random() * choices.length)];
+		next[lastSlot] = preview;
+		return next;
+	});
+}
 
 let cancelled = false;
 
@@ -151,9 +168,12 @@ async function chooseTarget(mediaRun: boolean): Promise<TargetAnswer> {
 	return targetPrompt.ask({ media, mediaRun });
 }
 
-async function showPreview(item: ipc.BatchItem, file: string): Promise<void> {
-	const src = await ipc.getMediaPreview(file).catch(() => null);
-	if (src && get(playerBusy)) batchPreview.set({ lemma: item.lemma, sentence: item.sentence, src });
+async function showPreview(item: ipc.BatchItem, step: ipc.BatchStep): Promise<void> {
+	const src =
+		step.preview_image ??
+		(step.preview_file && (await ipc.getMediaPreview(step.preview_file).catch(() => null)));
+	if (!src || !get(playerBusy)) return;
+	placePreview({ id: previewId++, lemma: item.lemma, sentence: item.sentence, src });
 }
 
 function recordSuccess(item: ipc.BatchItem): void {
@@ -165,12 +185,6 @@ function recordSuccess(item: ipc.BatchItem): void {
 		sessionMinedSentences.update((s) => new Set(s).add(normalizeSentence(item.sentence)));
 	}
 	minedNoteIds.update((m) => ({ ...m, [item.lemma]: outcome.note_id }));
-	mediaMissing.update((s) => {
-		const next = new Set(s);
-		if (lacksMedia(outcome)) next.add(item.lemma);
-		else next.delete(item.lemma);
-		return next;
-	});
 }
 
 function clearUnchangedSelection(item: ipc.BatchItem): void {
@@ -201,9 +215,10 @@ function clearUnchangedSelection(item: ipc.BatchItem): void {
 }
 
 function toBatchItems(items: QueueItem[]): ipc.BatchItem[] {
-	const status = get(playerStatus);
 	const recording =
-		(status.mode === 'asbplayer' || get(asbContext).loaded_from_asbplayer) && !get(backgroundTab);
+		get(miningMode) === 'local' ||
+		((get(playerStatus).mode === 'asbplayer' || get(asbContext).loaded_from_asbplayer) &&
+			!get(backgroundTab));
 	const adhoc = new Set(get(adhocQueue).map((a) => a.key));
 	const start = (i: QueueItem) => i.timestamp?.start_secs ?? Infinity;
 	return [...items]
@@ -240,7 +255,7 @@ async function run(
 	const mediaRun = retry?.media ?? false;
 	playerBusy.set(true);
 	cancelled = false;
-	batchPreview.set(null);
+	batchPreviews.set([]);
 	batchSummaryOpen.set(false);
 	let batch = items ? null : previous;
 	let fatal = false;
@@ -248,6 +263,7 @@ async function run(
 	const options: ipc.MineOptions = { record: true, require_dictionary_media: true };
 	let target: string | null = null;
 	let finished: ipc.BatchRecord | null = null;
+	const local = get(miningMode) === 'local';
 
 	const plan: BatchPlan = {
 		create: { indices: [], done: 0, samples: [] },
@@ -261,7 +277,7 @@ async function run(
 			position: plan[phase].done + 1,
 			count: plan[phase].indices.length,
 			recordsNext: phase === 'create' && plan.record.indices.length > 0,
-			...estimateProgress(batch, plan),
+			...estimateProgress(batch, plan, local),
 			estimatedAt: Date.now(),
 			current: item.lemma,
 			sentence: item.sentence,
@@ -287,7 +303,7 @@ async function run(
 				lastBatch.set(batch);
 				const current = batch.items[index];
 				recordSuccess(current);
-				if (step.preview_file) void showPreview(current, step.preview_file);
+				void showPreview(current, step);
 				if (step.failure?.scope === 'stop') {
 					fatal = true;
 					if (step.failure.stage === 'Saving batch') batchSaveError.set(step.failure.message);
@@ -295,10 +311,13 @@ async function run(
 					return;
 				}
 				if (!step.failure) {
-					plan[phase].samples.push(phase === 'record' ? Math.max(0, secs - cueSecs(current)) : secs);
+					plan[phase].samples.push(
+						phase === 'record' && !local ? Math.max(0, secs - cueSecs(current)) : secs
+					);
 				}
 				clearUnchangedSelection(current);
-				if (!step.failure || cancelled) break;
+				// Left for "Retry failed" in the summary; the same item usually fails again right away.
+				if (!step.failure || cancelled || step.failure.kind === 'transient') break;
 				const choice = await pausePrompt.ask({ item: current, failure: step.failure });
 				if (choice === 'retry') continue;
 				if (choice === 'without_dictionary_media') {
@@ -321,11 +340,18 @@ async function run(
 		const snapshot = items ? toBatchItems(items) : previous!.items;
 		const selected = retry?.indices ?? snapshot.map((_, i) => i);
 		const records = selected.some((i) => snapshot[i].mine_media);
-		if (records && !get(asbContext).loaded_from_asbplayer) {
+		if (records && !local && !get(asbContext).loaded_from_asbplayer) {
 			const answer = await chooseTarget(mediaRun);
 			if (!answer || cancelled) return null;
 			target = answer.target;
 			options.record = answer.record;
+		}
+		if (local && get(localVideo) === null && !mediaRun) {
+			options.record = false;
+			if (items && records)
+				showNotice(
+					'No video is paired, so these cards get no audio or screenshot. Pair a video to add them.'
+				);
 		}
 		if (items) {
 			batch = await ipc.createBatch(file.batch_source, snapshot, auto);
@@ -339,6 +365,10 @@ async function run(
 		} else {
 			plan.create.indices = selected;
 			if (options.record) plan.record.indices = selected.filter((i) => snapshot[i].mine_media);
+		}
+		const cues = plan.record.indices.flatMap((i) => batch!.items[i].timestamp ?? []);
+		if (local && cues.length > 0) void ipc.prepareMedia(cues).catch(() => {});
+		if (!mediaRun) {
 			await runPhase('create');
 			const created = batch.items;
 			plan.record.indices = plan.record.indices.filter((i) => {
@@ -376,7 +406,7 @@ async function run(
 		miningTerm.set(null);
 		playerBusy.set(false);
 		mineQueueState.set(null);
-		batchPreview.set(null);
+		batchPreviews.set([]);
 		if (batch) {
 			batchSummaryOpen.set(true);
 			void refreshMinedState(true);
@@ -392,6 +422,21 @@ export function retryBatch(media = false): Promise<ipc.BatchRecord | null> {
 	const batch = get(lastBatch);
 	if (get(batchSaveError) || !batch) return Promise.resolve(null);
 	return run(null, { indices: retryIndices(batch, media), media });
+}
+
+/** lemma → index in the last batch, for loaded-source notes still without media. */
+export const missingMedia = derived([lastBatch, fileResult], ([batch, file]) => {
+	const missing = new Map<string, number>();
+	if (!batch || !sameSource(batch, file)) return missing;
+	batch.items.forEach((item, index) => {
+		if (lacksMedia(item.outcome)) missing.set(item.lemma, index);
+	});
+	return missing;
+});
+
+export function retryItemMedia(index: number): Promise<ipc.BatchRecord | null> {
+	if (get(batchSaveError)) return Promise.resolve(null);
+	return run(null, { indices: [index], media: true });
 }
 
 export function restoreBatchSelection(): void {
@@ -421,12 +466,16 @@ export function restoreBatchSelection(): void {
 				...options
 			});
 		} else {
-			queuedMineOptions.update((m) => ({ ...m, [item.key]: { ...options, occIdx, userChosen: true } }));
+			queuedMineOptions.update((m) => ({
+				...m,
+				[item.key]: { ...options, occIdx, userChosen: true }
+			}));
 			setSelected([item.key], true);
 		}
 		restored++;
 	}
-	const unavailable = restored < batch.items.length ? ' — some original occurrences are unavailable' : '';
+	const unavailable =
+		restored < batch.items.length ? ' — some original occurrences are unavailable' : '';
 	showNotice(`Restored ${restored} of ${batch.items.length} items${unavailable}`);
 }
 
@@ -442,9 +491,7 @@ export async function undoLastBatch(): Promise<void> {
 			result.batch.items.flatMap((i) => (i.outcome.status === 'deleted' ? [i.outcome.note_id] : []))
 		);
 		const ids = get(minedNoteIds);
-		const lemmas = new Set(Object.keys(ids).filter((lemma) => deleted.has(ids[lemma])));
 		minedNoteIds.set(Object.fromEntries(Object.entries(ids).filter(([, id]) => !deleted.has(id))));
-		mediaMissing.update((s) => new Set([...s].filter((lemma) => !lemmas.has(lemma))));
 		await refreshMinedState(true);
 		const remaining = result.remaining ? ` · ${result.remaining} could not be deleted` : '';
 		if (result.reopened) {

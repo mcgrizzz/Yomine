@@ -1,7 +1,7 @@
 import { showPossibleKnownMatches } from './knowledgeView';
 // The backend owns settings; this store is a local mirror synced on each save.
 
-import { get, writable } from 'svelte/store';
+import { derived, get, writable } from 'svelte/store';
 import * as ipc from '$lib/ipc';
 import { lastError } from './ui';
 import { type FreqFilterState, posEnabled } from './controls';
@@ -11,7 +11,8 @@ export const settings = writable<ipc.SettingsData | null>(null);
 /** Every setting's default (`SettingsData::default()`), for Restore Default. */
 export const defaultSettings = writable<ipc.SettingsData | null>(null);
 settings.subscribe((s) => showPossibleKnownMatches.set(s?.show_possible_known_matches ?? true));
-export const setShowPossibleKnownMatches = (show: boolean) => patchSettings({ show_possible_known_matches: show });
+export const setShowPossibleKnownMatches = (show: boolean) =>
+	patchSettings({ show_possible_known_matches: show });
 
 /** Returns false when settings haven't hydrated yet, or when the save failed. */
 async function patchSettings(patch: Partial<ipc.SettingsData>): Promise<boolean> {
@@ -68,6 +69,11 @@ export async function saveAppearance(
 
 export const setMpvPath = (path: string) => patchSettings({ mpv_path: path });
 
+export const miningMode = derived(settings, ($s) => $s?.mining_mode ?? 'asbplayer');
+export const setMiningMode = (mode: ipc.MiningMode) => patchSettings({ mining_mode: mode });
+export const setAutoReview = (on: boolean) =>
+	get(settings)?.auto_review === on ? Promise.resolve(true) : patchSettings({ auto_review: on });
+
 export const setTableColumns = (columns: { id: string; visible: boolean }[]) =>
 	patchSettings({ table_columns: columns.map((c) => ({ ...c })) });
 
@@ -123,9 +129,12 @@ export async function saveAnkiSettings(
 		anki_connection: { ...connection }
 	};
 	await ipc.saveSettings({ ...current, ...patch });
-	settings.update((s) => s ? { ...s, ...patch } : s);
+	settings.update((s) => (s ? { ...s, ...patch } : s));
 	void refreshMinedState(true);
 }
+
+export const saveLocalMedia = (format: ipc.MediaFormat, ffmpegPath: string) =>
+	patchSettings({ media_format: { ...format }, ffmpeg_path: ffmpegPath });
 
 export const saveJlptFilters = (filters: Record<string, boolean>) =>
 	patchSettings({ jlpt_filters: { ...filters } });
@@ -137,7 +146,10 @@ export const saveFreqFilter = (f: FreqFilterState) =>
 		freq_include_unknown: f.includeUnknown
 	});
 
-export const saveTextFilters = (presets: Record<string, boolean>, filters: ipc.TextFilterSetting[]) =>
+export const saveTextFilters = (
+	presets: Record<string, boolean>,
+	filters: ipc.TextFilterSetting[]
+) =>
 	patchSettings({
 		text_filter_presets: { ...presets },
 		text_filters: filters.map((f) => ({ ...f }))

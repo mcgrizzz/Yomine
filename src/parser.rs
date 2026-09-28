@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     fs,
     sync::LazyLock,
 };
@@ -14,6 +15,7 @@ use crate::core::{
         SourceFileType,
         TimeStamp,
     },
+    utils::is_kanji_char,
     Sentence,
     SourceFile,
     YomineError,
@@ -84,6 +86,9 @@ pub fn clean_subtitle_text(raw: &str) -> String {
     STRIP_INLINE_TAGS.replace_all(&text, "").trim().to_string()
 }
 
+/// Consecutive same-text cues this close are one line split in two, often at a scene cut.
+const SPLIT_CUE_GAP: time::Duration = time::Duration::milliseconds(100);
+
 fn parse_srt(srt: SRT, source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
     let sentences: Vec<Sentence> = srt
         .lines
@@ -109,12 +114,33 @@ fn parse_srt(srt: SRT, source_file: &SourceFile) -> Result<Vec<Sentence>, Yomine
             }))
         })
         .collect::<Result<Vec<_>, YomineError>>()?;
+    let sentences = merge_split_cues(sentences);
 
     if sentences.is_empty() {
         return Err(YomineError::Custom("No subtitles found in the file.".to_string()));
     }
 
     Ok(sentences)
+}
+
+/// Joins such cues, then numbers sentences by position, which terms refer to them by.
+fn merge_split_cues(sentences: Vec<Sentence>) -> Vec<Sentence> {
+    let mut merged: Vec<Sentence> = Vec::with_capacity(sentences.len());
+    for sentence in sentences {
+        if let Some(last) = merged.last_mut() {
+            if let (Some(prev), Some(next)) = (&mut last.timestamp, &sentence.timestamp) {
+                if last.text == sentence.text && next.start - prev.end <= SPLIT_CUE_GAP {
+                    prev.end = prev.end.max(next.end);
+                    continue;
+                }
+            }
+        }
+        merged.push(sentence);
+    }
+    for (id, sentence) in merged.iter_mut().enumerate() {
+        sentence.id = id;
+    }
+    merged
 }
 
 pub fn read_srt(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
@@ -134,12 +160,26 @@ fn read_ssa(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
     let raw_file = fs::read_to_string(&source_file.original_file)?;
     let raw_file = raw_file.trim_start_matches('\u{feff}');
 
-    let ssa = SSA::parse_lenient(raw_file)
+    let mut ssa = SSA::parse_lenient(raw_file)
         .map_err(|err| YomineError::Custom(format!("Error Parsing SSA/ASS File: {}", err)))?;
+    keep_japanese_styles(&mut ssa);
 
     let srt = ssa.to_srt();
 
     parse_srt(srt, source_file)
+}
+
+/// Drops each style with no kana or kanji in any of its lines: the English half of a merged
+/// ja-en file, or English signs. A Japanese style keeps its occasional romaji line.
+fn keep_japanese_styles(ssa: &mut SSA) {
+    let japanese = |c: char| is_kanji_char(c) || matches!(c, '\u{3040}'..='\u{30FF}');
+    let styles: HashSet<String> = ssa
+        .events
+        .iter()
+        .filter(|e| clean_subtitle_text(&e.text).chars().any(japanese))
+        .map(|e| e.style.clone())
+        .collect();
+    ssa.events.retain(|e| styles.contains(&e.style));
 }
 
 fn sentences_from_lines<'a>(
@@ -230,8 +270,15 @@ pub fn read(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
 
 #[cfg(test)]
 mod tests {
+    use rsubs_lib::{
+        SRT,
+        SSA,
+    };
+
     use super::{
         clean_subtitle_text,
+        keep_japanese_styles,
+        parse_srt,
         read_txt,
         sentences_from_lines,
     };
@@ -255,6 +302,50 @@ mod tests {
         for (a, b) in from_file.iter().zip(&from_lines) {
             assert_eq!((a.id, &a.text), (b.id, &b.text));
         }
+    }
+
+    #[test]
+    fn merges_a_line_split_into_touching_cues() {
+        // Frieren S01E01: one spoken line split at a scene cut, then said again later.
+        let srt = "146\n00:10:37,721 --> 00:10:38,096\n放り込んでおいてくれて\nよかったのに\n\n\
+                   147\n00:10:38,096 --> 00:10:40,307\n放り込んでおいてくれて\nよかったのに\n\n\
+                   148\n00:10:40,400 --> 00:10:41,000\n次の台詞\n\n\
+                   149\n00:10:45,000 --> 00:10:46,000\n次の台詞\n";
+        let sentences = parse_srt(SRT::parse(srt).unwrap(), &SourceFile::default()).unwrap();
+
+        let spans: Vec<(usize, (f32, f32))> =
+            sentences.iter().map(|s| (s.id, s.timestamp.as_ref().unwrap().to_secs())).collect();
+        assert_eq!(sentences.len(), 3);
+        assert_eq!(spans[0].0, 0);
+        assert!((spans[0].1 .0 - 637.721).abs() < 0.01 && (spans[0].1 .1 - 640.307).abs() < 0.01);
+        // A repeat after a real pause is its own line.
+        assert_eq!((spans[1].0, spans[2].0), (1, 2));
+    }
+
+    #[test]
+    fn ass_files_we_have_hit_parse() {
+        // A track ffmpeg extracted from an mkv, ending in a blank line, then the shape of
+        // Frieren S01E02's merged ja-en file from Jimaku: an embedded font whose data lines can
+        // start with `[`, and one time rounded up to `.100`.
+        let ass = include_str!("../tests/fixtures/ass/trailing_blank_line.ass").to_string()
+            + "Dialogue: 0,0:10:42.100,0:10:45.41,JPN TOP,,0,0,0,,（鐘の音）\n\n\
+               [Fonts]\nfontname: notosans_0.ttf\n!!%!!!!2!1!!\n[B-=1$]Y&B!J#AEK%\n";
+        let srt = SSA::parse_lenient(&ass).unwrap().to_srt();
+        let last = srt.lines.last().unwrap();
+        let clock = |t: time::Time| (t.minute(), t.second(), t.millisecond());
+        assert_eq!((clock(last.start), clock(last.end)), ((10, 43, 0), (10, 45, 410)));
+    }
+
+    #[test]
+    fn drops_styles_without_japanese() {
+        let ass =
+            include_str!("../tests/fixtures/ass/trailing_blank_line.ass").trim_end().to_string()
+                + "\nDialogue: 0,0:02:11.00,0:02:12.00,JPN TOP,,0,0,0,,王都が見えてきた\n\
+               Dialogue: 0,0:02:13.00,0:02:14.00,JPN TOP,,0,0,0,,{\\i1}Frieren-sama{\\i0}";
+        let mut ssa = SSA::parse_lenient(&ass).unwrap();
+        keep_japanese_styles(&mut ssa);
+        let texts: Vec<&str> = ssa.events.iter().map(|e| e.text.as_str()).collect();
+        assert_eq!(texts, ["王都が見えてきた", "{\\i1}Frieren-sama{\\i0}"]);
     }
 
     #[test]

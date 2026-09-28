@@ -95,7 +95,14 @@
 			disabled={draft.pct <= MIN_PCT}
 			onclick={() => step(-STEP)}>−</button
 		>
-		<input id="ui-scale" type="range" min={MIN_PCT} max={MAX_PCT} step={STEP} bind:value={draft.pct} />
+		<input
+			id="ui-scale"
+			type="range"
+			min={MIN_PCT}
+			max={MAX_PCT}
+			step={STEP}
+			bind:value={draft.pct}
+		/>
 		<button
 			class="step"
 			aria-label="Increase scale"

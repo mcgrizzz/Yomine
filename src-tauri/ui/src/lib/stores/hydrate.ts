@@ -5,14 +5,15 @@ import { dragHovering, initProgress, lastError, showNotice } from './ui';
 import { ankiStatus, knowledge, languageToolsStatus } from './status';
 import { checkForUpdate } from './update';
 import { asbContext, playerStatus } from './player';
-import { fileResult, isSupportedPath, loadAndStore, recentFiles } from './file';
+import { fileResult, openPaths, recentFiles } from './file';
 import { jlptEnabled, posCatalog, posEnabled } from './controls';
 import { defaultSettings, settings } from './settings';
 import { refreshIgnoredLemmas } from './ignore';
 import { refreshRecommendedDicts } from './dictionaries';
 import { refreshMinedState, yomitanReachable } from './mining';
 import { selectedTerms } from './selection';
-import { autoMine } from './auto';
+import { reviewDialogOpen } from './modals';
+import { autoMode, dropDeselectedReview, onNewVideo } from './auto';
 import { loadLastBatch } from './batches';
 import { refreshSetupStatus } from './setup';
 
@@ -51,16 +52,21 @@ export async function hydrate(): Promise<void> {
 	// Backend probe (5s poll, change-only) — keeps the dot fresh even when no
 	// file is loaded and nothing calls refreshMinedState.
 	ipc.onYomitanStatus((s) => yomitanReachable.set(s.reachable));
-	ipc.onTermsRefreshed((r) => { fileEventSeen = true; fileResult.set(r); });
+	ipc.onTermsRefreshed((r) => {
+		fileEventSeen = true;
+		fileResult.set(r);
+	});
 	ipc.onError((e) => lastError.set(e));
 	ipc.onAsbplayerMediaLoaded((r) => {
 		fileEventSeen = true;
 		fileResult.set(r);
 		showNotice(`Loaded from asbplayer: ${r.source_file.title}`);
-		void autoMine();
+		onNewVideo();
 	});
 	ipc.onAsbplayerContext((c) => asbContext.set(c));
-	ipc.onDictionariesChanged(() => { refreshSetupStatus(); });
+	ipc.onDictionariesChanged(() => {
+		refreshSetupStatus();
+	});
 
 	// Rows dropped by a refresh (mined/ignored) silently leave the selection.
 	// Wired here, not in selection.ts — see the note there.
@@ -68,17 +74,20 @@ export async function hydrate(): Promise<void> {
 		const live = new Set(r?.terms.map(termKey) ?? []);
 		selectedTerms.update((s) => new Set([...s].filter((k) => live.has(k))));
 	});
+	selectedTerms.subscribe(dropDeselectedReview);
+	reviewDialogOpen.subscribe((open) => {
+		if (!open) dropDeselectedReview(get(selectedTerms));
+	});
 
 	// Drag-drop works while the tools are still loading (loadAndStore waits for
 	// them); only a failed init disables it.
 	const toolsUsable = () => typeof get(languageToolsStatus) !== 'object';
 	ipc.onDragDrop({
-		onEnter: (paths) => dragHovering.set(toolsUsable() && paths.some(isSupportedPath)),
+		// Any path may be a folder, which only the backend can tell.
+		onEnter: (paths) => dragHovering.set(toolsUsable() && paths.length > 0),
 		onDrop: (paths) => {
 			dragHovering.set(false);
-			if (!toolsUsable()) return;
-			const file = paths.find(isSupportedPath);
-			if (file) loadAndStore(file);
+			if (toolsUsable() && paths.length > 0) void openPaths(paths);
 		},
 		onLeave: () => dragHovering.set(false)
 	});
@@ -124,7 +133,10 @@ export async function hydrate(): Promise<void> {
 	void refreshMinedState(true);
 	void loadLastBatch();
 	void ipc.setBatchRunning(false);
-	void ipc.setAutoMode(false);
+	// Mine is never restored, so a saved auto mode comes back as Review.
+	const restored = get(settings)?.auto_review ? 'review' : 'off';
+	autoMode.set(restored);
+	void ipc.setAutoMode(restored === 'review');
 
 	// Best-effort update check; a failure just means no notice.
 	void checkForUpdate();

@@ -2,6 +2,7 @@
 	import Modal from './Modal.svelte';
 	import RecordingSteps from './RecordingSteps.svelte';
 	import type { BatchPauseState, PauseChoice } from '$lib/stores/batches';
+	import { openAnkiModalAt } from '$lib/stores/modals';
 
 	interface Props {
 		pause: BatchPauseState;
@@ -14,24 +15,35 @@
 	const created = $derived(pause.item.outcome.status === 'created');
 	const shared = $derived(pause.failure.scope === 'shared');
 	const unrecorded = $derived(pause.failure.kind === 'media_unverified');
+	const unmapped = $derived(
+		pause.failure.kind === 'media_fields_unset' ? (pause.failure.note_type ?? '') : null
+	);
 	const headline = $derived(
-		unrecorded
-			? "asbplayer didn't record this card"
-			: created
-				? "The card's media wasn't added"
-				: shared
-					? "Cards can't be created right now"
-					: "This card wasn't created"
+		unmapped !== null
+			? `${unmapped} has no fields for audio and screenshots`
+			: unrecorded
+				? "asbplayer didn't record this card"
+				: created
+					? "The card's media wasn't added"
+					: shared
+						? "Cards can't be created right now"
+						: "This card wasn't created"
 	);
 
 	function describe(choice: PauseChoice): { label: string; detail: string } {
 		switch (choice) {
 			case 'retry':
 				if (created) {
-					return { label: 'Retry media', detail: 'Record audio and a screenshot for this card again.' };
+					return {
+						label: 'Retry media',
+						detail: 'Record audio and a screenshot for this card again.'
+					};
 				}
 				if (shared) {
-					return { label: 'Retry after fixing', detail: 'Try this card again once the problem is fixed.' };
+					return {
+						label: 'Retry after fixing',
+						detail: 'Try this card again once the problem is fixed.'
+					};
 				}
 				return { label: 'Retry card', detail: 'Try creating this card again.' };
 			case 'without_dictionary_media':
@@ -41,9 +53,15 @@
 				};
 			case 'skip':
 				if (created) {
-					return { label: 'Skip media for this card', detail: 'Keep the card as is and record the rest.' };
+					return {
+						label: 'Skip media for this card',
+						detail: 'Keep the card as is and record the rest.'
+					};
 				}
-				return { label: 'Skip this card', detail: 'Leave it uncreated and continue with the next card.' };
+				return {
+					label: 'Skip this card',
+					detail: 'Leave it uncreated and continue with the next card.'
+				};
 			case 'stop':
 				return { label: 'Stop batch', detail: '' };
 		}
@@ -66,22 +84,43 @@
 		<h3>{headline}</h3>
 		{#if unrecorded}
 			<RecordingSteps retryLabel="Retry media" />
+		{:else if unmapped !== null}
+			<p class="message">
+				Choose which of its fields get the sentence audio and the screenshot. No cards were created
+				without them.
+			</p>
+			<button
+				class="choice primary"
+				onclick={() => {
+					onchoose('stop');
+					openAnkiModalAt(unmapped);
+				}}
+				><span class="label">Stop and open Anki Settings</span><span class="detail"
+					>Save the fields there, then mine the remaining cards from the batch summary.</span
+				></button
+			>
 		{:else}
 			<p class="message">{pause.failure.message}</p>
 		{/if}
-		{#if shared}
-			<p class="shared">This affects the remaining cards too, so skipping isn't offered.</p>
-		{/if}
+		{#if unmapped === null}
+			{#if shared}
+				<p class="shared">This affects the remaining cards too, so skipping isn't offered.</p>
+			{/if}
 
-		<div class="choices" role="group" aria-label="How to continue">
-			{#each choices.filter((c) => c !== 'stop') as choice (choice)}
-				{@const option = describe(choice)}
-				<button class="choice" class:primary={choice === 'retry'} onclick={() => onchoose(choice)}>
-					<span class="label">{option.label}</span>
-					<span class="detail">{option.detail}</span>
-				</button>
-			{/each}
-		</div>
+			<div class="choices" role="group" aria-label="How to continue">
+				{#each choices.filter((c) => c !== 'stop') as choice (choice)}
+					{@const option = describe(choice)}
+					<button
+						class="choice"
+						class:primary={choice === 'retry'}
+						onclick={() => onchoose(choice)}
+					>
+						<span class="label">{option.label}</span>
+						<span class="detail">{option.detail}</span>
+					</button>
+				{/each}
+			</div>
+		{/if}
 
 		<details>
 			<summary>Technical details</summary>

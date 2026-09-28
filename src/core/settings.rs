@@ -13,7 +13,10 @@ use std::{
     num::NonZeroU16,
 };
 
-use crate::anki::FieldMapping;
+use crate::{
+    anki::FieldMapping,
+    media::clip::MediaFormat,
+};
 
 #[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize, Debug)]
 pub struct FrequencyDictionarySetting {
@@ -237,6 +240,9 @@ pub struct SettingsData {
     pub asbplayer_poll_secs: u32,
     #[serde(default)]
     pub auto_mine: AutoMine,
+    /// Restores Review at startup; Mine comes back as Review.
+    #[serde(default)]
+    pub auto_review: bool,
     /// Whole-UI scale factor (Tauri app only; 1.0 = 100%). The egui app ignores it.
     #[serde(default = "default_font_scale")]
     pub font_scale: f32,
@@ -265,6 +271,13 @@ pub struct SettingsData {
     /// Preset id → enabled (`text_filter::presets`); missing = off.
     #[serde(default)]
     pub text_filter_presets: HashMap<String, bool>,
+    #[serde(default)]
+    pub mining_mode: MiningMode,
+    #[serde(default)]
+    pub media_format: MediaFormat,
+    /// Empty finds ffmpeg on PATH or uses the downloaded copy.
+    #[serde(default)]
+    pub ffmpeg_path: String,
 }
 
 const fn default_font_scale() -> f32 {
@@ -325,6 +338,7 @@ impl Default for SettingsData {
             asbplayer_follow_active_tab: true,
             asbplayer_poll_secs: default_asbplayer_poll_secs(),
             auto_mine: AutoMine::default(),
+            auto_review: false,
             font_scale: default_font_scale(),
             definition_scale: default_font_scale(),
             yomitan_url: default_yomitan_url(),
@@ -335,8 +349,22 @@ impl Default for SettingsData {
             table_columns: Vec::new(),
             text_filters: Vec::new(),
             text_filter_presets: HashMap::new(),
+            mining_mode: MiningMode::default(),
+            media_format: MediaFormat::default(),
+            ffmpeg_path: String::new(),
         }
     }
+}
+
+/// Where mined cards get their sentence audio and screenshot.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MiningMode {
+    /// Cut from the paired video file with ffmpeg.
+    Local,
+    /// Recorded by asbplayer in the browser.
+    #[default]
+    Asbplayer,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

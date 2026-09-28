@@ -24,20 +24,6 @@ use yomine::{
     },
 };
 
-/// `mine_term` outcome. `status`: `"created"` | `"duplicate"`; `warning` =
-/// note created but asbplayer enrichment failed; `media_missing` = enrichment
-/// verifiably didn't land (drives the retry chip).
-#[derive(Serialize, Clone)]
-pub struct MineResultDto {
-    pub status: String,
-    pub via: String,
-    pub warning: Option<String>,
-    pub note_id: Option<u64>,
-    pub media_missing: bool,
-    /// `mined::entry_key` of the entry that was mined.
-    pub key: String,
-}
-
 /// Already-mined state (issue #3): `added:1` terms + normalized sentence keys.
 #[derive(Serialize, Clone)]
 pub struct MinedStateDto {
@@ -71,7 +57,7 @@ pub struct FilterPresetDto {
 /// The `*_html` fields are Yomitan-rendered markers, sanitized frontend-side.
 #[derive(Serialize, Clone)]
 pub struct DefinitionEntryDto {
-    /// Position in Yomitan's entry list (pre-filter) — `mine_term`'s `entry_index`.
+    /// Position in Yomitan's entry list (pre-filter) — a batch item's `entry_index`.
     pub index: usize,
     pub expression: String,
     pub reading: String,
@@ -227,6 +213,9 @@ pub struct FileLoadResult {
     /// Terms hidden by the ignore list — the known-count hover breakdown.
     pub ignored_terms: usize,
     pub batch_source: crate::batches::BatchSource,
+    pub local_video: Option<String>,
+    pub subtitle_tracks: Vec<yomine::media::subtitles::SubtitleChoice>,
+    pub subtitle_track: Option<String>,
 }
 
 /// Persisted `IgnoreFile` fields plus the display-only `exists` + `term_count`.
@@ -329,7 +318,8 @@ pub struct SetupStatus {
     pub has_frequency_dict: bool,
     /// ≥1 answers "default dict installed"; >1 answers "additional dicts installed".
     pub frequency_dict_count: usize,
-    pub player_connected: bool,
+    /// What the mining mode needs for card media: asbplayer connected, or ffmpeg found.
+    pub media_ready: bool,
     /// yomitan-api reachable (optional item — enables one-click mining).
     pub yomitan_connected: bool,
 }
@@ -387,6 +377,15 @@ pub struct RecommendedDictionaryDto {
     pub installed_revision: Option<String>,
     pub latest_revision: Option<String>,
     pub status: String,
+}
+
+/// A video in the queue, with the show and episode its file name gives, if any.
+#[derive(Serialize, Clone)]
+pub struct QueuedVideoDto {
+    pub path: String,
+    pub show: Option<String>,
+    /// `S01E05`, or `Episode 5` without a season.
+    pub episode: Option<String>,
 }
 
 /// One selectable chapter slice; `id` is what `process_file` takes back, `seen` = mined before.

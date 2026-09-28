@@ -193,7 +193,7 @@ jobs:
       - name: Check Tauri app
         run: cargo check -p yomine-tauri
 
-  # 4) Frontend type/lint check (svelte-check)
+  # 4) Frontend type/lint check (svelte-check) and formatting (Prettier)
   # Run if: frontend changed OR it's a push to main
   svelte-check:
     needs: filter
@@ -224,6 +224,9 @@ jobs:
 
       - name: svelte-check
         run: pnpm run check
+
+      - name: Check formatting
+        run: pnpm run format:check
 
   # 5) Say why the suite was skipped, so the run isn't a lone green `filter`.
   # Run if: a version-only push, OR no code changed in a PR

@@ -100,7 +100,7 @@
 		style="width: {width}; max-height: {maxHeight}"
 	>
 		<header>
-			<h2 id={headingId} title={title}>{title}</h2>
+			<h2 id={headingId} {title}>{title}</h2>
 			{#if actions}
 				<div class="head-actions">{@render actions()}</div>
 			{/if}

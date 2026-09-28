@@ -118,17 +118,8 @@
 		<h3>Custom filters <span class="dim">(regex, applied in order)</span></h3>
 		{#each draft.filters as filter, i (i)}
 			<div class="rule">
-				<input
-					type="checkbox"
-					bind:checked={filter.enabled}
-					aria-label="Enable this filter"
-				/>
-				<input
-					class="mono"
-					type="text"
-					placeholder="pattern (regex)"
-					bind:value={filter.pattern}
-				/>
+				<input type="checkbox" bind:checked={filter.enabled} aria-label="Enable this filter" />
+				<input class="mono" type="text" placeholder="pattern (regex)" bind:value={filter.pattern} />
 				<input
 					class="mono"
 					type="text"
