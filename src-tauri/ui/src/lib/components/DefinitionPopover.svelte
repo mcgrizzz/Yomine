@@ -91,11 +91,8 @@
 		canMine = false,
 		canQueue,
 		isDuplicate,
-		mineDisabled,
-		mineTitle,
 		formats = [],
 		pickedIndex,
-		onmine,
 		onqueue,
 		onpick,
 		onclose
@@ -108,12 +105,9 @@
 		canMine?: boolean;
 		canQueue?: (entry: DefinitionEntry) => boolean;
 		isDuplicate?: (entry: DefinitionEntry) => boolean;
-		mineDisabled?: (entry: DefinitionEntry) => boolean;
-		mineTitle?: (entry: DefinitionEntry) => string;
 		/** Yomitan term card formats; >1 renders per-format buttons. */
 		formats?: CardFormat[];
 		pickedIndex?: number;
-		onmine?: (entry: DefinitionEntry, formatName?: string) => void;
 		onqueue?: (entry: DefinitionEntry, formatName?: string) => void;
 		/** Set to pick an entry for an already-queued term instead of mining. */
 		onpick?: (entry: DefinitionEntry) => void;
@@ -272,45 +266,21 @@
 									}}>{current ? 'Current' : 'Use this entry'}</button
 								>
 							</span>
-						{:else if canMine && onmine}
+						{:else if canMine && onqueue && canQueue?.(entry)}
 							{@const dupe = isDuplicate?.(entry) ?? false}
 							<span class="actions">
 								<button
 									class="mine-btn"
 									class:primary={!dupe}
-									disabled={mineDisabled?.(entry) ?? false}
 									title={(dupe
-										? 'Already in Anki — mine again to add another card'
-										: (mineTitle?.(entry) ?? '')) +
+										? 'Already in Anki — select to add another card'
+										: 'Select for mining using this definition') +
 										(multiFormat ? ` — format: ${activeFormat}` : '')}
 									onclick={() => {
-										onmine(entry, multiFormat ? activeFormat : undefined);
+										onqueue(entry, multiFormat ? activeFormat : undefined);
 										onclose();
-									}}
-									><svg
-											class="pick-icon"
-											viewBox="0 0 24 24"
-											fill="none"
-											stroke="currentColor"
-											stroke-width="2.4"
-											stroke-linecap="round"
-											aria-hidden="true"
-										>
-											<path d="M3 21 L13.5 10.5" />
-											<path d="M10 4 Q 17.8 6.2 20 14" />
-										</svg> {dupe ? 'Mine again' : 'Mine'}</button
+									}}>Queue</button
 								>
-								{#if onqueue && canQueue?.(entry)}
-									<button
-										class="mine-btn"
-										title={'Select for batch mining using this definition' +
-											(multiFormat ? ` — format: ${activeFormat}` : '')}
-										onclick={() => {
-											onqueue(entry, multiFormat ? activeFormat : undefined);
-											onclose();
-										}}>Queue</button
-									>
-								{/if}
 							</span>
 						{/if}
 					</div>
@@ -502,10 +472,5 @@
 	.mine-btn:disabled {
 		opacity: 0.5;
 		cursor: default;
-	}
-	.pick-icon {
-		width: 1em;
-		height: 1em;
-		vertical-align: -0.125em;
 	}
 </style>

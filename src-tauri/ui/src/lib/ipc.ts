@@ -748,18 +748,6 @@ export async function loadAsbplayerMedia(
 	});
 }
 
-/** `mine_term` outcome; `warning` = note created but enrichment failed;
- * `media_missing` = enrichment verifiably didn't land (drives the retry chip). */
-export interface MineResult {
-	status: 'created' | 'duplicate';
-	via: string;
-	warning: string | null;
-	note_id: number | null;
-	media_missing: boolean;
-	/** `anki::mined::entry_key` of the entry that was mined. */
-	key: string;
-}
-
 /** Already-mined state (issue #3); sentences are `normalizeSentence` keys. */
 export interface MinedState {
 	added_terms: string[];
@@ -771,47 +759,6 @@ export interface MinedState {
 export interface YomitanStatus {
 	reachable: boolean;
 	version: string | null;
-}
-
-/** One-click mine (issue #105); stage updates stream through `onProgress`. */
-export function mineTerm(
-	args: {
-		term: string;
-		/** The row's reading, which picks the matching entry when `entryIndex` is null. */
-		reading: string | null;
-		/** The occurrence as tokenized from the text — cloze/bold highlighting. */
-		surface: string;
-		sentence: string;
-		timestampSecs: number | null;
-		timestampEndSecs: number | null;
-		timestampLabel: string | null;
-		via: 'media' | 'direct';
-		/** Yomitan entry to build the card from (default first). */
-		entryIndex: number | null;
-		/** Yomitan card format to render with (default first term format). */
-		formatName: string | null;
-	},
-	onProgress: (msg: LoadingMessage) => void
-): Promise<MineResult> {
-	const channel = new Channel<LoadingMessage>();
-	channel.onmessage = onProgress;
-	return invoke('mine_term', { ...args, progress: channel });
-}
-
-/** Re-run asbplayer enrichment on a media-missing note. Rejects when the note
- * is no longer Anki's newest ("update last card" can't target a specific note). */
-export function retryMineMedia(
-	args: {
-		noteId: number;
-		timestampSecs: number | null;
-		timestampEndSecs: number | null;
-		timestampLabel: string | null;
-	},
-	onProgress: (msg: LoadingMessage) => void
-): Promise<void> {
-	const channel = new Channel<LoadingMessage>();
-	channel.onmessage = onProgress;
-	return invoke('retry_mine_media', { ...args, progress: channel });
 }
 
 /** Open Anki's browser on recent adds with the mined note's card selected. */
@@ -967,7 +914,7 @@ export function getCardFormats(): Promise<CardFormat[]> {
 /** One Yomitan dictionary entry for the definition popover (issue #113).
  * The `*_html` fields are Yomitan-rendered markers; sanitize before {@html}. */
 export interface DefinitionEntry {
-	/** Position in Yomitan's entry list (pre-filter) — mine_term's entryIndex. */
+	/** Position in Yomitan's entry list (pre-filter) — a batch item's entry_index. */
 	index: number;
 	expression: string;
 	reading: string;

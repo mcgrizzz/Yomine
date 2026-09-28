@@ -39,9 +39,7 @@ use crate::{
     dto::{
         CardFormatDto,
         DefinitionEntryDto,
-        MineResultDto,
         MinedStateDto,
-        TimeStampDto,
         YomitanStatusDto,
     },
     events::LoadingMessage,
@@ -55,83 +53,6 @@ use crate::{
 
 /// Cloze refinement is optional; this caps how long it can delay a mine.
 const MATCH_LOOKUP_TIMEOUT: Duration = Duration::from_secs(2);
-
-#[tauri::command]
-pub async fn mine_term(
-    state: State<'_, Mutex<AppState>>,
-    player: State<'_, PlayerHandle>,
-    term: String,
-    reading: Option<String>,
-    surface: String,
-    sentence: String,
-    timestamp_secs: Option<f32>,
-    timestamp_end_secs: Option<f32>,
-    timestamp_label: Option<String>,
-    via: String,
-    entry_index: Option<usize>,
-    format_name: Option<String>,
-    progress: Channel<LoadingMessage>,
-) -> Result<MineResultDto, String> {
-    let _operation =
-        batches::OPERATION.try_lock().map_err(|_| "Mining or undo is already running")?;
-    let item_key = reading.map(|r| format!("{term} {r}")).unwrap_or_default();
-    let (yomitan_url, media, local_mappings, lexeme, source) = {
-        let guard = state.lock().unwrap();
-        (
-            guard.settings.yomitan_url.clone(),
-            MediaSource::for_file(&guard, None),
-            local_mappings(&guard),
-            row_lexeme(&guard.file, &item_key),
-            BatchSource::from_file(&guard.file).ok(),
-        )
-    };
-    let item = BatchItem {
-        key: item_key,
-        lemma: term,
-        surface,
-        sentence,
-        timestamp: timestamp(timestamp_secs, timestamp_end_secs, timestamp_label),
-        entry_index,
-        format_name,
-        scan_text: None,
-        adhoc: false,
-        mine_media: via != "direct",
-        outcome: Outcome::Unattempted,
-    };
-    let options = MineOptions { record: true, require_dictionary_media: true };
-    let mut result = mine(
-        &yomitan_url,
-        &item,
-        lexeme,
-        options,
-        &progress,
-        None,
-        source.as_ref(),
-        local_mappings.as_ref(),
-    )
-    .await
-    .map_err(|e| e.message)?;
-
-    // Enrichment failures don't undo the mine (the note exists) — warn instead.
-    if let Some(id) = result.note_id.filter(|_| item.mine_media) {
-        let warning = match media {
-            Err(reason) => Some(format!("Card created without audio and a screenshot. {reason}.")),
-            Ok(media) if media.lacks_subtitles(&player).await => Some(
-                "asbplayer has no subtitles loaded on the loaded video — card created without \
-                 audio/screenshot"
-                    .to_string(),
-            ),
-            Ok(media) => media
-                .attach(&player, id, item.timestamp.as_ref(), &progress)
-                .await
-                .err()
-                .map(|e| format!("Card created, but media wasn't added: {e}")),
-        };
-        result.media_missing = warning.is_some();
-        result.warning = warning;
-    }
-    Ok(result)
-}
 
 /// The mappings local mining checks before creating a note; `None` in asbplayer mode.
 fn local_mappings(state: &AppState) -> Option<HashMap<String, FieldMapping>> {
@@ -189,8 +110,8 @@ pub async fn mine_batch_item(
                     lexeme,
                     options,
                     &progress,
-                    Some((&mut batch, item_index)),
-                    None,
+                    &mut batch,
+                    item_index,
                     local_mappings.as_ref(),
                 )
                 .await?;
@@ -316,18 +237,16 @@ async fn mine(
     lexeme: Option<String>,
     options: MineOptions,
     progress: &Channel<LoadingMessage>,
-    mut batch: Option<(&mut BatchRecord, usize)>,
-    // The loaded source of a single mine; a batch carries its own.
-    source: Option<&BatchSource>,
+    batch: &mut BatchRecord,
+    index: usize,
     local_mappings: Option<&HashMap<String, FieldMapping>>,
-) -> Result<MineResultDto, Failure> {
+) -> Result<(), Failure> {
     let term = item.scan_text.as_ref().unwrap_or(&item.lemma).clone();
     let surface = item.surface.clone();
     let sentence = item.sentence.clone();
     let entry_index = item.entry_index;
     let format_name = item.format_name.clone();
     let timestamp_secs = item.timestamp.as_ref().map(|t| t.start_secs);
-    let via = if item.mine_media { "media" } else { "direct" }.to_string();
     let entry_index = match entry_index {
         Some(index) => index,
         None => default_entry(yomitan_url, item, &term, lexeme.as_deref()).await,
@@ -392,11 +311,6 @@ async fn mine(
             format!("Yomitan has no dictionary entry for 「{}」", term),
         ));
     }
-    let key = mined::entry_key(
-        marker_values.get("expression").map(String::as_str).unwrap_or_default(),
-        marker_values.get("reading").map(String::as_str).unwrap_or_default(),
-    );
-
     // Cloze highlighting must match the text as it appears in the sentence: an
     // inflected occurrence (沈めて) never contains the lemma (沈める).
     let matched = tokio::time::timeout(
@@ -450,19 +364,15 @@ async fn mine(
     if timestamp_secs.is_none() {
         tags.push("yomine::no-media".to_string());
     }
-    if batch.as_ref().is_some_and(|(record, _)| record.auto) {
+    if batch.auto {
         tags.push("yomine::auto".to_string());
     }
-    if let Some((record, index)) = &mut batch {
-        batches::checkpoint(record, *index, Outcome::Attempting)?;
-    }
+    batches::checkpoint(batch, index, Outcome::Attempting)?;
     let response = match anki_api::add_note(&format.deck, &format.model, &fields, &tags).await {
         Ok(response) => response,
         Err(e) if e.is_connect() => {
             let error = Failure::new("Anki connection", FailureScope::Shared, e);
-            if let Some((record, index)) = &mut batch {
-                batches::checkpoint(record, *index, Outcome::Failed { error: error.clone() })?;
-            }
+            batches::checkpoint(batch, index, Outcome::Failed { error: error.clone() })?;
             return Err(error);
         }
         Err(e) => {
@@ -479,17 +389,7 @@ async fn mine(
     let note_id = match response.error {
         None => response.result,
         Some(err) if err.contains("duplicate") => {
-            if let Some((record, index)) = &mut batch {
-                batches::checkpoint(record, *index, Outcome::Duplicate)?;
-            }
-            return Ok(MineResultDto {
-                status: "duplicate".to_string(),
-                via,
-                warning: None,
-                note_id: None,
-                media_missing: false,
-                key,
-            });
+            return batches::checkpoint(batch, index, Outcome::Duplicate);
         }
         Some(err) => {
             let lower = err.to_lowercase();
@@ -502,9 +402,7 @@ async fn mine(
                 FailureScope::Unknown
             };
             let error = Failure::new("Creating note", scope, err);
-            if let Some((record, index)) = &mut batch {
-                batches::checkpoint(record, *index, Outcome::Failed { error: error.clone() })?;
-            }
+            batches::checkpoint(batch, index, Outcome::Failed { error: error.clone() })?;
             return Err(error);
         }
     };
@@ -515,83 +413,29 @@ async fn mine(
             "Anki returned no note ID. Check Anki before retrying.",
         )
     })?;
-    if let Some((record, index)) = &mut batch {
-        batches::checkpoint(
-            record,
-            *index,
-            Outcome::Created {
-                note_id: id,
-                media: match (item.mine_media, options.record) {
-                    (false, _) => MediaState::NotRequested,
-                    (true, true) => MediaState::Pending,
-                    (true, false) => MediaState::Skipped,
-                },
-                error: None,
+    batches::checkpoint(
+        batch,
+        index,
+        Outcome::Created {
+            note_id: id,
+            media: match (item.mine_media, options.record) {
+                (false, _) => MediaState::NotRequested,
+                (true, true) => MediaState::Pending,
+                (true, false) => MediaState::Skipped,
             },
-        )?;
-    }
-    if let Some(id) = note_id {
-        let (source, batch_id) = match &batch {
-            Some((record, _)) => (Some(&record.source), Some(record.id.as_str())),
-            None => (source, None),
-        };
-        let collection = yomine::anki::api::active_profile().await.ok();
-        mined::record_note(
-            id,
-            &sentence,
-            &item.lemma,
-            source.map(|s| s.fingerprint.as_str()),
-            batch_id,
-            collection.as_deref(),
-        );
-    }
-
-    Ok(MineResultDto {
-        status: "created".to_string(),
-        via,
-        warning: None,
-        note_id,
-        media_missing: false,
-        key,
-    })
-}
-
-/// Re-run asbplayer enrichment on a note whose media never landed.
-#[tauri::command]
-pub async fn retry_mine_media(
-    state: State<'_, Mutex<AppState>>,
-    player: State<'_, PlayerHandle>,
-    note_id: u64,
-    timestamp_secs: Option<f32>,
-    timestamp_end_secs: Option<f32>,
-    timestamp_label: Option<String>,
-    progress: Channel<LoadingMessage>,
-) -> Result<(), String> {
-    let _operation =
-        batches::OPERATION.try_lock().map_err(|_| "Mining or undo is already running")?;
-    let media = { MediaSource::for_file(&state.lock().unwrap(), None)? };
-    if media.lacks_subtitles(&player).await {
-        return Err("asbplayer still has no subtitles loaded on the loaded video".to_string());
-    }
-    let timestamp = timestamp(timestamp_secs, timestamp_end_secs, timestamp_label);
-    media
-        .attach(&player, note_id, timestamp.as_ref(), &progress)
-        .await
-        .map(|_| ())
-        .map_err(|e| e.to_string())
-}
-
-fn timestamp(
-    start_secs: Option<f32>,
-    end_secs: Option<f32>,
-    label: Option<String>,
-) -> Option<TimeStampDto> {
-    start_secs.map(|start_secs| TimeStampDto {
-        start_secs,
-        end_secs: end_secs.unwrap_or(start_secs),
-        start_label: label.unwrap_or_default(),
-        end_label: String::new(),
-    })
+            error: None,
+        },
+    )?;
+    let collection = yomine::anki::api::active_profile().await.ok();
+    mined::record_note(
+        id,
+        &sentence,
+        &item.lemma,
+        Some(batch.source.fingerprint.as_str()),
+        Some(batch.id.as_str()),
+        collection.as_deref(),
+    );
+    Ok(())
 }
 
 /// A file from Anki's media folder as a data URI; `None` for a type the webview can't show

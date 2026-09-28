@@ -1,15 +1,13 @@
 // One-click mining (issue #105), batch mining (issue #114) + already-mined
 // state (issue #3).
 
-import { get, writable } from 'svelte/store';
+import { writable } from 'svelte/store';
 import * as ipc from '$lib/ipc';
 import { playerStatus } from './player';
-import { lastError, showNotice } from './ui';
+import { lastError } from './ui';
 
 /** Lemmas mined this session (optimistic, until the next refresh). */
 export const minedTerms = writable<Set<string>>(new Set());
-/** `entry_key`s mined this session — the reading-keyed twin of `minedTerms`. */
-export const minedKeys = writable<Set<string>>(new Set());
 /** Terms with an Anki card added in the last day (`added:1`). */
 export const addedTerms = writable<Set<string>>(new Set());
 /** `entry_key`s for those same notes; covers what the vocab cache is too old for. */
@@ -22,8 +20,6 @@ export const sessionMinedSentences = writable<Set<string>>(new Set());
 export const miningTerm = writable<string | null>(null);
 /** lemma → Anki note id for this session's mines ("open in Anki"). */
 export const minedNoteIds = writable<Record<string, number>>({});
-/** Lemmas whose note exists but asbplayer media never landed (retry chip). */
-export const mediaMissing = writable<Set<string>>(new Set());
 /** Gates the mine button — no yomitan-api, no card content. */
 export const yomitanReachable = writable(false);
 /** Yomitan term card formats; >1 turns on per-format mine/queue buttons. */
@@ -68,108 +64,9 @@ export async function refreshMinedState(force = false): Promise<void> {
 		// Backend state covers session mines; keeping the optimistic sets
 		// would mask notes deleted in Anki.
 		minedTerms.set(new Set());
-		minedKeys.set(new Set());
 		sessionMinedSentences.set(new Set());
 	} catch {
 		// keep the optimistic sets when Anki is unreachable
-	}
-}
-
-/** One mine: IPC + bookkeeping only — locking, toasts, and refresh belong to
- * the callers. Resolves once the backend has verified the mine end-to-end. */
-async function mineOne(
-	lemma: string,
-	surface: string,
-	sentence: string,
-	timestamp: ipc.TimeStampDto | null,
-	via: 'media' | 'direct',
-	entryIndex?: number,
-	formatName?: string,
-	scanText?: string,
-	reading?: string
-): Promise<ipc.MineResult> {
-	const result = await ipc.mineTerm(
-		{
-			// entryIndex is a position within the scan of scanText — mine_term must rescan that same string.
-			term: scanText ?? lemma,
-			reading: reading ?? null,
-			surface,
-			sentence,
-			timestampSecs: timestamp?.start_secs ?? null,
-			timestampEndSecs: timestamp?.end_secs ?? null,
-			timestampLabel: timestamp?.start_label ?? null,
-			via,
-			entryIndex: entryIndex ?? null,
-			formatName: formatName ?? null
-		},
-		(msg) => {
-			if (msg.message) showNotice(msg.message);
-		}
-	);
-	minedTerms.update((s) => new Set(s).add(lemma));
-	minedKeys.update((s) => new Set(s).add(result.key));
-	if (result.note_id !== null) {
-		minedNoteIds.update((m) => ({ ...m, [lemma]: result.note_id! }));
-	}
-	if (result.media_missing) {
-		mediaMissing.update((s) => new Set(s).add(lemma));
-	}
-	if (sentence && result.status === 'created') {
-		sessionMinedSentences.update((s) => new Set(s).add(normalizeSentence(sentence)));
-	}
-	return result;
-}
-
-/** Mine one term from its displayed sentence; the caller decides `via`.
- * `surface` is the occurrence text the table highlighted (cloze/bold). */
-export async function mineTerm(
-	lemma: string,
-	sentence: string,
-	timestamp: ipc.TimeStampDto | null,
-	via: 'media' | 'direct',
-	surface: string,
-	entryIndex?: number,
-	formatName?: string,
-	scanText?: string,
-	reading?: string
-): Promise<void> {
-	if (get(miningTerm) !== null || get(playerBusy)) return;
-	miningTerm.set(lemma);
-	playerBusy.set(true);
-	try {
-		const result = await mineOne(
-			lemma,
-			surface,
-			sentence,
-			timestamp,
-			via,
-			entryIndex,
-			formatName,
-			scanText,
-			reading
-		);
-		// Dynamic: static imports close the file.ts → settings.ts → controls.ts cycle
-		// (see locateMpvAndRetry in player.ts).
-		const [{ miningMode }, { localVideo }] = await Promise.all([
-			import('./settings'),
-			import('./file')
-		]);
-		const unpaired =
-			get(miningMode) === 'local' && timestamp !== null && get(localVideo) === null;
-		showNotice(
-			result.warning ??
-				(result.status === 'duplicate'
-					? `「${lemma}」 is already in Anki`
-					: unpaired
-						? `Added 「${lemma}」 without audio or a screenshot. Pair a video to add them.`
-						: `Added 「${lemma}」 to Anki`)
-		);
-		setTimeout(() => void refreshMinedState(true), 2000);
-	} catch (err) {
-		lastError.set({ title: 'Mining failed', message: String(err), detail: null });
-	} finally {
-		miningTerm.set(null);
-		playerBusy.set(false);
 	}
 }
 
@@ -188,43 +85,6 @@ export interface QueueItem {
 	formatName?: string;
 	/** The text the popover scanned — entryIndex is only valid against it. */
 	scanText?: string;
-}
-
-/** Retry asbplayer enrichment for a media-missing note (session-scoped: needs
- * the note id from this session's mine). */
-export async function retryMedia(
-	term: ipc.Term,
-	timestamp: ipc.TimeStampDto | null
-): Promise<void> {
-	if (get(miningTerm) !== null || get(playerBusy)) return;
-	const noteId = get(minedNoteIds)[term.lemma_form];
-	if (noteId === undefined) return;
-	miningTerm.set(term.lemma_form);
-	playerBusy.set(true);
-	try {
-		await ipc.retryMineMedia(
-			{
-				noteId,
-				timestampSecs: timestamp?.start_secs ?? null,
-				timestampEndSecs: timestamp?.end_secs ?? null,
-				timestampLabel: timestamp?.start_label ?? null
-			},
-			(msg) => {
-				if (msg.message) showNotice(msg.message);
-			}
-		);
-		mediaMissing.update((s) => {
-			const next = new Set(s);
-			next.delete(term.lemma_form);
-			return next;
-		});
-		showNotice(`Added media to 「${term.lemma_form}」`);
-	} catch (err) {
-		lastError.set({ title: 'Media retry failed', message: String(err), detail: null });
-	} finally {
-		miningTerm.set(null);
-		playerBusy.set(false);
-	}
 }
 
 /** Open Anki's browser on a mined note. */

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import UncertainMatch from './UncertainMatch.svelte';
-	import type { DefinitionEntry, SentenceDto, Term, TimeStampDto } from '$lib/ipc';
+	import type { DefinitionEntry, SentenceDto, Term } from '$lib/ipc';
 	import {
 		defaultDir,
 		harmonic,
@@ -23,12 +23,10 @@
 		localVideo,
 		miningMode,
 		ignoredLemmas,
-		mediaMissing,
+		missingMedia,
 		mineQueue,
 		mineQueueState,
-		mineTerm,
 		addedKeys,
-		minedKeys,
 		minedNoteIds,
 		isMinedTerm,
 		minedTerms,
@@ -43,7 +41,7 @@
 		queuedMineOptions,
 		queueAdhoc,
 		queueWithEntry,
-		retryMedia,
+		retryItemMedia,
 		selectedTerms,
 		setSelected,
 		setTableColumns,
@@ -201,7 +199,6 @@
 		if (e.key === 'Shift' && e.shiftKey && !e.repeat && hovered) hovered();
 		if (e.key === 'Escape') {
 			editColumns = false;
-			confirmMine = null;
 		}
 	}
 
@@ -255,52 +252,6 @@
 
 	const isMined = (t: Term): boolean => isMinedTerm(t, $minedTerms, $addedTerms);
 
-	let confirmMine = $state<{ term: Term; occs: Occurrence[] } | null>(null);
-
-	function mineClicked(term: Term, occs: Occurrence[]) {
-		if ($queuedCount > 0) confirmMine = { term, occs };
-		else mine(term, occs);
-	}
-
-	function confirmedMine() {
-		if (!confirmMine) return;
-		const { term, occs } = confirmMine;
-		confirmMine = null;
-		mine(term, occs);
-	}
-
-	// Media needs a cue, plus a paired video (local) or an active asbplayer tab.
-	const viaFor = (ts: TimeStampDto | null): 'media' | 'direct' =>
-		ts !== null &&
-		($miningMode === 'local'
-			? $localVideo !== null
-			: $playerStatus.ws_clients > 0 && !$backgroundTab)
-			? 'media'
-			: 'direct';
-
-	function mine(
-		term: Term,
-		occs: Occurrence[],
-		entryIndex?: number,
-		formatName?: string,
-		scanText?: string
-	) {
-		const occ = occs[Math.min(occIdx[termKey(term)] ?? 0, occs.length - 1)];
-		const ts = occ?.sentence.timestamp ?? null;
-		const surface = occ ? termHighlightText(term, occ) : term.surface_form;
-		void mineTerm(
-			term.lemma_form,
-			occ?.sentence.text ?? '',
-			ts,
-			viaFor(ts),
-			surface,
-			entryIndex,
-			formatName,
-			scanText,
-			term.lemma_reading
-		);
-	}
-
 	/** Only the row whose term IS this entry — `termCoversSegment` merely overlaps. */
 	function rowFor(entry: DefinitionEntry): { term: Term; occs: Occurrence[] } | null {
 		const p = defPopover;
@@ -317,31 +268,6 @@
 	function queueable(entry: DefinitionEntry): boolean {
 		const row = rowFor(entry);
 		return row ? !isMined(row.term) : defPopover?.segment != null;
-	}
-
-	/** Mine a hovered span that no table row represents. */
-	function mineSegment(
-		segment: { sentence: SentenceDto; surface: string },
-		entry: DefinitionEntry,
-		formatName?: string,
-		scanText?: string
-	) {
-		const ts = segment.sentence.timestamp ?? null;
-		void mineTerm(
-			entry.expression,
-			segment.sentence.text,
-			ts,
-			viaFor(ts),
-			segment.surface,
-			entry.index,
-			formatName,
-			scanText
-		);
-	}
-
-	function retry(term: Term, occs: Occurrence[]) {
-		const occ = occs[Math.min(occIdx[termKey(term)] ?? 0, occs.length - 1)];
-		void retryMedia(term, occ?.sentence.timestamp ?? null);
 	}
 
 	const COLUMN_TRACKS: Record<ColumnId, string> = {
@@ -435,9 +361,9 @@
 		if ($playerStatus.ws_clients === 0)
 			return ' — no audio/screenshot without asbplayer';
 		if ($asbContext.loaded_from_asbplayer && !$asbContext.loaded_has_subtitles)
-			return ' — the loaded video has no subtitles in asbplayer; card will get no audio/screenshot';
+			return ' — the loaded video has no subtitles in asbplayer; cards will get no audio/screenshot';
 		if ($backgroundTab)
-			return " — ⚠ the video's tab isn't active; card will get no audio/screenshot";
+			return " — ⚠ the video's tab isn't active; cards will get no audio/screenshot";
 		// Timestamp-less sources (EPUB/TXT) never enrich, so no target note.
 		const subtitleFile =
 			$fileResult?.source_file.file_type === 'SRT' ||
@@ -589,30 +515,6 @@
 	/>
 {/if}
 
-{#if confirmMine}
-	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions --
-	     Escape closes it via the window handler below. -->
-	<div class="backdrop" onclick={() => (confirmMine = null)}>
-		<div
-			class="dialog"
-			role="dialog"
-			aria-modal="true"
-			aria-label="Mine individually"
-			tabindex="-1"
-			onclick={(e) => e.stopPropagation()}
-		>
-			<p class="dialog-body">
-				You have {$queuedCount} term{$queuedCount === 1 ? '' : 's'} selected for batch
-				mining. Mine 「<span lang="ja">{confirmMine.term.lemma_form}</span>」 individually now?
-			</p>
-			<footer class="dialog-footer">
-				<button class="bulk-btn primary" onclick={confirmedMine}>Mine individually</button>
-				<button class="bulk-btn" onclick={() => (confirmMine = null)}>Cancel</button>
-			</footer>
-		</div>
-	</div>
-{/if}
-
 {#if !$mineQueueState && canMine && $queuedCount > 0}
 	{#if showQueueDetails}
 		<MiningQueueModal {terms} onclose={() => (showQueueDetails = false)} />
@@ -632,7 +534,7 @@
 			<button
 				class="bulk-btn primary"
 				disabled={$miningTerm !== null || $playerBusy}
-				title={busyReason ?? 'Mine the selected terms one by one, in timestamp order'}
+				title={busyReason ?? 'Mine the selected terms one by one, in timestamp order' + mediaNote}
 				onclick={startBatch}>Mine {$queuedCount}</button
 			>
 		{/if}
@@ -804,13 +706,14 @@
 						</span>
 						{#if isMined(term)}
 							{@const noteId = $minedNoteIds[term.lemma_form]}
-							{#if noteId !== undefined && $mediaMissing.has(term.lemma_form)}
+							{@const missing = $missingMedia.get(term.lemma_form)}
+							{#if missing !== undefined}
 								<button
 									class="chip warn"
 									disabled={$miningTerm !== null || $playerBusy}
 									title={busyReason ??
-										'Card is in Anki, but asbplayer never added the audio/screenshot — click to retry'}
-									onclick={() => retry(term, occs)}
+										'Card is in Anki without audio or a screenshot — click to add them'}
+									onclick={() => void retryItemMedia(missing)}
 								>
 									{$miningTerm === term.lemma_form ? '…' : '⚠'}
 								</button>
@@ -823,29 +726,6 @@
 							{:else}
 								<span class="chip mined" title="This term already has a recent Anki card">✓</span>
 							{/if}
-						{:else if canMine}
-							<button
-								class="chip mine"
-								disabled={$miningTerm !== null || $playerBusy}
-								title={busyReason ?? 'Create an Anki card from the displayed sentence' + mediaNote}
-								onclick={() => mineClicked(term, occs)}
-							>
-								{#if $miningTerm === term.lemma_form}…{:else}
-									<svg
-										viewBox="0 0 24 24"
-										width="1em"
-										height="1em"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2.4"
-										stroke-linecap="round"
-										aria-hidden="true"
-									>
-										<path d="M3 21 L13.5 10.5" />
-										<path d="M10 4 Q 17.8 6.2 20 14" />
-									</svg>
-								{/if}
-							</button>
 						{/if}
 					</span>
 				{:else if id === 'jlpt'}
@@ -890,20 +770,8 @@
 		scale={$settings?.definition_scale ?? 1}
 		canMine={canMine && (mineable !== null || defPopover.segment !== null)}
 		canQueue={queueable}
-		isDuplicate={(entry) => entry.known || $minedKeys.has(entry.key) || $addedKeys.has(entry.key)}
-		mineDisabled={(entry) =>
-			$miningTerm !== null || $playerBusy || ($queuedCount > 0 && queueable(entry))}
-		mineTitle={(entry) =>
-			$queuedCount > 0 && queueable(entry)
-				? 'A batch selection is active — Queue this term instead, or clear the selection'
-				: 'Create an Anki card from the displayed sentence' + mediaNote}
+		isDuplicate={(entry) => entry.known || $addedKeys.has(entry.key)}
 		formats={$cardFormats}
-		onmine={(entry, formatName) => {
-			const row = rowFor(entry);
-			if (row) mine(row.term, row.occs, entry.index, formatName, defPopover?.text);
-			else if (defPopover?.segment)
-				mineSegment(defPopover.segment, entry, formatName, defPopover.text);
-		}}
 		onqueue={(entry, formatName) => {
 			const row = rowFor(entry);
 			if (row) {
@@ -1097,20 +965,6 @@
 		line-height: 1;
 		border-radius: var(--radius);
 	}
-	.mine {
-		color: var(--accent);
-		background: var(--bg-raised);
-		border: 1px solid var(--border);
-		cursor: pointer;
-	}
-	.mine:hover:not(:disabled) {
-		background: var(--bg-hover);
-		border-color: var(--accent);
-	}
-	.mine:disabled {
-		opacity: 0.5;
-		cursor: default;
-	}
 	.mined {
 		color: var(--success);
 		background: color-mix(in srgb, var(--success) 12%, transparent);
@@ -1185,35 +1039,6 @@
 	.bulk-btn:disabled {
 		opacity: 0.5;
 		cursor: default;
-	}
-	.backdrop {
-		position: fixed;
-		inset: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
-		z-index: var(--z-modal);
-	}
-	.dialog {
-		display: flex;
-		flex-direction: column;
-		gap: 0.6rem;
-		width: min(420px, 92%);
-		padding: 1rem;
-		background: var(--bg-panel);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		box-shadow: var(--shadow-modal);
-	}
-	.dialog-body {
-		margin: 0;
-		font-size: 0.9rem;
-	}
-	.dialog-footer {
-		display: flex;
-		gap: 0.5rem;
-		justify-content: flex-end;
 	}
 	.empty {
 		color: var(--text-muted);

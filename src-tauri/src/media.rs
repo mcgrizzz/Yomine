@@ -126,16 +126,6 @@ impl MediaSource {
         Ok(())
     }
 
-    /// asbplayer's `mine-subtitle` drops targets without loaded subtitles, so
-    /// enriching against one can only fail — detect it up front. Unknown states
-    /// (no target id, pre-v1.20 extension) fall through to the normal attempt.
-    pub async fn lacks_subtitles(&self, player: &PlayerHandle) -> bool {
-        let Self::Asbplayer { media_id } = self else { return false };
-        let Some(id) = media_id else { return false };
-        let Ok(media) = player.get_bound_media().await else { return false };
-        !media.iter().any(|m| &m.id == id && !m.loaded_subtitles.is_empty())
-    }
-
     /// Returns the new screenshot's filename, for the batch preview.
     pub async fn attach(
         &self,

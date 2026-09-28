@@ -1,4 +1,4 @@
-import { get, writable, type Writable } from 'svelte/store';
+import { derived, get, writable, type Writable } from 'svelte/store';
 import * as ipc from '$lib/ipc';
 import {
 	cueSecs,
@@ -16,7 +16,6 @@ import { miningMode } from './settings';
 import { asbContext, backgroundTab, playerStatus } from './player';
 import { adhocQueue, dropAdhoc, queuedMineOptions, queueAdhoc, setSelected } from './selection';
 import {
-	mediaMissing,
 	minedNoteIds,
 	minedTerms,
 	miningTerm,
@@ -166,12 +165,6 @@ function recordSuccess(item: ipc.BatchItem): void {
 		sessionMinedSentences.update((s) => new Set(s).add(normalizeSentence(item.sentence)));
 	}
 	minedNoteIds.update((m) => ({ ...m, [item.lemma]: outcome.note_id }));
-	mediaMissing.update((s) => {
-		const next = new Set(s);
-		if (lacksMedia(outcome)) next.add(item.lemma);
-		else next.delete(item.lemma);
-		return next;
-	});
 }
 
 function clearUnchangedSelection(item: ipc.BatchItem): void {
@@ -203,10 +196,9 @@ function clearUnchangedSelection(item: ipc.BatchItem): void {
 
 function toBatchItems(items: QueueItem[]): ipc.BatchItem[] {
 	const recording =
-		get(miningMode) === 'local'
-			? get(localVideo) !== null
-			: (get(playerStatus).mode === 'asbplayer' || get(asbContext).loaded_from_asbplayer) &&
-				!get(backgroundTab);
+		get(miningMode) === 'local' ||
+		((get(playerStatus).mode === 'asbplayer' || get(asbContext).loaded_from_asbplayer) &&
+			!get(backgroundTab));
 	const adhoc = new Set(get(adhocQueue).map((a) => a.key));
 	const start = (i: QueueItem) => i.timestamp?.start_secs ?? Infinity;
 	return [...items]
@@ -333,8 +325,11 @@ async function run(
 			target = answer.target;
 			options.record = answer.record;
 		}
-		if (items && local && get(localVideo) === null && items.some((i) => i.timestamp !== null))
-			showNotice('No video is paired, so these cards get no audio or screenshot. Pair a video to add them.');
+		if (local && get(localVideo) === null && !mediaRun) {
+			options.record = false;
+			if (items && records)
+				showNotice('No video is paired, so these cards get no audio or screenshot. Pair a video to add them.');
+		}
 		if (items) {
 			batch = await ipc.createBatch(file.batch_source, snapshot, auto);
 			batchSaveError.set(null);
@@ -402,6 +397,21 @@ export function retryBatch(media = false): Promise<ipc.BatchRecord | null> {
 	return run(null, { indices: retryIndices(batch, media), media });
 }
 
+/** lemma → index in the last batch, for loaded-source notes still without media. */
+export const missingMedia = derived([lastBatch, fileResult], ([batch, file]) => {
+	const missing = new Map<string, number>();
+	if (!batch || !sameSource(batch, file)) return missing;
+	batch.items.forEach((item, index) => {
+		if (lacksMedia(item.outcome)) missing.set(item.lemma, index);
+	});
+	return missing;
+});
+
+export function retryItemMedia(index: number): Promise<ipc.BatchRecord | null> {
+	if (get(batchSaveError)) return Promise.resolve(null);
+	return run(null, { indices: [index], media: true });
+}
+
 export function restoreBatchSelection(): void {
 	if (get(playerBusy)) return;
 	const batch = get(lastBatch);
@@ -450,9 +460,7 @@ export async function undoLastBatch(): Promise<void> {
 			result.batch.items.flatMap((i) => (i.outcome.status === 'deleted' ? [i.outcome.note_id] : []))
 		);
 		const ids = get(minedNoteIds);
-		const lemmas = new Set(Object.keys(ids).filter((lemma) => deleted.has(ids[lemma])));
 		minedNoteIds.set(Object.fromEntries(Object.entries(ids).filter(([, id]) => !deleted.has(id))));
-		mediaMissing.update((s) => new Set([...s].filter((lemma) => !lemmas.has(lemma))));
 		await refreshMinedState(true);
 		const remaining = result.remaining ? ` · ${result.remaining} could not be deleted` : '';
 		if (result.reopened) {

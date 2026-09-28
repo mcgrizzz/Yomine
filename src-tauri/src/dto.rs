@@ -24,20 +24,6 @@ use yomine::{
     },
 };
 
-/// `mine_term` outcome. `status`: `"created"` | `"duplicate"`; `warning` =
-/// note created but asbplayer enrichment failed; `media_missing` = enrichment
-/// verifiably didn't land (drives the retry chip).
-#[derive(Serialize, Clone)]
-pub struct MineResultDto {
-    pub status: String,
-    pub via: String,
-    pub warning: Option<String>,
-    pub note_id: Option<u64>,
-    pub media_missing: bool,
-    /// `mined::entry_key` of the entry that was mined.
-    pub key: String,
-}
-
 /// Already-mined state (issue #3): `added:1` terms + normalized sentence keys.
 #[derive(Serialize, Clone)]
 pub struct MinedStateDto {
@@ -71,7 +57,7 @@ pub struct FilterPresetDto {
 /// The `*_html` fields are Yomitan-rendered markers, sanitized frontend-side.
 #[derive(Serialize, Clone)]
 pub struct DefinitionEntryDto {
-    /// Position in Yomitan's entry list (pre-filter) — `mine_term`'s `entry_index`.
+    /// Position in Yomitan's entry list (pre-filter) — a batch item's `entry_index`.
     pub index: usize,
     pub expression: String,
     pub reading: String,
