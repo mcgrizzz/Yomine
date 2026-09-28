@@ -1,0 +1,33 @@
+[Script Info]
+Title: English (US)
+Original Translation: 
+Original Editing: 
+Original Timing: 
+Synch Point: 
+Script Updated By: 
+Update Details: 
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+YCbCr Matrix: TV.709
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Aver,68,&H00FFFFFF,&H00000000,&H0012291F,&H4612291F,0,0,0,0,100,100,0,0,1,3.9,1.7,2,200,200,60,1
+Style: Italics,Aver,68,&H00FFFFFF,&H00000000,&H0012291F,&H4612291F,0,-1,0,0,100,100,0,0,1,3.9,1.7,2,200,200,60,1
+Style: Top-Alt,Aver,68,&H00FFFFFF,&H00000000,&H0048214C,&H4648214C,0,0,0,0,100,100,0,0,1,3.9,1.7,8,200,200,45,1
+Style: Btm-Alt,Aver,68,&H00FFFFFF,&H00000000,&H0048214C,&H4648214C,0,0,0,0,100,100,0,0,1,3.9,1.7,2,200,200,60,1
+Style: Signs,Aver,80,&H00FFFFFF,&H000000FF,&H00000000,&H97000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1
+Style: OP-R,Footlight MT Light,53,&H00FFFFFF,&H00F1C472,&H006E6E6E,&H00000000,-1,0,0,0,100,100,0,0,1,2.5,0,8,25,25,25,1
+Style: OP-E,Footlight MT Light,53,&H00FFFFFF,&H00F1C472,&H006E6E6E,&H00000000,-1,0,0,0,100,100,0,0,1,2.5,0,2,25,25,30,1
+Style: OP-R-S,Footlight MT Light,43,&H00FFFFFF,&H00F1C472,&H006E6E6E,&H00000000,-1,0,0,0,100,100,0,0,1,2.5,0,8,25,25,25,1
+Style: ED-R,FOT-Matisse Pro DB,44,&H00000000,&H000000FF,&H00FFFFFF,&H00000000,0,0,0,0,100,100,0,0,1,2.7,0,8,25,25,25,1
+Style: ED-E,FOT-Matisse Pro DB,44,&H00000000,&H000000FF,&H00FFFFFF,&H00000000,0,0,0,0,100,100,0,0,1,2.7,0,2,25,25,30,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:01:59.90,0:02:00.86,Default,Himmel,0,0,0,,Frieren.
+Dialogue: 0,0:02:08.23,0:02:10.57,Default,Frieren,0,0,0,,We can see the capital now.
+

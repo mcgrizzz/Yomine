@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     fs,
     sync::LazyLock,
 };
@@ -14,6 +15,7 @@ use crate::core::{
         SourceFileType,
         TimeStamp,
     },
+    utils::is_kanji_char,
     Sentence,
     SourceFile,
     YomineError,
@@ -158,28 +160,26 @@ fn read_ssa(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
     let raw_file = fs::read_to_string(&source_file.original_file)?;
     let raw_file = raw_file.trim_start_matches('\u{feff}');
 
-    let ssa = SSA::parse_lenient(without_empty_blocks(raw_file))
+    let mut ssa = SSA::parse_lenient(raw_file)
         .map_err(|err| YomineError::Custom(format!("Error Parsing SSA/ASS File: {}", err)))?;
+    keep_japanese_styles(&mut ssa);
 
     let srt = ssa.to_srt();
 
     parse_srt(srt, source_file)
 }
 
-/// rsubs-lib splits a file into sections at blank lines and rejects an empty one, which a
-/// trailing blank line (as ffmpeg writes) or two blank lines in a row produce.
-fn without_empty_blocks(raw: &str) -> String {
-    let mut out = String::with_capacity(raw.len());
-    let mut after_blank = true;
-    for line in raw.lines() {
-        let blank = line.trim().is_empty();
-        if !(blank && after_blank) {
-            out.push_str(line);
-            out.push('\n');
-        }
-        after_blank = blank;
-    }
-    out.trim_end().to_string()
+/// Drops each style with no kana or kanji in any of its lines: the English half of a merged
+/// ja-en file, or English signs. A Japanese style keeps its occasional romaji line.
+fn keep_japanese_styles(ssa: &mut SSA) {
+    let japanese = |c: char| is_kanji_char(c) || matches!(c, '\u{3040}'..='\u{30FF}');
+    let styles: HashSet<String> = ssa
+        .events
+        .iter()
+        .filter(|e| clean_subtitle_text(&e.text).chars().any(japanese))
+        .map(|e| e.style.clone())
+        .collect();
+    ssa.events.retain(|e| styles.contains(&e.style));
 }
 
 fn sentences_from_lines<'a>(
@@ -277,10 +277,10 @@ mod tests {
 
     use super::{
         clean_subtitle_text,
+        keep_japanese_styles,
         parse_srt,
         read_txt,
         sentences_from_lines,
-        without_empty_blocks,
     };
     use crate::core::SourceFile;
 
@@ -323,11 +323,29 @@ mod tests {
     }
 
     #[test]
-    fn ass_ending_in_a_blank_line_parses() {
-        // The start of a track ffmpeg extracted from an mkv, which ends with a blank line.
-        let ass = include_str!("../tests/fixtures/ass/trailing_blank_line.ass");
-        assert!(SSA::parse_lenient(ass).is_err());
-        assert!(SSA::parse_lenient(without_empty_blocks(ass)).is_ok());
+    fn ass_files_we_have_hit_parse() {
+        // A track ffmpeg extracted from an mkv, ending in a blank line, then the shape of
+        // Frieren S01E02's merged ja-en file from Jimaku: an embedded font whose data lines can
+        // start with `[`, and one time rounded up to `.100`.
+        let ass = include_str!("../tests/fixtures/ass/trailing_blank_line.ass").to_string()
+            + "Dialogue: 0,0:10:42.100,0:10:45.41,JPN TOP,,0,0,0,,（鐘の音）\n\n\
+               [Fonts]\nfontname: notosans_0.ttf\n!!%!!!!2!1!!\n[B-=1$]Y&B!J#AEK%\n";
+        let srt = SSA::parse_lenient(&ass).unwrap().to_srt();
+        let last = srt.lines.last().unwrap();
+        let clock = |t: time::Time| (t.minute(), t.second(), t.millisecond());
+        assert_eq!((clock(last.start), clock(last.end)), ((10, 43, 0), (10, 45, 410)));
+    }
+
+    #[test]
+    fn drops_styles_without_japanese() {
+        let ass =
+            include_str!("../tests/fixtures/ass/trailing_blank_line.ass").trim_end().to_string()
+                + "\nDialogue: 0,0:02:11.00,0:02:12.00,JPN TOP,,0,0,0,,王都が見えてきた\n\
+               Dialogue: 0,0:02:13.00,0:02:14.00,JPN TOP,,0,0,0,,{\\i1}Frieren-sama{\\i0}";
+        let mut ssa = SSA::parse_lenient(&ass).unwrap();
+        keep_japanese_styles(&mut ssa);
+        let texts: Vec<&str> = ssa.events.iter().map(|e| e.text.as_str()).collect();
+        assert_eq!(texts, ["王都が見えてきた", "{\\i1}Frieren-sama{\\i0}"]);
     }
 
     #[test]
