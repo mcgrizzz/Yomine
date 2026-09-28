@@ -11,7 +11,8 @@ export const settings = writable<ipc.SettingsData | null>(null);
 /** Every setting's default (`SettingsData::default()`), for Restore Default. */
 export const defaultSettings = writable<ipc.SettingsData | null>(null);
 settings.subscribe((s) => showPossibleKnownMatches.set(s?.show_possible_known_matches ?? true));
-export const setShowPossibleKnownMatches = (show: boolean) => patchSettings({ show_possible_known_matches: show });
+export const setShowPossibleKnownMatches = (show: boolean) =>
+	patchSettings({ show_possible_known_matches: show });
 
 /** Returns false when settings haven't hydrated yet, or when the save failed. */
 async function patchSettings(patch: Partial<ipc.SettingsData>): Promise<boolean> {
@@ -128,7 +129,7 @@ export async function saveAnkiSettings(
 		anki_connection: { ...connection }
 	};
 	await ipc.saveSettings({ ...current, ...patch });
-	settings.update((s) => s ? { ...s, ...patch } : s);
+	settings.update((s) => (s ? { ...s, ...patch } : s));
 	void refreshMinedState(true);
 }
 
@@ -145,7 +146,10 @@ export const saveFreqFilter = (f: FreqFilterState) =>
 		freq_include_unknown: f.includeUnknown
 	});
 
-export const saveTextFilters = (presets: Record<string, boolean>, filters: ipc.TextFilterSetting[]) =>
+export const saveTextFilters = (
+	presets: Record<string, boolean>,
+	filters: ipc.TextFilterSetting[]
+) =>
 	patchSettings({
 		text_filter_presets: { ...presets },
 		text_filters: filters.map((f) => ({ ...f }))

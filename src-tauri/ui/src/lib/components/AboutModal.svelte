@@ -109,7 +109,8 @@
 				data (EDRDG / James William Breen) and
 				<a href="https://jitendex.org/pages/legal.html" onclick={openLink}>Jitendex</a>
 				data (Stephen Kraus and contributors), under
-				<a href="https://creativecommons.org/licenses/by-sa/4.0/" onclick={openLink}>CC BY-SA 4.0</a>.
+				<a href="https://creativecommons.org/licenses/by-sa/4.0/" onclick={openLink}>CC BY-SA 4.0</a
+				>.
 			</p>
 		</footer>
 	</div>

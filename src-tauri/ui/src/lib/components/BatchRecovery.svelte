@@ -101,7 +101,11 @@
 		{/snippet}
 	</Modal>
 {:else if $batchPause}
-	<BatchPauseDialog pause={$batchPause} choices={pauseChoices($batchPause)} onchoose={resumeBatch} />
+	<BatchPauseDialog
+		pause={$batchPause}
+		choices={pauseChoices($batchPause)}
+		onchoose={resumeBatch}
+	/>
 {:else if $mineQueueState}
 	<BatchProgressDialog progress={$mineQueueState} batch={$lastBatch} previews={$batchPreviews} />
 {:else if $batchSummaryOpen && $lastBatch}

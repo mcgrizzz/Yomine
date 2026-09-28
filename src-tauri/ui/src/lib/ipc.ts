@@ -425,9 +425,7 @@ export interface ExportCompletePayload {
 // ---------------------------------------------------------------------------
 
 /** Load tokenizer + freq dicts + ignore list; streams progress over `onProgress`. */
-export async function loadLanguageTools(
-	onProgress: (msg: LoadingMessage) => void
-): Promise<void> {
+export async function loadLanguageTools(onProgress: (msg: LoadingMessage) => void): Promise<void> {
 	const channel = new Channel<LoadingMessage>();
 	channel.onmessage = onProgress;
 	await invoke('load_language_tools', { progress: channel });
@@ -860,7 +858,11 @@ export interface MineOptions {
 }
 
 /** The entry mining picks when none was chosen, as an index into the scan of `scanText`. */
-export function getDefaultEntry(key: string, lemma: string, scanText: string | null): Promise<number> {
+export function getDefaultEntry(
+	key: string,
+	lemma: string,
+	scanText: string | null
+): Promise<number> {
 	return invoke('get_default_entry', { key, lemma, scanText });
 }
 
@@ -1226,6 +1228,8 @@ function listenTo<T>(event: string, cb: (payload: T) => void): Promise<UnlistenF
 }
 
 /** Apply one complete dictionary-settings batch and refresh the loaded file. */
-export function setDictionaryStates(updates: Record<string, FrequencyDictionarySetting>): Promise<void> {
-    return invoke('set_dictionary_states', { updates });
+export function setDictionaryStates(
+	updates: Record<string, FrequencyDictionarySetting>
+): Promise<void> {
+	return invoke('set_dictionary_states', { updates });
 }

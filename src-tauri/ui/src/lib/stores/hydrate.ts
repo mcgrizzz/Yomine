@@ -52,7 +52,10 @@ export async function hydrate(): Promise<void> {
 	// Backend probe (5s poll, change-only) — keeps the dot fresh even when no
 	// file is loaded and nothing calls refreshMinedState.
 	ipc.onYomitanStatus((s) => yomitanReachable.set(s.reachable));
-	ipc.onTermsRefreshed((r) => { fileEventSeen = true; fileResult.set(r); });
+	ipc.onTermsRefreshed((r) => {
+		fileEventSeen = true;
+		fileResult.set(r);
+	});
 	ipc.onError((e) => lastError.set(e));
 	ipc.onAsbplayerMediaLoaded((r) => {
 		fileEventSeen = true;
@@ -61,7 +64,9 @@ export async function hydrate(): Promise<void> {
 		onNewVideo();
 	});
 	ipc.onAsbplayerContext((c) => asbContext.set(c));
-	ipc.onDictionariesChanged(() => { refreshSetupStatus(); });
+	ipc.onDictionariesChanged(() => {
+		refreshSetupStatus();
+	});
 
 	// Rows dropped by a refresh (mined/ignored) silently leave the selection.
 	// Wired here, not in selection.ts — see the note there.

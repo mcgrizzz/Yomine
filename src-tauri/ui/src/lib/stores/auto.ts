@@ -34,9 +34,7 @@ export const autoMode = writable<AutoMode>('off');
 export const autoAvailable = derived(
 	[yomitanReachable, ankiStatus, playerStatus, miningMode, localVideo],
 	([$yomitan, $anki, $player, $mode, $video]) =>
-		$yomitan &&
-		$anki.connected &&
-		($mode === 'local' ? $video !== null : $player.ws_clients > 0)
+		$yomitan && $anki.connected && ($mode === 'local' ? $video !== null : $player.ws_clients > 0)
 );
 
 export const autoCountdown = writable<number | null>(null);
@@ -165,7 +163,10 @@ export async function selectPicks(): Promise<ReturnType<typeof pick> | null> {
 	if (!file) return null;
 	const result = pick(file, prefs);
 	const occIdx = new Map(result.picks.map((p) => [p.item.key, p.occIdx]));
-	setSelected([...occIdx.keys()], true, (key) => ({ occIdx: occIdx.get(key) ?? 0, userChosen: false }));
+	setSelected([...occIdx.keys()], true, (key) => ({
+		occIdx: occIdx.get(key) ?? 0,
+		userChosen: false
+	}));
 	return result;
 }
 
@@ -204,7 +205,12 @@ function reviewVideo(force = false): Promise<void> {
 			void advanceQueue(fingerprint);
 			return;
 		}
-		review.set({ fingerprint, title, keys: result.picks.map((p) => p.item.key), next: result.next });
+		review.set({
+			fingerprint,
+			title,
+			keys: result.picks.map((p) => p.item.key),
+			next: result.next
+		});
 		reviewDialogOpen.set(true);
 	});
 }

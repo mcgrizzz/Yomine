@@ -124,8 +124,7 @@
 				{
 					id: 'copy-furigana',
 					text: 'Copy with furigana',
-					action: () =>
-						void navigator.clipboard.writeText(furiganaText(lemma, term.lemma_reading))
+					action: () => void navigator.clipboard.writeText(furiganaText(lemma, term.lemma_reading))
 				},
 				{ item: 'Separator' },
 				{
@@ -349,9 +348,7 @@
 	const commitColumns = () => void setTableColumns(editCols);
 
 	const renderCols = $derived(editColumns ? editCols.map((c) => c.id) : visibleCols);
-	const gridTemplate = $derived(
-		['1.5rem', ...renderCols.map((id) => COLUMN_TRACKS[id])].join(' ')
-	);
+	const gridTemplate = $derived(['1.5rem', ...renderCols.map((id) => COLUMN_TRACKS[id])].join(' '));
 
 	// Mining needs Yomitan (renders the card) + AnkiConnect (stores it).
 	const canMine = $derived($yomitanReachable && $ankiStatus.connected);
@@ -368,16 +365,14 @@
 	const mediaNote = $derived.by(() => {
 		if ($miningMode === 'local')
 			return $localVideo === null ? ' — pair a video to add audio and a screenshot' : '';
-		if ($playerStatus.ws_clients === 0)
-			return ' — no audio/screenshot without asbplayer';
+		if ($playerStatus.ws_clients === 0) return ' — no audio/screenshot without asbplayer';
 		if ($asbContext.loaded_from_asbplayer && !$asbContext.loaded_has_subtitles)
 			return ' — the loaded video has no subtitles in asbplayer; cards will get no audio/screenshot';
 		if ($backgroundTab)
 			return " — ⚠ the video's tab isn't active; cards will get no audio/screenshot";
 		// Timestamp-less sources (EPUB/TXT) never enrich, so no target note.
 		const subtitleFile =
-			$fileResult?.source_file.file_type === 'SRT' ||
-			$fileResult?.source_file.file_type === 'SSA';
+			$fileResult?.source_file.file_type === 'SRT' || $fileResult?.source_file.file_type === 'SSA';
 		if (!$asbContext.loaded_from_asbplayer && subtitleFile)
 			return " — captures media from asbplayer's active tab";
 		return '';
@@ -397,7 +392,11 @@
 		// Text wrappers and their padding belong to the row; only actual controls
 		// own their clicks. Dragging to select text is handled below.
 		const target = e.target as Element;
-		if (target.closest('button, input, select, textarea, a, summary, [contenteditable], [role="tooltip"]'))
+		if (
+			target.closest(
+				'button, input, select, textarea, a, summary, [contenteditable], [role="tooltip"]'
+			)
+		)
 			return;
 		if (window.getSelection()?.toString()) return;
 		const key = termKey(term);
@@ -419,7 +418,9 @@
 	$effect(() => {
 		if ($mineQueueState?.key === undefined) return;
 		requestAnimationFrame(() => {
-			document.querySelector('.row.mining')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+			document
+				.querySelector('.row.mining')
+				?.scrollIntoView({ block: 'center', behavior: 'smooth' });
 		});
 	});
 
@@ -531,9 +532,7 @@
 {#if !$mineQueueState && canMine && $queuedCount > 0}
 	<div class="bulk-bar">
 		<span class="bulk-info">
-			{$queuedCount} selected{hiddenSelected > 0
-				? ` · ${hiddenSelected} hidden by filters`
-				: ''}
+			{$queuedCount} selected{hiddenSelected > 0 ? ` · ${hiddenSelected} hidden by filters` : ''}
 		</span>
 		<button
 			class="bulk-btn"
@@ -690,29 +689,29 @@
 				{#if id === 'term'}
 					<span class="term-cell">
 						<span class="term-copy">
-						<!-- svelte-ignore a11y_click_events_have_key_events -- Ctrl/Cmd+Click is a
+							<!-- svelte-ignore a11y_click_events_have_key_events -- Ctrl/Cmd+Click is a
 						     mouse-modifier ignore toggle (egui parity); no keyboard equivalent. -->
-						<span
-							class="term"
-							class:mined-term={isMined(term)}
-							class:ignored={$ignoredLemmas.has(term.lemma_form)}
-							class:ignorable={ctrlHeld}
-							lang="ja"
-							role="button"
-							tabindex="-1"
-							title={($yomitanReachable ? 'Shift+Hover for definition · ' : '') +
-								($ignoredLemmas.has(term.lemma_form)
-									? 'Ctrl+Click to UNDO ignore'
-									: 'Ctrl+Click to ignore')}
-							onclick={(e) => termClick(e, term)}
-							oncontextmenu={(e) => openMenu(e, term)}
-							onmouseenter={(e) => termEnter(e, term)}
-							onmouseleave={() => (hovered = null)}
-							><Furigana surface={term.lemma_form} reading={term.lemma_reading} /></span
-						>
-						{#if term.possible_known_match}
-							<UncertainMatch match={term.possible_known_match} />
-						{/if}
+							<span
+								class="term"
+								class:mined-term={isMined(term)}
+								class:ignored={$ignoredLemmas.has(term.lemma_form)}
+								class:ignorable={ctrlHeld}
+								lang="ja"
+								role="button"
+								tabindex="-1"
+								title={($yomitanReachable ? 'Shift+Hover for definition · ' : '') +
+									($ignoredLemmas.has(term.lemma_form)
+										? 'Ctrl+Click to UNDO ignore'
+										: 'Ctrl+Click to ignore')}
+								onclick={(e) => termClick(e, term)}
+								oncontextmenu={(e) => openMenu(e, term)}
+								onmouseenter={(e) => termEnter(e, term)}
+								onmouseleave={() => (hovered = null)}
+								><Furigana surface={term.lemma_form} reading={term.lemma_reading} /></span
+							>
+							{#if term.possible_known_match}
+								<UncertainMatch match={term.possible_known_match} />
+							{/if}
 						</span>
 						{#if isMined(term)}
 							{@const noteId = $minedNoteIds[term.lemma_form]}

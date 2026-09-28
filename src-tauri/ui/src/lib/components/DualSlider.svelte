@@ -28,7 +28,8 @@
 
 	// value ↔ [0,1] fraction, log-scaled`).
 	const toFrac = (v: number) => (Math.log(v) - Math.log(lo)) / (Math.log(hi) - Math.log(lo));
-	const fromFrac = (f: number) => Math.round(Math.exp(Math.log(lo) + f * (Math.log(hi) - Math.log(lo))));
+	const fromFrac = (f: number) =>
+		Math.round(Math.exp(Math.log(lo) + f * (Math.log(hi) - Math.log(lo))));
 
 	const minFrac = $derived(clamp(toFrac(min), 0, 1));
 	const maxFrac = $derived(clamp(toFrac(max), 0, 1));

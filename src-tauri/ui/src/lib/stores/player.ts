@@ -15,10 +15,7 @@ export const playerStatus = writable<ipc.PlayerStatus>({
 });
 
 /** Gates the clickable timestamp seek. */
-export const playerConnected = derived(
-	playerStatus,
-	($p) => $p.mpv_connected || $p.ws_clients > 0
-);
+export const playerConnected = derived(playerStatus, ($p) => $p.mpv_connected || $p.ws_clients > 0);
 
 /** Ambient asbplayer active-tab awareness (asbplayer-context event). */
 export const asbContext = writable<ipc.AsbplayerContext>({

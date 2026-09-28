@@ -16,20 +16,8 @@
 	const activeThemeId = $derived(resolveTheme($settings, $userThemes).id);
 	const preferredDark = $derived($settings?.theme_dark ?? 'dracula');
 	const preferredLight = $derived($settings?.theme_light ?? 'paper');
-	const SURFACES: TokenName[] = [
-		'bg-deep',
-		'bg-panel',
-		'bg',
-		'bg-raised',
-		'bg-hover',
-	];
-	const SWATCHES: TokenName[] = [
-		'term',
-		'know-unknown',
-		'know-new',
-		'know-young',
-		'know-mature',
-	];
+	const SURFACES: TokenName[] = ['bg-deep', 'bg-panel', 'bg', 'bg-raised', 'bg-hover'];
+	const SWATCHES: TokenName[] = ['term', 'know-unknown', 'know-new', 'know-young', 'know-mature'];
 
 	const PROVERBS = [
 		'塵も積もれば山となる',
@@ -43,7 +31,7 @@
 		'ローマは一日にして成らず',
 		'案ずるより産むが易し'
 	];
-	
+
 	const STREAM = [...PROVERBS.join('')];
 	const chipChar = (card: number, chip: number) =>
 		STREAM[(card * SWATCHES.length + chip) % STREAM.length];

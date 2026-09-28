@@ -53,11 +53,8 @@
 	import Modal from './Modal.svelte';
 	import { termCoversSegment, termHighlightText, type Occurrence } from './SentenceView.svelte';
 
-	let {
-		canMine,
-		onmine,
-		onclose
-	}: { canMine: boolean; onmine: () => void; onclose: () => void } = $props();
+	let { canMine, onmine, onclose }: { canMine: boolean; onmine: () => void; onclose: () => void } =
+		$props();
 
 	interface Row {
 		key: string;
@@ -146,7 +143,9 @@
 		const all = [...live, ...adhoc, ...unticked];
 		// Auto mode's picks read best first; a selection reads in the order it plays.
 		return review
-			? all.sort((a, b) => (b.score ? total(b.score) : -Infinity) - (a.score ? total(a.score) : -Infinity))
+			? all.sort(
+					(a, b) => (b.score ? total(b.score) : -Infinity) - (a.score ? total(a.score) : -Infinity)
+				)
 			: all.sort(
 					(a, b) =>
 						(a.sentence?.timestamp?.start_secs ?? Infinity) -
@@ -387,8 +386,8 @@
 </script>
 
 {#snippet highlighted(row: Row)}{#each sentenceParts(row) as part, i (i)}{#if part.hit}<mark
-			>{part.text}</mark
-		>{:else}{part.text}{/if}{/each}{/snippet}
+				>{part.text}</mark
+			>{:else}{part.text}{/if}{/each}{/snippet}
 
 <svelte:window
 	onkeydown={(e) => {
@@ -428,7 +427,9 @@
 							onclick={() => (focusedKey = row.key)}
 						>
 							{#if showFrames}
-								<span class="thumb">{#if frame}<img src={frame} alt="" />{/if}</span>
+								<span class="thumb"
+									>{#if frame}<img src={frame} alt="" />{/if}</span
+								>
 							{/if}
 							<span class="text">
 								<span class="line">
@@ -450,9 +451,7 @@
 									</span>
 								</span>
 								<span class="line context">
-									<span class="sentence" lang="ja"
-										>{@render highlighted(row)}</span
-									>
+									<span class="sentence" lang="ja">{@render highlighted(row)}</span>
 									{#if row.sentence?.timestamp}<span class="time"
 											>{row.sentence.timestamp.start_label}</span
 										>{/if}
@@ -642,7 +641,9 @@
 											<dd><strong>Score</strong></dd>
 										</div>
 									</dl>
-									<p class="quiet small">Word type and JLPT points are set in Mining → Auto Mode.</p>
+									<p class="quiet small">
+										Word type and JLPT points are set in Mining → Auto Mode.
+									</p>
 								</div>
 							{/if}
 						</div>
@@ -696,8 +697,9 @@
 			<span class="count">{$queuedCount} of {rows.length} ticked</span>
 			<span class="spacer"></span>
 			{#if review}
-				<button title="Mine nothing from this video. It isn't marked as processed." onclick={skipReview}
-					>Skip video</button
+				<button
+					title="Mine nothing from this video. It isn't marked as processed."
+					onclick={skipReview}>Skip video</button
 				>
 				<button class="quiet-btn" title="Close this; the picks stay selected" onclick={onclose}
 					>Later</button

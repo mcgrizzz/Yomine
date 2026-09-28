@@ -302,7 +302,8 @@
 			const width = Math.min(420, window.innerWidth / zoom - 16);
 			const below = (window.innerHeight - anchor.bottom) / zoom - 14;
 			const above = below < 280 && anchor.top / zoom > below;
-			pickerStyle = `width: ${width}px; left: ${Math.max(8, anchor.right / zoom - width)}px; ` +
+			pickerStyle =
+				`width: ${width}px; left: ${Math.max(8, anchor.right / zoom - width)}px; ` +
 				(above
 					? `bottom: ${(window.innerHeight - anchor.top) / zoom + 6}px; max-height: ${anchor.top / zoom - 14}px;`
 					: `top: ${anchor.bottom / zoom + 6}px; max-height: ${below}px;`);
@@ -314,7 +315,11 @@
 	$effect(() => {
 		if (!adding) return;
 		function dismissPicker(event: Event) {
-			if (event.target instanceof Element && event.target.closest('#anki-model-picker, #anki-add-model')) return;
+			if (
+				event.target instanceof Element &&
+				event.target.closest('#anki-model-picker, #anki-add-model')
+			)
+				return;
 			adding = false;
 		}
 		const events = ['pointerdown', 'focusin', 'scroll', 'resize'];
@@ -340,7 +345,9 @@
 				Math.min(filteredModels.length - 1, modelIndex + (event.key === 'ArrowDown' ? 1 : -1))
 			);
 			await tick();
-			document.getElementById(`anki-model-option-${modelIndex}`)?.scrollIntoView({ block: 'nearest' });
+			document
+				.getElementById(`anki-model-option-${modelIndex}`)
+				?.scrollIntoView({ block: 'nearest' });
 		}
 	}
 
@@ -751,7 +758,12 @@
 							/>
 							<button type="button" class="quiet" onclick={toggleAdding}>Dismiss</button>
 						</div>
-						<div id="anki-model-options" class="model-options" role="listbox" aria-label="Note types">
+						<div
+							id="anki-model-options"
+							class="model-options"
+							role="listbox"
+							aria-label="Note types"
+						>
 							{#each filteredModels as model, index (model.name)}
 								<button
 									id={`anki-model-option-${index}`}
@@ -764,7 +776,9 @@
 								>
 							{/each}
 						</div>
-						{#if !filteredModels.length}<p class="hint" role="status">No matching note types.</p>{/if}
+						{#if !filteredModels.length}<p class="hint" role="status">
+								No matching note types.
+							</p>{/if}
 					</div>{/if}
 				{#each Object.entries(draft.anki_model_mappings) as [name, mapping] (name)}
 					<div class="mapping">
@@ -820,7 +834,8 @@
 										{@const example = value ? samples[name]?.sample_note?.[value] : undefined}
 										{@const sound =
 											field === 'sentence_audio_field' && example ? soundFile(example) : null}
-										{@const image = field === 'picture_field' && example ? imageFile(example) : null}
+										{@const image =
+											field === 'picture_field' && example ? imageFile(example) : null}
 										<label for={`anki-${id}-${name}`}>{label}</label>
 										{@render fieldSelect(name, mapping, field, id)}
 										<div class="sample">
@@ -832,15 +847,15 @@
 													onclick={() => togglePlay(sound)}
 													><span aria-hidden="true">{playing === sound ? '■' : '▶'}</span
 													>{playing === sound ? 'Stop' : 'Play sample'}</button
-												>{:else if image}{#await mediaUri(image)}<span class="frame"></span
-													>{:then uri}{#if uri}<img
+												>{:else if image}{#await mediaUri(image)}<span class="frame"
+													></span>{:then uri}{#if uri}<img
 															class="frame"
 															src={uri}
 															alt="Sample note's screenshot"
 															title={image}
-														/>{:else}<span class="example">{image}</span>{/if}{/await}{:else if example}<span
-													class="example"
-													title={example}>{preview(example)}</span
+														/>{:else}<span class="example">{image}</span
+														>{/if}{/await}{:else if example}<span class="example" title={example}
+													>{preview(example)}</span
 												>{:else if example === ''}<span class="hint">Empty in the sample note</span
 												>{/if}
 										</div>

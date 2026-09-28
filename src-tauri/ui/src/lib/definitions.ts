@@ -28,7 +28,8 @@ export function glossarySummary(html: string, max = 6): string {
 	doc.querySelectorAll('style, script').forEach((el) => el.remove());
 	const text = (el: Element) => (el.textContent ?? '').replace(/\s+/g, ' ').trim();
 	let items = [...doc.querySelectorAll('[data-sc-content="glossary"] > li')];
-	if (items.length === 0) items = [...doc.querySelectorAll('li')].filter((li) => !li.querySelector('li'));
+	if (items.length === 0)
+		items = [...doc.querySelectorAll('li')].filter((li) => !li.querySelector('li'));
 	const glosses = items.map(text).filter(Boolean);
 	return glosses.length > 0 ? glosses.slice(0, max).join('; ') : text(doc.body);
 }

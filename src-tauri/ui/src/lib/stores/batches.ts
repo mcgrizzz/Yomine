@@ -349,7 +349,9 @@ async function run(
 		if (local && get(localVideo) === null && !mediaRun) {
 			options.record = false;
 			if (items && records)
-				showNotice('No video is paired, so these cards get no audio or screenshot. Pair a video to add them.');
+				showNotice(
+					'No video is paired, so these cards get no audio or screenshot. Pair a video to add them.'
+				);
 		}
 		if (items) {
 			batch = await ipc.createBatch(file.batch_source, snapshot, auto);
@@ -464,12 +466,16 @@ export function restoreBatchSelection(): void {
 				...options
 			});
 		} else {
-			queuedMineOptions.update((m) => ({ ...m, [item.key]: { ...options, occIdx, userChosen: true } }));
+			queuedMineOptions.update((m) => ({
+				...m,
+				[item.key]: { ...options, occIdx, userChosen: true }
+			}));
 			setSelected([item.key], true);
 		}
 		restored++;
 	}
-	const unavailable = restored < batch.items.length ? ' — some original occurrences are unavailable' : '';
+	const unavailable =
+		restored < batch.items.length ? ' — some original occurrences are unavailable' : '';
 	showNotice(`Restored ${restored} of ${batch.items.length} items${unavailable}`);
 }
 

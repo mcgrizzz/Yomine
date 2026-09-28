@@ -80,10 +80,7 @@ export function estimateProgress(
 	const recordCosts = plan.record.indices.map(
 		(i) => (local ? 0 : cueSecs(batch.items[i])) + overhead
 	);
-	const costs = [
-		...createCosts.slice(plan.create.done),
-		...recordCosts.slice(plan.record.done)
-	];
+	const costs = [...createCosts.slice(plan.create.done), ...recordCosts.slice(plan.record.done)];
 	const totalSecs = sum(createCosts) + sum(recordCosts);
 	return { doneSecs: totalSecs - sum(costs), currentSecs: costs[0] ?? 0, totalSecs };
 }

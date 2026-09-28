@@ -67,7 +67,12 @@
 	}
 </script>
 
-<Modal title="Mining batch" width="min(32rem, calc(100vw - 2rem))" dismissible={false} onclose={stop}>
+<Modal
+	title="Mining batch"
+	width="min(32rem, calc(100vw - 2rem))"
+	dismissible={false}
+	onclose={stop}
+>
 	<div class="body">
 		<p class="step">
 			{creating ? 'Creating' : 'Recording'} card {progress.position} of {progress.count}
@@ -141,7 +146,9 @@
 	{#snippet footer()}
 		<footer>
 			<span class="muted">
-				{stopping ? 'Stopping after the current card…' : 'Stopping finishes the current card first.'}
+				{stopping
+					? 'Stopping after the current card…'
+					: 'Stopping finishes the current card first.'}
 			</span>
 			<button disabled={stopping} onclick={stop}>Stop</button>
 		</footer>

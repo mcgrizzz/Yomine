@@ -80,7 +80,9 @@
 			);
 	});
 	const group = $derived(groups[0]);
-	const used = $derived(new Set(work.filter((e) => !skipped.has(e.key)).map((e) => skey(e.sentence))));
+	const used = $derived(
+		new Set(work.filter((e) => !skipped.has(e.key)).map((e) => skey(e.sentence)))
+	);
 
 	const keeperOf = (g: BatchEntry[]) => g.find((e) => e.explicit) ?? g[0];
 	const freeAltOf = (e: BatchEntry, usedNow: Set<string>) =>
@@ -219,19 +221,19 @@
 <Modal title="Sentence conflicts" width="min(460px, 92%)" dismissible={false} onclose={oncancel}>
 	{#if intro && group}
 		<p class="body">
-			{groups.length} sentence{groups.length === 1 ? ' is' : 's are'} shared by more than one
-			selected term.
+			{groups.length} sentence{groups.length === 1 ? ' is' : 's are'} shared by more than one selected
+			term.
 			{#if autoResolvable > 0}
-				{autoResolvable} term{autoResolvable === 1 ? '' : 's'} can switch to an unused sentence
-				automatically; your own sentence picks are never changed.
+				{autoResolvable} term{autoResolvable === 1 ? '' : 's'} can switch to an unused sentence automatically;
+				your own sentence picks are never changed.
 			{:else}
 				None of them have an unused sentence to switch to, so each conflict needs a pick.
 			{/if}
 		</p>
 	{:else if group}
 		<p class="count">
-			{groups.length} conflict{groups.length === 1 ? '' : 's'} remaining — click the term this
-			sentence should mine:
+			{groups.length} conflict{groups.length === 1 ? '' : 's'} remaining — click the term this sentence
+			should mine:
 		</p>
 		<blockquote class="sentence" lang="ja">
 			<!-- svelte-ignore a11y_no_static_element_interactions -- Shift+Hover
@@ -275,7 +277,9 @@
 		{:else if group}
 			<p class="hint">Unpicked terms are skipped for this batch.</p>
 			<footer>
-				<button onclick={mineAll}>{group.length === 2 ? 'Mine both' : `Mine all ${group.length}`}</button>
+				<button onclick={mineAll}
+					>{group.length === 2 ? 'Mine both' : `Mine all ${group.length}`}</button
+				>
 				<button class="right" onclick={oncancel}>Cancel batch</button>
 			</footer>
 		{/if}

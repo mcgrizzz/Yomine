@@ -77,8 +77,11 @@
 >
 	<div class="chips">
 		<!-- Parent "Noun" chip; its sub-categories grey out when it's off. -->
-		<button class="chip parent" class:on={nounOn} onclick={() => toggle('Noun')} aria-pressed={nounOn}
-			>{labelOf.get('Noun') ?? 'Noun'}</button
+		<button
+			class="chip parent"
+			class:on={nounOn}
+			onclick={() => toggle('Noun')}
+			aria-pressed={nounOn}>{labelOf.get('Noun') ?? 'Noun'}</button
 		>
 		{#each NOUN_CHILDREN as key (key)}
 			<button

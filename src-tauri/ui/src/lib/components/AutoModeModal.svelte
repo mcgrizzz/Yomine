@@ -57,9 +57,7 @@
 
 	const posName = (key: string) => $posCatalog.find((p) => p.key === key)?.display_name ?? key;
 	const editablePos = $derived($posCatalog.filter((p) => !(p.key in POS_ALIASES)));
-	const posRows = $derived(
-		editablePos.map((p) => p.key).filter((key) => key in draft.pos_points)
-	);
+	const posRows = $derived(editablePos.map((p) => p.key).filter((key) => key in draft.pos_points));
 	const choose = (stop: AutoMine['stop']) => () => (draft.stop = stop);
 	const addable = $derived(editablePos.filter((p) => !(p.key in draft.pos_points)));
 
@@ -105,8 +103,9 @@
 >
 	<div class="body">
 		<p class="intro">
-			Mines each video you load with your table filters. Cards include audio, a screenshot and
-			the <code>yomine::auto</code> tag.
+			Mines each video you load with your table filters. Cards include audio, a screenshot and the <code
+				>yomine::auto</code
+			> tag.
 		</p>
 
 		<section>
@@ -179,7 +178,9 @@
 		<section>
 			<div class="section-head">
 				<h3>Scoring</h3>
-				<span class="hint">Score = frequency + word type + JLPT. Higher scores are mined first.</span>
+				<span class="hint"
+					>Score = frequency + word type + JLPT. Higher scores are mined first.</span
+				>
 			</div>
 			<div class="scoring">
 				<div class="group">
@@ -241,9 +242,11 @@
 				<summary>How scoring works</summary>
 				<div class="how-body">
 					<p>
-						Frequency is 40 points up to your horizon, <strong>rank {horizon.toLocaleString()}</strong>,
-						and 20 fewer per tenfold step past it. The horizon grows with your Anki cards. Word types
-						without a row score 0, and a video gets fewer cards when your filters leave fewer terms.
+						Frequency is 40 points up to your horizon, <strong
+							>rank {horizon.toLocaleString()}</strong
+						>, and 20 fewer per tenfold step past it. The horizon grows with your Anki cards. Word
+						types without a row score 0, and a video gets fewer cards when your filters leave fewer
+						terms.
 					</p>
 					<table class="examples">
 						<thead><tr><th>Example</th><th>Frequency</th><th>Score</th></tr></thead>

@@ -34,10 +34,16 @@
 		switch (choice) {
 			case 'retry':
 				if (created) {
-					return { label: 'Retry media', detail: 'Record audio and a screenshot for this card again.' };
+					return {
+						label: 'Retry media',
+						detail: 'Record audio and a screenshot for this card again.'
+					};
 				}
 				if (shared) {
-					return { label: 'Retry after fixing', detail: 'Try this card again once the problem is fixed.' };
+					return {
+						label: 'Retry after fixing',
+						detail: 'Try this card again once the problem is fixed.'
+					};
 				}
 				return { label: 'Retry card', detail: 'Try creating this card again.' };
 			case 'without_dictionary_media':
@@ -47,9 +53,15 @@
 				};
 			case 'skip':
 				if (created) {
-					return { label: 'Skip media for this card', detail: 'Keep the card as is and record the rest.' };
+					return {
+						label: 'Skip media for this card',
+						detail: 'Keep the card as is and record the rest.'
+					};
 				}
-				return { label: 'Skip this card', detail: 'Leave it uncreated and continue with the next card.' };
+				return {
+					label: 'Skip this card',
+					detail: 'Leave it uncreated and continue with the next card.'
+				};
 			case 'stop':
 				return { label: 'Stop batch', detail: '' };
 		}
@@ -74,8 +86,8 @@
 			<RecordingSteps retryLabel="Retry media" />
 		{:else if unmapped !== null}
 			<p class="message">
-				Choose which of its fields get the sentence audio and the screenshot. No cards were
-				created without them.
+				Choose which of its fields get the sentence audio and the screenshot. No cards were created
+				without them.
 			</p>
 			<button
 				class="choice primary"

@@ -90,9 +90,7 @@ const completeTheme = (t: ThemeFile): Theme => ({
 const builtinGroup = (dark: boolean, pinned: string): Theme[] =>
 	loaded
 		.filter((t) => t.dark === dark)
-		.sort((a, b) =>
-			a.id === pinned ? -1 : b.id === pinned ? 1 : a.label.localeCompare(b.label)
-		)
+		.sort((a, b) => (a.id === pinned ? -1 : b.id === pinned ? 1 : a.label.localeCompare(b.label)))
 		.map(completeTheme);
 
 export const BUILTIN_THEMES: Theme[] = [

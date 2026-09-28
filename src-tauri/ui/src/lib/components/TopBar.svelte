@@ -129,7 +129,7 @@
 
 	const modeTip = $derived(
 		$playerBusy
-			? "Wait for mining to finish before switching"
+			? 'Wait for mining to finish before switching'
 			: $miningMode === 'local'
 				? $localVideo
 					? 'Local: audio and screenshots are cut from the paired video'
@@ -204,9 +204,7 @@
 		<button class="menu-trigger" onclick={(e) => toggleMenu('file', e)}>File</button>
 		{#if openMenu === 'file'}
 			<div class="menu-panel">
-				<button onclick={() => run(openAndProcessFile)} disabled={toolsError}
-					>Open File…</button
-				>
+				<button onclick={() => run(openAndProcessFile)} disabled={toolsError}>Open File…</button>
 				<button onclick={() => run(openFolder)} disabled={toolsError}>Open Folder…</button>
 				<!-- svelte-ignore a11y_no_static_element_interactions -- hover-expand is a
 				     mouse affordance; the row button below also toggles on click. -->
@@ -376,8 +374,7 @@
 						{/if}
 						<button
 							onclick={() => run(openAsbplayerModal)}
-							disabled={toolsError || $playerStatus.ws_clients === 0}
-							>Load from asbplayer…</button
+							disabled={toolsError || $playerStatus.ws_clients === 0}>Load from asbplayer…</button
 						>
 						<label
 							class="menu-check"

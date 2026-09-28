@@ -4,7 +4,8 @@
 	import * as ipc from '$lib/ipc';
 	import { lastError, profilesModalOpen } from '$lib/stores';
 
-	const RESTART_NOTE = 'Yomine restarts to switch profiles; the loaded file and any queued mining are lost.';
+	const RESTART_NOTE =
+		'Yomine restarts to switch profiles; the loaded file and any queued mining are lost.';
 
 	type RowEdit = { slug: string; mode: 'rename' | 'copy'; value: string };
 
@@ -47,7 +48,11 @@
 	const create = () => run(() => ipc.createProfile(newName));
 
 	function startEdit(p: ipc.Profile, mode: 'rename' | 'copy') {
-		editing = { slug: p.slug, mode, value: mode === 'copy' ? `${p.display_name} copy` : p.display_name };
+		editing = {
+			slug: p.slug,
+			mode,
+			value: mode === 'copy' ? `${p.display_name} copy` : p.display_name
+		};
 		confirmDelete = null;
 	}
 
@@ -70,8 +75,8 @@
 	onclose={() => profilesModalOpen.set(false)}
 >
 	<p class="intro">
-		Each profile keeps its own settings, ignore list and mined-card history. Frequency
-		dictionaries are shared by all of them.
+		Each profile keeps its own settings, ignore list and mined-card history. Frequency dictionaries
+		are shared by all of them.
 	</p>
 
 	<div class="list">
@@ -83,9 +88,15 @@
 						class="rename"
 						bind:value={editing.value}
 						onkeydown={(e) => e.key === 'Enter' && commitEdit()}
-						aria-label={copying ? `Name for the copy of ${p.display_name}` : `New name for ${p.display_name}`}
+						aria-label={copying
+							? `Name for the copy of ${p.display_name}`
+							: `New name for ${p.display_name}`}
 					/>
-					<button class:primary={copying} onclick={commitEdit} disabled={editing.value.trim() === ''}>
+					<button
+						class:primary={copying}
+						onclick={commitEdit}
+						disabled={editing.value.trim() === ''}
+					>
 						{copying ? 'Copy & Restart' : 'Save'}
 					</button>
 					<button aria-label="Cancel" onclick={() => (editing = null)}>✕</button>
@@ -104,7 +115,12 @@
 								>✕</button
 							>
 						{:else}
-							<button class="chip" title={RESTART_NOTE} disabled={busy} onclick={() => (switchArmed = p.slug)}>
+							<button
+								class="chip"
+								title={RESTART_NOTE}
+								disabled={busy}
+								onclick={() => (switchArmed = p.slug)}
+							>
 								Switch
 							</button>
 						{/if}

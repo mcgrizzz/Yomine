@@ -3,18 +3,14 @@
 /** Anki-media refs can never resolve here (and every DOM insert re-requests
  * them, spamming 404s), so anything that isn't a data: URI becomes `none`. */
 function scrubCssUrls(css: string): string {
-	return css
-		.replace(/@import[^;]*(;|$)/gi, '')
-		.replace(/url\(\s*(?!['"]?data:)[^)]*\)/gi, 'none');
+	return css.replace(/@import[^;]*(;|$)/gi, '').replace(/url\(\s*(?!['"]?data:)[^)]*\)/gi, 'none');
 }
 
 /** Defang third-party dictionary HTML. Embedded style tags are kept — Yomitan
  * scopes them under `.yomitan-glossary` — but purged of external loads. */
 export function sanitize(html: string): string {
 	const doc = new DOMParser().parseFromString(html, 'text/html');
-	doc.querySelectorAll('script, iframe, object, embed, link, meta').forEach((el) =>
-		el.remove()
-	);
+	doc.querySelectorAll('script, iframe, object, embed, link, meta').forEach((el) => el.remove());
 	doc.querySelectorAll('style').forEach((el) => {
 		el.textContent = scrubCssUrls(el.textContent ?? '');
 	});

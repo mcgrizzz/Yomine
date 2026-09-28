@@ -178,7 +178,6 @@
 	width="min(460px, 92%)"
 	onclose={close}
 >
-
 	<div class="row">
 		<label for="theme-name">Name:</label>
 		<input id="theme-name" type="text" bind:value={name} placeholder="My theme" />
@@ -190,11 +189,7 @@
 	{#if !originalName}
 		<div class="row">
 			<label for="theme-seed">Start from:</label>
-			<select
-				id="theme-seed"
-				bind:value={seedId}
-				onchange={() => seed(seedId)}
-			>
+			<select id="theme-seed" bind:value={seedId} onchange={() => seed(seedId)}>
 				{#each allThemes(library) as t (t.id)}
 					<option value={t.id}>{t.label}</option>
 				{/each}

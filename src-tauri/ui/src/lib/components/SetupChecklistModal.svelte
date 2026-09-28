@@ -141,13 +141,7 @@
 	}
 </script>
 
-<Modal
-	open={$setupModalOpen}
-	title="Setup Checklist"
-	width="min(600px, 92%)"
-	flush
-	onclose={close}
->
+<Modal open={$setupModalOpen} title="Setup Checklist" width="min(600px, 92%)" flush onclose={close}>
 	<ul class="items">
 		{#each items as item (item.title)}
 			{@const ic = iconFor(item)}

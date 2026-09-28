@@ -62,7 +62,13 @@
 	import AutoModeToggle from '$lib/components/AutoModeToggle.svelte';
 	import MineAbility from '$lib/components/MineAbility.svelte';
 	import QueueStepper from '$lib/components/QueueStepper.svelte';
-	import { fileIcon, filename, formatTermCount, formatFileSize, formatLastOpened } from '$lib/recents';
+	import {
+		fileIcon,
+		filename,
+		formatTermCount,
+		formatFileSize,
+		formatLastOpened
+	} from '$lib/recents';
 
 	onMount(hydrate);
 
@@ -74,8 +80,7 @@
 	const minesActiveTab = $derived(
 		$playerStatus.mode === 'asbplayer' &&
 			$playerStatus.ws_clients > 0 &&
-			($fileResult?.source_file.file_type === 'SRT' ||
-				$fileResult?.source_file.file_type === 'SSA')
+			($fileResult?.source_file.file_type === 'SRT' || $fileResult?.source_file.file_type === 'SSA')
 	);
 	const timed = $derived(
 		$fileResult?.source_file.file_type === 'SRT' || $fileResult?.source_file.file_type === 'SSA'
@@ -210,26 +215,26 @@
 							{/if}
 						</span>
 					</div>
-			{#if $ankiFilterActive && $fileResult.sentences.length > 0}
-				<p
-					class="comprehension"
-					style:color={comprehensionColor(pct)}
-					title="Overall estimated comprehension across all sentences"
-				>
-					Comprehension estimate: {pct.toFixed(1)}%
-				</p>
-			{/if}
-			<p class="counts">
-				{$visibleTerms.length} shown
-				{#if known > 0}
-					· <span
-						class="excluded"
-						title={`Ignore list: ${$fileResult.ignored_terms}\nAnki filtered: ${known - $fileResult.ignored_terms}`}
-						>{known} excluded</span
-					>
-				{/if}
-				· {total} total
-			</p>
+					{#if $ankiFilterActive && $fileResult.sentences.length > 0}
+						<p
+							class="comprehension"
+							style:color={comprehensionColor(pct)}
+							title="Overall estimated comprehension across all sentences"
+						>
+							Comprehension estimate: {pct.toFixed(1)}%
+						</p>
+					{/if}
+					<p class="counts">
+						{$visibleTerms.length} shown
+						{#if known > 0}
+							· <span
+								class="excluded"
+								title={`Ignore list: ${$fileResult.ignored_terms}\nAnki filtered: ${known - $fileResult.ignored_terms}`}
+								>{known} excluded</span
+							>
+						{/if}
+						· {total} total
+					</p>
 				</div>
 				<div class="header-right">
 					<AutoModeToggle />
@@ -329,7 +334,7 @@
 	<!-- First: every backdrop shares --z-modal, so paint order is DOM order, and the
 	     checklist is the one modal that opens others on top of itself. -->
 	<SetupChecklistModal />
-<ProfilesModal />
+	<ProfilesModal />
 	<IgnoreListModal />
 	<AsbplayerModal />
 	<WebsocketSettingsModal />

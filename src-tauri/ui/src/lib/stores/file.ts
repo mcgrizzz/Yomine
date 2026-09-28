@@ -223,7 +223,11 @@ export async function refreshTerms(): Promise<void> {
 		overlay.set('Refreshing terms…');
 		await ipc.refreshTerms();
 	} catch (err) {
-		lastError.set({ title: 'Refresh Error', message: 'Unable to refresh terms', detail: String(err) });
+		lastError.set({
+			title: 'Refresh Error',
+			message: 'Unable to refresh terms',
+			detail: String(err)
+		});
 	} finally {
 		overlay.set(null);
 	}

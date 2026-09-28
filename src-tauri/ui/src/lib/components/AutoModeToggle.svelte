@@ -53,9 +53,7 @@
 			$autoSkipped !== null &&
 			$autoSkipped === $fileResult?.batch_source.fingerprint
 	);
-	const waitingPicks = $derived(
-		$autoReview?.keys.filter((k) => $selectedTerms.has(k)).length ?? 0
-	);
+	const waitingPicks = $derived($autoReview?.keys.filter((k) => $selectedTerms.has(k)).length ?? 0);
 
 	function choose(mode: AutoMode) {
 		menuOpen = false;
@@ -67,7 +65,9 @@
 		if (!result) return;
 		const n = result.picks.length;
 		showNotice(
-			n === 0 ? 'Auto mode found nothing to pick in this file' : `Selected ${n} pick${n === 1 ? '' : 's'}`
+			n === 0
+				? 'Auto mode found nothing to pick in this file'
+				: `Selected ${n} pick${n === 1 ? '' : 's'}`
 		);
 	}
 </script>
@@ -84,7 +84,8 @@
 			title="Auto mode's picks for this video are selected and waiting for you to check them"
 			onclick={() => reviewDialogOpen.set(true)}
 		>
-			<span class="sparkle" aria-hidden="true">✦</span> Review {waitingPicks} pick{waitingPicks === 1
+			<span class="sparkle" aria-hidden="true">✦</span> Review {waitingPicks} pick{waitingPicks ===
+			1
 				? ''
 				: 's'}
 		</button>
