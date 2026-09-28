@@ -379,6 +379,15 @@ pub struct RecommendedDictionaryDto {
     pub status: String,
 }
 
+/// A video in the queue, with the show and episode its file name gives, if any.
+#[derive(Serialize, Clone)]
+pub struct QueuedVideoDto {
+    pub path: String,
+    pub show: Option<String>,
+    /// `S01E05`, or `Episode 5` without a season.
+    pub episode: Option<String>,
+}
+
 /// One selectable chapter slice; `id` is what `process_file` takes back, `seen` = mined before.
 #[derive(Serialize, Clone)]
 pub struct EpubPartDto {

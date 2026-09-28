@@ -494,9 +494,25 @@ export function saveUserThemes(themes: UserTheme[]): Promise<void> {
 	return invoke('save_user_themes', { themes });
 }
 
-/** Native open dialog; resolves to the chosen path or `null`. */
-export function openFileDialog(): Promise<string | null> {
+/** Native open dialog; resolves to the chosen paths, empty if cancelled. */
+export function openFileDialog(): Promise<string[]> {
 	return invoke('open_file_dialog');
+}
+
+export function openFolderDialog(): Promise<string | null> {
+	return invoke('open_folder_dialog');
+}
+
+/** A queued video, with the show and episode (`S01E05`) its file name gives, if any. */
+export interface QueuedVideo {
+	path: string;
+	show: string | null;
+	episode: string | null;
+}
+
+/** The videos among `paths`, folders expanded to their top-level videos, in play order. */
+export function listVideos(paths: string[]): Promise<QueuedVideo[]> {
+	return invoke('list_videos', { paths });
 }
 
 /** One selectable chapter slice; `id` is what `processFile` takes back, `seen` = mined before. */

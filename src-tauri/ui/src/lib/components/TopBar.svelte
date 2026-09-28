@@ -14,6 +14,7 @@
 		toggleDarkMode,
 		toggleSerifFont,
 		openAndProcessFile,
+		openFolder,
 		openRecentFile,
 		openRecentFilesModal,
 		recentFiles,
@@ -44,7 +45,8 @@
 		miningMode,
 		setMiningMode,
 		playerBusy,
-		localVideo
+		localVideo,
+		currentQueue
 	} from '$lib/stores';
 	import { openThemesWindow } from '$lib/ipc';
 	import { filename } from '$lib/recents';
@@ -205,6 +207,7 @@
 				<button onclick={() => run(openAndProcessFile)} disabled={toolsError}
 					>Open File…</button
 				>
+				<button onclick={() => run(openFolder)} disabled={toolsError}>Open Folder…</button>
 				<!-- svelte-ignore a11y_no_static_element_interactions -- hover-expand is a
 				     mouse affordance; the row button below also toggles on click. -->
 				<div
@@ -328,7 +331,10 @@
 					role="radio"
 					aria-checked={$miningMode === mode}
 					class:on={$miningMode === mode}
-					disabled={$playerBusy}
+					disabled={$playerBusy || (mode === 'asbplayer' && $currentQueue !== null)}
+					title={mode === 'asbplayer' && $currentQueue
+						? 'A queue of local videos is open. Close it (click the n/N count) to use asbplayer.'
+						: undefined}
 					onclick={() => $miningMode !== mode && setMiningMode(mode)}>{label}</button
 				>
 			{/each}

@@ -6,6 +6,7 @@
 	import {
 		hydrate,
 		openAndProcessFile,
+		openFolder,
 		openRecentFile,
 		openAsbplayerModal,
 		asbContext,
@@ -60,6 +61,7 @@
 	import AutoModeModal from '$lib/components/AutoModeModal.svelte';
 	import AutoModeToggle from '$lib/components/AutoModeToggle.svelte';
 	import MineAbility from '$lib/components/MineAbility.svelte';
+	import QueueStepper from '$lib/components/QueueStepper.svelte';
 	import { fileIcon, filename, formatTermCount, formatFileSize, formatLastOpened } from '$lib/recents';
 
 	onMount(hydrate);
@@ -110,6 +112,7 @@
 			<div class="header-row">
 				<div class="header-left">
 					<div class="title-row">
+						<QueueStepper />
 						<h2
 							class="title"
 							title={`${$fileResult.source_file.title}\n${filename($fileResult.source_file.original_file)}`}
@@ -276,6 +279,7 @@
 				<p class="landing-hint">ℹ You can drag and drop a file at any time to load it.</p>
 				<div class="landing-actions">
 					<button class="landing-open" onclick={openAndProcessFile}>Open File…</button>
+					<button class="landing-open" onclick={openFolder}>Open Folder…</button>
 					{#if $miningMode === 'asbplayer' && $playerStatus.ws_clients > 0}
 						<!-- Only offered while asbplayer is actually connected (issue #105). -->
 						<button class="landing-open asb" onclick={openAsbplayerModal}

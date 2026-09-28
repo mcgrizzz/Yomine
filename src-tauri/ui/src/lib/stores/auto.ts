@@ -4,7 +4,7 @@ import { autoPick, DEFAULT_HORIZON, type NextInLine } from '$lib/autopick';
 import { applyControls } from '$lib/table';
 import { autoLedger, mineQueue } from './batches';
 import { freqFilter, jlptEnabled, posEnabled } from './controls';
-import { fileResult, localVideo } from './file';
+import { advanceQueue, fileResult, localVideo } from './file';
 import { showPossibleKnownMatches } from './knowledgeView';
 import {
 	addedTerms,
@@ -19,7 +19,7 @@ import {
 	yomitanReachable,
 	type QueueItem
 } from './mining';
-import { reviewDialogOpen } from './modals';
+import { batchSummaryOpen, reviewDialogOpen } from './modals';
 import { playerStatus } from './player';
 import { setSelected } from './selection';
 import { ankiStatus, knowledge } from './status';
@@ -77,6 +77,7 @@ async function countDownCurrent(): Promise<void> {
 	try {
 		if (await ipc.isMediaProcessed(fingerprint)) {
 			autoSkipped.set(fingerprint);
+			void advanceQueue(fingerprint, true);
 			return;
 		}
 	} catch (err) {
@@ -121,7 +122,7 @@ export async function setAutoMode(mode: AutoMode): Promise<void> {
 
 export function onNewVideo(): void {
 	const mode = get(autoMode);
-	if (mode === 'mine') void autoMine();
+	if (mode === 'mine') void countDownCurrent();
 	if (mode === 'review') void reviewVideo();
 }
 
@@ -200,6 +201,7 @@ function reviewVideo(force = false): Promise<void> {
 		const title = loaded.source_file.title;
 		if (result.picks.length === 0) {
 			showNotice(`Auto mode found nothing to mine in ${title}`);
+			void advanceQueue(fingerprint);
 			return;
 		}
 		review.set({ fingerprint, title, keys: result.picks.map((p) => p.item.key), next: result.next });
@@ -225,6 +227,7 @@ export function skipReview(): void {
 	if (pending) setSelected(pending.keys, false);
 	review.set(null);
 	reviewDialogOpen.set(false);
+	if (pending) void advanceQueue(pending.fingerprint);
 }
 
 /** The loaded video, if `mode` is on, nothing is mining, and it wasn't processed (unless
@@ -240,6 +243,7 @@ async function claimVideo(mode: AutoMode, force: boolean): Promise<ipc.FileLoadR
 	autoSkipped.set(null);
 	if (!force && (await ipc.isMediaProcessed(fingerprint))) {
 		autoSkipped.set(fingerprint);
+		void advanceQueue(fingerprint, true);
 		return null;
 	}
 	return loaded;
@@ -260,6 +264,15 @@ export async function mineSelection(items: QueueItem[]): Promise<void> {
 	await recordProcessed(pending.fingerprint, pending.title, batch).catch((err) =>
 		lastError.set({ title: 'Auto mode', message: String(err), detail: null })
 	);
+	// The next video's review would open over this batch's summary.
+	await new Promise<void>((resolve) => {
+		const stop = batchSummaryOpen.subscribe((open) => {
+			if (open) return;
+			queueMicrotask(() => stop());
+			resolve();
+		});
+	});
+	void advanceQueue(pending.fingerprint);
 }
 
 /** Mines the loaded video once, unless it was already processed and not `force`d. */
@@ -277,9 +290,12 @@ export function autoMine(force = false): Promise<void> {
 		if (items.length === 0) {
 			await recordProcessed(fingerprint, title, null);
 			showNotice(`Auto mode found nothing to mine in ${title}`);
+			void advanceQueue(fingerprint);
 			return;
 		}
 		const batch = await mineQueue(items, true);
-		if (batch) await recordProcessed(fingerprint, title, batch);
+		if (!batch) return;
+		await recordProcessed(fingerprint, title, batch);
+		void advanceQueue(fingerprint);
 	});
 }

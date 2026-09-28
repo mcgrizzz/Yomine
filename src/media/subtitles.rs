@@ -2,16 +2,19 @@
 //! extracted to files the loader can open.
 
 use std::{
+    cmp::Ordering,
     ffi::OsString,
     hash::{
         DefaultHasher,
         Hash,
         Hasher,
     },
+    iter::Peekable,
     path::{
         Path,
         PathBuf,
     },
+    str::Chars,
 };
 
 use serde::{
@@ -149,6 +152,54 @@ pub fn sibling_video(subtitle: &Path) -> Option<PathBuf> {
         .find(|path| {
             path.file_stem().and_then(|s| s.to_str()).is_some_and(|s| s == stem || s == base)
         })
+}
+
+/// The videos among `paths`, each folder standing for the videos at its top level, in
+/// natural order ("ep2" before "ep10").
+pub fn videos_in(paths: &[PathBuf]) -> Vec<PathBuf> {
+    let mut videos: Vec<PathBuf> = paths
+        .iter()
+        .flat_map(|path| match std::fs::read_dir(path) {
+            Ok(entries) => entries.filter_map(|entry| entry.ok().map(|e| e.path())).collect(),
+            Err(_) => vec![path.clone()],
+        })
+        .filter(|path| path.is_file() && is_video(path))
+        .collect();
+    videos.sort_by(|a, b| natural_cmp(&a.to_string_lossy(), &b.to_string_lossy()));
+    videos.dedup();
+    videos
+}
+
+fn natural_cmp(a: &str, b: &str) -> Ordering {
+    let (mut a, mut b) = (a.chars().peekable(), b.chars().peekable());
+    loop {
+        let order = match (a.peek(), b.peek()) {
+            (None, None) => return Ordering::Equal,
+            (None, Some(_)) => return Ordering::Less,
+            (Some(_), None) => return Ordering::Greater,
+            (Some(x), Some(y)) if x.is_ascii_digit() && y.is_ascii_digit() => {
+                let (n, m) = (take_number(&mut a), take_number(&mut b));
+                n.len().cmp(&m.len()).then_with(|| n.cmp(&m))
+            }
+            (Some(x), Some(y)) => {
+                let order = x.to_lowercase().cmp(y.to_lowercase());
+                a.next();
+                b.next();
+                order
+            }
+        };
+        if order != Ordering::Equal {
+            return order;
+        }
+    }
+}
+
+fn take_number(chars: &mut Peekable<Chars>) -> String {
+    let mut digits = String::new();
+    while let Some(c) = chars.next_if(char::is_ascii_digit) {
+        digits.push(c);
+    }
+    digits.trim_start_matches('0').to_string()
 }
 
 enum Codec {
@@ -344,6 +395,21 @@ mod tests {
         );
         assert_eq!(sibling_video(&dir.join("ep01.ja.ass")), Some(dir.join("ep01.mkv")));
         assert_eq!(sibling_video(&dir.join("ep02.srt")), None);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn folder_lists_its_videos_in_episode_order() {
+        let dir = std::env::temp_dir().join(format!("yomine-folder-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(dir.join("extras")).unwrap();
+        for name in ["ep10.mkv", "ep2.mkv", "Ep01.mp4", "ep2.srt", "extras/ep0.mkv"] {
+            std::fs::write(dir.join(name), "").unwrap();
+        }
+        let names: Vec<_> = videos_in(&[dir.clone(), dir.join("ep2.mkv")])
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["Ep01.mp4", "ep2.mkv", "ep10.mkv"]);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

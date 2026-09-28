@@ -23,7 +23,10 @@ use yomine::{
         AnkiState,
     },
     core::{
-        filename_parser,
+        filename_parser::{
+            self,
+            MediaType,
+        },
         models::{
             Sentence,
             SourceFile,
@@ -55,6 +58,7 @@ use crate::{
         EpubChapterDto,
         EpubPartDto,
         FileLoadResult,
+        QueuedVideoDto,
         SentenceDto,
     },
     events::{
@@ -145,20 +149,60 @@ async fn pick_path(
     Ok(chosen.and_then(|p| p.into_path().ok()).map(|p| p.display().to_string()))
 }
 
-/// Native open dialog (FR: file selection). Returns the chosen path or `null`.
+/// Native open dialog (FR: file selection). Returns the chosen paths, empty if cancelled.
 #[tauri::command]
-pub async fn open_file_dialog(app: AppHandle) -> Result<Option<String>, String> {
-    pick_path(
-        app.dialog()
-            .file()
-            .add_filter(
-                "Videos, subtitles & text",
-                &[SourceFileType::supported_extensions(), subtitles::VIDEO_EXTENSIONS].concat(),
-            )
-            .add_filter("Videos", subtitles::VIDEO_EXTENSIONS)
-            .add_filter("Subtitles & text", SourceFileType::supported_extensions()),
-    )
-    .await
+pub async fn open_file_dialog(app: AppHandle) -> Result<Vec<String>, String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .add_filter(
+            "Videos, subtitles & text",
+            &[SourceFileType::supported_extensions(), subtitles::VIDEO_EXTENSIONS].concat(),
+        )
+        .add_filter("Videos", subtitles::VIDEO_EXTENSIONS)
+        .add_filter("Subtitles & text", SourceFileType::supported_extensions())
+        .pick_files(move |paths| {
+            let _ = tx.send(paths);
+        });
+    let chosen = rx.await.map_err(|_| "file dialog closed unexpectedly".to_string())?;
+    Ok(chosen
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|p| p.into_path().ok())
+        .map(|p| p.display().to_string())
+        .collect())
+}
+
+#[tauri::command]
+pub async fn open_folder_dialog(app: AppHandle) -> Result<Option<String>, String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog().file().pick_folder(move |path| {
+        let _ = tx.send(path);
+    });
+    let chosen = rx.await.map_err(|_| "folder dialog closed unexpectedly".to_string())?;
+    Ok(chosen.and_then(|p| p.into_path().ok()).map(|p| p.display().to_string()))
+}
+
+/// The videos among opened files and folders, in the order the queue plays them.
+#[tauri::command]
+pub async fn list_videos(paths: Vec<PathBuf>) -> Vec<QueuedVideoDto> {
+    subtitles::videos_in(&paths)
+        .iter()
+        .map(|path| {
+            let path = path.display().to_string();
+            match filename_parser::parse_filename(&path) {
+                MediaType::TvShow { title, season, episode: Some(e), .. } => QueuedVideoDto {
+                    path,
+                    show: Some(title),
+                    episode: Some(match season {
+                        Some(s) => format!("S{s:02}E{e:02}"),
+                        None => format!("Episode {e}"),
+                    }),
+                },
+                _ => QueuedVideoDto { path, show: None, episode: None },
+            }
+        })
+        .collect()
 }
 
 /// Book title + pickable chapters for the EPUB chapter picker.

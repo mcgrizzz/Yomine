@@ -5,7 +5,7 @@ import { dragHovering, initProgress, lastError, showNotice } from './ui';
 import { ankiStatus, knowledge, languageToolsStatus } from './status';
 import { checkForUpdate } from './update';
 import { asbContext, playerStatus } from './player';
-import { fileResult, isSupportedPath, loadAndStore, recentFiles } from './file';
+import { fileResult, openPaths, recentFiles } from './file';
 import { jlptEnabled, posCatalog, posEnabled } from './controls';
 import { defaultSettings, settings } from './settings';
 import { refreshIgnoredLemmas } from './ignore';
@@ -78,12 +78,11 @@ export async function hydrate(): Promise<void> {
 	// them); only a failed init disables it.
 	const toolsUsable = () => typeof get(languageToolsStatus) !== 'object';
 	ipc.onDragDrop({
-		onEnter: (paths) => dragHovering.set(toolsUsable() && paths.some(isSupportedPath)),
+		// Any path may be a folder, which only the backend can tell.
+		onEnter: (paths) => dragHovering.set(toolsUsable() && paths.length > 0),
 		onDrop: (paths) => {
 			dragHovering.set(false);
-			if (!toolsUsable()) return;
-			const file = paths.find(isSupportedPath);
-			if (file) loadAndStore(file);
+			if (toolsUsable() && paths.length > 0) void openPaths(paths);
 		},
 		onLeave: () => dragHovering.set(false)
 	});

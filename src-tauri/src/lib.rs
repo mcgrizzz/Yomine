@@ -44,6 +44,8 @@ pub fn run() {
             commands::lifecycle::export_theme_file,
             commands::lifecycle::import_theme_file,
             commands::file::open_file_dialog,
+            commands::file::open_folder_dialog,
+            commands::file::list_videos,
             commands::file::get_epub_chapters,
             commands::file::open_video_dialog,
             commands::file::open_executable_dialog,
