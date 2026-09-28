@@ -19,7 +19,10 @@ use yomine::{
         mined,
         FieldMapping,
     },
-    core::settings::MiningMode,
+    core::{
+        settings::MiningMode,
+        YomineError,
+    },
     yomitan,
 };
 
@@ -46,6 +49,7 @@ use crate::{
     media::{
         media_fields,
         MediaSource,
+        Preview,
     },
     player_task::PlayerHandle,
     state::AppState,
@@ -71,6 +75,7 @@ pub struct BatchStep {
     batch: BatchRecord,
     failure: Option<Failure>,
     preview_file: Option<String>,
+    preview_image: Option<String>,
 }
 
 #[tauri::command]
@@ -100,7 +105,7 @@ pub async fn mine_batch_item(
             (!item.adhoc).then(|| row_lexeme(&state.file, &item.key)).flatten(),
         )
     };
-    let mut preview_file = None;
+    let (mut preview_file, mut preview_image) = (None, None);
     let result = async {
         match item.outcome {
             Outcome::Unattempted | Outcome::Failed { .. } => {
@@ -133,8 +138,12 @@ pub async fn mine_batch_item(
                 let result =
                     media.attach(&player, note_id, item.timestamp.as_ref(), &progress).await;
                 let failure = match result {
-                    Ok(image) => {
-                        preview_file = image;
+                    Ok(preview) => {
+                        match preview {
+                            Some(Preview::AnkiFile(file)) => preview_file = Some(file),
+                            Some(Preview::DataUri(uri)) => preview_image = Some(uri),
+                            None => {}
+                        }
                         None
                     }
                     Err(e) => Some(e.failure()),
@@ -188,7 +197,36 @@ pub async fn mine_batch_item(
             }
         }
     }
-    Ok(BatchStep { batch, failure, preview_file })
+    Ok(BatchStep { batch, failure, preview_file, preview_image })
+}
+
+/// Starts cutting local media for the items a batch will record.
+#[tauri::command]
+pub async fn prepare_batch_media(
+    state: State<'_, Mutex<AppState>>,
+    batch_id: String,
+    indices: Vec<usize>,
+) -> Result<(), String> {
+    let batch = batches::load(&batch_id)?;
+    let cues = indices.iter().filter_map(|&i| batch.items.get(i)?.timestamp.clone()).collect();
+    if let Ok(source) = MediaSource::for_file(&state.lock().unwrap(), None) {
+        crate::media::prepare(&source, cues);
+    }
+    Ok(())
+}
+
+/// A render request that failed outright. It pauses the batch only when Yomitan has stopped
+/// answering; otherwise the item is worth trying again later.
+async fn request_failure(yomitan_url: &str, term: &str, error: YomineError) -> Failure {
+    if let Err(e) = yomitan::get_version(yomitan_url).await {
+        return Failure::new("Yomitan connection", FailureScope::Shared, e);
+    }
+    let message = if matches!(&error, YomineError::Reqwest(e) if e.is_timeout()) {
+        format!("Yomitan didn't finish rendering 「{term}」 in time")
+    } else {
+        format!("Yomitan dropped the request for 「{term}」: {error}")
+    };
+    Failure::new("Rendering card", FailureScope::Unknown, message).with_kind(FailureKind::Transient)
 }
 
 /// UniDic's lexeme for a row, keyed by `termKey`: "{lemma} {reading}".
@@ -297,9 +335,15 @@ async fn mine(
         }
     }
     let rendered =
-        yomitan::render_fields(yomitan_url, &term, &markers, entry_index as u32 + 1, true)
+        match yomitan::render_fields(yomitan_url, &term, &markers, entry_index as u32 + 1, true)
             .await
-            .map_err(|e| Failure::new("Rendering card", FailureScope::Unknown, e))?;
+        {
+            Ok(rendered) => rendered,
+            Err(e @ YomineError::Reqwest(_)) => {
+                return Err(request_failure(yomitan_url, &term, e).await)
+            }
+            Err(e) => return Err(Failure::new("Rendering card", FailureScope::Unknown, e)),
+        };
 
     let empty = std::collections::HashMap::new();
     let marker_values = rendered.fields.get(entry_index).unwrap_or(&empty);

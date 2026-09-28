@@ -1,16 +1,28 @@
 <script lang="ts">
+	import { fade } from 'svelte/transition';
 	import Modal from './Modal.svelte';
 	import type { BatchRecord } from '$lib/ipc';
-	import { cancelQueue, type BatchPreview, type BatchProgress } from '$lib/stores/batches';
+	import {
+		cancelQueue,
+		PREVIEW_SLOTS,
+		type BatchPreview,
+		type BatchProgress
+	} from '$lib/stores/batches';
 	import { miningMode } from '$lib/stores/settings';
 
 	interface Props {
 		progress: BatchProgress;
 		batch: BatchRecord | null;
-		preview: BatchPreview | null;
+		previews: (BatchPreview | null)[];
 	}
 
-	let { progress, batch, preview }: Props = $props();
+	let { progress, batch, previews }: Props = $props();
+
+	const slots = $derived(Array.from({ length: PREVIEW_SLOTS }, (_, i) => previews[i] ?? null));
+	const latest = $derived(
+		slots.reduce<BatchPreview | null>((a, b) => (b && (!a || b.id > a.id) ? b : a), null)
+	);
+	const motionMs = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 120;
 
 	let stopping = $state(false);
 	let now = $state(Date.now());
@@ -93,15 +105,37 @@
 			</span>
 		</div>
 
-		{#if preview && !creating}
-			<figure class="last">
-				<img src={preview.src} alt="Screenshot recorded for {preview.lemma}" />
+		{#if latest && !creating && $miningMode !== 'local'}
+			<figure class="single">
+				<img src={latest.src} alt="Screenshot recorded for {latest.lemma}" />
 				<figcaption>
 					<span class="eyebrow">Last recorded</span>
-					<strong class="last-word" lang="ja">{preview.lemma}</strong>
-					<span class="last-sentence" lang="ja" title={preview.sentence}>{preview.sentence}</span>
+					<strong class="last-word" lang="ja">{latest.lemma}</strong>
+					<span class="last-sentence" lang="ja" title={latest.sentence}>{latest.sentence}</span>
 				</figcaption>
 			</figure>
+		{:else if latest && !creating}
+			<div class="shots" role="list" aria-label="Recorded screenshots">
+				{#each slots as shot, i (i)}
+					<div class="shot" role="listitem" class:latest={shot?.id === latest.id}>
+						{#if shot}
+							{#key shot.id}
+								<img
+									src={shot.src}
+									alt="Screenshot recorded for {shot.lemma}"
+									title={shot.lemma}
+									transition:fade={{ duration: motionMs }}
+								/>
+							{/key}
+						{/if}
+					</div>
+				{/each}
+			</div>
+			<p class="last">
+				<span class="eyebrow">Last recorded</span>
+				<strong class="last-word" lang="ja">{latest.lemma}</strong>
+				<span class="last-sentence" lang="ja" title={latest.sentence}>{latest.sentence}</span>
+			</p>
 		{/if}
 
 		{#if counts.length > 0}
@@ -201,11 +235,44 @@
 		.pulse {
 			animation: none;
 		}
-		.fill {
+		.fill,
+		.shot {
 			transition: none;
 		}
 	}
+	.shots {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 0.3rem;
+		margin-top: 0.6rem;
+	}
+	.shot {
+		position: relative;
+		aspect-ratio: 16 / 9;
+		overflow: hidden;
+		border-radius: var(--radius-sm);
+		background: var(--bg-raised);
+		outline: 2px solid transparent;
+		outline-offset: -2px;
+		transition: outline-color 0.12s;
+	}
+	.shot.latest {
+		outline-color: var(--accent);
+	}
+	.shot img {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
 	.last {
+		display: grid;
+		gap: 0.15rem;
+		margin-top: 0.5rem;
+		min-width: 0;
+	}
+	.single {
 		display: flex;
 		align-items: center;
 		gap: 0.85rem;
@@ -214,7 +281,7 @@
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 	}
-	.last img {
+	.single img {
 		flex-shrink: 0;
 		width: 7.5rem;
 		aspect-ratio: 16 / 9;
@@ -222,7 +289,7 @@
 		border-radius: var(--radius-sm);
 		background: var(--bg-deep);
 	}
-	.last figcaption {
+	.single figcaption {
 		display: grid;
 		gap: 0.15rem;
 		min-width: 0;

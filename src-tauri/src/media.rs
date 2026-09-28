@@ -6,11 +6,19 @@ use std::{
         Path,
         PathBuf,
     },
+    sync::{
+        Arc,
+        Mutex,
+    },
     time::Duration,
 };
 
 use base64::Engine;
-use tauri::ipc::Channel;
+use tauri::{
+    async_runtime::JoinHandle,
+    ipc::Channel,
+};
+use tokio::sync::OnceCell;
 use yomine::{
     anki::{
         api as anki_api,
@@ -19,7 +27,11 @@ use yomine::{
     core::settings::MiningMode,
     media::{
         clip::MediaFormat,
-        ffmpeg,
+        ffmpeg::{
+            self,
+            Encoded,
+        },
+        probe::MediaInfo,
     },
 };
 
@@ -126,17 +138,18 @@ impl MediaSource {
         Ok(())
     }
 
-    /// Returns the new screenshot's filename, for the batch preview.
     pub async fn attach(
         &self,
         player: &PlayerHandle,
         note_id: u64,
         timestamp: Option<&TimeStampDto>,
         progress: &Channel<LoadingMessage>,
-    ) -> Result<Option<String>, EnrichError> {
+    ) -> Result<Option<Preview>, EnrichError> {
         match self {
             Self::Asbplayer { media_id } => {
-                enrich_and_verify(player, note_id, media_id.clone(), timestamp, progress).await
+                enrich_and_verify(player, note_id, media_id.clone(), timestamp, progress)
+                    .await
+                    .map(|file| file.map(Preview::AnkiFile))
             }
             Self::LocalFile { video, ffmpeg_path, format, mappings } => {
                 let timestamp =
@@ -180,7 +193,7 @@ async fn attach_local(
     ffmpeg_path: &str,
     format: &MediaFormat,
     mappings: &HashMap<String, FieldMapping>,
-) -> Result<Option<String>, EnrichError> {
+) -> Result<Option<Preview>, EnrichError> {
     let note = anki_api::get_notes(vec![note_id])
         .await
         .map_err(|e| e.to_string())?
@@ -195,35 +208,23 @@ async fn attach_local(
             )
         })?;
 
-    let (video, configured, format) =
-        (video.to_path_buf(), ffmpeg_path.to_string(), format.clone());
-    let cue = (f64::from(timestamp.start_secs), f64::from(timestamp.end_secs));
-    let (want_audio, want_picture) = (audio_field.is_some(), picture_field.is_some());
-    let encoded = tauri::async_runtime::spawn_blocking(move || {
-        let ff = find_ffmpeg(&configured).ok_or(NO_FFMPEG.to_string())?;
-        let info = ff.probe(&video).map_err(|e| e.to_string())?;
-        let read = |file: ffmpeg::Encoded| {
-            std::fs::read(&file.path)
-                .map(|bytes| (bytes, file.extension))
-                .map_err(|e| e.to_string())
-        };
-        let audio = want_audio
-            .then(|| ff.encode_audio(&video, &info, cue, &format).map_err(|e| e.to_string()))
-            .transpose()?
-            .map(read)
-            .transpose()?;
-        let picture = want_picture
-            .then(|| ff.encode_frame(&video, &info, cue, &format).map_err(|e| e.to_string()))
-            .transpose()?
-            .map(read)
-            .transpose()?;
-        Ok::<_, String>((audio, picture))
-    })
-    .await
-    .map_err(|e| e.to_string())??;
+    let cutter = cutter_for(video, ffmpeg_path, format);
+    let clips = cutter.clips(timestamp).await?;
+    let read = |file: &Result<Encoded, String>| {
+        let file = file.as_ref().map_err(String::clone)?;
+        std::fs::read(&file.path).map(|bytes| (bytes, file.extension)).map_err(|e| e.to_string())
+    };
+    let wanted = |field: Option<&str>, file| field.map(|_| read(file)).transpose();
+    let encoded = match (wanted(audio_field, &clips.audio), wanted(picture_field, &clips.picture)) {
+        (Ok(audio), Ok(picture)) => (audio, picture),
+        (Err(error), _) | (_, Err(error)) => {
+            cutter.forget(timestamp);
+            return Err(error.into());
+        }
+    };
 
     let mut fields: HashMap<String, String> = HashMap::new();
-    let mut picture_name = None;
+    let mut preview = None;
     for (field, file, is_picture) in
         [(audio_field, encoded.0, false), (picture_field, encoded.1, true)]
     {
@@ -239,11 +240,134 @@ async fn attach_local(
         // Both can go in one field.
         fields.entry(field.to_string()).or_default().push_str(&value);
         if is_picture {
-            picture_name = Some(name);
+            let mime = if extension == "jpg" { "jpeg" } else { extension };
+            preview = Some(Preview::DataUri(format!("data:image/{mime};base64,{data}")));
         }
     }
     anki_api::update_note_fields(note_id, &fields).await?;
-    Ok(picture_name)
+    Ok(preview)
+}
+
+/// The running batch's clips, cut ahead of its record phase.
+static PREPARED: Mutex<Option<Prepared>> = Mutex::new(None);
+
+struct Prepared {
+    cutter: Arc<Cutter>,
+    worker: JoinHandle<()>,
+}
+
+/// Starts cutting every cue's media in the background, in order, replacing an earlier batch's.
+pub fn prepare(source: &MediaSource, cues: Vec<TimeStampDto>) {
+    let MediaSource::LocalFile { video, ffmpeg_path, format, .. } = source else { return };
+    let cutter = Arc::new(Cutter::new(video, ffmpeg_path, format));
+    let worker = tauri::async_runtime::spawn({
+        let cutter = cutter.clone();
+        async move {
+            for cue in cues {
+                let _ = cutter.clips(&cue).await;
+            }
+        }
+    });
+    if let Some(earlier) = PREPARED.lock().unwrap().replace(Prepared { cutter, worker }) {
+        earlier.worker.abort();
+    }
+}
+
+/// Stops the worker and deletes clips no one is using.
+pub fn stop_preparing() {
+    if let Some(prepared) = PREPARED.lock().unwrap().take() {
+        prepared.worker.abort();
+    }
+}
+
+fn cutter_for(video: &Path, ffmpeg_path: &str, format: &MediaFormat) -> Arc<Cutter> {
+    let prepared = PREPARED.lock().unwrap().as_ref().map(|p| p.cutter.clone());
+    prepared
+        .filter(|c| c.video == video && c.ffmpeg_path == ffmpeg_path && &c.format == format)
+        .unwrap_or_else(|| Arc::new(Cutter::new(video, ffmpeg_path, format)))
+}
+
+type CueKey = (u32, u32);
+
+/// Cuts each cue of one video once. The worker and the record step share it, so a cue the
+/// worker is still encoding is waited for rather than encoded twice.
+struct Cutter {
+    video: PathBuf,
+    ffmpeg_path: String,
+    format: MediaFormat,
+    tool: OnceCell<Arc<(ffmpeg::Ffmpeg, MediaInfo)>>,
+    clips: Mutex<HashMap<CueKey, Arc<OnceCell<Arc<Clips>>>>>,
+}
+
+/// Both are cut whatever the note type needs, since the worker runs before notes exist.
+struct Clips {
+    audio: Result<Encoded, String>,
+    picture: Result<Encoded, String>,
+}
+
+impl Cutter {
+    fn new(video: &Path, ffmpeg_path: &str, format: &MediaFormat) -> Self {
+        Self {
+            video: video.to_path_buf(),
+            ffmpeg_path: ffmpeg_path.to_string(),
+            format: format.clone(),
+            tool: OnceCell::new(),
+            clips: Mutex::default(),
+        }
+    }
+
+    fn key(cue: &TimeStampDto) -> CueKey {
+        (cue.start_secs.to_bits(), cue.end_secs.to_bits())
+    }
+
+    async fn clips(&self, cue: &TimeStampDto) -> Result<Arc<Clips>, String> {
+        let tool = self
+            .tool
+            .get_or_try_init(|| {
+                let (configured, video) = (self.ffmpeg_path.clone(), self.video.clone());
+                async move {
+                    tauri::async_runtime::spawn_blocking(move || {
+                        let ff = find_ffmpeg(&configured).ok_or(NO_FFMPEG.to_string())?;
+                        let info = ff.probe(&video).map_err(|e| e.to_string())?;
+                        Ok::<_, String>(Arc::new((ff, info)))
+                    })
+                    .await
+                    .map_err(|e| e.to_string())?
+                }
+            })
+            .await?
+            .clone();
+        let cell = self.clips.lock().unwrap().entry(Self::key(cue)).or_default().clone();
+        let (video, format) = (self.video.clone(), self.format.clone());
+        let range = (f64::from(cue.start_secs), f64::from(cue.end_secs));
+        cell.get_or_try_init(|| async move {
+            tauri::async_runtime::spawn_blocking(move || {
+                let (ff, info) = &*tool;
+                let error = |e: yomine::core::YomineError| e.to_string();
+                Arc::new(Clips {
+                    audio: ff.encode_audio(&video, info, range, &format).map_err(error),
+                    picture: ff.encode_frame(&video, info, range, &format).map_err(error),
+                })
+            })
+            .await
+            .map_err(|e| e.to_string())
+        })
+        .await
+        .cloned()
+    }
+
+    /// Drops a cue's clips so the next attempt cuts them again.
+    fn forget(&self, cue: &TimeStampDto) {
+        self.clips.lock().unwrap().remove(&Self::key(cue));
+    }
+}
+
+/// The screenshot a record step added, for the batch preview.
+pub enum Preview {
+    /// A file in Anki's media folder.
+    AnkiFile(String),
+    /// The image just cut, so showing it needs no Anki request.
+    DataUri(String),
 }
 
 pub enum EnrichError {

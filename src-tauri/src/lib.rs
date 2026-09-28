@@ -87,6 +87,7 @@ pub fn run() {
             commands::file::pair_video,
             commands::file::open_video,
             commands::mining::mine_batch_item,
+            commands::mining::prepare_batch_media,
             commands::mining::get_media_preview,
             batches::create_batch,
             batches::get_last_batch,

@@ -782,7 +782,7 @@ export interface BatchFailure {
 	scope: 'item' | 'shared' | 'unknown' | 'stop';
 	message: string;
 	fallback: 'without_dictionary_media' | null;
-	kind: 'media_unverified' | 'media_fields_unset' | null;
+	kind: 'media_unverified' | 'media_fields_unset' | 'transient' | null;
 	/** With `media_fields_unset`: the note type that needs media fields. */
 	note_type?: string;
 }
@@ -821,7 +821,10 @@ export interface BatchRecord {
 export interface BatchStep {
 	batch: BatchRecord;
 	failure: BatchFailure | null;
+	/** A screenshot in Anki's media folder (asbplayer). */
 	preview_file: string | null;
+	/** A `data:` URI of the screenshot just cut (local). */
+	preview_image: string | null;
 }
 
 export interface BatchUndoResult {
@@ -836,6 +839,11 @@ export interface BatchUndoResult {
 export interface MineOptions {
 	record: boolean;
 	require_dictionary_media: boolean;
+}
+
+/** Starts cutting local media for the items a batch will record. */
+export function prepareBatchMedia(batchId: string, indices: number[]): Promise<void> {
+	return invoke('prepare_batch_media', { batchId, indices });
 }
 
 export function setBatchRunning(running: boolean): Promise<void> {

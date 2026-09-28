@@ -97,6 +97,9 @@ pub enum FailureKind {
     MediaUnverified,
     /// Local mining has nowhere to put media for `note_type`.
     MediaFieldsUnset,
+    /// A Yomitan request for this item failed while Yomitan still answers, so it may pass
+    /// on a later attempt.
+    Transient,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -286,6 +289,9 @@ pub fn checkpoint(batch: &mut BatchRecord, index: usize, outcome: Outcome) -> Re
 #[tauri::command]
 pub fn set_batch_running(running: bool) {
     RUNNING.store(running, Ordering::Relaxed);
+    if !running {
+        crate::media::stop_preparing();
+    }
 }
 
 #[tauri::command]

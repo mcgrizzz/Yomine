@@ -97,12 +97,29 @@ export interface AutoLedgerEntry {
 export const autoLedger = writable<AutoLedgerEntry[]>([]);
 export const mineQueueState = writable<BatchProgress | null>(null);
 export interface BatchPreview {
+	id: number;
 	lemma: string;
 	sentence: string;
 	src: string;
 }
 
-export const batchPreview = writable<BatchPreview | null>(null);
+/** The progress dialog's grid of recorded screenshots, by slot. */
+export const batchPreviews = writable<(BatchPreview | null)[]>([]);
+export const PREVIEW_SLOTS = 9;
+let previewId = 0;
+let lastSlot = -1;
+
+/** Fills empty slots first, then replaces a random one other than the last changed. */
+function placePreview(preview: BatchPreview): void {
+	batchPreviews.update((slots) => {
+		const next = Array.from({ length: PREVIEW_SLOTS }, (_, i) => slots[i] ?? null);
+		const empty = next.flatMap((shot, i) => (shot ? [] : [i]));
+		const choices = empty.length > 0 ? empty : next.map((_, i) => i).filter((i) => i !== lastSlot);
+		lastSlot = choices[Math.floor(Math.random() * choices.length)];
+		next[lastSlot] = preview;
+		return next;
+	});
+}
 
 let cancelled = false;
 
@@ -151,9 +168,12 @@ async function chooseTarget(mediaRun: boolean): Promise<TargetAnswer> {
 	return targetPrompt.ask({ media, mediaRun });
 }
 
-async function showPreview(item: ipc.BatchItem, file: string): Promise<void> {
-	const src = await ipc.getMediaPreview(file).catch(() => null);
-	if (src && get(playerBusy)) batchPreview.set({ lemma: item.lemma, sentence: item.sentence, src });
+async function showPreview(item: ipc.BatchItem, step: ipc.BatchStep): Promise<void> {
+	const src =
+		step.preview_image ??
+		(step.preview_file && (await ipc.getMediaPreview(step.preview_file).catch(() => null)));
+	if (!src || !get(playerBusy)) return;
+	placePreview({ id: previewId++, lemma: item.lemma, sentence: item.sentence, src });
 }
 
 function recordSuccess(item: ipc.BatchItem): void {
@@ -235,7 +255,7 @@ async function run(
 	const mediaRun = retry?.media ?? false;
 	playerBusy.set(true);
 	cancelled = false;
-	batchPreview.set(null);
+	batchPreviews.set([]);
 	batchSummaryOpen.set(false);
 	let batch = items ? null : previous;
 	let fatal = false;
@@ -283,7 +303,7 @@ async function run(
 				lastBatch.set(batch);
 				const current = batch.items[index];
 				recordSuccess(current);
-				if (step.preview_file) void showPreview(current, step.preview_file);
+				void showPreview(current, step);
 				if (step.failure?.scope === 'stop') {
 					fatal = true;
 					if (step.failure.stage === 'Saving batch') batchSaveError.set(step.failure.message);
@@ -296,7 +316,8 @@ async function run(
 					);
 				}
 				clearUnchangedSelection(current);
-				if (!step.failure || cancelled) break;
+				// Left for "Retry failed" in the summary; the same item usually fails again right away.
+				if (!step.failure || cancelled || step.failure.kind === 'transient') break;
 				const choice = await pausePrompt.ask({ item: current, failure: step.failure });
 				if (choice === 'retry') continue;
 				if (choice === 'without_dictionary_media') {
@@ -342,6 +363,10 @@ async function run(
 		} else {
 			plan.create.indices = selected;
 			if (options.record) plan.record.indices = selected.filter((i) => snapshot[i].mine_media);
+		}
+		if (local && plan.record.indices.length > 0)
+			void ipc.prepareBatchMedia(batch.id, plan.record.indices).catch(() => {});
+		if (!mediaRun) {
 			await runPhase('create');
 			const created = batch.items;
 			plan.record.indices = plan.record.indices.filter((i) => {
@@ -379,7 +404,7 @@ async function run(
 		miningTerm.set(null);
 		playerBusy.set(false);
 		mineQueueState.set(null);
-		batchPreview.set(null);
+		batchPreviews.set([]);
 		if (batch) {
 			batchSummaryOpen.set(true);
 			void refreshMinedState(true);
