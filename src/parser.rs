@@ -84,6 +84,9 @@ pub fn clean_subtitle_text(raw: &str) -> String {
     STRIP_INLINE_TAGS.replace_all(&text, "").trim().to_string()
 }
 
+/// Consecutive same-text cues this close are one line split in two, often at a scene cut.
+const SPLIT_CUE_GAP: time::Duration = time::Duration::milliseconds(100);
+
 fn parse_srt(srt: SRT, source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
     let sentences: Vec<Sentence> = srt
         .lines
@@ -109,12 +112,33 @@ fn parse_srt(srt: SRT, source_file: &SourceFile) -> Result<Vec<Sentence>, Yomine
             }))
         })
         .collect::<Result<Vec<_>, YomineError>>()?;
+    let sentences = merge_split_cues(sentences);
 
     if sentences.is_empty() {
         return Err(YomineError::Custom("No subtitles found in the file.".to_string()));
     }
 
     Ok(sentences)
+}
+
+/// Joins such cues, then numbers sentences by position, which terms refer to them by.
+fn merge_split_cues(sentences: Vec<Sentence>) -> Vec<Sentence> {
+    let mut merged: Vec<Sentence> = Vec::with_capacity(sentences.len());
+    for sentence in sentences {
+        if let Some(last) = merged.last_mut() {
+            if let (Some(prev), Some(next)) = (&mut last.timestamp, &sentence.timestamp) {
+                if last.text == sentence.text && next.start - prev.end <= SPLIT_CUE_GAP {
+                    prev.end = prev.end.max(next.end);
+                    continue;
+                }
+            }
+        }
+        merged.push(sentence);
+    }
+    for (id, sentence) in merged.iter_mut().enumerate() {
+        sentence.id = id;
+    }
+    merged
 }
 
 pub fn read_srt(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
@@ -246,10 +270,14 @@ pub fn read(source_file: &SourceFile) -> Result<Vec<Sentence>, YomineError> {
 
 #[cfg(test)]
 mod tests {
-    use rsubs_lib::SSA;
+    use rsubs_lib::{
+        SRT,
+        SSA,
+    };
 
     use super::{
         clean_subtitle_text,
+        parse_srt,
         read_txt,
         sentences_from_lines,
         without_empty_blocks,
@@ -274,6 +302,24 @@ mod tests {
         for (a, b) in from_file.iter().zip(&from_lines) {
             assert_eq!((a.id, &a.text), (b.id, &b.text));
         }
+    }
+
+    #[test]
+    fn merges_a_line_split_into_touching_cues() {
+        // Frieren S01E01: one spoken line split at a scene cut, then said again later.
+        let srt = "146\n00:10:37,721 --> 00:10:38,096\n放り込んでおいてくれて\nよかったのに\n\n\
+                   147\n00:10:38,096 --> 00:10:40,307\n放り込んでおいてくれて\nよかったのに\n\n\
+                   148\n00:10:40,400 --> 00:10:41,000\n次の台詞\n\n\
+                   149\n00:10:45,000 --> 00:10:46,000\n次の台詞\n";
+        let sentences = parse_srt(SRT::parse(srt).unwrap(), &SourceFile::default()).unwrap();
+
+        let spans: Vec<(usize, (f32, f32))> =
+            sentences.iter().map(|s| (s.id, s.timestamp.as_ref().unwrap().to_secs())).collect();
+        assert_eq!(sentences.len(), 3);
+        assert_eq!(spans[0].0, 0);
+        assert!((spans[0].1 .0 - 637.721).abs() < 0.01 && (spans[0].1 .1 - 640.307).abs() < 0.01);
+        // A repeat after a real pause is its own line.
+        assert_eq!((spans[1].0, spans[2].0), (1, 2));
     }
 
     #[test]
