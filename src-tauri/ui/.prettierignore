@@ -1,0 +1,6 @@
+build
+.svelte-kit
+node_modules
+static
+pnpm-lock.yaml
+pnpm-workspace.yaml
