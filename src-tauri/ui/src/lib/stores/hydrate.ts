@@ -12,7 +12,8 @@ import { refreshIgnoredLemmas } from './ignore';
 import { refreshRecommendedDicts } from './dictionaries';
 import { refreshMinedState, yomitanReachable } from './mining';
 import { selectedTerms } from './selection';
-import { autoMine } from './auto';
+import { reviewDialogOpen } from './modals';
+import { autoMode, dropDeselectedReview, onNewVideo } from './auto';
 import { loadLastBatch } from './batches';
 import { refreshSetupStatus } from './setup';
 
@@ -57,7 +58,7 @@ export async function hydrate(): Promise<void> {
 		fileEventSeen = true;
 		fileResult.set(r);
 		showNotice(`Loaded from asbplayer: ${r.source_file.title}`);
-		void autoMine();
+		onNewVideo();
 	});
 	ipc.onAsbplayerContext((c) => asbContext.set(c));
 	ipc.onDictionariesChanged(() => { refreshSetupStatus(); });
@@ -67,6 +68,10 @@ export async function hydrate(): Promise<void> {
 	fileResult.subscribe((r) => {
 		const live = new Set(r?.terms.map(termKey) ?? []);
 		selectedTerms.update((s) => new Set([...s].filter((k) => live.has(k))));
+	});
+	selectedTerms.subscribe(dropDeselectedReview);
+	reviewDialogOpen.subscribe((open) => {
+		if (!open) dropDeselectedReview(get(selectedTerms));
 	});
 
 	// Drag-drop works while the tools are still loading (loadAndStore waits for
@@ -124,7 +129,10 @@ export async function hydrate(): Promise<void> {
 	void refreshMinedState(true);
 	void loadLastBatch();
 	void ipc.setBatchRunning(false);
-	void ipc.setAutoMode(false);
+	// Mine is never restored, so a saved auto mode comes back as Review.
+	const restored = get(settings)?.auto_review ? 'review' : 'off';
+	autoMode.set(restored);
+	void ipc.setAutoMode(restored === 'review');
 
 	// Best-effort update check; a failure just means no notice.
 	void checkForUpdate();

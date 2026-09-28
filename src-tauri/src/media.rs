@@ -240,8 +240,7 @@ async fn attach_local(
         // Both can go in one field.
         fields.entry(field.to_string()).or_default().push_str(&value);
         if is_picture {
-            let mime = if extension == "jpg" { "jpeg" } else { extension };
-            preview = Some(Preview::DataUri(format!("data:image/{mime};base64,{data}")));
+            preview = Some(Preview::DataUri(data_uri(extension, &data)));
         }
     }
     anki_api::update_note_fields(note_id, &fields).await?;
@@ -256,10 +255,16 @@ struct Prepared {
     worker: JoinHandle<()>,
 }
 
-/// Starts cutting every cue's media in the background, in order, replacing an earlier batch's.
+/// Cuts every cue's media in the background, in order, keeping clips already cut for the
+/// same video and format.
 pub fn prepare(source: &MediaSource, cues: Vec<TimeStampDto>) {
     let MediaSource::LocalFile { video, ffmpeg_path, format, .. } = source else { return };
-    let cutter = Arc::new(Cutter::new(video, ffmpeg_path, format));
+    let mut prepared = PREPARED.lock().unwrap();
+    let cutter = prepared
+        .as_ref()
+        .map(|p| p.cutter.clone())
+        .filter(|c| c.serves(video, ffmpeg_path, format))
+        .unwrap_or_else(|| Arc::new(Cutter::new(video, ffmpeg_path, format)));
     let worker = tauri::async_runtime::spawn({
         let cutter = cutter.clone();
         async move {
@@ -268,9 +273,45 @@ pub fn prepare(source: &MediaSource, cues: Vec<TimeStampDto>) {
             }
         }
     });
-    if let Some(earlier) = PREPARED.lock().unwrap().replace(Prepared { cutter, worker }) {
+    if let Some(earlier) = prepared.replace(Prepared { cutter, worker }) {
         earlier.worker.abort();
     }
+}
+
+#[derive(serde::Deserialize, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+pub enum LineMedia {
+    Frame,
+    Audio,
+}
+
+/// As a `data:` URI, from the prepared cutter's clips when it has the line.
+pub async fn line_media(
+    source: &MediaSource,
+    cue: &TimeStampDto,
+    kind: LineMedia,
+) -> Result<Option<String>, String> {
+    let MediaSource::LocalFile { video, ffmpeg_path, format, .. } = source else { return Ok(None) };
+    let clips = cutter_for(video, ffmpeg_path, format).clips(cue).await?;
+    let file = match kind {
+        LineMedia::Frame => &clips.picture,
+        LineMedia::Audio => &clips.audio,
+    };
+    let Ok(file) = file else { return Ok(None) };
+    let bytes = std::fs::read(&file.path).map_err(|e| e.to_string())?;
+    let data = base64::engine::general_purpose::STANDARD.encode(bytes);
+    Ok(Some(data_uri(file.extension, &data)))
+}
+
+fn data_uri(extension: &str, base64: &str) -> String {
+    let mime = match extension {
+        "jpg" => "image/jpeg",
+        "png" => "image/png",
+        "mp3" => "audio/mpeg",
+        "ogg" => "audio/ogg",
+        _ => "application/octet-stream",
+    };
+    format!("data:{mime};base64,{base64}")
 }
 
 /// Stops the worker and deletes clips no one is using.
@@ -283,7 +324,7 @@ pub fn stop_preparing() {
 fn cutter_for(video: &Path, ffmpeg_path: &str, format: &MediaFormat) -> Arc<Cutter> {
     let prepared = PREPARED.lock().unwrap().as_ref().map(|p| p.cutter.clone());
     prepared
-        .filter(|c| c.video == video && c.ffmpeg_path == ffmpeg_path && &c.format == format)
+        .filter(|c| c.serves(video, ffmpeg_path, format))
         .unwrap_or_else(|| Arc::new(Cutter::new(video, ffmpeg_path, format)))
 }
 
@@ -314,6 +355,10 @@ impl Cutter {
             tool: OnceCell::new(),
             clips: Mutex::default(),
         }
+    }
+
+    fn serves(&self, video: &Path, ffmpeg_path: &str, format: &MediaFormat) -> bool {
+        self.video == video && self.ffmpeg_path == ffmpeg_path && &self.format == format
     }
 
     fn key(cue: &TimeStampDto) -> CueKey {

@@ -24,7 +24,7 @@
 		miningMode,
 		ignoredLemmas,
 		missingMedia,
-		mineQueue,
+		mineSelection,
 		mineQueueState,
 		addedKeys,
 		minedNoteIds,
@@ -45,6 +45,7 @@
 		selectedTerms,
 		setSelected,
 		setTableColumns,
+		reviewDialogOpen,
 		settings,
 		tableSearch,
 		tableSort,
@@ -59,7 +60,7 @@
 	import { furiganaText } from '$lib/furigana';
 	import DefinitionPopover from './DefinitionPopover.svelte';
 	import Furigana from './Furigana.svelte';
-	import MiningQueueModal from './MiningQueueModal.svelte';
+	import ReviewDialog from './ReviewDialog.svelte';
 	import SentenceConflictModal, { type BatchEntry } from './SentenceConflictModal.svelte';
 	import SentenceView, {
 		termCoversSegment,
@@ -250,6 +251,15 @@
 		}
 	});
 
+	// Show sentences pinned in the review dialog or by auto mode's picks.
+	$effect(() => {
+		for (const [key, option] of Object.entries($queuedMineOptions)) {
+			if (!$selectedTerms.has(key)) continue;
+			if (option.occIdx !== undefined && untrack(() => occIdx[key]) !== option.occIdx)
+				occIdx[key] = option.occIdx;
+		}
+	});
+
 	const isMined = (t: Term): boolean => isMinedTerm(t, $minedTerms, $addedTerms);
 
 	/** Only the row whose term IS this entry — `termCoversSegment` merely overlaps. */
@@ -402,9 +412,8 @@
 		$selectedTerms.size - terms.filter((t) => $selectedTerms.has(termKey(t))).length
 	);
 
-	let showQueueDetails = $state(false);
 	$effect(() => {
-		if ($queuedCount === 0 || $mineQueueState !== null) showQueueDetails = false;
+		if ($mineQueueState !== null) reviewDialogOpen.set(false);
 	});
 
 	$effect(() => {
@@ -466,7 +475,7 @@
 		const entries = [...rows, ...adhoc];
 		const keys = entries.map((e) => normalizeSentence(e.sentence)).filter((s) => s !== '');
 		if (new Set(keys).size === keys.length) {
-			void mineQueue(
+			void mineSelection(
 				entries.map(
 					({ lemma, key, surface, sentence, timestamp, entryIndex, formatName, scanText }) => ({
 						lemma,
@@ -493,7 +502,7 @@
 			pinOccurrence(key, { occIdx: idx, userChosen: userChosen[key] ?? false });
 		}
 		batchEntries = null;
-		void mineQueue(items);
+		void mineSelection(items);
 	}
 </script>
 
@@ -515,10 +524,11 @@
 	/>
 {/if}
 
+{#if $reviewDialogOpen && !$mineQueueState}
+	<ReviewDialog {canMine} onmine={startBatch} onclose={() => reviewDialogOpen.set(false)} />
+{/if}
+
 {#if !$mineQueueState && canMine && $queuedCount > 0}
-	{#if showQueueDetails}
-		<MiningQueueModal {terms} onclose={() => (showQueueDetails = false)} />
-	{/if}
 	<div class="bulk-bar">
 		<span class="bulk-info">
 			{$queuedCount} selected{hiddenSelected > 0
@@ -527,8 +537,8 @@
 		</span>
 		<button
 			class="bulk-btn"
-			title="Review the queued terms — entry, card format, and what to drop"
-			onclick={() => (showQueueDetails = true)}>Details…</button
+			title="Check each term's sentence, definition and card format before mining"
+			onclick={() => reviewDialogOpen.set(true)}>Review…</button
 		>
 		{#if canMine}
 			<button

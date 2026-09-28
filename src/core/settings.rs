@@ -240,6 +240,9 @@ pub struct SettingsData {
     pub asbplayer_poll_secs: u32,
     #[serde(default)]
     pub auto_mine: AutoMine,
+    /// Restores Review at startup; Mine comes back as Review.
+    #[serde(default)]
+    pub auto_review: bool,
     /// Whole-UI scale factor (Tauri app only; 1.0 = 100%). The egui app ignores it.
     #[serde(default = "default_font_scale")]
     pub font_scale: f32,
@@ -335,6 +338,7 @@ impl Default for SettingsData {
             asbplayer_follow_active_tab: true,
             asbplayer_poll_secs: default_asbplayer_poll_secs(),
             auto_mine: AutoMine::default(),
+            auto_review: false,
             font_scale: default_font_scale(),
             definition_scale: default_font_scale(),
             yomitan_url: default_yomitan_url(),

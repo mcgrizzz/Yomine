@@ -96,7 +96,9 @@ export async function loadAndStore(
 			? await ipc.openVideo(path, null, (msg) => overlay.set(msg.message))
 			: await ipc.processFile(path, (msg) => overlay.set(msg.message), epubChapters, epubLabel);
 		fileResult.set(result);
-		if (isVideoPath(path)) void useLocalMode();
+		if (isVideoPath(path)) await useLocalMode();
+		// Dynamic for the same import cycle as useLocalMode.
+		if (result.local_video) void import('./auto').then((auto) => auto.onLocalVideo());
 		void refreshMinedState(true);
 		recentFiles.set(await ipc.getRecentFiles());
 	} catch (err) {

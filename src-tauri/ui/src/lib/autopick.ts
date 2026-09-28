@@ -15,6 +15,26 @@ export const frequencyPoints = (rank: number, horizon: number): number =>
 /** Word types the UI shows under another's name (both read "Compound Noun"), scored as it. */
 export const POS_ALIASES: Record<string, string> = { NounExpression: 'CompoundNoun' };
 
+export interface ScoreParts {
+	frequency: number;
+	wordType: number;
+	jlpt: number;
+}
+
+export function scoreParts(
+	rank: number,
+	pos: string,
+	jlpt: string | null,
+	horizon: number,
+	prefs: Pick<AutoMine, 'pos_points' | 'jlpt_points'>
+): ScoreParts {
+	return {
+		frequency: frequencyPoints(rank, horizon),
+		wordType: prefs.pos_points[POS_ALIASES[pos] ?? pos] ?? 0,
+		jlpt: prefs.jlpt_points[jlpt ?? ''] ?? 0
+	};
+}
+
 export function pickPoints(
 	rank: number,
 	pos: string,
@@ -22,11 +42,8 @@ export function pickPoints(
 	horizon: number,
 	prefs: Pick<AutoMine, 'pos_points' | 'jlpt_points'>
 ): number {
-	return (
-		frequencyPoints(rank, horizon) +
-		(prefs.pos_points[POS_ALIASES[pos] ?? pos] ?? 0) +
-		(prefs.jlpt_points[jlpt ?? ''] ?? 0)
-	);
+	const parts = scoreParts(rank, pos, jlpt, horizon, prefs);
+	return parts.frequency + parts.wordType + parts.jlpt;
 }
 
 export interface PickOptions {
@@ -52,8 +69,27 @@ function skipped(t: Term, opts: PickOptions): boolean {
 	);
 }
 
-/** Best terms to mine from `terms`, at most one per sentence. */
-export function autoPick(terms: Term[], sentences: SentenceDto[], opts: PickOptions): QueueItem[] {
+export interface AutoPick {
+	item: QueueItem;
+	/** The chosen sentence, as an index into the term's occurrences. */
+	occIdx: number;
+}
+
+export type MissReason = 'limit' | 'min_score' | 'sentence_used';
+
+export interface NextInLine {
+	term: Term;
+	reason: MissReason;
+}
+
+const NEXT_IN_LINE = 5;
+
+/** Best terms to mine from `terms`, at most one per sentence, and the few ranked after them. */
+export function autoPick(
+	terms: Term[],
+	sentences: SentenceDto[],
+	opts: PickOptions
+): { picks: AutoPick[]; next: NextInLine[] } {
 	const ranked = terms
 		.filter((t) => !skipped(t, opts))
 		.map((term) => ({
@@ -77,27 +113,40 @@ export function autoPick(terms: Term[], sentences: SentenceDto[], opts: PickOpti
 		);
 
 	const used = new Set(opts.minedSentences);
-	const picks: QueueItem[] = [];
+	const picks: AutoPick[] = [];
+	const next: NextInLine[] = [];
 	const { stop, limit, min_score, max_cards } = opts.prefs;
 	const cap = stop === 'count' ? limit : (max_cards ?? Infinity);
 	for (const { term, points } of ranked) {
-		// Ranked best first, so the first term under the minimum ends the picks.
-		if (picks.length >= cap || (stop === 'min_score' && points < min_score)) break;
-		const occ = occurrencesOf(term, sentences)
-			.filter((o) => !used.has(opts.normalize(o.sentence.text)))
-			.reduce<ReturnType<typeof occurrencesOf>[number] | null>(
-				(best, o) => (!best || o.sentence.comprehension > best.sentence.comprehension ? o : best),
-				null
-			);
-		if (!occ) continue;
+		// Ranked best first: once one is under the minimum, the rest are too.
+		const low = stop === 'min_score' && points < min_score;
+		if (low || picks.length >= cap) {
+			if (next.length >= NEXT_IN_LINE) break;
+			next.push({ term, reason: low ? 'min_score' : 'limit' });
+			continue;
+		}
+		const occs = occurrencesOf(term, sentences);
+		let best = -1;
+		occs.forEach((o, i) => {
+			if (used.has(opts.normalize(o.sentence.text))) return;
+			if (best < 0 || o.sentence.comprehension > occs[best].sentence.comprehension) best = i;
+		});
+		if (best < 0) {
+			if (next.length < NEXT_IN_LINE) next.push({ term, reason: 'sentence_used' });
+			continue;
+		}
+		const occ = occs[best];
 		used.add(opts.normalize(occ.sentence.text));
 		picks.push({
-			lemma: term.lemma_form,
-			key: termKey(term),
-			surface: termHighlightText(term, occ),
-			sentence: occ.sentence.text,
-			timestamp: occ.sentence.timestamp
+			item: {
+				lemma: term.lemma_form,
+				key: termKey(term),
+				surface: termHighlightText(term, occ),
+				sentence: occ.sentence.text,
+				timestamp: occ.sentence.timestamp
+			},
+			occIdx: best
 		});
 	}
-	return picks;
+	return { picks, next };
 }

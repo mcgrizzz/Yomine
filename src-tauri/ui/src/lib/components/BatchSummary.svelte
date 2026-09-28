@@ -168,7 +168,7 @@
 			{/each}
 		</ul>
 
-		{#if batch.auto && $autoMode}
+		{#if batch.auto && $autoMode !== 'off'}
 			<details class="auto">
 				<summary><AutoWaiting /></summary>
 				<AutoLedger />

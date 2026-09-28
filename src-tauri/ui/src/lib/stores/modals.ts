@@ -42,5 +42,8 @@ export const openEpubChapterModal = (): void => epubChapterModalOpen.set(true);
 export const openProfilesModal = (): void => profilesModalOpen.set(true);
 export const openAutoModal = (): void => autoModalOpen.set(true);
 
+/** The review dialog: auto mode's picks, or the selection before mining. */
+export const reviewDialogOpen = writable(false);
+
 export const batchSummaryOpen = writable(false);
 export const openBatchSummary = (): void => batchSummaryOpen.set(true);

@@ -375,6 +375,7 @@
 		align-items: flex-start;
 		justify-content: space-between;
 		gap: 1rem;
+		margin-bottom: 0.75rem;
 	}
 	.header-left {
 		min-width: 0;

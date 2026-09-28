@@ -70,6 +70,8 @@ export const setMpvPath = (path: string) => patchSettings({ mpv_path: path });
 
 export const miningMode = derived(settings, ($s) => $s?.mining_mode ?? 'asbplayer');
 export const setMiningMode = (mode: ipc.MiningMode) => patchSettings({ mining_mode: mode });
+export const setAutoReview = (on: boolean) =>
+	get(settings)?.auto_review === on ? Promise.resolve(true) : patchSettings({ auto_review: on });
 
 export const setTableColumns = (columns: { id: string; visible: boolean }[]) =>
 	patchSettings({ table_columns: columns.map((c) => ({ ...c })) });

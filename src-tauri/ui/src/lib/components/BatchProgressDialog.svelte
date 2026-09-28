@@ -46,16 +46,17 @@
 	});
 	const counts = $derived.by(() => {
 		const outcomes = batch?.items.map((i) => i.outcome) ?? [];
-		const created = outcomes.filter((o) => o.status === 'created');
+		// Only what the "card N of M" heading doesn't already say.
 		const parts = creating
 			? [
-					[created.length, 'created'],
 					[outcomes.filter((o) => o.status === 'duplicate').length, 'already in Anki'],
 					[outcomes.filter((o) => o.status === 'failed').length, 'not created']
 				]
 			: [
-					[created.filter((o) => o.media === 'complete').length, 'recorded'],
-					[created.filter((o) => o.media === 'failed').length, 'not recorded']
+					[
+						outcomes.filter((o) => o.status === 'created' && o.media === 'failed').length,
+						'not recorded'
+					]
 				];
 		return parts.filter(([n]) => n).map(([n, label]) => `${n} ${label}`);
 	});
@@ -131,11 +132,6 @@
 					</div>
 				{/each}
 			</div>
-			<p class="last">
-				<span class="eyebrow">Last recorded</span>
-				<strong class="last-word" lang="ja">{latest.lemma}</strong>
-				<span class="last-sentence" lang="ja" title={latest.sentence}>{latest.sentence}</span>
-			</p>
 		{/if}
 
 		{#if counts.length > 0}
@@ -265,12 +261,6 @@
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
-	}
-	.last {
-		display: grid;
-		gap: 0.15rem;
-		margin-top: 0.5rem;
-		min-width: 0;
 	}
 	.single {
 		display: flex;

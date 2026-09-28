@@ -1,6 +1,6 @@
 import { derived, get, writable } from 'svelte/store';
 import * as ipc from '$lib/ipc';
-import { autoPick, DEFAULT_HORIZON } from '$lib/autopick';
+import { autoPick, DEFAULT_HORIZON, type NextInLine } from '$lib/autopick';
 import { applyControls } from '$lib/table';
 import { autoLedger, mineQueue } from './batches';
 import { freqFilter, jlptEnabled, posEnabled } from './controls';
@@ -16,14 +16,20 @@ import {
 	playerBusy,
 	refreshMinedState,
 	sessionMinedSentences,
-	yomitanReachable
+	yomitanReachable,
+	type QueueItem
 } from './mining';
+import { reviewDialogOpen } from './modals';
 import { playerStatus } from './player';
+import { setSelected } from './selection';
 import { ankiStatus, knowledge } from './status';
-import { miningMode, settings } from './settings';
+import { miningMode, setAutoReview, settings } from './settings';
 import { lastError, showNotice } from './ui';
 
-export const autoMode = writable(false);
+/** What happens when a new video loads: nothing, a review of the picks, or mining them. */
+export type AutoMode = 'off' | 'review' | 'mine';
+
+export const autoMode = writable<AutoMode>('off');
 
 export const autoAvailable = derived(
 	[yomitanReachable, ankiStatus, playerStatus, miningMode, localVideo],
@@ -37,6 +43,21 @@ export const autoCountdown = writable<number | null>(null);
 
 /** Fingerprint of the loaded video auto mode skipped as already mined. */
 export const autoSkipped = writable<string | null>(null);
+
+/** Picks waiting for review, selected in the table until mined or skipped. */
+export interface AutoReview {
+	fingerprint: string;
+	title: string;
+	keys: string[];
+	next: NextInLine[];
+}
+
+const review = writable<AutoReview | null>(null);
+
+/** The review for the loaded video, if one is waiting. */
+export const autoReview = derived([review, fileResult], ([$review, $file]) =>
+	$review && $review.fingerprint === $file?.batch_source.fingerprint ? $review : null
+);
 
 let picking = false;
 let loadedWhilePicking = false;
@@ -62,12 +83,12 @@ async function countDownCurrent(): Promise<void> {
 		lastError.set({ title: 'Auto mode', message: String(err), detail: null });
 		return;
 	}
-	if (!get(autoMode) || get(fileResult)?.batch_source.fingerprint !== fingerprint) return;
+	if (get(autoMode) !== 'mine' || get(fileResult)?.batch_source.fingerprint !== fingerprint) return;
 	cancelAutoCountdown();
 	let secs = 3;
 	autoCountdown.set(secs);
 	countdownTimer = setInterval(() => {
-		if (!get(autoMode) || get(fileResult)?.batch_source.fingerprint !== fingerprint) {
+		if (get(autoMode) !== 'mine' || get(fileResult)?.batch_source.fingerprint !== fingerprint) {
 			cancelAutoCountdown();
 		} else if (secs > 1) {
 			autoCountdown.set(--secs);
@@ -78,18 +99,40 @@ async function countDownCurrent(): Promise<void> {
 	}, 1000);
 }
 
-export async function setAutoMode(on: boolean): Promise<void> {
-	autoMode.set(on);
+export async function setAutoMode(mode: AutoMode): Promise<void> {
+	const previous = get(autoMode);
+	if (mode === previous) return;
+	autoMode.set(mode);
 	autoSkipped.set(null);
-	if (!on) cancelAutoCountdown();
+	cancelAutoCountdown();
+	review.set(null);
+	reviewDialogOpen.set(false);
 	try {
-		await ipc.setAutoMode(on);
+		await ipc.setAutoMode(mode !== 'off');
 	} catch (err) {
-		autoMode.set(false);
+		autoMode.set(previous);
 		lastError.set({ title: 'Auto mode', message: String(err), detail: null });
 		return;
 	}
-	if (on) void countDownCurrent();
+	void setAutoReview(mode !== 'off');
+	if (mode === 'mine') void countDownCurrent();
+	if (mode === 'review') void reviewVideo();
+}
+
+export function onNewVideo(): void {
+	const mode = get(autoMode);
+	if (mode === 'mine') void autoMine();
+	if (mode === 'review') void reviewVideo();
+}
+
+/** In asbplayer mode, asbplayer's loads count as new videos instead. */
+export function onLocalVideo(): void {
+	if (get(miningMode) === 'local') onNewVideo();
+}
+
+/** Runs the video again although it was already processed ("Mine anyway"). */
+export function processAnyway(): Promise<void> {
+	return get(autoMode) === 'review' ? reviewVideo(true) : autoMine(true);
 }
 
 function pick(file: ipc.FileLoadResult, prefs: ipc.AutoMine) {
@@ -112,32 +155,123 @@ function pick(file: ipc.FileLoadResult, prefs: ipc.AutoMine) {
 	});
 }
 
-/** Mines the loaded video once, unless it was already processed and not `force`d. */
-export async function autoMine(force = false): Promise<void> {
+/** Selects auto mode's picks, each on its chosen sentence. */
+export async function selectPicks(): Promise<ReturnType<typeof pick> | null> {
+	const prefs = get(settings)?.auto_mine;
+	if (!prefs || !get(fileResult)) return null;
+	await refreshMinedState(true);
+	const file = get(fileResult);
+	if (!file) return null;
+	const result = pick(file, prefs);
+	const occIdx = new Map(result.picks.map((p) => [p.item.key, p.occIdx]));
+	setSelected([...occIdx.keys()], true, (key) => ({ occIdx: occIdx.get(key) ?? 0, userChosen: false }));
+	return result;
+}
+
+/** Skips `run` while a pick is running; a video loaded meanwhile is picked after. */
+async function exclusive(run: () => Promise<void>): Promise<void> {
 	if (picking) {
 		loadedWhilePicking = true;
 		return;
 	}
-	const loaded = get(fileResult);
-	const prefs = get(settings)?.auto_mine;
-	if (!get(autoMode) || !loaded || !prefs) return;
-	const { fingerprint } = loaded.batch_source;
-	const title = loaded.source_file.title;
-	if (get(playerBusy) || get(miningTerm) !== null) {
-		showNotice(`Auto mode skipped ${title}: a mine was already running`);
-		return;
-	}
 	picking = true;
-	autoSkipped.set(null);
 	try {
+		await run();
+	} catch (err) {
+		lastError.set({ title: 'Auto mode', message: String(err), detail: null });
+	} finally {
+		picking = false;
+		if (loadedWhilePicking) {
+			loadedWhilePicking = false;
+			onNewVideo();
+		}
+	}
+}
+
+/** Selects the loaded video's picks and opens the review dialog, unless it was processed. */
+function reviewVideo(force = false): Promise<void> {
+	return exclusive(async () => {
+		const loaded = get(fileResult);
+		if (get(autoMode) !== 'review' || !loaded) return;
+		const { fingerprint } = loaded.batch_source;
+		if (get(playerBusy) || get(miningTerm) !== null) {
+			showNotice(`Auto mode skipped ${loaded.source_file.title}: a mine was already running`);
+			return;
+		}
+		autoSkipped.set(null);
+		if (!force && (await ipc.isMediaProcessed(fingerprint))) {
+			autoSkipped.set(fingerprint);
+			return;
+		}
+		const result = await selectPicks();
+		if (!result || get(autoMode) !== 'review') return;
+		if (get(fileResult)?.batch_source.fingerprint !== fingerprint) return;
+		const title = loaded.source_file.title;
+		if (result.picks.length === 0) {
+			showNotice(`Auto mode found nothing to mine in ${title}`);
+			return;
+		}
+		review.set({ fingerprint, title, keys: result.picks.map((p) => p.item.key), next: result.next });
+		reviewDialogOpen.set(true);
+	});
+}
+
+/** A term added to a waiting review counts as one of its picks. */
+export function addReviewPick(key: string): void {
+	review.update((r) => (r && !r.keys.includes(key) ? { ...r, keys: [...r.keys, key] } : r));
+}
+
+/** Drops a waiting review once none of its picks are selected, as Skip would. */
+export function dropDeselectedReview(selected: Set<string>): void {
+	const pending = get(review);
+	if (pending && !get(reviewDialogOpen) && !pending.keys.some((k) => selected.has(k)))
+		review.set(null);
+}
+
+/** Drops the review and the picks it selected, without marking the video processed. */
+export function skipReview(): void {
+	const pending = get(autoReview);
+	if (pending) setSelected(pending.keys, false);
+	review.set(null);
+	reviewDialogOpen.set(false);
+}
+
+/** Mining a waiting review's picks marks its video processed. */
+export async function mineSelection(items: QueueItem[]): Promise<void> {
+	const pending = get(autoReview);
+	const batch = await mineQueue(items, pending !== null);
+	if (!pending || !batch) return;
+	review.set(null);
+	try {
+		await ipc.markMediaProcessed(pending.fingerprint);
+	} catch (err) {
+		lastError.set({ title: 'Auto mode', message: String(err), detail: null });
+	}
+	const created = batch.items.filter((i) => i.outcome.status === 'created').length;
+	autoLedger.update((l) => [...l, { title: pending.title, batchId: batch.id, created, undone: false }]);
+}
+
+/** Mines the loaded video once, unless it was already processed and not `force`d. */
+export function autoMine(force = false): Promise<void> {
+	return exclusive(async () => {
+		const loaded = get(fileResult);
+		const prefs = get(settings)?.auto_mine;
+		if (get(autoMode) !== 'mine' || !loaded || !prefs) return;
+		const { fingerprint } = loaded.batch_source;
+		const title = loaded.source_file.title;
+		if (get(playerBusy) || get(miningTerm) !== null) {
+			showNotice(`Auto mode skipped ${title}: a mine was already running`);
+			return;
+		}
+		autoSkipped.set(null);
 		if (!force && (await ipc.isMediaProcessed(fingerprint))) {
 			autoSkipped.set(fingerprint);
 			return;
 		}
 		await refreshMinedState(true);
 		const file = get(fileResult);
-		if (!get(autoMode) || file?.batch_source.fingerprint !== fingerprint) return;
-		const items = pick(file, prefs);
+		if (get(autoMode) !== 'mine' || file?.batch_source.fingerprint !== fingerprint) return;
+		const items = pick(file, prefs).picks.map((p) => p.item);
 		if (items.length === 0) {
 			await ipc.markMediaProcessed(fingerprint);
 			autoLedger.update((l) => [...l, { title, batchId: null, created: 0, undone: false }]);
@@ -149,13 +283,5 @@ export async function autoMine(force = false): Promise<void> {
 		await ipc.markMediaProcessed(fingerprint);
 		const created = batch.items.filter((i) => i.outcome.status === 'created').length;
 		autoLedger.update((l) => [...l, { title, batchId: batch.id, created, undone: false }]);
-	} catch (err) {
-		lastError.set({ title: 'Auto mode', message: String(err), detail: null });
-	} finally {
-		picking = false;
-		if (loadedWhilePicking) {
-			loadedWhilePicking = false;
-			void autoMine();
-		}
-	}
+	});
 }

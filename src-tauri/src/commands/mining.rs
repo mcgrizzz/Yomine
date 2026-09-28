@@ -43,11 +43,13 @@ use crate::{
         CardFormatDto,
         DefinitionEntryDto,
         MinedStateDto,
+        TimeStampDto,
         YomitanStatusDto,
     },
     events::LoadingMessage,
     media::{
         media_fields,
+        LineMedia,
         MediaSource,
         Preview,
     },
@@ -239,17 +241,57 @@ fn row_lexeme(file: &crate::state::FileData, key: &str) -> Option<String> {
         .clone()
 }
 
+/// Cuts local media for lines under review; mining reuses the clips.
+#[tauri::command]
+pub fn prepare_line_media(
+    state: State<'_, Mutex<AppState>>,
+    cues: Vec<TimeStampDto>,
+) -> Result<(), String> {
+    if let Ok(source) = MediaSource::for_file(&state.lock().unwrap(), None) {
+        crate::media::prepare(&source, cues);
+    }
+    Ok(())
+}
+
+/// `None` without a paired video or in asbplayer mode.
+#[tauri::command]
+pub async fn get_line_media(
+    state: State<'_, Mutex<AppState>>,
+    cue: TimeStampDto,
+    kind: LineMedia,
+) -> Result<Option<String>, String> {
+    let Ok(source) = MediaSource::for_file(&state.lock().unwrap(), None) else { return Ok(None) };
+    crate::media::line_media(&source, &cue, kind).await
+}
+
+/// The entry mining picks when none was chosen, as an index into the scan of `scan_text`.
+#[tauri::command]
+pub async fn get_default_entry(
+    state: State<'_, Mutex<AppState>>,
+    key: String,
+    lemma: String,
+    scan_text: Option<String>,
+) -> Result<usize, String> {
+    let (url, lexeme) = {
+        let state = state.lock().unwrap();
+        (state.settings.yomitan_url.clone(), row_lexeme(&state.file, &key))
+    };
+    let term = scan_text.unwrap_or_else(|| lemma.clone());
+    Ok(default_entry(&url, &key, &lemma, &term, lexeme.as_deref()).await)
+}
+
 /// Yomitan's first entry can be a different word with the same spelling (止める as やめる when
 /// the sentence reads とめる), so a row picks the entry for its own word.
 async fn default_entry(
     yomitan_url: &str,
-    item: &BatchItem,
+    key: &str,
+    lemma: &str,
     term: &str,
     lexeme: Option<&str>,
 ) -> usize {
     // A row's key is `termKey`: "{lemma} {reading}".
-    let reading = match item.key.split_once(' ') {
-        Some((lemma, reading)) if !item.adhoc && lemma == item.lemma => reading,
+    let reading = match key.split_once(' ') {
+        Some((key_lemma, reading)) if key_lemma == lemma => reading,
         _ => return 0,
     };
     tokio::time::timeout(
@@ -257,7 +299,7 @@ async fn default_entry(
         yomitan::entry_index_for(
             yomitan_url,
             term,
-            &item.lemma,
+            lemma,
             reading,
             lexeme.map(yomine::segmentation::word::lexeme_name),
         ),
@@ -287,7 +329,8 @@ async fn mine(
     let timestamp_secs = item.timestamp.as_ref().map(|t| t.start_secs);
     let entry_index = match entry_index {
         Some(index) => index,
-        None => default_entry(yomitan_url, item, &term, lexeme.as_deref()).await,
+        None if item.adhoc => 0,
+        None => default_entry(yomitan_url, &item.key, &item.lemma, &term, lexeme.as_deref()).await,
     };
 
     let _ = progress.send(LoadingMessage::new(format!("Rendering 「{}」 with Yomitan…", term)));

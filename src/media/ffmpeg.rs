@@ -167,7 +167,39 @@ fn temp_output(extension: &'static str) -> Encoded {
     Encoded { path: std::env::temp_dir().join(name), extension }
 }
 
+/// Deletes clips a quit or crash left in the temp folder; normally they go when dropped.
+pub fn remove_leftovers() {
+    let Ok(dir) = std::fs::read_dir(std::env::temp_dir()) else { return };
+    for entry in dir.flatten() {
+        if is_clip_name(&entry.file_name().to_string_lossy()) {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+}
+
+/// Only the names `temp_output` makes.
+fn is_clip_name(name: &str) -> bool {
+    let Some((id, extension)) = name.strip_prefix("yomine-").and_then(|n| n.split_once('.')) else {
+        return false;
+    };
+    id.len() == 32
+        && id.bytes().all(|b| b.is_ascii_hexdigit())
+        && matches!(extension, "mp3" | "ogg" | "jpg" | "png")
+}
+
 fn last_line(stderr: &[u8]) -> String {
     let text = String::from_utf8_lossy(stderr);
     text.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("no output").trim().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn leftover_cleanup_matches_only_clip_names() {
+        assert!(super::is_clip_name("yomine-0013153c66ba4c09a1d242275aa85e54.mp3"));
+        assert!(super::is_clip_name("yomine-065a09c0f0c14f47affb4b066815aea4.jpg"));
+        assert!(!super::is_clip_name("yomine-sidecars-0013153c66ba4c09a1d242275aa85e54"));
+        assert!(!super::is_clip_name("yomine-notes.jpg"));
+        assert!(!super::is_clip_name("yomine-0013153c66ba4c09a1d242275aa85e54.srt"));
+    }
 }

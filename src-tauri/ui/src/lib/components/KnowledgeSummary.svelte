@@ -83,7 +83,8 @@
 		background: var(--bg-raised);
 		border: 1px solid var(--border);
 		border-radius: 4px;
-		align-self: flex-start;
+		/* Lines its right edge up with the auto mode row. */
+		align-self: stretch;
 	}
 	.mode-header {
 		display: flex;

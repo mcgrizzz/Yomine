@@ -305,6 +305,8 @@ export interface SettingsData {
 	/** Follow-mode poll cadence in seconds (≥1). */
 	asbplayer_poll_secs: number;
 	auto_mine: AutoMine;
+	/** Restores Review at startup; Mine comes back as Review. */
+	auto_review: boolean;
 	/** Whole-UI scale factor (1.0 = 100%), applied as CSS zoom on the root. */
 	font_scale: number;
 	/** Definition popover scale factor (issue #113), independent of font_scale. */
@@ -839,6 +841,21 @@ export interface BatchUndoResult {
 export interface MineOptions {
 	record: boolean;
 	require_dictionary_media: boolean;
+}
+
+/** The entry mining picks when none was chosen, as an index into the scan of `scanText`. */
+export function getDefaultEntry(key: string, lemma: string, scanText: string | null): Promise<number> {
+	return invoke('get_default_entry', { key, lemma, scanText });
+}
+
+/** Cuts local media for lines under review; mining reuses the clips. */
+export function prepareLineMedia(cues: TimeStampDto[]): Promise<void> {
+	return invoke('prepare_line_media', { cues });
+}
+
+/** A `data:` URI; null without a paired video or in asbplayer mode. */
+export function getLineMedia(cue: TimeStampDto, kind: 'frame' | 'audio'): Promise<string | null> {
+	return invoke('get_line_media', { cue, kind });
 }
 
 /** Starts cutting local media for the items a batch will record. */
