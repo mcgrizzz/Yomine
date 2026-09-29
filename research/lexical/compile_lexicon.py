@@ -27,6 +27,8 @@ def compile_rows(db):
     senses its entries give it (one byte, capped at 255).
     `w\\tspelling`: a JMdict spelling with kanji, of any part of speech (二日酔い). Kana-only
     forms are left out: a run of kana tokens spells some JMdict reading too often (いいか).
+    `a\\treading`: a JMdict i-adjective ending in ない, which UniDic reads as a verb and ない
+    (つまらない as つまる).
     `e\\tspelling\\treading`: entries listing the spelling under that reading, kept only
     for spellings an entry reads more than one way (明日 as あした and あす)."""
     # A pair has one row per sense that applies to it.
@@ -34,6 +36,7 @@ def compile_rows(db):
     phrase_pairs = set()
     readings = collections.defaultdict(set)
     words = set()
+    nai_adjectives = set()
     for entry, reading, spelling, pos in db.execute("SELECT entry_id,reading,spelling,pos FROM pairs"):
         reading = normalize_long_vowel(reading)
         # Unfolded, so に+カット can't pass for にかっと.
@@ -44,6 +47,8 @@ def compile_rows(db):
             words.add(pair[2])
         if set(json.loads(pos)) & PHRASE_POS:
             phrase_pairs.add(pair)
+        if "adj-i" in json.loads(pos) and reading.endswith("ない"):
+            nai_adjectives.add(reading)
         spelling = normalize(spelling)
         if has_kanji(spelling):
             readings[(spelling, entry)].add(reading)
@@ -62,6 +67,7 @@ def compile_rows(db):
                 entries[(spelling, reading)].add(entry)
     rows = [(("p\t" + form).encode(), bytes([min(senses, 255)])) for form, senses in phrases.items()]
     rows += [(("w\t" + form).encode(), b"") for form in words]
+    rows += [(("a\t" + reading).encode(), b"") for reading in nai_adjectives]
     rows += [(f"e\t{spelling}\t{reading}".encode(), b"".join(struct.pack("<I", e) for e in sorted(ids)))
              for (spelling, reading), ids in entries.items()]
     return sorted(rows)

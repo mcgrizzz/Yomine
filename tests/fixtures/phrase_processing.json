@@ -375,7 +375,7 @@
         "lemma_form": "つまらなかった",
         "lemma_reading": "つまらなかった",
         "lexeme": null,
-        "part_of_speech": "Verb",
+        "part_of_speech": "Adjective",
         "possible_known_match": null,
         "sentence_references": [],
         "surface_form": "つまらなかった",
@@ -405,7 +405,7 @@
         "lemma_form": "つまらない",
         "lemma_reading": "つまらない",
         "lexeme": null,
-        "part_of_speech": "Verb",
+        "part_of_speech": "Adjective",
         "possible_known_match": null,
         "sentence_references": [
           [
@@ -420,7 +420,7 @@
     "segments": [
       [
         "つまらなかった",
-        "Verb",
+        "Adjective",
         0,
         21
       ]

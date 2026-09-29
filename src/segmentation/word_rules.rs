@@ -287,6 +287,29 @@ pub fn create_default_rules() -> Vec<Rule> {
                 main_word_policy: Some(MainWordPolicy::MineCompleteCitation),
             },
         },
+        // A verb-forming suffix (ぶる, めく) makes a verb of the noun, which is rarely a word of
+        // its own (子ぶる, from いい子ぶる): it stays a verb, and phrase promotion joins the
+        // whole word when a dictionary lists it.
+        Rule {
+            name: "Verbal suffix after noun",
+            current: TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Setsubiji]),
+                pos2: Matcher::Any(vec![UnidicTag::Doushiteki]),
+                ..Default::default()
+            },
+            next: None,
+            prev: Some(TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Meishi]),
+                ..Default::default()
+            }),
+            prev_word: WordMatcher::None,
+            action: RuleAction::CreateWord {
+                eat_next: false,
+                eat_next_lemma: false,
+                pos: POS::Verb,
+                main_word_policy: None,
+            },
+        },
         Rule {
             name: "Suffix to noun",
             current: TokenMatcher {

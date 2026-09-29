@@ -49,9 +49,6 @@ use crate::{
     },
 };
 
-// Lexical exceptions are intentionally reading- and spelling-constrained.
-const LEXICAL_CITATIONS: &[(&str, &str)] = &[("つまらない", "つまらない")];
-
 pub(super) fn resolve_citation(word: &mut Word, manager: &FrequencyManager) {
     if word.citation.is_some()
         || word.main_word.is_some()
@@ -66,20 +63,29 @@ pub(super) fn resolve_citation(word: &mut Word, manager: &FrequencyManager) {
         return;
     }
     let deinflections = pairwise_deinflection(&word.surface_form, &word.surface_hatsuon);
+    // UniDic reads an i-adjective like つまらない as a verb and ない (つまる). Written in kana
+    // it is the adjective; with kanji (行けない) it is usually the verb's negative.
+    let kana = word.surface_form.as_str().is_kana();
     let exception = deinflections
         .iter()
-        .find(|(form, reading)| {
-            word.surface_form.as_str().is_kana()
-                && LEXICAL_CITATIONS.contains(&(form.as_str(), reading.as_str()))
-        })
-        .cloned();
+        .find(|(form, reading)| kana && form == reading && jmdict_lexicon::is_nai_adjective(form))
+        .cloned()
+        .or_else(|| {
+            // Speech shortens ない to ん (すまん, くだらん), which the deinflector doesn't undo.
+            let form = format!("{}ない", word.surface_form.strip_suffix('ん')?);
+            (kana && jmdict_lexicon::is_nai_adjective(&form)).then(|| (form.clone(), form))
+        });
+    let lemma = (word.lemma_form.clone(), word.lemma_hatsuon.clone());
+    // UniDic's form wins when the deinflector agrees; otherwise it only competes on frequency,
+    // so the deinflector's gaps (すん for する) don't lose it, but ください stays ください.
+    let deinflected_lemma = deinflections.contains(&lemma);
     let mut candidates: Vec<_> = deinflections
         .into_iter()
+        .chain((!deinflected_lemma).then(|| lemma.clone()))
         .filter(|(form, reading)| manager.get_harmonic_frequency_for_pair(form, reading).is_some())
         .collect();
     candidates
         .sort_by_key(|(form, reading)| manager.get_harmonic_frequency_for_pair(form, reading));
-    let lemma = (word.lemma_form.clone(), word.lemma_hatsuon.clone());
     match word.part_of_speech {
         POS::Verb => retain_verb_final_candidates(&mut candidates, &word.surface_form),
         // An adjective stem can deinflect as a verb (のろ as 乗る's imperative).
@@ -91,7 +97,7 @@ pub(super) fn resolve_citation(word: &mut Word, manager: &FrequencyManager) {
         .or_else(|| {
             candidates
                 .iter()
-                .find(|pair| **pair == lemma)
+                .find(|pair| deinflected_lemma && **pair == lemma)
                 .or(candidates.first())
                 .cloned()
                 .map(|pair| (pair, CitationProvenance::ValidatedDeinflection))
@@ -113,6 +119,9 @@ pub(super) fn resolve_citation(word: &mut Word, manager: &FrequencyManager) {
             })
         });
     if let Some(((form, reading), provenance)) = selected {
+        if matches!(provenance, CitationProvenance::LexicalException) {
+            word.part_of_speech = POS::Adjective;
+        }
         word.lemma_form = form.clone();
         word.lemma_hatsuon = reading.clone();
         word.citation = Some(Citation { form, reading, provenance });

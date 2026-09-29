@@ -17,6 +17,12 @@ frequencies = [
 	{ term = "覚え", reading = "おぼえ", rank = 400 },
 	{ term = "つまらない", reading = "つまらない", rank = 2455, kana = true },
 	{ term = "つまる", reading = "つまる", rank = 2806, kana = true },
+	{ term = "くだらない", reading = "くだらない", rank = 2500, kana = true },
+	{ term = "くだる", reading = "くだる", rank = 2953, kana = true },
+	{ term = "行ける", reading = "いける", rank = 2206 },
+	{ term = "すまない", reading = "すまない", rank = 1900, kana = true },
+	{ term = "すむ", reading = "すむ", rank = 464, kana = true },
+	{ term = "分かる", reading = "わかる", rank = 40 },
 ]
 
 [[case]]
@@ -73,6 +79,28 @@ absent = ["助けられるだろう", "助け"]
 name = "lexicalized negative つまらない keeps its own lemma"
 text = "この映画はつまらなかった。"
 terms = [{ surface = "つまらなかった", lemma = "つまらない", reading = "つまらない" }]
+
+# The same holds for any i-adjective JMdict lists (くだらない, not くだる, "to descend"), but
+# only in kana: with kanji, 行けない is 行ける's negative ("can't go"), not いけない ("bad").
+[[case]]
+name = "kana verb + ない that spells a JMdict adjective is the adjective"
+text = "くだらなかったな"
+terms = [{ surface = "くだらなかった", lemma = "くだらない", reading = "くだらない", pos = "Adjective" }]
+
+[[case]]
+name = "colloquial ん for ない: すまん is the adjective すまない"
+text = "待たせて すまんな"
+terms = [{ surface = "すまん", lemma = "すまない", reading = "すまない", pos = "Adjective" }]
+
+[[case]]
+name = "colloquial ん on a verb that isn't an adjective: 分からん is 分かる"
+text = "分からん"
+terms = [{ surface = "分からん", lemma = "分かる", reading = "わかる" }]
+
+[[case]]
+name = "with kanji, 行けない stays the negative of 行ける"
+text = "学校に行けない"
+terms = [{ surface = "行けない", lemma = "行ける", reading = "いける" }]
 
 # Needs the なきゃ→ない rule from the jp-deinflector fork (btrkeks/jp-deinflector#8).
 [[case]]

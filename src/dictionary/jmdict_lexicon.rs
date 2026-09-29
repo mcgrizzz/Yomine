@@ -25,6 +25,11 @@ pub(crate) fn is_word(form: &str) -> bool {
     lookup(format!("w\t{}", form.normalize_long_vowel())).is_some()
 }
 
+/// JMdict lists `reading` as an i-adjective ending in ない (つまらない, くだらない).
+pub(crate) fn is_nai_adjective(reading: &str) -> bool {
+    lookup(format!("a\t{}", reading.normalize_long_vowel())).is_some()
+}
+
 /// How many senses JMdict gives the phrase `form` across its entries; `None` when it isn't one.
 pub(crate) fn phrase_senses(form: &str) -> Option<u8> {
     lookup(format!("p\t{}", form.normalize_long_vowel())).and_then(|value| value.first().copied())
