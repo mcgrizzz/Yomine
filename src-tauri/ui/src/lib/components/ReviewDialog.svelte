@@ -216,7 +216,7 @@
 
 	// Yomitan entries by scan text, and each row's default entry.
 	let entries = $state<Record<string, DefinitionEntry[]>>({});
-	let defaults = $state<Record<string, number>>({});
+	let defaults = $state<Record<string, number | null>>({});
 	const requested = new Set<string>();
 	const scanOf = (row: Row) => row.scanText ?? row.lemma;
 
@@ -249,8 +249,9 @@
 	function entryOf(row: Row): DefinitionEntry | null | undefined {
 		const list = entries[scanOf(row)];
 		const index = row.entryIndex ?? defaults[row.key];
-		if (list === undefined || index === undefined || index < 0) return undefined;
-		return list.find((e) => e.index === index) ?? null;
+		if (list === undefined || index === undefined || (index !== null && index < 0))
+			return undefined;
+		return index === null ? null : (list.find((e) => e.index === index) ?? null);
 	}
 
 	function pickEntry(row: Row, entry: DefinitionEntry) {
@@ -500,7 +501,7 @@
 				{@const changed =
 					row.term !== null &&
 					row.entryIndex !== undefined &&
-					defaults[row.key] >= 0 &&
+					(defaults[row.key] === null || defaults[row.key]! >= 0) &&
 					row.entryIndex !== defaults[row.key]}
 				<header class="detail-head" class:framed={showFrames}>
 					{#if showFrames}
@@ -718,7 +719,7 @@
 		label={row.lemma}
 		anchor={picker.anchor}
 		scale={$settings?.definition_scale ?? 1}
-		pickedIndex={row.entryIndex ?? defaults[row.key]}
+		pickedIndex={row.entryIndex ?? defaults[row.key] ?? undefined}
 		onpick={(entry) => pickEntry(row, entry)}
 		onclose={() => (picker = null)}
 	/>
