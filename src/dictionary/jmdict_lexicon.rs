@@ -20,6 +20,11 @@ pub(crate) fn is_phrase(form: &str) -> bool {
     lookup(format!("p\t{}", form.normalize_long_vowel())).is_some()
 }
 
+/// JMdict lists `form` as a word spelled with kanji, of any part of speech (二日酔い).
+pub(crate) fn is_word(form: &str) -> bool {
+    lookup(format!("w\t{}", form.normalize_long_vowel())).is_some()
+}
+
 /// How many senses JMdict gives the phrase `form` across its entries; `None` when it isn't one.
 pub(crate) fn phrase_senses(form: &str) -> Option<u8> {
     lookup(format!("p\t{}", form.normalize_long_vowel())).and_then(|value| value.first().copied())
