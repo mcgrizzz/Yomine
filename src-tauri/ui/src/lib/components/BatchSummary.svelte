@@ -300,10 +300,12 @@
 </Modal>
 
 <style>
+	/* The list shrinks to fit the dialog, so only it scrolls, never the dialog. */
 	.body {
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;
+		min-height: 0;
 		padding: 0.25rem 1rem 0.5rem;
 	}
 	.auto {
@@ -392,6 +394,7 @@
 		flex-direction: column;
 		gap: 0.75rem;
 		max-height: 52vh;
+		min-height: 0;
 		overflow: auto;
 	}
 	.panel {
