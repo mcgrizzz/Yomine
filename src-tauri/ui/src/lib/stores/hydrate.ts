@@ -61,6 +61,7 @@ export async function hydrate(): Promise<void> {
 	ipc.onAsbplayerMediaLoaded((r) => {
 		fileEventSeen = true;
 		fileResult.set(r);
+		void refreshMinedState(true);
 		showNotice(`Loaded from asbplayer: ${r.source_file.title}`);
 		onNewVideo();
 	});
