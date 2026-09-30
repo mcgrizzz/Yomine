@@ -7,6 +7,7 @@ pub mod known_note_types;
 pub mod mined;
 pub mod scoring;
 pub mod state;
+pub mod sync;
 mod tsunagi;
 pub mod types;
 

@@ -287,6 +287,7 @@ pub fn save_settings(
     }
     if matching_changed {
         guard.invalidate_anki_cache();
+        crate::anki_sync::hint(&app);
     }
     if summary_changed {
         guard.knowledge_dirty.store(true, Ordering::Relaxed);

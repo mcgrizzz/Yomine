@@ -85,7 +85,7 @@ pub fn probe(connection: AnkiConnectionSettings) -> Anki {
 pub async fn reachable() -> bool {
     let reached = current().version().await.is_ok();
     if !reached {
-        super::state::anki_unreachable();
+        super::sync::anki_unreachable();
     }
     reached
 }

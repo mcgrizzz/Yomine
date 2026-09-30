@@ -173,3 +173,37 @@ pub async fn apply_filters(
 
     Ok(FilterResult { terms: unknown_terms, anki_filtered, ignore_filtered })
 }
+
+/// Re-filters after Anki changed, moving terms only between unknown (`shown`) and known
+/// (`known_lemmas`). What the ignore list filtered stays filtered, and shown terms that
+/// `keep` holds stay shown, until the next full `apply_filters`.
+pub fn refilter_known(
+    base_terms: Vec<Term>,
+    shown: &[Term],
+    known_lemmas: &HashSet<String>,
+    keep: impl Fn(&Term) -> bool,
+    state: &AnkiState,
+) -> FilterResult {
+    let key = |t: &Term| (t.lemma_form.clone(), t.lemma_reading.clone());
+    let shown: HashSet<_> = shown.iter().map(key).collect();
+    let order: std::collections::HashMap<_, usize> =
+        base_terms.iter().enumerate().map(|(i, t)| (key(t), i)).collect();
+    let (mut terms, mut candidates, mut ignore_filtered) = (Vec::new(), Vec::new(), Vec::new());
+    for term in base_terms {
+        if shown.contains(&key(&term)) {
+            if keep(&term) {
+                terms.push(term);
+            } else {
+                candidates.push(term);
+            }
+        } else if known_lemmas.contains(&term.lemma_form) {
+            candidates.push(term);
+        } else {
+            ignore_filtered.push(term);
+        }
+    }
+    let (unknown, anki_filtered) = state.filter_existing_terms(candidates);
+    terms.extend(unknown);
+    terms.sort_by_key(|t| order.get(&key(t)).copied());
+    FilterResult { terms, anki_filtered, ignore_filtered }
+}

@@ -558,17 +558,11 @@ fn gui_error(error: AnkiError) -> String {
     }
 }
 
-/// Mined/added state for the table (issue #3). Best-effort: an offline
-/// AnkiConnect still returns the cached sentences.
+/// Mined state for the table (issue #3), from Yomine's copy of the collection; later
+/// changes arrive as `mined-state` events.
 #[tauri::command]
-pub async fn get_mined_state(state: State<'_, Mutex<AppState>>) -> Result<MinedStateDto, String> {
-    let mappings = { state.lock().unwrap().settings.anki_model_mappings.clone() };
-    let (added_terms, added_keys, added_sentences) =
-        mined::get_recently_added(&mappings).await.unwrap_or_default();
-
-    let mut mined_sentences = mined::mined_sentences_pruned().await;
-    mined_sentences.extend(added_sentences);
-    Ok(MinedStateDto { added_terms, added_keys, mined_sentences })
+pub fn get_mined_state(state: State<'_, Mutex<AppState>>) -> MinedStateDto {
+    crate::anki_sync::mined_state(&state.lock().unwrap())
 }
 
 /// The user's Yomitan term card formats, for the popover's per-format buttons.

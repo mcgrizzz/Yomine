@@ -13,6 +13,7 @@ pub mod names {
     pub const YOMITAN_STATUS: &str = "yomitan-status";
     pub const PLAYER_STATUS: &str = "player-status";
     pub const TERMS_REFRESHED: &str = "terms-refreshed";
+    pub const MINED_STATE: &str = "mined-state";
     pub const DICTIONARIES_CHANGED: &str = "dictionaries-changed";
     pub const KNOWLEDGE_SUMMARY: &str = "knowledge-summary";
     pub const ASBPLAYER_MEDIA_LOADED: &str = "asbplayer-media-loaded";

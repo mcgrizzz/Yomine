@@ -60,3 +60,64 @@ pub fn live_sentences(conn: &Connection, collection: &str) -> rusqlite::Result<V
     })?
     .collect()
 }
+
+/// The collection's notes Yomine hasn't seen deleted.
+pub fn live_ids(conn: &Connection, collection: &str) -> rusqlite::Result<Vec<u64>> {
+    conn.prepare("SELECT note_id FROM notes WHERE deleted_at IS NULL AND collection = ?1")?
+        .query_map(params![collection], |r| r.get::<_, i64>(0).map(|id| id as u64))?
+        .collect()
+}
+
+/// Terms Yomine mined from a source into the collection, whose notes it hasn't seen
+/// deleted.
+pub fn live_terms(
+    conn: &Connection,
+    collection: &str,
+    fingerprint: &str,
+) -> rusqlite::Result<Vec<String>> {
+    conn.prepare(
+        "SELECT DISTINCT n.term FROM notes n JOIN sources s ON s.id = n.source_id
+         WHERE n.deleted_at IS NULL AND n.term IS NOT NULL AND s.fingerprint = ?2
+           AND (n.collection = ?1 OR n.collection IS NULL)",
+    )?
+    .query_map(params![collection, fingerprint], |r| r.get(0))?
+    .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        super::{
+            sources,
+            tests::scratch,
+        },
+        *,
+    };
+
+    #[test]
+    fn mined_terms_are_the_sources_live_notes_in_the_collection() {
+        let (_dir, conn) = scratch("live-terms");
+        let file = sources::id(&conn, "file").unwrap();
+        let other = sources::id(&conn, "other").unwrap();
+        let note = |note_id, term, source, collection| NewNote {
+            note_id,
+            sentence: "文",
+            term: Some(term),
+            source: Some(source),
+            batch_id: None,
+            collection: Some(collection),
+            deleted_at: None,
+        };
+        for n in [
+            note(1, "犬", file, "A"),
+            note(2, "猫", file, "A"),
+            note(3, "鳥", other, "A"),
+            note(4, "魚", file, "B"),
+        ] {
+            insert(&conn, &n).unwrap();
+        }
+        mark_deleted(&conn, &[2], 10).unwrap();
+        assert_eq!(live_terms(&conn, "A", "file").unwrap(), ["犬"]);
+        assert_eq!(live_ids(&conn, "A").unwrap(), [1, 3]);
+    }
+}

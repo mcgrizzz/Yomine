@@ -766,9 +766,7 @@ export async function loadAsbplayerMedia(
 
 /** Already-mined state (issue #3); sentences are `normalizeSentence` keys. */
 export interface MinedState {
-	added_terms: string[];
-	/** `entry_key`s for the same notes — reading-keyed, for the popover. */
-	added_keys: string[];
+	mined_terms: string[];
 	mined_sentences: string[];
 }
 
@@ -932,6 +930,10 @@ export function mineBatchItem(
 /** Best-effort: an offline AnkiConnect still returns cached sentences. */
 export function getMinedState(): Promise<MinedState> {
 	return invoke('get_mined_state');
+}
+
+export function syncAnki(): Promise<void> {
+	return invoke('sync_anki');
 }
 
 /** Reachability probe; `url` tests a staged value (omitted = saved setting). */
@@ -1192,6 +1194,7 @@ export const onYomitanStatus = (cb: (s: YomitanStatus) => void) => listenTo('yom
 export const onPlayerStatus = (cb: (s: PlayerStatus) => void) => listenTo('player-status', cb);
 export const onTermsRefreshed = (cb: (r: FileLoadResult) => void) =>
 	listenTo('terms-refreshed', cb);
+export const onMinedState = (cb: (s: MinedState) => void) => listenTo('mined-state', cb);
 export const onKnowledgeSummary = (cb: (s: KnowledgeSummary) => void) =>
 	listenTo('knowledge-summary', cb);
 export const onDictionariesChanged = (cb: () => void) =>

@@ -72,6 +72,9 @@ async fn poll_anki(app: AppHandle) {
         if last_connected != Some(connected) {
             let _ = app.emit(names::ANKI_STATUS, AnkiStatus { connected, fetching: false });
             last_connected = Some(connected);
+            if connected {
+                crate::anki_sync::hint(&app);
+            }
         }
     }
 }

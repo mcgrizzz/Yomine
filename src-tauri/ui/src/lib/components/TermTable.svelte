@@ -12,7 +12,6 @@
 		type SortField
 	} from '$lib/table';
 	import {
-		addedTerms,
 		adhocQueue,
 		ankiStatus,
 		asbContext,
@@ -26,7 +25,6 @@
 		missingMedia,
 		mineSelection,
 		mineQueueState,
-		addedKeys,
 		minedNoteIds,
 		isMinedTerm,
 		minedTerms,
@@ -259,7 +257,7 @@
 		}
 	});
 
-	const isMined = (t: Term): boolean => isMinedTerm(t, $minedTerms, $addedTerms);
+	const isMined = (t: Term): boolean => isMinedTerm(t, $minedTerms);
 
 	/** Only the row whose term IS this entry — `termCoversSegment` merely overlaps. */
 	function rowFor(entry: DefinitionEntry): { term: Term; occs: Occurrence[] } | null {
@@ -779,7 +777,7 @@
 		scale={$settings?.definition_scale ?? 1}
 		canMine={canMine && (mineable !== null || defPopover.segment !== null)}
 		canQueue={queueable}
-		isDuplicate={(entry) => entry.known || $addedKeys.has(entry.key)}
+		isDuplicate={(entry) => entry.known}
 		formats={$cardFormats}
 		onqueue={(entry, formatName) => {
 			const row = rowFor(entry);

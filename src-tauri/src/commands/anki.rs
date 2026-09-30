@@ -20,6 +20,13 @@ pub async fn get_anki_status() -> AnkiStatus {
     AnkiStatus { connected: anki::reachable().await, fetching: false }
 }
 
+/// Syncs Yomine's copy of the collection in the background, for moments Anki may have
+/// changed (the window regaining focus, a batch ending).
+#[tauri::command]
+pub fn sync_anki(app: tauri::AppHandle) {
+    crate::anki_sync::hint(&app);
+}
+
 /// All note types and their fields, including empty types.
 #[tauri::command]
 pub async fn list_anki_models(

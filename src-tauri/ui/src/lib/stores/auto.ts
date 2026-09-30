@@ -7,7 +7,6 @@ import { freqFilter, jlptEnabled, posEnabled } from './controls';
 import { advanceQueue, fileResult, localVideo } from './file';
 import { showPossibleKnownMatches } from './knowledgeView';
 import {
-	addedTerms,
 	isMinedTerm,
 	minedSentences,
 	minedTerms,
@@ -144,11 +143,10 @@ function pick(file: ipc.FileLoadResult, prefs: ipc.AutoMine) {
 		jlpt: get(jlptEnabled)
 	});
 	const mined = get(minedTerms);
-	const added = get(addedTerms);
 	return autoPick(terms, file.sentences, {
 		prefs,
 		horizon: get(knowledge)?.horizon ?? DEFAULT_HORIZON,
-		isMined: (t) => isMinedTerm(t, mined, added),
+		isMined: (t) => isMinedTerm(t, mined),
 		minedSentences: new Set([...get(minedSentences), ...get(sessionMinedSentences)]),
 		normalize: normalizeSentence
 	});

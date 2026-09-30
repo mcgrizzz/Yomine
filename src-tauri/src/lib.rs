@@ -1,3 +1,4 @@
+mod anki_sync;
 mod background;
 mod batches;
 mod commands;
@@ -66,6 +67,7 @@ pub fn run() {
             commands::ignore::export_ignore_list,
             commands::anki::get_anki_status,
             commands::anki::test_anki_connection,
+            commands::anki::sync_anki,
             commands::anki::list_anki_models,
             commands::anki::get_anki_sample_note,
             commands::dictionary::list_dictionaries,

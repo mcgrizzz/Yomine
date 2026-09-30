@@ -1,17 +1,10 @@
-//! Already-mined detection (issue #3): terms with a recently-added card and
+//! Already-mined detection (issue #3): terms Yomine mined from the loaded source and
 //! sentences that already exist in the user's notes.
 
-use std::collections::{
-    HashMap,
-    HashSet,
-};
+use std::collections::HashSet;
 
 use wana_kana::IsJapaneseStr;
 
-use super::{
-    client::AnkiError,
-    types::FieldMapping,
-};
 use crate::{
     core::utils::{
         normalize_japanese_text,
@@ -32,7 +25,7 @@ pub fn entry_key(expression: &str, reading: &str) -> String {
     let expression = normalize_japanese_text(strip_html(expression).trim());
     // Anki reading fields carry furigana markup that Yomitan's readings never do.
     let mut reading = normalize_japanese_text(&strip_html(reading).filter_kana());
-    // Mirrors the vocab harvest's fallback (state.rs): a kana term is its own reading.
+    // Mirrors the vocab harvest's fallback (sync.rs): a kana term is its own reading.
     if reading.is_empty() && expression.as_str().is_kana() {
         reading = expression.clone();
     }
@@ -48,44 +41,6 @@ pub fn known_entry_keys() -> HashSet<String> {
             Vec::new()
         });
     vocab.iter().map(|v| entry_key(&v.term, &v.reading)).collect()
-}
-
-/// Recently-added terms, their `entry_key`s, and normalized sentences, from
-/// notes added in the last day (`added:1`).
-pub async fn get_recently_added(
-    model_mapping: &HashMap<String, FieldMapping>,
-) -> Result<(Vec<String>, Vec<String>, Vec<String>), AnkiError> {
-    let anki = super::current();
-    let note_ids = anki.find_notes("added:1").await?;
-    if note_ids.is_empty() {
-        return Ok((Vec::new(), Vec::new(), Vec::new()));
-    }
-    let notes = anki.notes(&note_ids).await?;
-
-    let mut terms = Vec::new();
-    let mut keys = Vec::new();
-    let mut sentences = Vec::new();
-    for note in notes {
-        let Some(mapping) = model_mapping.get(&note.note_type) else { continue };
-        if let Some(field) = note.fields.get(&mapping.term_field) {
-            let term = strip_html(field).trim().to_string();
-            if !term.is_empty() {
-                let reading =
-                    note.fields.get(&mapping.reading_field).map(String::as_str).unwrap_or_default();
-                keys.push(entry_key(&term, reading));
-                terms.push(term);
-            }
-        }
-        if let Some(sentence_field) = &mapping.sentence_field {
-            if let Some(field) = note.fields.get(sentence_field) {
-                let sentence = normalize_sentence(field);
-                if !sentence.is_empty() {
-                    sentences.push(sentence);
-                }
-            }
-        }
-    }
-    Ok((terms, keys, sentences))
 }
 
 /// Records a note Yomine created; its sentence counts as mined even without a
@@ -120,51 +75,34 @@ pub fn mark_notes_deleted(note_ids: &[u64]) -> Result<(), String> {
     db::with(|conn| db::notes::mark_deleted(conn, note_ids, db::now_ms()))
 }
 
-/// The open collection's harvested and recorded sentences, minus notes since deleted
-/// in Anki (marked gone in passing). Unreachable Anki reads the latest harvested
-/// collection and prunes nothing.
-pub async fn mined_sentences_pruned() -> Vec<String> {
-    let anki = super::current();
-    let open = anki.profile().await.ok();
+/// The latest synced collection's sentences, from its notes and from the notes Yomine
+/// created, minus notes seen deleted.
+pub fn mined_sentences() -> Vec<String> {
     let loaded = db::with(|conn| {
-        let collection = match &open {
-            Some(name) => name.clone(),
-            None => db::anki::active_collection(conn)?,
-        };
-        let harvested = db::anki::live_sentences(conn, &collection)?;
-        let recorded = db::notes::live_sentences(conn, &collection)?;
-        Ok((collection, harvested, recorded))
+        let collection = db::anki::active_collection(conn)?;
+        let mut sentences = db::anki::live_sentences(conn, &collection)?;
+        sentences.extend(db::notes::live_sentences(conn, &collection)?);
+        Ok(sentences)
     });
-    let (collection, mut harvested, mut recorded) = match loaded {
-        Ok(loaded) => loaded,
-        Err(e) => {
+    let sentences: HashSet<String> = loaded
+        .unwrap_or_else(|e| {
             eprintln!("{e}");
-            return Vec::new();
-        }
-    };
-
-    let ids: Vec<u64> =
-        harvested.iter().chain(recorded.iter()).map(|entry| entry.note_id).collect();
-    if open.is_some() && !ids.is_empty() {
-        // An error keeps every entry: only Anki's own answer marks a note deleted.
-        if let Ok(existing) = anki.existing(&ids).await {
-            let existing: HashSet<u64> = existing.into_iter().collect();
-            let gone: Vec<u64> = ids.iter().copied().filter(|id| !existing.contains(id)).collect();
-            harvested.retain(|entry| existing.contains(&entry.note_id));
-            recorded.retain(|entry| existing.contains(&entry.note_id));
-            let now = db::now_ms();
-            if let Err(e) = db::with(|conn| {
-                db::anki::mark_sentences_gone(conn, &collection, &gone, now)?;
-                db::notes::mark_deleted(conn, &gone, now)
-            }) {
-                eprintln!("Failed to mark deleted notes: {e}");
-            }
-        }
-    }
-
-    let sentences: std::collections::HashSet<String> =
-        harvested.into_iter().chain(recorded).map(|entry| entry.sentence).collect();
+            Vec::new()
+        })
+        .into_iter()
+        .map(|entry| entry.sentence)
+        .collect();
     sentences.into_iter().collect()
+}
+
+/// Terms Yomine mined from a source into the latest synced collection, minus notes seen
+/// deleted.
+pub fn mined_terms(fingerprint: &str) -> Vec<String> {
+    db::with(|conn| db::notes::live_terms(conn, &db::anki::active_collection(conn)?, fingerprint))
+        .unwrap_or_else(|e| {
+            eprintln!("{e}");
+            Vec::new()
+        })
 }
 
 /// Sentence match key: tags stripped, whitespace removed. Must stay in sync

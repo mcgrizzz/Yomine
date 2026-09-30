@@ -1,14 +1,6 @@
 use std::{
-    collections::{
-        BTreeMap,
-        HashMap,
-        HashSet,
-    },
-    sync::{
-        Arc,
-        Mutex,
-    },
-    time::Instant,
+    collections::HashMap,
+    sync::Arc,
 };
 
 use rayon::iter::{
@@ -18,18 +10,11 @@ use rayon::iter::{
 use wana_kana::IsJapaneseStr;
 
 use super::{
-    client::{
-        AnkiError,
-        NoteInfo,
-    },
     scoring::{
         MatchEvidence,
         MatchResult,
     },
-    types::{
-        FieldMapping,
-        Vocab,
-    },
+    types::Vocab,
 };
 use crate::{
     anki::comprehensibility::comp_term,
@@ -37,8 +22,6 @@ use crate::{
         utils::{
             is_kanji_char,
             normalize_japanese_text,
-            FilterKana,
-            NormalizeLongVowel,
         },
         Term,
     },
@@ -56,15 +39,6 @@ pub struct AnkiState {
 }
 
 impl AnkiState {
-    pub async fn new(
-        model_mapping: HashMap<String, FieldMapping>,
-        frequency_manager: Arc<FrequencyManager>,
-        known_interval: u32,
-    ) -> Result<Self, AnkiError> {
-        let vocab = harvest(&model_mapping).await.inspect_err(|_| anki_unreachable())?;
-        Ok(Self::from_vocab(vocab, frequency_manager, known_interval))
-    }
-
     /// Build an `AnkiState` from an already-fetched vocab list (no network).
     fn from_vocab(
         vocab: Vec<Vocab>,
@@ -416,141 +390,6 @@ impl AnkiState {
     }
 }
 
-/// Collections harvested in full since Yomine started or Anki last stopped answering.
-/// Their next harvests fetch only new and edited notes; intervals refresh with a full one.
-static CURRENT: Mutex<Vec<String>> = Mutex::new(Vec::new());
-
-/// Anki stopped answering, so anything may have changed: the next harvests are full.
-pub(crate) fn anki_unreachable() {
-    CURRENT.lock().unwrap_or_else(|e| e.into_inner()).clear();
-}
-
-/// Reads the active collection's notes into the database and returns its cards.
-async fn harvest(model_mapping: &HashMap<String, FieldMapping>) -> Result<Vec<Vocab>, AnkiError> {
-    let start = Instant::now();
-    let anki = super::current();
-    let collection = anki.profile().await?;
-    let mapping = serde_json::to_string(&model_mapping.iter().collect::<BTreeMap<_, _>>())
-        .expect("field mappings are plain data");
-    let note_ids = anki.find_notes("deck:*").await?;
-    let now = db::now_ms();
-
-    let current = CURRENT.lock().unwrap_or_else(|e| e.into_inner()).contains(&collection);
-    let stored = db::with(|conn| db::anki::harvest_state(conn, &collection))
-        .inspect_err(|e| eprintln!("{e}"))
-        .ok()
-        .filter(|s| {
-            current && s.mapping.as_deref() == Some(mapping.as_str()) && !s.notes.is_empty()
-        });
-    let fetch: Vec<u64> = match (&stored, stored.as_ref().and_then(|s| s.harvested_at)) {
-        (Some(stored), Some(harvested_at)) => {
-            // edited:N counts back from the start of today, so one extra day covers a
-            // harvest late yesterday.
-            let days = (now - harvested_at) / 86_400_000 + 1;
-            let edited: HashSet<u64> =
-                anki.find_notes(&format!("edited:{days}")).await?.into_iter().collect();
-            note_ids
-                .iter()
-                .copied()
-                .filter(|id| !stored.notes.contains(id) || edited.contains(id))
-                .collect()
-        }
-        _ => note_ids.clone(),
-    };
-    let full = fetch.len() == note_ids.len();
-
-    let (mut cards, sentences) = read_notes(model_mapping, anki.notes(&fetch).await?);
-    let card_ids: Vec<u64> = cards.iter().filter_map(|(_, card)| card.card_id).collect();
-    let intervals: HashMap<u64, i32> =
-        card_ids.iter().copied().zip(anki.intervals(&card_ids).await?).collect();
-    for (_, card) in &mut cards {
-        // Negative intervals are in seconds (learning/relearning), positive in days.
-        card.interval = card.card_id.and_then(|id| intervals.get(&id)).map(|&interval| {
-            if interval >= 0 {
-                interval as f32
-            } else {
-                interval.unsigned_abs() as f32 / 86400.0
-            }
-        });
-    }
-    println!(
-        "Harvested {} of {} notes from Anki profile {collection:?} ({:.1}s)",
-        fetch.len(),
-        note_ids.len(),
-        start.elapsed().as_secs_f32()
-    );
-
-    if full && cards.is_empty() {
-        eprintln!("Anki returned no vocab; keeping the existing cache");
-    } else {
-        let harvest = db::anki::Harvest {
-            note_ids: &note_ids,
-            fetched: &fetch,
-            cards: &cards,
-            sentences: &sentences,
-            full,
-            mapping: &mapping,
-        };
-        match db::with(|conn| db::anki::apply_harvest(conn, &collection, &harvest, now)) {
-            Ok(()) if full => {
-                CURRENT.lock().unwrap_or_else(|e| e.into_inner()).push(collection.clone())
-            }
-            Ok(()) => {}
-            // With the database failing, a full harvest still has every card; an
-            // incremental one has only the changed ones.
-            Err(e) if full => {
-                eprintln!("Failed to save Anki vocab cache: {e}");
-                return Ok(cards.into_iter().map(|(_, card)| card).collect());
-            }
-            Err(e) => eprintln!("Failed to save Anki vocab cache: {e}"),
-        }
-    }
-    Ok(db::with(|conn| db::anki::live_cards(conn, &collection)).unwrap_or_else(|e| {
-        eprintln!("{e}");
-        Vec::new()
-    }))
-}
-
-/// Vocab cards, by note id, and sentence-field values (issue #3) of the given notes.
-fn read_notes(
-    model_mapping: &HashMap<String, FieldMapping>,
-    notes: Vec<NoteInfo>,
-) -> (Vec<(u64, Vocab)>, Vec<super::mined::MinedSentence>) {
-    let sentences = notes
-        .iter()
-        .filter_map(|note| {
-            let mapping = model_mapping.get(&note.note_type)?;
-            let sentence_field = mapping.sentence_field.as_ref()?;
-            let value = note.fields.get(sentence_field)?;
-            let normalized = super::mined::normalize_sentence(value);
-            (!normalized.is_empty())
-                .then_some(super::mined::MinedSentence { note_id: note.id, sentence: normalized })
-        })
-        .collect();
-
-    let cards = notes
-        .into_par_iter()
-        .filter_map(|note| {
-            let field_mapping = model_mapping.get(&note.note_type)?;
-            let term = note.fields.get(&field_mapping.term_field)?.clone();
-            let mut reading = note.fields.get(&field_mapping.reading_field)?.clone();
-            if reading.trim().is_empty() && term.as_str().is_kana() {
-                reading = term.clone();
-            }
-            Some((
-                note.id,
-                Vocab {
-                    term,
-                    reading: reading.filter_kana().normalize_long_vowel().into_owned(),
-                    card_id: note.cards.first().copied(),
-                    interval: None,
-                },
-            ))
-        })
-        .collect();
-    (cards, sentences)
-}
-
 #[cfg(test)]
 mod classification_tests {
     use super::*;
@@ -731,6 +570,41 @@ mod classification_tests {
         assert!(known.filter_existing_terms(vec![phrase.clone()]).0.is_empty());
         assert!(known.word_stats("なんとなく", "なんとなく", &POS::Expression).0);
         assert_eq!(state(manager, &[]).filter_existing_terms(vec![phrase]).0.len(), 1);
+    }
+    #[test]
+    fn a_live_refilter_moves_only_rows_nobody_acted_on() {
+        let manager = Arc::new(FrequencyManager::from_dictionaries(vec![dictionary(
+            "test",
+            &[
+                ("犬", "いぬ", 1),
+                ("猫", "ねこ", 2),
+                ("鳥", "とり", 3),
+                ("魚", "さかな", 4),
+                ("虫", "むし", 5),
+            ],
+        )]));
+        let base = ["犬", "猫", "鳥", "魚", "虫"]
+            .iter()
+            .zip(["いぬ", "ねこ", "とり", "さかな", "むし"])
+            .map(|(lemma, reading)| term(lemma, reading))
+            .collect::<Vec<_>>();
+        // 犬 gained a card, 猫 too but was mined this session, 鳥 was known and lost its
+        // card, 魚 is ignored, 虫 is still unknown.
+        let shown = [base[0].clone(), base[1].clone(), base[4].clone()];
+        let known_before = std::collections::HashSet::from(["鳥".to_string()]);
+        let anki = state(manager, &[("犬", "いぬ"), ("猫", "ねこ")]);
+        let result = crate::core::pipeline::refilter_known(
+            base,
+            &shown,
+            &known_before,
+            |t| t.lemma_form == "猫",
+            &anki,
+        );
+        let lemmas =
+            |terms: &[Term]| terms.iter().map(|t| t.lemma_form.clone()).collect::<Vec<_>>();
+        assert_eq!(lemmas(&result.terms), ["猫", "鳥", "虫"]);
+        assert_eq!(lemmas(&result.anki_filtered), ["犬"]);
+        assert_eq!(lemmas(&result.ignore_filtered), ["魚"]);
     }
     #[test]
     fn card_changes_clear_labels_and_stats_agree() {

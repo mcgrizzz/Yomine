@@ -5,12 +5,9 @@ import { writable } from 'svelte/store';
 import * as ipc from '$lib/ipc';
 import { lastError } from './ui';
 
-/** Lemmas mined this session (optimistic, until the next refresh). */
+/** Lemmas mined from the loaded file; this session's mines are added before the backend
+ * confirms them. */
 export const minedTerms = writable<Set<string>>(new Set());
-/** Terms with an Anki card added in the last day (`added:1`). */
-export const addedTerms = writable<Set<string>>(new Set());
-/** `entry_key`s for those same notes; covers what the vocab cache is too old for. */
-export const addedKeys = writable<Set<string>>(new Set());
 /** Normalized sentences that already exist in the user's notes. */
 export const minedSentences = writable<Set<string>>(new Set());
 /** Normalized sentences mined this session (optimistic). */
@@ -29,14 +26,20 @@ export const playerBusy = writable(false);
 /** Must stay in sync with the engine's `anki::mined::normalize_sentence`. */
 export const normalizeSentence = (s: string): string => s.replace(/\s+/g, '');
 
-export const isMinedTerm = (t: ipc.Term, mined: Set<string>, added: Set<string>): boolean =>
-	mined.has(t.lemma_form) || added.has(t.lemma_form) || added.has(t.surface_form);
+export const isMinedTerm = (t: ipc.Term, mined: Set<string>): boolean => mined.has(t.lemma_form);
+
+export function applyMinedState(state: ipc.MinedState): void {
+	// The backend records a note as it's created, so its sets cover this session's mines.
+	minedTerms.set(new Set(state.mined_terms));
+	minedSentences.set(new Set(state.mined_sentences));
+	sessionMinedSentences.set(new Set());
+}
 
 const REFRESH_DEBOUNCE_MS = 5000;
 let lastRefresh = 0;
 
-/** Refresh mined/added state from Anki; debounced unless `force`. Silent on
- * failure — Anki being closed must not error on every refocus. */
+/** Reads the mined state and asks for an Anki sync, whose changes arrive as `mined-state`
+ * events; debounced unless `force`. */
 export async function refreshMinedState(force = false): Promise<void> {
 	const now = Date.now();
 	if (!force && now - lastRefresh < REFRESH_DEBOUNCE_MS) return;
@@ -55,17 +58,11 @@ export async function refreshMinedState(force = false): Promise<void> {
 			cardFormats.set([]);
 		}
 	);
+	void ipc.syncAnki();
 	try {
-		const state = await ipc.getMinedState();
-		addedTerms.set(new Set(state.added_terms));
-		addedKeys.set(new Set(state.added_keys));
-		minedSentences.set(new Set(state.mined_sentences));
-		// Backend state covers session mines; keeping the optimistic sets
-		// would mask notes deleted in Anki.
-		minedTerms.set(new Set());
-		sessionMinedSentences.set(new Set());
+		applyMinedState(await ipc.getMinedState());
 	} catch {
-		// keep the optimistic sets when Anki is unreachable
+		// keep the optimistic sets
 	}
 }
 
