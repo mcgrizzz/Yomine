@@ -198,7 +198,10 @@ impl Anki {
         &self,
         note_type: &str,
     ) -> Result<Option<HashMap<String, String>>, AnkiError> {
-        ankiconnect::sample_note(self, note_type).await
+        let query = format!("note:\"{}\"", note_type.replace('"', "\\\""));
+        let ids = self.find_notes(&query).await?;
+        let Some(id) = ids.get(ids.len() / 2) else { return Ok(None) };
+        Ok(self.notes(&[*id]).await?.into_iter().next().map(|note| note.fields))
     }
 
     /// Notes matching an Anki search.
@@ -237,7 +240,11 @@ impl Anki {
     }
 
     pub async fn notes(&self, ids: &[u64]) -> Result<Vec<NoteInfo>, AnkiError> {
-        ankiconnect::notes(self, ids).await
+        if self.tsunagi() {
+            tsunagi::notes(self, ids).await
+        } else {
+            ankiconnect::notes(self, ids).await
+        }
     }
 
     /// In days, or negative seconds while learning; in the order of `card_ids`.
@@ -247,7 +254,11 @@ impl Anki {
 
     /// Those of `ids` still in Anki; an error rather than a guess when Anki can't say.
     pub async fn existing(&self, ids: &[u64]) -> Result<Vec<u64>, AnkiError> {
-        ankiconnect::existing(self, ids).await
+        if self.tsunagi() {
+            tsunagi::existing(self, ids).await
+        } else {
+            ankiconnect::existing(self, ids).await
+        }
     }
 
     pub async fn delete(&self, ids: &[u64]) -> Result<(), AnkiError> {
@@ -264,7 +275,11 @@ impl Anki {
         note_id: u64,
         fields: &HashMap<String, String>,
     ) -> Result<(), AnkiError> {
-        ankiconnect::update_fields(self, note_id, fields).await
+        if self.tsunagi() {
+            tsunagi::update_fields(self, note_id, fields).await
+        } else {
+            ankiconnect::update_fields(self, note_id, fields).await
+        }
     }
 
     /// Stores a base64 file and returns the name Anki stored it under.
@@ -273,21 +288,51 @@ impl Anki {
         filename: &str,
         base64_data: &str,
     ) -> Result<String, AnkiError> {
-        ankiconnect::store_media(self, filename, base64_data).await
+        if self.tsunagi() {
+            tsunagi::store_media(self, filename, base64_data).await
+        } else {
+            ankiconnect::store_media(self, filename, base64_data).await
+        }
     }
 
     /// A media file as base64; `None` when Anki doesn't have it.
     pub async fn media(&self, filename: &str) -> Result<Option<String>, AnkiError> {
-        ankiconnect::media(self, filename).await
+        if self.tsunagi() {
+            tsunagi::media(self, filename).await
+        } else {
+            ankiconnect::media(self, filename).await
+        }
     }
 
     /// Opens Anki's browser on recent adds with the note's card selected.
     pub async fn open_note(&self, note_id: u64) -> Result<(), AnkiError> {
-        ankiconnect::open_note(self, note_id).await
+        self.browse(&format!("added:1 OR nid:{note_id}")).await?;
+        if let Ok(notes) = self.notes(&[note_id]).await {
+            if let Some(&card) = notes.first().and_then(|n| n.cards.first()) {
+                let _ = self.select_card(card).await;
+            }
+        }
+        Ok(())
     }
 
     pub async fn browse_notes(&self, ids: &[u64]) -> Result<(), AnkiError> {
         let ids = ids.iter().map(u64::to_string).collect::<Vec<_>>().join(",");
-        ankiconnect::browse(self, &format!("nid:{ids}")).await
+        self.browse(&format!("nid:{ids}")).await
+    }
+
+    async fn browse(&self, query: &str) -> Result<(), AnkiError> {
+        if self.tsunagi() {
+            tsunagi::browse(self, query).await
+        } else {
+            ankiconnect::browse(self, query).await
+        }
+    }
+
+    async fn select_card(&self, card_id: u64) -> Result<(), AnkiError> {
+        if self.tsunagi() {
+            tsunagi::select_card(self, card_id).await
+        } else {
+            ankiconnect::select_card(self, card_id).await
+        }
     }
 }

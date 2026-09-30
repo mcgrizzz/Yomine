@@ -103,8 +103,8 @@ pub async fn get_anki_sample_note(
     model_name: String,
     fields: Vec<String>,
 ) -> Result<SampleNote, String> {
-    let sample_note =
-        anki::probe(connection).sample_note(&model_name).await.map_err(|e| e.to_string())?;
+    let anki = anki::probe(connection).detected().await;
+    let sample_note = anki.sample_note(&model_name).await.map_err(|e| e.to_string())?;
     let templates: HashMap<String, String> = yomitan::get_term_card_formats(&yomitan_url)
         .await
         .unwrap_or_default()

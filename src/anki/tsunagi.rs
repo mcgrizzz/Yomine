@@ -14,10 +14,12 @@ use std::{
     time::Duration,
 };
 
+use base64::Engine;
 use reqwest::{
     Client,
     Method,
     RequestBuilder,
+    StatusCode,
 };
 use serde::{
     de::DeserializeOwned,
@@ -137,6 +139,10 @@ async fn send<T: DeserializeOwned>(anki: &Anki, request: RequestBuilder) -> Resu
 /// The response, or Tsunagi's reason for refusing the request.
 async fn accepted(anki: &Anki, request: RequestBuilder) -> Result<reqwest::Response, AnkiError> {
     let response = request.send().await.map_err(|e| transport(anki, e))?;
+    success(anki, response).await
+}
+
+async fn success(anki: &Anki, response: reqwest::Response) -> Result<reqwest::Response, AnkiError> {
     let status = response.status();
     if !status.is_success() {
         #[derive(Deserialize)]
@@ -191,12 +197,49 @@ struct Field {
     value: String,
 }
 
+pub(super) async fn existing(anki: &Anki, ids: &[u64]) -> Result<Vec<u64>, AnkiError> {
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let body = json!({
+        "where": [format!("id in {}", json!(ids))],
+        "select": "id",
+        "shape": "scalar",
+    });
+    let mut found: Vec<u64> = query(anki, "/v1/notes/query", body).await?;
+    found.sort_unstable();
+    Ok(found)
+}
+
 #[derive(Deserialize)]
-struct VocabNote {
+struct Note {
     id: u64,
     model_name: String,
     cards: Vec<u64>,
     fields: Vec<Field>,
+}
+
+impl From<Note> for NoteInfo {
+    fn from(note: Note) -> Self {
+        NoteInfo {
+            id: note.id,
+            note_type: note.model_name,
+            fields: note.fields.into_iter().map(|f| (f.name, f.value)).collect(),
+            cards: note.cards,
+        }
+    }
+}
+
+pub(super) async fn notes(anki: &Anki, ids: &[u64]) -> Result<Vec<NoteInfo>, AnkiError> {
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let body = json!({
+        "where": [format!("id in {}", json!(ids))],
+        "select": "id,model_name,cards,fields[].(name,value)",
+    });
+    let notes: Vec<Note> = query(anki, "/v1/notes/query", body).await?;
+    Ok(notes.into_iter().map(NoteInfo::from).collect())
 }
 
 /// Only the mapped note types, and only the fields the mapping reads.
@@ -219,16 +262,72 @@ pub(super) async fn vocab_notes(
         "where": [format!("id in {}", list(json!(ids))), format!("model_name in {}", list(json!(types)))],
         "select": format!("id,model_name,cards,fields[name in {}].(name,value)", list(json!(fields))),
     });
-    let notes: Vec<VocabNote> = query(anki, "/v1/notes/query", body).await?;
-    Ok(notes
-        .into_iter()
-        .map(|note| NoteInfo {
-            id: note.id,
-            note_type: note.model_name,
-            fields: note.fields.into_iter().map(|f| (f.name, f.value)).collect(),
-            cards: note.cards,
-        })
-        .collect())
+    let notes: Vec<Note> = query(anki, "/v1/notes/query", body).await?;
+    Ok(notes.into_iter().map(NoteInfo::from).collect())
+}
+
+pub(super) async fn update_fields(
+    anki: &Anki,
+    note_id: u64,
+    fields: &HashMap<String, String>,
+) -> Result<(), AnkiError> {
+    let request = request(anki, Method::PATCH, &format!("/v1/notes/{note_id}"));
+    accepted(anki, request.json(&json!({ "fields": fields }))).await?;
+    Ok(())
+}
+
+pub(super) async fn store_media(
+    anki: &Anki,
+    filename: &str,
+    base64_data: &str,
+) -> Result<String, AnkiError> {
+    #[derive(Deserialize)]
+    struct Response {
+        created: Vec<Stored>,
+        failed: Vec<Failed>,
+    }
+    #[derive(Deserialize)]
+    struct Stored {
+        filename: String,
+    }
+    #[derive(Deserialize)]
+    struct Failed {
+        message: String,
+    }
+    let body = json!({ "filename": filename, "data": base64_data });
+    let response: Response =
+        send(anki, request(anki, Method::POST, "/v1/media").json(&body)).await?;
+    if let Some(failed) = response.failed.into_iter().next() {
+        return Err(AnkiError::Rejected(failed.message));
+    }
+    let stored = response.created.into_iter().next();
+    stored
+        .map(|s| s.filename)
+        .ok_or_else(|| AnkiError::Unconfirmed("Tsunagi stored no file".into()))
+}
+
+pub(super) async fn media(anki: &Anki, filename: &str) -> Result<Option<String>, AnkiError> {
+    let mut url = reqwest::Url::parse("http://localhost/v1/media").expect("valid URL");
+    url.path_segments_mut().expect("base URL").push(filename);
+    let response =
+        request(anki, Method::GET, url.path()).send().await.map_err(|e| transport(anki, e))?;
+    if response.status() == StatusCode::NOT_FOUND {
+        return Ok(None);
+    }
+    let bytes = success(anki, response).await?.bytes().await.map_err(|e| transport(anki, e))?;
+    Ok(Some(base64::engine::general_purpose::STANDARD.encode(bytes)))
+}
+
+pub(super) async fn browse(anki: &Anki, query: &str) -> Result<(), AnkiError> {
+    let request = request(anki, Method::POST, "/v1/gui:browse");
+    accepted(anki, request.json(&json!({ "query": query }))).await?;
+    Ok(())
+}
+
+pub(super) async fn select_card(anki: &Anki, card_id: u64) -> Result<(), AnkiError> {
+    let request = request(anki, Method::POST, "/v1/gui:select-card");
+    accepted(anki, request.json(&json!({ "card_id": card_id }))).await?;
+    Ok(())
 }
 
 pub(super) async fn note_types(anki: &Anki) -> Result<Vec<Model>, AnkiError> {

@@ -169,16 +169,6 @@ pub(super) async fn note_types(anki: &Anki) -> Result<Vec<Model>, AnkiError> {
         .await
 }
 
-pub(super) async fn sample_note(
-    anki: &Anki,
-    note_type: &str,
-) -> Result<Option<HashMap<String, String>>, AnkiError> {
-    let query = format!("note:\"{}\"", note_type.replace('"', "\\\""));
-    let ids = find_notes(anki, &query).await?;
-    let Some(id) = ids.get(ids.len() / 2) else { return Ok(None) };
-    Ok(notes(anki, &[*id]).await?.into_iter().next().map(|note| note.fields))
-}
-
 pub(super) async fn find_notes(anki: &Anki, query: &str) -> Result<Vec<u64>, AnkiError> {
     request(anki, "findNotes", Some(json!({ "query": query }))).await
 }
@@ -274,18 +264,12 @@ pub(super) async fn media(anki: &Anki, filename: &str) -> Result<Option<String>,
     Ok(result.and_then(|v| v.as_str().map(str::to_string)))
 }
 
-pub(super) async fn open_note(anki: &Anki, note_id: u64) -> Result<(), AnkiError> {
-    browse(anki, &format!("added:1 OR nid:{note_id}")).await?;
-    if let Ok(notes) = notes(anki, &[note_id]).await {
-        if let Some(card) = notes.first().and_then(|n| n.cards.first()) {
-            let _ = request_empty(anki, "guiSelectCard", Some(json!({ "card": card }))).await;
-        }
-    }
-    Ok(())
-}
-
 pub(super) async fn browse(anki: &Anki, query: &str) -> Result<(), AnkiError> {
     request_empty(anki, "guiBrowse", Some(json!({ "query": query }))).await
+}
+
+pub(super) async fn select_card(anki: &Anki, card_id: u64) -> Result<(), AnkiError> {
+    request_empty(anki, "guiSelectCard", Some(json!({ "card": card_id }))).await
 }
 
 #[cfg(test)]

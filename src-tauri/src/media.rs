@@ -455,7 +455,7 @@ impl EnrichError {
     }
 }
 
-/// The note's current field values, or `None` when AnkiConnect can't serve it.
+/// The note's current field values, or `None` when Anki can't serve it.
 async fn snapshot_fields(note_id: u64) -> Option<HashMap<String, String>> {
     let notes = anki::current().notes(&[note_id]).await.ok()?;
     Some(notes.into_iter().next()?.fields)

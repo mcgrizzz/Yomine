@@ -554,7 +554,7 @@ pub async fn open_notes_in_anki(note_ids: Vec<u64>) -> Result<(), String> {
 fn gui_error(error: AnkiError) -> String {
     match error {
         AnkiError::Rejected(message) => message,
-        e => format!("AnkiConnect is unreachable: {e}"),
+        e => format!("Anki is unreachable: {e}"),
     }
 }
 
