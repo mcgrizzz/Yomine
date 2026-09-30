@@ -59,6 +59,7 @@
 	let saveError = $state<string | null>(null);
 	let ankiPhase = $state<Phase>('idle');
 	let ankiError = $state<ipc.ConnectionError | null>(null);
+	let ankiBackend = $state<ipc.AnkiBackend | null>(null);
 	let yomitanPhase = $state<Phase>('idle');
 	let yomitanError = $state<string | null>(null);
 	let yomitanVersion = $state<string | null>(null);
@@ -168,6 +169,7 @@
 		ankiGeneration++;
 		ankiPhase = 'idle';
 		ankiError = null;
+		ankiBackend = null;
 		clearCatalog();
 	}
 
@@ -184,8 +186,9 @@
 		ankiPhase = 'loading';
 		ankiError = null;
 		try {
-			await ipc.testAnkiConnection({ ...draft.anki_connection });
+			const backend = await ipc.testAnkiConnection({ ...draft.anki_connection });
 			if (generation !== ankiGeneration) return;
+			ankiBackend = backend;
 			ankiPhase = 'ready';
 			if (catalogPhase !== 'ready') await fetchModels();
 		} catch (error) {
@@ -558,7 +561,10 @@
 							class="status"
 							class:ok={ankiPhase === 'ready'}
 							class:warning={ankiPhase === 'failed'}
-							role="status">{connectionLabel(ankiPhase)}</span
+							role="status"
+							>{connectionLabel(ankiPhase)}{ankiBackend
+								? ` · ${ankiBackend.kind === 'tsunagi' ? `Tsunagi ${ankiBackend.version}` : 'AnkiConnect'}`
+								: ''}</span
 						>
 						<button
 							type="button"

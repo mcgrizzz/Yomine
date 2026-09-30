@@ -1000,7 +1000,9 @@ export interface ConnectionError {
 	detail: string;
 }
 
-export function testAnkiConnection(connection: AnkiConnectionSettings): Promise<number> {
+export type AnkiBackend = { kind: 'anki_connect' } | { kind: 'tsunagi'; version: string };
+
+export function testAnkiConnection(connection: AnkiConnectionSettings): Promise<AnkiBackend> {
 	return invoke('test_anki_connection', { connection });
 }
 

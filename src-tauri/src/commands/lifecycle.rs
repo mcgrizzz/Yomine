@@ -279,7 +279,7 @@ pub fn save_settings(
         || guard.settings.anki_model_mappings != settings.anki_model_mappings;
     persistence::save_json(&settings, "settings.json").map_err(|e| e.to_string())?;
     if connection_changed {
-        yomine::anki::api::configure_connection(settings.anki_connection.clone());
+        yomine::anki::configure(settings.anki_connection.clone());
     }
     guard.settings = settings.clone();
     if let Some(tools) = guard.language_tools.as_mut() {

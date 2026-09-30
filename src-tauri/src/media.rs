@@ -21,7 +21,7 @@ use tauri::{
 use tokio::sync::OnceCell;
 use yomine::{
     anki::{
-        api as anki_api,
+        self,
         FieldMapping,
     },
     core::settings::MiningMode,
@@ -194,17 +194,19 @@ async fn attach_local(
     format: &MediaFormat,
     mappings: &HashMap<String, FieldMapping>,
 ) -> Result<Option<Preview>, EnrichError> {
-    let note = anki_api::get_notes(vec![note_id])
+    let anki = anki::current();
+    let note = anki
+        .notes(&[note_id])
         .await
         .map_err(|e| e.to_string())?
         .into_iter()
         .next()
         .ok_or("Anki no longer has this note".to_string())?;
     let (audio_field, picture_field) =
-        media_fields(mappings.get(&note.model_name)).ok_or_else(|| {
+        media_fields(mappings.get(&note.note_type)).ok_or_else(|| {
             format!(
                 "Choose where {} keeps sentence audio and screenshots in Anki Settings",
-                note.model_name
+                note.note_type
             )
         })?;
 
@@ -231,9 +233,12 @@ async fn attach_local(
         let (Some(field), Some((bytes, extension))) = (field, file) else { continue };
         let name = format!("yomine-{note_id}.{extension}");
         let data = base64::engine::general_purpose::STANDARD.encode(bytes);
-        let stored = anki_api::store_media_file(&name, &data).await.map_err(|e| e.to_string())?;
-        if let Some(error) = stored.error {
-            return Err(EnrichError::Failed(format!("Anki didn't store {name}: {error}")));
+        match anki.store_media(&name, &data).await {
+            Ok(_) => {}
+            Err(anki::AnkiError::Rejected(error)) => {
+                return Err(EnrichError::Failed(format!("Anki didn't store {name}: {error}")))
+            }
+            Err(e) => return Err(e.to_string().into()),
         }
         let value =
             if is_picture { format!("<img src=\"{name}\">") } else { format!("[sound:{name}]") };
@@ -243,7 +248,7 @@ async fn attach_local(
             preview = Some(Preview::DataUri(data_uri(extension, &data)));
         }
     }
-    anki_api::update_note_fields(note_id, &fields).await?;
+    anki.update_fields(note_id, &fields).await.map_err(|e| e.to_string())?;
     Ok(preview)
 }
 
@@ -452,9 +457,8 @@ impl EnrichError {
 
 /// The note's current field values, or `None` when AnkiConnect can't serve it.
 async fn snapshot_fields(note_id: u64) -> Option<HashMap<String, String>> {
-    let notes = anki_api::get_notes(vec![note_id]).await.ok()?;
-    let note = notes.into_iter().next()?;
-    Some(note.fields.into_iter().map(|(name, field)| (name, field.value)).collect())
+    let notes = anki::current().notes(&[note_id]).await.ok()?;
+    Some(notes.into_iter().next()?.fields)
 }
 
 /// Seek, mine, then verify the enrichment actually changed the note: asbplayer's

@@ -9,10 +9,7 @@ use std::collections::{
 use wana_kana::IsJapaneseStr;
 
 use super::{
-    api::{
-        get_note_ids,
-        get_notes,
-    },
+    client::AnkiError,
     types::FieldMapping,
 };
 use crate::{
@@ -57,33 +54,31 @@ pub fn known_entry_keys() -> HashSet<String> {
 /// notes added in the last day (`added:1`).
 pub async fn get_recently_added(
     model_mapping: &HashMap<String, FieldMapping>,
-) -> Result<(Vec<String>, Vec<String>, Vec<String>), reqwest::Error> {
-    let note_ids = get_note_ids("added:1").await?;
+) -> Result<(Vec<String>, Vec<String>, Vec<String>), AnkiError> {
+    let anki = super::current();
+    let note_ids = anki.find_notes("added:1").await?;
     if note_ids.is_empty() {
         return Ok((Vec::new(), Vec::new(), Vec::new()));
     }
-    let notes = get_notes(note_ids).await?;
+    let notes = anki.notes(&note_ids).await?;
 
     let mut terms = Vec::new();
     let mut keys = Vec::new();
     let mut sentences = Vec::new();
     for note in notes {
-        let Some(mapping) = model_mapping.get(&note.model_name) else { continue };
+        let Some(mapping) = model_mapping.get(&note.note_type) else { continue };
         if let Some(field) = note.fields.get(&mapping.term_field) {
-            let term = strip_html(&field.value).trim().to_string();
+            let term = strip_html(field).trim().to_string();
             if !term.is_empty() {
-                let reading = note
-                    .fields
-                    .get(&mapping.reading_field)
-                    .map(|f| f.value.as_str())
-                    .unwrap_or_default();
+                let reading =
+                    note.fields.get(&mapping.reading_field).map(String::as_str).unwrap_or_default();
                 keys.push(entry_key(&term, reading));
                 terms.push(term);
             }
         }
         if let Some(sentence_field) = &mapping.sentence_field {
             if let Some(field) = note.fields.get(sentence_field) {
-                let sentence = normalize_sentence(&field.value);
+                let sentence = normalize_sentence(field);
                 if !sentence.is_empty() {
                     sentences.push(sentence);
                 }
@@ -125,25 +120,12 @@ pub fn mark_notes_deleted(note_ids: &[u64]) -> Result<(), String> {
     db::with(|conn| db::notes::mark_deleted(conn, note_ids, db::now_ms()))
 }
 
-/// Note ids that still exist in Anki; `None` when unreachable (keep caches).
-async fn existing_note_ids(ids: &[u64]) -> Option<std::collections::HashSet<u64>> {
-    let mut existing = std::collections::HashSet::new();
-    for chunk in ids.chunks(500) {
-        let query =
-            format!("nid:{}", chunk.iter().map(u64::to_string).collect::<Vec<_>>().join(","));
-        match get_note_ids(&query).await {
-            Ok(found) => existing.extend(found),
-            Err(_) => return None,
-        }
-    }
-    Some(existing)
-}
-
 /// The open collection's harvested and recorded sentences, minus notes since deleted
 /// in Anki (marked gone in passing). Unreachable Anki reads the latest harvested
 /// collection and prunes nothing.
 pub async fn mined_sentences_pruned() -> Vec<String> {
-    let open = super::api::active_profile().await.ok();
+    let anki = super::current();
+    let open = anki.profile().await.ok();
     let loaded = db::with(|conn| {
         let collection = match &open {
             Some(name) => name.clone(),
@@ -164,7 +146,9 @@ pub async fn mined_sentences_pruned() -> Vec<String> {
     let ids: Vec<u64> =
         harvested.iter().chain(recorded.iter()).map(|entry| entry.note_id).collect();
     if open.is_some() && !ids.is_empty() {
-        if let Some(existing) = existing_note_ids(&ids).await {
+        // An error keeps every entry: only Anki's own answer marks a note deleted.
+        if let Ok(existing) = anki.existing(&ids).await {
+            let existing: HashSet<u64> = existing.into_iter().collect();
             let gone: Vec<u64> = ids.iter().copied().filter(|id| !existing.contains(id)).collect();
             harvested.retain(|entry| existing.contains(&entry.note_id));
             recorded.retain(|entry| existing.contains(&entry.note_id));

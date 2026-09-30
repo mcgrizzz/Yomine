@@ -437,7 +437,7 @@ async fn load_file(
     // refresh against it in the background via `terms-refreshed`.
     let app_handle = app.clone();
     tauri::async_runtime::spawn(async move {
-        if yomine::anki::api::get_version().await.is_ok() {
+        if yomine::anki::reachable().await {
             if let Err(e) = live_refresh(&app_handle).await {
                 let _ = app_handle.emit(
                     names::ERROR,
@@ -646,7 +646,7 @@ pub(crate) async fn load_asbplayer_into_state(
     // Same background live-Anki refresh as `process_file`.
     let app_handle = app.clone();
     tauri::async_runtime::spawn(async move {
-        if yomine::anki::api::get_version().await.is_ok() {
+        if yomine::anki::reachable().await {
             if let Err(e) = live_refresh(&app_handle).await {
                 let _ = app_handle.emit(
                     names::ERROR,
@@ -856,7 +856,7 @@ pub async fn reload_current_file(
 
     let app_handle = app.clone();
     tauri::async_runtime::spawn(async move {
-        if yomine::anki::api::get_version().await.is_ok() {
+        if yomine::anki::reachable().await {
             if let Err(e) = live_refresh(&app_handle).await {
                 let _ = app_handle.emit(
                     names::ERROR,

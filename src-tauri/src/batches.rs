@@ -13,7 +13,7 @@ use serde::{
 use tauri::State;
 use yomine::{
     anki::{
-        api,
+        self,
         mined,
     },
     core::{
@@ -256,7 +256,7 @@ pub fn load(id: &str) -> Result<BatchRecord, String> {
 /// don't exist.
 pub async fn require_profile(batch: &BatchRecord, action: &str) -> Result<(), String> {
     let Some(profile) = &batch.collection else { return Ok(()) };
-    let open = api::active_profile().await.map_err(|e| format!("Anki is unreachable: {e}"))?;
+    let open = anki::current().profile().await.map_err(|e| format!("Anki is unreachable: {e}"))?;
     if open != *profile {
         return Err(format!(
             "This batch was mined into the Anki profile \"{profile}\". Switch Anki to it to {action}."
@@ -267,7 +267,7 @@ pub async fn require_profile(batch: &BatchRecord, action: &str) -> Result<(), St
 
 /// The open Anki profile, or the last one harvested while Anki is unreachable.
 async fn open_profile() -> Result<String, String> {
-    match api::active_profile().await {
+    match anki::current().profile().await {
         Ok(profile) => Ok(profile),
         Err(_) => db::with(|conn| db::anki::active_collection(conn)),
     }
@@ -347,7 +347,8 @@ pub async fn create_batch(
     for item in &mut items {
         item.outcome = Outcome::Unattempted;
     }
-    let profile = api::active_profile().await.map_err(|e| format!("Anki is unreachable: {e}"))?;
+    let profile =
+        anki::current().profile().await.map_err(|e| format!("Anki is unreachable: {e}"))?;
     let now = chrono::Utc::now();
     let batch = BatchRecord {
         id: now.timestamp_nanos_opt().ok_or("Could not assign a batch ID")?.to_string(),
@@ -394,11 +395,12 @@ pub async fn undo_batch(batch_id: String) -> Result<UndoResult, String> {
             _ => None,
         })
         .collect();
-    let existing = api::existing_note_ids_strict(&ids).await?;
+    let anki = anki::current();
+    let existing = anki.existing(&ids).await.map_err(|e| e.to_string())?;
     if !existing.is_empty() {
-        api::delete_notes(&existing).await?;
+        anki.delete(&existing).await.map_err(|e| e.to_string())?;
     }
-    let remaining = api::existing_note_ids_strict(&existing).await?;
+    let remaining = anki.existing(&existing).await.map_err(|e| e.to_string())?;
     mark_deleted(&mut batch, &remaining);
     save(&batch).map_err(|e| format!("Anki deletion was checked, but recovery history could not be saved: {}. Retry Undo to reconcile it.", e.message))?;
     let gone: Vec<u64> = ids.iter().copied().filter(|id| !remaining.contains(id)).collect();

@@ -41,7 +41,7 @@ pub async fn get_setup_status(
     };
     let has_frequency_dict = frequency_dict_count > 0;
 
-    let anki_connected = anki::api::get_version().await.is_ok();
+    let anki_connected = anki::reachable().await;
     let yomitan_connected = yomine::yomitan::get_version(&yomitan_url).await.is_ok();
     let media_ready = match mode {
         MiningMode::Asbplayer => player.status().await?.ws_clients > 0,

@@ -68,12 +68,35 @@ async fn poll_anki(app: AppHandle) {
     loop {
         tick.tick().await;
 
-        let connected = anki::api::get_version().await.is_ok();
+        let connected = anki::reachable().await || adopt_default_tsunagi(&app).await;
         if last_connected != Some(connected) {
             let _ = app.emit(names::ANKI_STATUS, AnkiStatus { connected, fetching: false });
             last_connected = Some(connected);
         }
     }
+}
+
+/// Saves a Tsunagi found on its default port while the connection is still the default.
+async fn adopt_default_tsunagi(app: &AppHandle) -> bool {
+    let current = app.state::<Mutex<AppState>>().lock().unwrap().settings.anki_connection.clone();
+    let Some(found) = anki::default_tsunagi(&current).await else { return false };
+    let state = app.state::<Mutex<AppState>>();
+    let mut guard = state.lock().unwrap();
+    // The user may have saved a connection during the probe.
+    if guard.settings.anki_connection != current {
+        return false;
+    }
+    let mut settings = guard.settings.clone();
+    settings.anki_connection = found.clone();
+    if let Err(e) = yomine::persistence::save_json(&settings, "settings.json") {
+        eprintln!("Failed to save the Tsunagi connection: {e}");
+        return false;
+    }
+    anki::configure(found);
+    guard.settings = settings.clone();
+    guard.invalidate_anki_cache();
+    let _ = app.emit(names::SETTINGS_CHANGED, settings);
+    true
 }
 
 /// yomitan-api reachability probe: emit `yomitan-status` on change.

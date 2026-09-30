@@ -8,32 +8,19 @@ use std::{
         Arc,
         Mutex,
     },
-    time::{
-        Duration,
-        Instant,
-    },
+    time::Instant,
 };
 
-use futures::{
-    stream,
-    StreamExt,
-    TryStreamExt,
-};
 use rayon::iter::{
     IntoParallelIterator,
     ParallelIterator,
 };
-use tokio::time::sleep;
 use wana_kana::IsJapaneseStr;
 
 use super::{
-    api::{
-        active_profile,
-        get_intervals,
-        get_note_ids,
-        get_notes,
-        get_version,
-        Note,
+    client::{
+        AnkiError,
+        NoteInfo,
     },
     scoring::{
         MatchEvidence,
@@ -41,7 +28,6 @@ use super::{
     },
     types::{
         FieldMapping,
-        Model,
         Vocab,
     },
 };
@@ -74,7 +60,7 @@ impl AnkiState {
         model_mapping: HashMap<String, FieldMapping>,
         frequency_manager: Arc<FrequencyManager>,
         known_interval: u32,
-    ) -> Result<Self, reqwest::Error> {
+    ) -> Result<Self, AnkiError> {
         let vocab = harvest(&model_mapping).await.inspect_err(|_| anki_unreachable())?;
         Ok(Self::from_vocab(vocab, frequency_manager, known_interval))
     }
@@ -440,14 +426,13 @@ pub(crate) fn anki_unreachable() {
 }
 
 /// Reads the active collection's notes into the database and returns its cards.
-async fn harvest(
-    model_mapping: &HashMap<String, FieldMapping>,
-) -> Result<Vec<Vocab>, reqwest::Error> {
+async fn harvest(model_mapping: &HashMap<String, FieldMapping>) -> Result<Vec<Vocab>, AnkiError> {
     let start = Instant::now();
-    let collection = active_profile().await?;
+    let anki = super::current();
+    let collection = anki.profile().await?;
     let mapping = serde_json::to_string(&model_mapping.iter().collect::<BTreeMap<_, _>>())
         .expect("field mappings are plain data");
-    let note_ids = get_note_ids("deck:*").await?;
+    let note_ids = anki.find_notes("deck:*").await?;
     let now = db::now_ms();
 
     let current = CURRENT.lock().unwrap_or_else(|e| e.into_inner()).contains(&collection);
@@ -463,7 +448,7 @@ async fn harvest(
             // harvest late yesterday.
             let days = (now - harvested_at) / 86_400_000 + 1;
             let edited: HashSet<u64> =
-                get_note_ids(&format!("edited:{days}")).await?.into_iter().collect();
+                anki.find_notes(&format!("edited:{days}")).await?.into_iter().collect();
             note_ids
                 .iter()
                 .copied()
@@ -474,10 +459,10 @@ async fn harvest(
     };
     let full = fetch.len() == note_ids.len();
 
-    let (mut cards, sentences) = read_notes(model_mapping, get_notes(fetch.clone()).await?);
+    let (mut cards, sentences) = read_notes(model_mapping, anki.notes(&fetch).await?);
     let card_ids: Vec<u64> = cards.iter().filter_map(|(_, card)| card.card_id).collect();
     let intervals: HashMap<u64, i32> =
-        card_ids.iter().copied().zip(get_intervals(card_ids.clone()).await?).collect();
+        card_ids.iter().copied().zip(anki.intervals(&card_ids).await?).collect();
     for (_, card) in &mut cards {
         // Negative intervals are in seconds (learning/relearning), positive in days.
         card.interval = card.card_id.and_then(|id| intervals.get(&id)).map(|&interval| {
@@ -529,33 +514,31 @@ async fn harvest(
 /// Vocab cards, by note id, and sentence-field values (issue #3) of the given notes.
 fn read_notes(
     model_mapping: &HashMap<String, FieldMapping>,
-    notes: Vec<Note>,
+    notes: Vec<NoteInfo>,
 ) -> (Vec<(u64, Vocab)>, Vec<super::mined::MinedSentence>) {
     let sentences = notes
         .iter()
         .filter_map(|note| {
-            let mapping = model_mapping.get(&note.model_name)?;
+            let mapping = model_mapping.get(&note.note_type)?;
             let sentence_field = mapping.sentence_field.as_ref()?;
-            let value = &note.fields.get(sentence_field)?.value;
+            let value = note.fields.get(sentence_field)?;
             let normalized = super::mined::normalize_sentence(value);
-            (!normalized.is_empty()).then_some(super::mined::MinedSentence {
-                note_id: note.note_id,
-                sentence: normalized,
-            })
+            (!normalized.is_empty())
+                .then_some(super::mined::MinedSentence { note_id: note.id, sentence: normalized })
         })
         .collect();
 
     let cards = notes
         .into_par_iter()
         .filter_map(|note| {
-            let field_mapping = model_mapping.get(&note.model_name)?;
-            let term = note.fields.get(&field_mapping.term_field)?.value.clone();
-            let mut reading = note.fields.get(&field_mapping.reading_field)?.value.clone();
+            let field_mapping = model_mapping.get(&note.note_type)?;
+            let term = note.fields.get(&field_mapping.term_field)?.clone();
+            let mut reading = note.fields.get(&field_mapping.reading_field)?.clone();
             if reading.trim().is_empty() && term.as_str().is_kana() {
                 reading = term.clone();
             }
             Some((
-                note.note_id,
+                note.id,
                 Vocab {
                     term,
                     reading: reading.filter_kana().normalize_long_vowel().into_owned(),
@@ -566,57 +549,6 @@ fn read_notes(
         })
         .collect();
     (cards, sentences)
-}
-
-pub async fn get_models(
-    client: &super::api::AnkiClient,
-) -> Result<Vec<Model>, crate::core::errors::YomineError> {
-    let model_ids = client.get_model_ids().await?;
-    stream::iter(model_ids)
-        .map(|(name, id)| async move {
-            let fields = client.get_field_names(&name).await?;
-            Ok(Model { name, id, fields, sample_note: None })
-        })
-        .buffer_unordered(8)
-        .try_collect()
-        .await
-}
-
-pub async fn wait_awake(wait_time: u64, max_attempts: u32) -> Result<bool, reqwest::Error> {
-    for attempt in 1..=max_attempts {
-        match get_version().await {
-            Ok(version) => {
-                println!("AnkiConnect is online. Version: {}", version);
-                return Ok(true);
-            }
-            Err(err) => {
-                println!(
-                    "AnkiConnect attempt {} of {} failed. Retrying in {} seconds... Error: {}",
-                    attempt, max_attempts, wait_time, err
-                );
-                if attempt < max_attempts {
-                    sleep(Duration::from_secs(wait_time)).await;
-                }
-            }
-        }
-    }
-    Ok(false)
-}
-
-pub async fn get_sample_note_for_model(
-    client: &super::api::AnkiClient,
-    model_name: &str,
-) -> Result<Option<HashMap<String, String>>, crate::core::errors::YomineError> {
-    match client.get_sample_note_for_model(model_name).await? {
-        Some(note) => {
-            let mut sample_fields = HashMap::new();
-            for (field_name, field) in note.fields {
-                sample_fields.insert(field_name, field.value);
-            }
-            Ok(Some(sample_fields))
-        }
-        None => Ok(None),
-    }
 }
 
 #[cfg(test)]

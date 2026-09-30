@@ -15,9 +15,12 @@ use tauri::{
 };
 use yomine::{
     anki::{
-        api as anki_api,
+        self,
         mined,
+        AnkiError,
+        CreateOutcome,
         FieldMapping,
+        NewNote,
     },
     core::{
         settings::MiningMode,
@@ -431,12 +434,11 @@ async fn mine(
 
     let _ = progress.send(LoadingMessage::new("Creating Anki note…"));
 
+    let anki = anki::current();
     for media in rendered.audio_media.iter().chain(rendered.dictionary_media.iter()) {
-        let response = anki_api::store_media_file(&media.anki_filename, &media.content)
-            .await
-            .map_err(|e| Failure::new("Uploading media", FailureScope::Shared, e))?;
-        match response.error {
-            Some(error) if options.require_dictionary_media => {
+        match anki.store_media(&media.anki_filename, &media.content).await {
+            Ok(_) => {}
+            Err(AnkiError::Rejected(error)) if options.require_dictionary_media => {
                 return Err(Failure::new(
                     "Uploading media",
                     FailureScope::Unknown,
@@ -444,8 +446,10 @@ async fn mine(
                 )
                 .with_fallback(Fallback::WithoutDictionaryMedia))
             }
-            Some(error) => eprintln!("storeMediaFile {}: {}", media.anki_filename, error),
-            None => {}
+            Err(AnkiError::Rejected(error)) => {
+                eprintln!("storeMediaFile {}: {}", media.anki_filename, error)
+            }
+            Err(e) => return Err(Failure::new("Uploading media", FailureScope::Shared, e)),
         }
     }
 
@@ -458,9 +462,20 @@ async fn mine(
         tags.push("yomine::auto".to_string());
     }
     batches::checkpoint(batch, index, Outcome::Attempting)?;
-    let response = match anki_api::add_note(&format.deck, &format.model, &fields, &tags).await {
-        Ok(response) => response,
-        Err(e) if e.is_connect() => {
+    let note =
+        NewNote { deck: &format.deck, note_type: &format.model, fields: &fields, tags: &tags };
+    let id = match anki.create_note(&note).await {
+        Ok(CreateOutcome::Created(id)) => id,
+        Ok(CreateOutcome::Duplicate) => {
+            return batches::checkpoint(batch, index, Outcome::Duplicate)
+        }
+        Ok(CreateOutcome::Rejected { reason, setup }) => {
+            let scope = if setup { FailureScope::Shared } else { FailureScope::Unknown };
+            let error = Failure::new("Creating note", scope, reason);
+            batches::checkpoint(batch, index, Outcome::Failed { error: error.clone() })?;
+            return Err(error);
+        }
+        Err(e @ AnkiError::NotSent(_)) => {
             let error = Failure::new("Anki connection", FailureScope::Shared, e);
             batches::checkpoint(batch, index, Outcome::Failed { error: error.clone() })?;
             return Err(error);
@@ -476,33 +491,6 @@ async fn mine(
             ))
         }
     };
-    let note_id = match response.error {
-        None => response.result,
-        Some(err) if err.contains("duplicate") => {
-            return batches::checkpoint(batch, index, Outcome::Duplicate);
-        }
-        Some(err) => {
-            let lower = err.to_lowercase();
-            let scope = if ["deck", "model", "note type", "api key", "permission"]
-                .iter()
-                .any(|s| lower.contains(s))
-            {
-                FailureScope::Shared
-            } else {
-                FailureScope::Unknown
-            };
-            let error = Failure::new("Creating note", scope, err);
-            batches::checkpoint(batch, index, Outcome::Failed { error: error.clone() })?;
-            return Err(error);
-        }
-    };
-    let id = note_id.ok_or_else(|| {
-        Failure::new(
-            "Creating note",
-            FailureScope::Stop,
-            "Anki returned no note ID. Check Anki before retrying.",
-        )
-    })?;
     batches::checkpoint(
         batch,
         index,
@@ -516,7 +504,7 @@ async fn mine(
             error: None,
         },
     )?;
-    let collection = yomine::anki::api::active_profile().await.ok();
+    let collection = anki.profile().await.ok();
     mined::record_note(
         id,
         &sentence,
@@ -547,37 +535,26 @@ pub async fn get_media_preview(filename: String) -> Result<Option<String>, Strin
         Some("webm") => "audio/webm",
         _ => return Ok(None),
     };
-    let data = anki_api::retrieve_media_file(&filename).await.map_err(|e| e.to_string())?;
+    let data = anki::current().media(&filename).await.map_err(|e| e.to_string())?;
     Ok(data.map(|d| format!("data:{mime};base64,{d}")))
 }
 
 /// Open Anki's browser on recent adds with the mined note's card selected.
 #[tauri::command]
 pub async fn open_in_anki(note_id: u64) -> Result<(), String> {
-    let response = anki_api::gui_browse(&format!("added:1 OR nid:{}", note_id))
-        .await
-        .map_err(|e| format!("AnkiConnect is unreachable: {}", e))?;
-    if let Some(err) = response.error {
-        return Err(err);
-    }
-    if let Ok(notes) = anki_api::get_notes(vec![note_id]).await {
-        if let Some(card) = notes.first().and_then(|n| n.cards.first()) {
-            let _ = anki_api::gui_select_card(*card).await;
-        }
-    }
-    Ok(())
+    anki::current().open_note(note_id).await.map_err(gui_error)
 }
 
 /// Open Anki's browser on a set of notes (post-batch review).
 #[tauri::command]
 pub async fn open_notes_in_anki(note_ids: Vec<u64>) -> Result<(), String> {
-    let ids = note_ids.iter().map(u64::to_string).collect::<Vec<_>>().join(",");
-    let response = anki_api::gui_browse(&format!("nid:{}", ids))
-        .await
-        .map_err(|e| format!("AnkiConnect is unreachable: {}", e))?;
-    match response.error {
-        None => Ok(()),
-        Some(err) => Err(err),
+    anki::current().browse_notes(&note_ids).await.map_err(gui_error)
+}
+
+fn gui_error(error: AnkiError) -> String {
+    match error {
+        AnkiError::Rejected(message) => message,
+        e => format!("AnkiConnect is unreachable: {e}"),
     }
 }
 
