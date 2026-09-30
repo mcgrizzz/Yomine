@@ -42,6 +42,16 @@ pub enum AnkiError {
     Rejected(String),
 }
 
+/// A message from Tsunagi's event stream about notes.
+pub enum NoteEvent {
+    /// Connected; changes made before it may have been missed.
+    Ready,
+    Changed(Vec<u64>),
+    Deleted(Vec<u64>),
+    /// Notes changed that Tsunagi can't name (an undo, a sync), or messages were dropped.
+    Stale,
+}
+
 pub struct NoteInfo {
     pub id: u64,
     pub note_type: String,
@@ -148,9 +158,32 @@ impl Anki {
         matches!(self.backend, Backend::Tsunagi { .. })
     }
 
+    /// Whether this handle is still the configured connection, answering as Tsunagi.
+    pub fn is_configured_tsunagi(&self) -> bool {
+        self.tsunagi()
+            && self.connection == connection::active()
+            && connection::backend().as_ref() == Some(&self.backend)
+    }
+
+    /// Follows note changes until the stream ends, returning the reason Tsunagi gave for
+    /// closing it; only Tsunagi has one.
+    pub async fn follow_notes(
+        &self,
+        on: impl FnMut(NoteEvent),
+    ) -> Result<Option<String>, AnkiError> {
+        if !self.tsunagi() {
+            return Err(AnkiError::Rejected("Only Tsunagi announces changes".into()));
+        }
+        tsunagi::follow_notes(self, on).await
+    }
+
     /// The open profile's name, which keys Yomine's copy of its collection.
     pub async fn profile(&self) -> Result<String, AnkiError> {
-        ankiconnect::active_profile(self).await
+        if self.tsunagi() {
+            tsunagi::profile(self).await
+        } else {
+            ankiconnect::active_profile(self).await
+        }
     }
 
     pub async fn note_types(&self) -> Result<Vec<Model>, AnkiError> {

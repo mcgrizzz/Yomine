@@ -265,6 +265,43 @@ pub async fn require_profile(batch: &BatchRecord, action: &str) -> Result<(), St
     Ok(())
 }
 
+/// Lemmas the collection's newest batch from `fingerprint` is creating notes for, or has
+/// created them for without recording them yet: Anki can announce a note before `mine`
+/// records it.
+pub fn unrecorded_lemmas(collection: &str, fingerprint: &str) -> Vec<String> {
+    let batch = db::with(|conn| {
+        db::batches::latest_id(conn, Some(collection))?
+            .map(|id| db::batches::read(conn, &id))
+            .transpose()
+            .map(Option::flatten)
+    });
+    let Some(batch) = batch.ok().flatten().and_then(|b| BatchRecord::from_stored(b).ok()) else {
+        return Vec::new();
+    };
+    if batch.source.fingerprint != fingerprint {
+        return Vec::new();
+    }
+    let created: Vec<u64> = batch
+        .items
+        .iter()
+        .filter_map(|i| match i.outcome {
+            Outcome::Created { note_id, .. } => Some(note_id),
+            _ => None,
+        })
+        .collect();
+    let recorded = db::with(|conn| db::notes::recorded(conn, &created)).unwrap_or_default();
+    batch
+        .items
+        .into_iter()
+        .filter(|item| match item.outcome {
+            Outcome::Attempting => true,
+            Outcome::Created { note_id, .. } => !recorded.contains(&note_id),
+            _ => false,
+        })
+        .map(|item| item.lemma)
+        .collect()
+}
+
 /// The open Anki profile, or the last one harvested while Anki is unreachable.
 async fn open_profile() -> Result<String, String> {
     match anki::current().profile().await {

@@ -4,10 +4,14 @@
 use std::{
     collections::HashSet,
     sync::{
-        atomic::Ordering,
+        atomic::{
+            AtomicBool,
+            Ordering,
+        },
         Arc,
         Mutex,
     },
+    time::Duration,
 };
 
 use tauri::{
@@ -21,12 +25,14 @@ use yomine::{
         comprehensibility::calculate_sentence_comprehension,
         mined,
         AnkiState,
+        NoteEvent,
     },
     core::pipeline::{
         apply_filters,
         refilter_known,
         AnkiFilter,
     },
+    persistence::db,
 };
 
 use crate::{
@@ -72,14 +78,104 @@ pub(crate) async fn sync(app: &AppHandle, progress: bool) -> Result<(), String> 
     Ok(())
 }
 
+/// Set while Tsunagi's event stream is connected, which makes background syncs unneeded.
+static FOLLOWING: AtomicBool = AtomicBool::new(false);
+
+const RECONNECT_DELAY: Duration = Duration::from_secs(5);
+
 /// A sync in the background, for a moment Anki may have changed.
 pub(crate) fn hint(app: &AppHandle) {
+    if FOLLOWING.load(Ordering::Relaxed) {
+        return;
+    }
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         if let Err(e) = sync(&app, false).await {
             eprintln!("Anki sync: {e}");
         }
     });
+}
+
+/// Follows Tsunagi's event stream while the configured connection is Tsunagi, so changes
+/// reach Yomine's copy as they happen. Logs only when following starts or stops, or the
+/// reason it can't changes.
+pub(crate) fn follow_events(app: AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        let mut last_failure = None;
+        loop {
+            let anki = anki::current();
+            if anki.is_configured_tsunagi() {
+                let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+                let connection_changed = async {
+                    while anki.is_configured_tsunagi() {
+                        tokio::time::sleep(RECONNECT_DELAY).await;
+                    }
+                };
+                let reason = tokio::select! {
+                    result = anki.follow_notes(|event| drop(sender.send(event))) => match result {
+                        Ok(Some(reason)) => format!("Tsunagi closed the stream ({reason})"),
+                        Ok(None) => "the stream ended".to_string(),
+                        Err(e) => e.to_string(),
+                    },
+                    _ = connection_changed => "the connection or add-on changed".to_string(),
+                    _ = apply_events(&app, receiver) => "the stream ended".to_string(),
+                };
+                if FOLLOWING.swap(false, Ordering::Relaxed) {
+                    eprintln!("Stopped following Tsunagi's changes: {reason}");
+                } else if last_failure.as_ref() != Some(&reason) {
+                    eprintln!("Can't follow Tsunagi's changes: {reason}");
+                }
+                last_failure = Some(reason);
+            }
+            tokio::time::sleep(RECONNECT_DELAY).await;
+        }
+    });
+}
+
+async fn apply_events(
+    app: &AppHandle,
+    mut receiver: tokio::sync::mpsc::UnboundedReceiver<NoteEvent>,
+) {
+    while let Some(first) = receiver.recv().await {
+        // Messages that arrived during the last sync are applied together.
+        let mut events = vec![first];
+        while let Ok(event) = receiver.try_recv() {
+            events.push(event);
+        }
+        let (mut catch_up, mut changed, mut deleted) = (false, Vec::new(), Vec::new());
+        for event in events {
+            match event {
+                // Messages sent while Yomine wasn't listening aren't replayed.
+                NoteEvent::Ready => {
+                    if !FOLLOWING.swap(true, Ordering::Relaxed) {
+                        println!("Following Tsunagi's changes");
+                    }
+                    catch_up = true;
+                }
+                NoteEvent::Stale => catch_up = true,
+                NoteEvent::Changed(ids) => changed.extend(ids),
+                NoteEvent::Deleted(ids) => deleted.extend(ids),
+            }
+        }
+        let mapping =
+            app.state::<Mutex<AppState>>().lock().unwrap().settings.anki_model_mappings.clone();
+        let result = if catch_up {
+            anki::sync::sync(&mapping).await
+        } else if !changed.is_empty() || !deleted.is_empty() {
+            anki::sync::sync_changed(&mapping, &changed, &deleted).await
+        } else {
+            continue;
+        };
+        match result {
+            Ok(true) => {
+                if let Err(e) = refresh(app, Refresh::Live).await {
+                    eprintln!("Anki refresh: {e}");
+                }
+            }
+            Ok(false) => {}
+            Err(e) => eprintln!("Anki sync: {e}"),
+        }
+    }
 }
 
 /// Rebuilds the known words from Yomine's copy, re-filters the loaded file against them
@@ -135,11 +231,8 @@ pub(crate) async fn refresh(app: &AppHandle, mode: Refresh) -> Result<RefreshOut
             .await
             .map_err(|e| e.to_string())?,
         Refresh::Live => {
-            let mined: HashSet<String> = fingerprint
-                .map(|f| mined::mined_terms(&f))
-                .unwrap_or_default()
-                .into_iter()
-                .collect();
+            let mined: HashSet<String> =
+                fingerprint.map(|f| mined_lemmas(&f)).unwrap_or_default().into_iter().collect();
             let ignored = tools.ignore_list.lock().map_err(|_| "Failed to lock ignore list")?;
             let keep = |t: &yomine::core::Term| {
                 ignored.contains(&t.lemma_form) || mined.contains(&t.lemma_form)
@@ -181,9 +274,21 @@ pub(crate) async fn refresh(app: &AppHandle, mode: Refresh) -> Result<RefreshOut
     Ok(RefreshOutcome::Done)
 }
 
+/// Lemmas mined from a source: Yomine's record of the notes it created, and those the
+/// running batch hasn't recorded yet.
+fn mined_lemmas(fingerprint: &str) -> Vec<String> {
+    let mut lemmas = mined::mined_terms(fingerprint);
+    if let Ok(collection) = db::with(|conn| db::anki::active_collection(conn)) {
+        lemmas.extend(crate::batches::unrecorded_lemmas(&collection, fingerprint));
+    }
+    lemmas.sort_unstable();
+    lemmas.dedup();
+    lemmas
+}
+
 pub(crate) fn mined_state(state: &AppState) -> MinedStateDto {
     let terms = BatchSource::from_file(&state.file)
-        .map(|source| mined::mined_terms(&source.fingerprint))
+        .map(|source| mined_lemmas(&source.fingerprint))
         .unwrap_or_default();
     MinedStateDto { mined_terms: terms, mined_sentences: mined::mined_sentences() }
 }

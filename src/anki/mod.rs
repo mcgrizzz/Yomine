@@ -20,6 +20,7 @@ pub use client::{
     Backend,
     CreateOutcome,
     NewNote,
+    NoteEvent,
     NoteInfo,
 };
 pub use connection::{

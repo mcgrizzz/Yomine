@@ -61,6 +61,18 @@ pub fn live_sentences(conn: &Connection, collection: &str) -> rusqlite::Result<V
     .collect()
 }
 
+/// Those of `note_ids` Yomine has recorded, deleted or not.
+pub fn recorded(conn: &Connection, note_ids: &[u64]) -> rusqlite::Result<Vec<u64>> {
+    let mut statement = conn.prepare("SELECT 1 FROM notes WHERE note_id = ?1")?;
+    let mut found = Vec::new();
+    for id in note_ids {
+        if statement.exists(params![*id as i64])? {
+            found.push(*id);
+        }
+    }
+    Ok(found)
+}
+
 /// The collection's notes Yomine hasn't seen deleted.
 pub fn live_ids(conn: &Connection, collection: &str) -> rusqlite::Result<Vec<u64>> {
     conn.prepare("SELECT note_id FROM notes WHERE deleted_at IS NULL AND collection = ?1")?

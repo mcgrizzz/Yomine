@@ -56,6 +56,7 @@ pub fn spawn(app: AppHandle) {
     tauri::async_runtime::spawn(poll_anki(app.clone()));
     tauri::async_runtime::spawn(poll_yomitan(app.clone()));
     tauri::async_runtime::spawn(poll_knowledge(app.clone()));
+    crate::anki_sync::follow_events(app.clone());
     tauri::async_runtime::spawn(poll_asbplayer_follow(app));
 }
 
