@@ -798,7 +798,7 @@ export interface BatchFailure {
 	scope: 'item' | 'shared' | 'unknown' | 'stop';
 	message: string;
 	fallback: 'without_dictionary_media' | null;
-	kind: 'media_unverified' | 'media_fields_unset' | 'transient' | null;
+	kind: 'media_unverified' | 'media_fields_unset' | 'transient' | 'part_only' | null;
 	/** With `media_fields_unset`: the note type that needs media fields. */
 	note_type?: string;
 }
@@ -857,12 +857,13 @@ export interface MineOptions {
 	require_dictionary_media: boolean;
 }
 
-/** The entry mining picks when none was chosen, as an index into the scan of `scanText`. */
+/** The entry mining picks when none was chosen, as an index into the scan of `scanText`.
+ * `null` when no entry matches the whole term. */
 export function getDefaultEntry(
 	key: string,
 	lemma: string,
 	scanText: string | null
-): Promise<number> {
+): Promise<number | null> {
 	return invoke('get_default_entry', { key, lemma, scanText });
 }
 

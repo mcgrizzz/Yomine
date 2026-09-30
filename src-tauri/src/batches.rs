@@ -100,6 +100,8 @@ pub enum FailureKind {
     /// A Yomitan request for this item failed while Yomitan still answers, so it may pass
     /// on a later attempt.
     Transient,
+    /// Yomitan has entries only for part of the term, so no attempt can mine this item.
+    PartOnly,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

@@ -1,0 +1,27 @@
+# Colloquial forms UniDic reads correctly but the engine then mines as the wrong word. Found in
+# auto-mined Frieren cards; ranks from JPDB. Frequency lists carry すん (寸) and ぶっ as words of
+# their own, so the surface can outrank UniDic's dictionary form.
+
+frequencies = [
+	{ term = "する", reading = "する", rank = 11, kana = true },
+	{ term = "すん", reading = "すん", rank = 152734, kana = true },
+	{ term = "どう", reading = "どう", rank = 85, kana = true },
+	{ term = "の", reading = "の", rank = 1, kana = true },
+	{ term = "さ", reading = "さ", rank = 87, kana = true },
+	{ term = "いい", reading = "いい", rank = 33, kana = true },
+	{ term = "子", reading = "こ", rank = 207 },
+	{ term = "いい子", reading = "いいこ", rank = 3984 },
+	{ term = "いい子ぶる", reading = "いいこぶる", rank = 52420 },
+	{ term = "ぶる", reading = "ぶる", rank = 4738, kana = true },
+	{ term = "ぶっ", reading = "ぶっ", rank = 8802, kana = true },
+]
+
+[[case]]
+name = "すん is する's contraction, not 寸"
+text = "でも こんなの解読して どうすんのさ"
+terms = [{ surface = "すん", lemma = "する", reading = "する" }]
+
+[[case]]
+name = "ぶった is the suffix ぶる, not a word ぶっ"
+text = "今さら いい子ぶったって"
+absent = ["ぶっ"]

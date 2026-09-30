@@ -316,8 +316,9 @@ async function run(
 					);
 				}
 				clearUnchangedSelection(current);
-				// Left for "Retry failed" in the summary; the same item usually fails again right away.
-				if (!step.failure || cancelled || step.failure.kind === 'transient') break;
+				// Left for "Retry failed" in the summary; the same item fails again right away, or always.
+				const unpaused = ['transient', 'part_only'];
+				if (!step.failure || cancelled || unpaused.includes(step.failure.kind ?? '')) break;
 				const choice = await pausePrompt.ask({ item: current, failure: step.failure });
 				if (choice === 'retry') continue;
 				if (choice === 'without_dictionary_media') {

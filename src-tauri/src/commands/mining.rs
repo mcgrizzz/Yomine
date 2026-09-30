@@ -23,7 +23,10 @@ use yomine::{
         settings::MiningMode,
         YomineError,
     },
-    yomitan,
+    yomitan::{
+        self,
+        EntryChoice,
+    },
 };
 
 use crate::{
@@ -250,13 +253,14 @@ pub async fn get_line_media(
 }
 
 /// The entry mining picks when none was chosen, as an index into the scan of `scan_text`.
+/// `None` when no entry matches the whole term.
 #[tauri::command]
 pub async fn get_default_entry(
     state: State<'_, Mutex<AppState>>,
     key: String,
     lemma: String,
     scan_text: Option<String>,
-) -> Result<usize, String> {
+) -> Result<Option<usize>, String> {
     let (url, lexeme) = {
         let state = state.lock().unwrap();
         (state.settings.yomitan_url.clone(), row_lexeme(&state.file, &key))
@@ -266,20 +270,21 @@ pub async fn get_default_entry(
 }
 
 /// Yomitan's first entry can be a different word with the same spelling (止める as やめる when
-/// the sentence reads とめる), so a row picks the entry for its own word.
+/// the sentence reads とめる), so a row picks the entry for its own word. `None` when no entry
+/// matches the whole term.
 async fn default_entry(
     yomitan_url: &str,
     key: &str,
     lemma: &str,
     term: &str,
     lexeme: Option<&str>,
-) -> usize {
+) -> Option<usize> {
     // A row's key is `termKey`: "{lemma} {reading}".
     let reading = match key.split_once(' ') {
         Some((key_lemma, reading)) if key_lemma == lemma => reading,
-        _ => return 0,
+        _ => return Some(0),
     };
-    tokio::time::timeout(
+    let choice = tokio::time::timeout(
         MATCH_LOOKUP_TIMEOUT,
         yomitan::entry_index_for(
             yomitan_url,
@@ -291,8 +296,12 @@ async fn default_entry(
     )
     .await
     .ok()
-    .flatten()
-    .unwrap_or(0)
+    .flatten();
+    match choice {
+        Some(EntryChoice::PartOnly) => None,
+        Some(EntryChoice::Entry(index)) => Some(index),
+        None => Some(0),
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -315,7 +324,16 @@ async fn mine(
     let entry_index = match entry_index {
         Some(index) => index,
         None if item.adhoc => 0,
-        None => default_entry(yomitan_url, &item.key, &item.lemma, &term, lexeme.as_deref()).await,
+        None => default_entry(yomitan_url, &item.key, &item.lemma, &term, lexeme.as_deref())
+            .await
+            .ok_or_else(|| {
+                Failure::new(
+                    "Dictionary entry",
+                    FailureScope::Item,
+                    format!("Yomitan has no dictionary entry for all of 「{}」", term),
+                )
+                .with_kind(FailureKind::PartOnly)
+            })?,
     };
 
     let _ = progress.send(LoadingMessage::new(format!("Rendering 「{}」 with Yomitan…", term)));

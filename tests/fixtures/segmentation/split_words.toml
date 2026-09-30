@@ -1,0 +1,32 @@
+# Words the 1-best parse breaks into pieces, each of which is mined as a card for the wrong
+# word. Found in auto-mined Frieren and Apothecary Diaries cards; ranks from JPDB.
+
+frequencies = [
+	{ term = "二日酔い", reading = "ふつかよい", rank = 16637 },
+	{ term = "二日", reading = "ふつか", rank = 3578 },
+	{ term = "酔い", reading = "よい", rank = 10236 },
+	{ term = "用心深い", reading = "ようじんぶかい", rank = 13526 },
+	{ term = "用心", reading = "ようじん", rank = 6663 },
+	{ term = "深い", reading = "ふかい", rank = 341 },
+	{ term = "何でもない", reading = "なんでもない", rank = 2180 },
+	{ term = "何", reading = "なに", rank = 72 },
+	{ term = "でもない", reading = "でもない", rank = 323, kana = true },
+]
+
+[[case]]
+name = "二日酔い is one word, not 二日 + 酔い"
+text = "ハイターが二日酔いで役に立たなかった"
+terms = [{ surface = "二日酔い", lemma = "二日酔い", reading = "ふつかよい" }]
+absent = ["酔い"]
+
+[[case]]
+name = "用心深い is one word, not 用心 + 深い"
+text = "同時に聡明で 用心深い"
+terms = [{ surface = "用心深い", lemma = "用心深い", reading = "ようじんぶかい" }]
+absent = ["用心"]
+
+[[case]]
+name = "何でもない is one expression, not 何 + でもない"
+text = "何でもない"
+terms = [{ surface = "何でもない", lemma = "何でもない" }]
+absent = ["でもない"]

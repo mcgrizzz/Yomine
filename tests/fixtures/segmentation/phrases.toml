@@ -99,7 +99,7 @@ absent = ["になると"]
 [[case]]
 name = "な-bound adjectival compound mines the citation-form lemma"
 text = "中途半端な動きをした"
-terms = [{ surface = "中途半端な", lemma = "中途半端", reading = "ちゅうとはんぱ", pos = "Expression" }]
+terms = [{ surface = "中途半端な", lemma = "中途半端", reading = "ちゅうとはんぱ", pos = "AdjectivalNoun" }]
 absent = ["中途半端な動き", "半端", "中途"]
 
 [[case]]

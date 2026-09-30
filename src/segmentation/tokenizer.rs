@@ -49,9 +49,6 @@ use crate::{
     },
 };
 
-// Lexical exceptions are intentionally reading- and spelling-constrained.
-const LEXICAL_CITATIONS: &[(&str, &str)] = &[("つまらない", "つまらない")];
-
 pub(super) fn resolve_citation(word: &mut Word, manager: &FrequencyManager) {
     if word.citation.is_some()
         || word.main_word.is_some()
@@ -66,20 +63,29 @@ pub(super) fn resolve_citation(word: &mut Word, manager: &FrequencyManager) {
         return;
     }
     let deinflections = pairwise_deinflection(&word.surface_form, &word.surface_hatsuon);
+    // UniDic reads an i-adjective like つまらない as a verb and ない (つまる). Written in kana
+    // it is the adjective; with kanji (行けない) it is usually the verb's negative.
+    let kana = word.surface_form.as_str().is_kana();
     let exception = deinflections
         .iter()
-        .find(|(form, reading)| {
-            word.surface_form.as_str().is_kana()
-                && LEXICAL_CITATIONS.contains(&(form.as_str(), reading.as_str()))
-        })
-        .cloned();
+        .find(|(form, reading)| kana && form == reading && jmdict_lexicon::is_nai_adjective(form))
+        .cloned()
+        .or_else(|| {
+            // Speech shortens ない to ん (すまん, くだらん), which the deinflector doesn't undo.
+            let form = format!("{}ない", word.surface_form.strip_suffix('ん')?);
+            (kana && jmdict_lexicon::is_nai_adjective(&form)).then(|| (form.clone(), form))
+        });
+    let lemma = (word.lemma_form.clone(), word.lemma_hatsuon.clone());
+    // UniDic's form wins when the deinflector agrees; otherwise it only competes on frequency,
+    // so the deinflector's gaps (すん for する) don't lose it, but ください stays ください.
+    let deinflected_lemma = deinflections.contains(&lemma);
     let mut candidates: Vec<_> = deinflections
         .into_iter()
+        .chain((!deinflected_lemma).then(|| lemma.clone()))
         .filter(|(form, reading)| manager.get_harmonic_frequency_for_pair(form, reading).is_some())
         .collect();
     candidates
         .sort_by_key(|(form, reading)| manager.get_harmonic_frequency_for_pair(form, reading));
-    let lemma = (word.lemma_form.clone(), word.lemma_hatsuon.clone());
     match word.part_of_speech {
         POS::Verb => retain_verb_final_candidates(&mut candidates, &word.surface_form),
         // An adjective stem can deinflect as a verb (のろ as 乗る's imperative).
@@ -91,7 +97,7 @@ pub(super) fn resolve_citation(word: &mut Word, manager: &FrequencyManager) {
         .or_else(|| {
             candidates
                 .iter()
-                .find(|pair| **pair == lemma)
+                .find(|pair| deinflected_lemma && **pair == lemma)
                 .or(candidates.first())
                 .cloned()
                 .map(|pair| (pair, CitationProvenance::ValidatedDeinflection))
@@ -113,6 +119,9 @@ pub(super) fn resolve_citation(word: &mut Word, manager: &FrequencyManager) {
             })
         });
     if let Some(((form, reading), provenance)) = selected {
+        if matches!(provenance, CitationProvenance::LexicalException) {
+            word.part_of_speech = POS::Adjective;
+        }
         word.lemma_form = form.clone();
         word.lemma_hatsuon = reading.clone();
         word.citation = Some(Citation { form, reading, provenance });
@@ -342,12 +351,14 @@ fn phrase_candidate(
         }
     }
     // UniDic can read a component differently inside a compound (表 as ひょう, but
-    // 表沙汰 is おもてざた), so a spelling every dictionary reads one way takes that reading.
+    // 表沙汰 is おもてざた; 何 as なに, but 何でもない is なんでもない), so a spelling every
+    // dictionary reads one way takes that reading.
     let kanji_nouns = subrange
         .iter()
         .all(|t| matches!(t.part_of_speech, POS::Noun | POS::CompoundNoun | POS::ProperNoun))
         && phrase.surface_form.chars().all(is_kanji_char);
-    if frequency.is_none() && matches!(mode, PhraseMode::Production) && kanji_nouns {
+    let one_word = kanji_nouns || jmdict_lexicon::is_word(&phrase.surface_form);
+    if frequency.is_none() && matches!(mode, PhraseMode::Production) && one_word {
         let sole = manager.sole_reading(&phrase.surface_form).and_then(|reading| {
             let reading = as_written(&phrase.full_segment_reading, reading);
             phrase_frequency(manager, &phrase.surface_form, &reading).map(|rank| (reading, rank))
@@ -487,12 +498,11 @@ pub fn extract_words(
                 }
                 let subrange = &sentence_terms[start..=end];
                 // Frequency lists carry particle n-grams (あなたに); JMdict lists only real
-                // phrases that begin or end in one (ついでに, にとって).
+                // phrases that begin or end in one (ついでに, にとって), and words (何でもない).
                 let listed_particle_phrase = || {
-                    subrange.iter().any(phrase_endpoint_ok)
-                        && jmdict_lexicon::is_phrase(
-                            &subrange.iter().map(|t| t.full_segment.as_str()).collect::<String>(),
-                        )
+                    let text: String = subrange.iter().map(|t| t.full_segment.as_str()).collect();
+                    (subrange.iter().any(phrase_endpoint_ok) && jmdict_lexicon::is_phrase(&text))
+                        || jmdict_lexicon::is_word(&text)
                 };
                 if (!phrase_endpoint_ok(&subrange[0])
                     || !phrase_endpoint_ok(&subrange[end - start]))
@@ -560,8 +570,12 @@ pub fn extract_words(
                         word_frequencies.iter().any(|(_, freq)| *freq == u32::MAX as f32);
                     // A JMdict phrase is no junk n-gram, and it reads as one unit even
                     // around a particle (しょうがない).
-                    let listed = jmdict_lexicon::is_phrase(&phrase.surface_form)
+                    let listed_phrase = jmdict_lexicon::is_phrase(&phrase.surface_form)
                         || jmdict_lexicon::is_phrase(&phrase.lemma_form);
+                    let word = !listed_phrase
+                        && (jmdict_lexicon::is_word(&phrase.surface_form)
+                            || jmdict_lexicon::is_word(&phrase.lemma_form));
+                    let listed = listed_phrase || word;
 
                     if !kanji_noun_compound
                         && !has_unvalidated_component
@@ -572,8 +586,16 @@ pub fn extract_words(
                         continue;
                     }
 
-                    phrase.part_of_speech =
-                        if all_nouns { POS::NounExpression } else { POS::Expression };
+                    // A word takes the type of its last part (用心深い is an adjective), unless
+                    // that is a suffix (見えにくい), which isn't a type of word.
+                    let last = &subrange[end - start].part_of_speech;
+                    phrase.part_of_speech = if all_nouns {
+                        POS::NounExpression
+                    } else if word && *last != POS::Suffix {
+                        last.clone()
+                    } else {
+                        POS::Expression
+                    };
                     phrase.auto_skip.ambiguous_grammar =
                         grammar::is_ambiguous(&grammatical[start..=end], &phrase);
 

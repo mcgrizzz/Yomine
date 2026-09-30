@@ -96,26 +96,54 @@ pub async fn matched_source(base_url: &str, text: &str, entry_index: usize) -> O
         .map(str::to_string)
 }
 
-/// The entry for our word among Yomitan's entries for `text`, preferring UniDic's lexeme at
-/// our reading (染みる over a kana-headword しみる entry without Jitendex's glosses), then
-/// `term` at our reading, then the lexeme at any reading (成る for the potential なれる),
-/// then any entry at our reading. `None` when none qualifies.
+#[derive(Debug, PartialEq)]
+pub enum EntryChoice {
+    Entry(usize),
+    /// No entry matches all of the term, only its start: the name ハイター scans as 排他 over
+    /// ハイタ. Mining that entry would make a card for a different word.
+    PartOnly,
+}
+
+/// `None` when Yomitan didn't answer.
 pub async fn entry_index_for(
     base_url: &str,
     text: &str,
     term: &str,
     reading: &str,
     lexeme: Option<&str>,
-) -> Option<usize> {
+) -> Option<EntryChoice> {
     let entries: TermEntries =
         post(base_url, "termEntries", serde_json::json!({ "term": text })).await.ok()?;
+    Some(choose_entry(&entries.dictionary_entries, text, term, reading, lexeme))
+}
+
+/// The entry for our word, preferring UniDic's lexeme at our reading (染みる over a
+/// kana-headword しみる entry without Jitendex's glosses), then `term` at our reading, then the
+/// lexeme at any reading (成る for the potential なれる), then any entry at our reading, then
+/// the first. A lookup of the term alone needs an entry matching all of it.
+fn choose_entry(
+    entries: &[TermDictionaryEntry],
+    text: &str,
+    term: &str,
+    reading: &str,
+    lexeme: Option<&str>,
+) -> EntryChoice {
+    let whole = |e: &TermDictionaryEntry| {
+        // A scan of sentence text only ever matches its start.
+        text != term || e.headwords.iter().flat_map(|h| &h.sources).any(|s| s.original_text == text)
+    };
+    let candidates: Vec<(usize, &TermDictionaryEntry)> =
+        entries.iter().enumerate().filter(|(_, e)| whole(e)).collect();
+    let Some(&(first, _)) = candidates.first() else { return EntryChoice::PartOnly };
     let reading = reading.to_hiragana();
     let reads = |h: &Headword| h.reading.to_hiragana() == reading;
     let is_lexeme = |h: &Headword| lexeme.is_some_and(|l| h.term == l);
     let tiers: [&dyn Fn(&Headword) -> bool; 4] =
         [&|h| is_lexeme(h) && reads(h), &|h| h.term == term && reads(h), &is_lexeme, &reads];
-    let entries = &entries.dictionary_entries;
-    tiers.iter().find_map(|tier| entries.iter().position(|e| e.headwords.iter().any(tier)))
+    let chosen = tiers.iter().find_map(|tier| {
+        candidates.iter().find(|(_, e)| e.headwords.iter().any(tier)).map(|&(i, _)| i)
+    });
+    EntryChoice::Entry(chosen.unwrap_or(first))
 }
 
 async fn post<T: for<'de> Deserialize<'de>>(
@@ -276,6 +304,37 @@ mod tests {
                 .collect(),
             kind: "term".into(),
         }
+    }
+
+    fn entry(term: &str, reading: &str, matched: &str) -> TermDictionaryEntry {
+        TermDictionaryEntry {
+            headwords: vec![Headword {
+                term: term.into(),
+                reading: reading.into(),
+                sources: vec![HeadwordSource { original_text: matched.into() }],
+            }],
+        }
+    }
+
+    #[test]
+    fn a_term_needs_an_entry_for_all_of_it() {
+        // Yomitan's answers for the name ハイター (Frieren).
+        let partial = [entry("排他", "はいた", "ハイタ"), entry("羽板", "はいた", "ハイタ")];
+        assert_eq!(
+            choose_entry(&partial, "ハイター", "ハイター", "ハイター", None),
+            EntryChoice::PartOnly
+        );
+
+        let with_whole =
+            [entry("排他", "はいた", "ハイタ"), entry("ハイター", "ハイター", "ハイター")];
+        assert_eq!(
+            choose_entry(&with_whole, "ハイター", "ハイター", "ハイター", None),
+            EntryChoice::Entry(1)
+        );
+        assert_eq!(
+            choose_entry(&partial, "ハイターが", "ハイター", "はいた", None),
+            EntryChoice::Entry(0)
+        );
     }
 
     #[test]
