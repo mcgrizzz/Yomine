@@ -11,7 +11,10 @@ use super::{
     ankiconnect,
     connection,
     tsunagi,
-    types::Model,
+    types::{
+        FieldMapping,
+        Model,
+    },
 };
 use crate::core::settings::AnkiConnectionSettings;
 
@@ -68,26 +71,34 @@ pub enum CreateOutcome {
 pub struct Anki {
     pub(super) connection: AnkiConnectionSettings,
     pub(super) timeout: Option<Duration>,
+    /// Anything not detected as Tsunagi talks AnkiConnect, which Tsunagi's shim answers too.
+    pub(super) backend: Backend,
 }
 
-/// The configured connection.
+/// The configured connection, as the add-on it last answered as.
 pub fn current() -> Anki {
-    Anki { connection: connection::active(), timeout: None }
+    Anki {
+        connection: connection::active(),
+        timeout: None,
+        backend: connection::backend().unwrap_or(Backend::AnkiConnect),
+    }
 }
 
 /// A connection being set up, which doesn't replace the configured one.
 pub fn probe(connection: AnkiConnectionSettings) -> Anki {
-    Anki { connection, timeout: Some(PROBE_TIMEOUT) }
+    Anki { connection, timeout: Some(PROBE_TIMEOUT), backend: Backend::AnkiConnect }
 }
 
-/// Whether the configured Anki answers. A failure makes the next harvests full, since
-/// anything may have changed meanwhile.
+/// Whether the configured Anki answers, noting which add-on did. A failure makes the next
+/// harvests full, since anything may have changed meanwhile.
 pub async fn reachable() -> bool {
-    let reached = current().version().await.is_ok();
-    if !reached {
+    let anki = current();
+    let detected = anki.detect().await.ok();
+    connection::set_backend(&anki.connection, detected.clone());
+    if detected.is_none() {
         super::sync::anki_unreachable();
     }
-    reached
+    detected.is_some()
 }
 
 impl Anki {
@@ -103,14 +114,38 @@ impl Anki {
         ankiconnect::version(self).await
     }
 
-    /// Both add-ons answer AnkiConnect's protocol, which also checks the key; Tsunagi's
-    /// health endpoint then tells them apart.
+    /// Tsunagi's health endpoint names it and the app the request counts as; anything else
+    /// is checked through AnkiConnect's protocol. What the app may do shows on the requests
+    /// themselves.
     pub async fn detect(&self) -> Result<Backend, AnkiError> {
-        self.version().await?;
-        Ok(match tsunagi::version(self).await {
-            Some(version) => Backend::Tsunagi { version },
-            None => Backend::AnkiConnect,
-        })
+        let Some(health) = tsunagi::health(self).await else {
+            self.version().await?;
+            return Ok(Backend::AnkiConnect);
+        };
+        match health.caller {
+            Some(caller) if !caller.enabled => {
+                let message =
+                    format!("The app \"{}\" is turned off in Tsunagi's settings", caller.app);
+                return Err(AnkiError::Rejected(message));
+            }
+            Some(_) => {}
+            None => {
+                self.version().await?;
+            }
+        }
+        Ok(Backend::Tsunagi { version: health.version })
+    }
+
+    /// Uses Tsunagi's own API from here on if Tsunagi answers.
+    pub async fn detected(mut self) -> Self {
+        if let Some(health) = tsunagi::health(&self).await {
+            self.backend = Backend::Tsunagi { version: health.version };
+        }
+        self
+    }
+
+    fn tsunagi(&self) -> bool {
+        matches!(self.backend, Backend::Tsunagi { .. })
     }
 
     /// The open profile's name, which keys Yomine's copy of its collection.
@@ -119,7 +154,11 @@ impl Anki {
     }
 
     pub async fn note_types(&self) -> Result<Vec<Model>, AnkiError> {
-        ankiconnect::note_types(self).await
+        if self.tsunagi() {
+            tsunagi::note_types(self).await
+        } else {
+            ankiconnect::note_types(self).await
+        }
     }
 
     pub async fn sample_note(
@@ -131,7 +170,37 @@ impl Anki {
 
     /// Notes matching an Anki search.
     pub(crate) async fn find_notes(&self, query: &str) -> Result<Vec<u64>, AnkiError> {
-        ankiconnect::find_notes(self, query).await
+        if self.tsunagi() {
+            tsunagi::find_notes(self, query).await
+        } else {
+            ankiconnect::find_notes(self, query).await
+        }
+    }
+
+    /// Notes edited since `since` (epoch ms); on AnkiConnect, also the others edited that
+    /// day.
+    pub(crate) async fn edited_since(&self, since: i64, now: i64) -> Result<Vec<u64>, AnkiError> {
+        // edited:N counts back from the start of today, so one extra day covers `since`
+        // late yesterday.
+        let search = format!("edited:{}", (now - since) / 86_400_000 + 1);
+        if self.tsunagi() {
+            tsunagi::edited_since(self, &search, since).await
+        } else {
+            ankiconnect::find_notes(self, &search).await
+        }
+    }
+
+    /// Those of `ids` whose note type is mapped, with the mapped fields at least.
+    pub(crate) async fn vocab_notes(
+        &self,
+        ids: &[u64],
+        mapping: &HashMap<String, FieldMapping>,
+    ) -> Result<Vec<NoteInfo>, AnkiError> {
+        if self.tsunagi() {
+            tsunagi::vocab_notes(self, ids, mapping).await
+        } else {
+            ankiconnect::notes(self, ids).await
+        }
     }
 
     pub async fn notes(&self, ids: &[u64]) -> Result<Vec<NoteInfo>, AnkiError> {

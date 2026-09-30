@@ -32,7 +32,8 @@ pub fn sync_anki(app: tauri::AppHandle) {
 pub async fn list_anki_models(
     connection: AnkiConnectionSettings,
 ) -> Result<Vec<AnkiModelInfo>, String> {
-    let mut models = anki::probe(connection).note_types().await.map_err(|e| e.to_string())?;
+    let anki = anki::probe(connection).detected().await;
+    let mut models = anki.note_types().await.map_err(|e| e.to_string())?;
     models.sort_by(|a, b| a.name.cmp(&b.name));
 
     Ok(models

@@ -88,10 +88,13 @@ pub(crate) async fn refresh(app: &AppHandle, mode: Refresh) -> Result<RefreshOut
     let state = app.state::<Mutex<AppState>>();
     let (tools, frequency_manager, known_interval) = {
         let guard = state.lock().unwrap();
-        let tools = guard
-            .language_tools
-            .clone()
-            .ok_or_else(|| "Language tools are still loading".to_string())?;
+        let Some(tools) = guard.language_tools.clone() else {
+            // Known words are built from the copy once the tools load.
+            return match mode {
+                Refresh::Live => Ok(RefreshOutcome::Done),
+                Refresh::Full => Err("Language tools are still loading".to_string()),
+            };
+        };
         let frequency_manager = tools.frequency_manager.clone();
         let known_interval = tools.known_interval;
         (tools, frequency_manager, known_interval)

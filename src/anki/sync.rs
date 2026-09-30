@@ -71,11 +71,8 @@ async fn harvest(model_mapping: &HashMap<String, FieldMapping>) -> Result<bool, 
         });
     let fetch: Vec<u64> = match (&stored, stored.as_ref().and_then(|s| s.harvested_at)) {
         (Some(stored), Some(harvested_at)) => {
-            // edited:N counts back from the start of today, so one extra day covers a
-            // harvest late yesterday.
-            let days = (now - harvested_at) / 86_400_000 + 1;
             let edited: HashSet<u64> =
-                anki.find_notes(&format!("edited:{days}")).await?.into_iter().collect();
+                anki.edited_since(harvested_at, now).await?.into_iter().collect();
             note_ids
                 .iter()
                 .copied()
@@ -86,7 +83,8 @@ async fn harvest(model_mapping: &HashMap<String, FieldMapping>) -> Result<bool, 
     };
     let full = fetch.len() == note_ids.len();
 
-    let (mut cards, sentences) = read_notes(model_mapping, anki.notes(&fetch).await?);
+    let (mut cards, sentences) =
+        read_notes(model_mapping, anki.vocab_notes(&fetch, model_mapping).await?);
     let card_ids: Vec<u64> = cards.iter().filter_map(|(_, card)| card.card_id).collect();
     let intervals: HashMap<u64, i32> =
         card_ids.iter().copied().zip(anki.intervals(&card_ids).await?).collect();

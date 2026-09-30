@@ -15,12 +15,28 @@ use crate::core::settings::AnkiConnectionSettings;
 static CONNECTION: LazyLock<RwLock<AnkiConnectionSettings>> =
     LazyLock::new(|| RwLock::new(AnkiConnectionSettings::default()));
 
+/// The add-on the configured connection last answered as; `None` until it answers.
+static BACKEND: RwLock<Option<Backend>> = RwLock::new(None);
+
 pub fn configure(settings: AnkiConnectionSettings) {
     *CONNECTION.write().unwrap() = settings;
+    *BACKEND.write().unwrap() = None;
 }
 
 pub(super) fn active() -> AnkiConnectionSettings {
     CONNECTION.read().unwrap().clone()
+}
+
+pub(super) fn backend() -> Option<Backend> {
+    BACKEND.read().unwrap().clone()
+}
+
+/// Records what `connection` answered as, unless the configured connection changed since.
+pub(super) fn set_backend(connection: &AnkiConnectionSettings, backend: Option<Backend>) {
+    let configured = CONNECTION.read().unwrap();
+    if *configured == *connection {
+        *BACKEND.write().unwrap() = backend;
+    }
 }
 
 pub(super) fn base_url(connection: &AnkiConnectionSettings) -> String {
