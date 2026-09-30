@@ -29,8 +29,11 @@ use serde_json::json;
 
 use super::{
     client::{
+        setup_problem,
         Anki,
         AnkiError,
+        CreateOutcome,
+        NewNote,
         NoteEvent,
         NoteInfo,
         PROBE_TIMEOUT,
@@ -266,6 +269,61 @@ pub(super) async fn vocab_notes(
     Ok(notes.into_iter().map(NoteInfo::from).collect())
 }
 
+pub(super) async fn create_note(
+    anki: &Anki,
+    note: &NewNote,
+    key: &str,
+) -> Result<CreateOutcome, AnkiError> {
+    #[derive(Deserialize)]
+    struct Response {
+        created: Vec<Created>,
+        failed: Vec<Failed>,
+    }
+    #[derive(Deserialize)]
+    struct Created {
+        id: u64,
+    }
+    #[derive(Deserialize)]
+    struct Failed {
+        code: String,
+        message: String,
+    }
+    let body = json!({
+        "deckName": note.deck,
+        "modelName": note.note_type,
+        "fields": note.fields,
+        "tags": note.tags,
+    });
+    let request =
+        request(anki, Method::POST, "/v1/notes").header("Idempotency-Key", key).json(&body);
+    let response = request.send().await.map_err(|e| transport(anki, e))?;
+    let status = response.status();
+    let response = match success(anki, response).await {
+        Ok(response) => response,
+        // A 503 from an operation timeout doesn't cancel the write, and after any other
+        // server error the note may exist too.
+        Err(AnkiError::Rejected(reason)) if status.is_server_error() => {
+            return Err(AnkiError::Unconfirmed(reason))
+        }
+        Err(AnkiError::Rejected(reason)) => {
+            let setup = matches!(status.as_u16(), 401 | 403 | 422) || setup_problem(&reason);
+            return Ok(CreateOutcome::Rejected { reason, setup });
+        }
+        Err(e) => return Err(e),
+    };
+    let response: Response = response.json().await.map_err(|e| transport(anki, e))?;
+    if let Some(created) = response.created.into_iter().next() {
+        return Ok(CreateOutcome::Created(created.id));
+    }
+    match response.failed.into_iter().next() {
+        Some(failed) if failed.code == "duplicate" => Ok(CreateOutcome::Duplicate),
+        Some(Failed { message, .. }) => {
+            Ok(CreateOutcome::Rejected { setup: setup_problem(&message), reason: message })
+        }
+        None => Err(AnkiError::Unconfirmed("Tsunagi reported no result".into())),
+    }
+}
+
 pub(super) async fn delete(anki: &Anki, ids: &[u64]) -> Result<(), AnkiError> {
     let request = request(anki, Method::POST, "/v1/notes:delete");
     accepted(anki, request.json(&json!({ "note_ids": ids }))).await?;
@@ -475,6 +533,59 @@ mod tests {
     fn feed(chunks: &[&[u8]]) -> Vec<(String, String)> {
         let mut stream = EventStream::default();
         chunks.iter().flat_map(|c| stream.feed(c)).map(|m| (m.event, m.data)).collect()
+    }
+
+    /// Answers one request with `status` and a JSON `body`.
+    async fn server(status: &'static str, body: &'static str) -> Anki {
+        use tokio::io::{
+            AsyncBufReadExt,
+            AsyncReadExt,
+            AsyncWriteExt,
+            BufReader,
+        };
+        let listener = tokio::net::TcpListener::bind("127.0.0.2:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let mut stream = BufReader::new(stream);
+            let mut length = 0;
+            loop {
+                let mut line = String::new();
+                stream.read_line(&mut line).await.unwrap();
+                if line == "\r\n" {
+                    break;
+                }
+                if let Some(value) = line.to_lowercase().strip_prefix("content-length:") {
+                    length = value.trim().parse().unwrap();
+                }
+            }
+            stream.read_exact(&mut vec![0; length]).await.unwrap();
+            let response = format!(
+                "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            stream.write_all(response.as_bytes()).await.unwrap();
+        });
+        super::super::probe(crate::core::settings::AnkiConnectionSettings {
+            host: "127.0.0.2".into(),
+            port: std::num::NonZeroU16::new(port).unwrap(),
+            api_key: String::new(),
+        })
+    }
+
+    #[tokio::test]
+    async fn a_create_that_may_have_run_is_not_reported_as_rejected() {
+        let note = NewNote {
+            deck: "Mining".into(),
+            note_type: "Basic".into(),
+            fields: HashMap::new(),
+            tags: Vec::new(),
+        };
+        let anki = server("503 Service Unavailable", r#"{"detail":"Anki took too long"}"#).await;
+        assert!(matches!(create_note(&anki, &note, "k").await, Err(AnkiError::Unconfirmed(_))));
+        let duplicate = r#"{"created":[],"failed":[{"index":0,"code":"duplicate","message":"Note duplicates an existing note"}]}"#;
+        let anki = server("200 OK", duplicate).await;
+        assert!(matches!(create_note(&anki, &note, "k").await, Ok(CreateOutcome::Duplicate)));
     }
 
     #[test]

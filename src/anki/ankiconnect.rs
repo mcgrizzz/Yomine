@@ -25,6 +25,7 @@ use serde_json::json;
 
 use super::{
     client::{
+        setup_problem,
         Anki,
         AnkiError,
         CreateOutcome,
@@ -205,10 +206,7 @@ pub(super) async fn delete(anki: &Anki, ids: &[u64]) -> Result<(), AnkiError> {
     request_empty(anki, "deleteNotes", Some(json!({ "notes": ids }))).await
 }
 
-pub(super) async fn create_note(
-    anki: &Anki,
-    note: &NewNote<'_>,
-) -> Result<CreateOutcome, AnkiError> {
+pub(super) async fn create_note(anki: &Anki, note: &NewNote) -> Result<CreateOutcome, AnkiError> {
     let params = json!({
         "note": {
             "deckName": note.deck,
@@ -225,11 +223,7 @@ pub(super) async fn create_note(
             Ok(CreateOutcome::Duplicate)
         }
         Err(AnkiError::Rejected(reason)) => {
-            let lower = reason.to_lowercase();
-            let setup = ["deck", "model", "note type", "api key", "permission"]
-                .iter()
-                .any(|s| lower.contains(s));
-            Ok(CreateOutcome::Rejected { reason, setup })
+            Ok(CreateOutcome::Rejected { setup: setup_problem(&reason), reason })
         }
         Err(error) => Err(error),
     }

@@ -15,6 +15,7 @@ pub use client::{
     current,
     probe,
     reachable,
+    request_key,
     Anki,
     AnkiError,
     Backend,

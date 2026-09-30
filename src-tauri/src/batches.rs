@@ -152,7 +152,11 @@ pub enum MediaState {
 pub enum Outcome {
     #[default]
     Unattempted,
-    Attempting,
+    Attempting {
+        /// The create request's key; `None` in older records.
+        #[serde(default)]
+        key: Option<String>,
+    },
     Created {
         note_id: u64,
         media: MediaState,
@@ -294,7 +298,7 @@ pub fn unrecorded_lemmas(collection: &str, fingerprint: &str) -> Vec<String> {
         .items
         .into_iter()
         .filter(|item| match item.outcome {
-            Outcome::Attempting => true,
+            Outcome::Attempting { .. } => true,
             Outcome::Created { note_id, .. } => !recorded.contains(&note_id),
             _ => false,
         })
@@ -509,6 +513,8 @@ mod tests {
             Outcome::Created { note_id: 42, media: MediaState::Pending, .. }
         ));
         assert!(restored.source == original.source);
+        let keyless = serde_json::from_str(r#"{"status":"attempting"}"#).unwrap();
+        assert!(matches!(keyless, Outcome::Attempting { key: None }));
     }
 
     #[test]
@@ -516,7 +522,7 @@ mod tests {
         let mut record = batch();
         for outcome in [
             Outcome::Duplicate,
-            Outcome::Attempting,
+            Outcome::Attempting { key: None },
             Outcome::Unattempted,
             Outcome::Created { note_id: 43, media: MediaState::Complete, error: None },
         ] {
@@ -527,7 +533,7 @@ mod tests {
         mark_deleted(&mut record, &[43]);
         assert!(matches!(record.items[0].outcome, Outcome::Deleted { note_id: 42 }));
         assert!(matches!(record.items[1].outcome, Outcome::Duplicate));
-        assert!(matches!(record.items[2].outcome, Outcome::Attempting));
+        assert!(matches!(record.items[2].outcome, Outcome::Attempting { .. }));
         assert!(matches!(record.items[3].outcome, Outcome::Unattempted));
         assert!(matches!(record.items[4].outcome, Outcome::Created { note_id: 43, .. }));
     }

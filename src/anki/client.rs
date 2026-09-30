@@ -59,11 +59,22 @@ pub struct NoteInfo {
     pub cards: Vec<u64>,
 }
 
-pub struct NewNote<'a> {
-    pub deck: &'a str,
-    pub note_type: &'a str,
-    pub fields: &'a HashMap<String, String>,
-    pub tags: &'a [String],
+pub struct NewNote {
+    pub deck: String,
+    pub note_type: String,
+    pub fields: HashMap<String, String>,
+    pub tags: Vec<String>,
+}
+
+/// A new idempotency key for one create request.
+pub fn request_key() -> String {
+    uuid::Uuid::new_v4().simple().to_string()
+}
+
+/// Whether a rejection would fail every note, not only this one.
+pub(super) fn setup_problem(reason: &str) -> bool {
+    let lower = reason.to_lowercase();
+    ["deck", "model", "note type", "api key", "permission"].iter().any(|s| lower.contains(s))
 }
 
 pub enum CreateOutcome {
@@ -269,8 +280,18 @@ impl Anki {
         }
     }
 
-    pub async fn create_note(&self, note: &NewNote<'_>) -> Result<CreateOutcome, AnkiError> {
-        ankiconnect::create_note(self, note).await
+    pub async fn create_note(&self, note: &NewNote, key: &str) -> Result<CreateOutcome, AnkiError> {
+        if self.tsunagi() {
+            tsunagi::create_note(self, note, key).await
+        } else {
+            ankiconnect::create_note(self, note).await
+        }
+    }
+
+    /// Whether a create sent again with its key returns the first attempt's result instead
+    /// of adding the note twice.
+    pub fn can_resend_create(&self) -> bool {
+        self.tsunagi()
     }
 
     /// Replaces only the named fields.

@@ -1,12 +1,15 @@
 //! One-click mining (issue #105) + mined-state tracking (issue #3). The note
-//! is always created via AnkiConnect from Yomitan-rendered fields; the
+//! is always created in Anki from Yomitan-rendered fields; the
 //! asbplayer path then enriches it (audio/screenshot) via a note-targeted
 //! `mine-subtitle` update.
 
 use std::{
     collections::HashMap,
     sync::Mutex,
-    time::Duration,
+    time::{
+        Duration,
+        Instant,
+    },
 };
 
 use tauri::{
@@ -171,6 +174,15 @@ pub async fn mine_batch_item(
                 )?;
                 if let Some(failure) = failure {
                     return Err(failure);
+                }
+            }
+            Outcome::Attempting { ref key } => {
+                let anki = anki::current();
+                match key.as_deref().and_then(unconfirmed) {
+                    Some(request) if anki.can_resend_create() => {
+                        create(&anki, request, &item, options, &mut batch, item_index).await?
+                    }
+                    _ => return Err(unconfirmed_stop(None)),
                 }
             }
             _ => {
@@ -423,7 +435,7 @@ async fn mine(
         })
         .unwrap_or(term.as_str());
     let ctx = yomitan::SentenceContext { sentence: &sentence, term: cloze_term };
-    let fields = yomitan::assemble_fields(format, marker_values, Some(ctx));
+    let mut fields = yomitan::assemble_fields(format, marker_values, Some(ctx));
     if fields.is_empty() {
         return Err(Failure::new(
             "Rendering card",
@@ -437,6 +449,12 @@ async fn mine(
     let anki = anki::current();
     for media in rendered.audio_media.iter().chain(rendered.dictionary_media.iter()) {
         match anki.store_media(&media.anki_filename, &media.content).await {
+            // Anki renames a file whose name is taken by different bytes.
+            Ok(stored) if stored != media.anki_filename => {
+                for value in fields.values_mut() {
+                    *value = value.replace(&media.anki_filename, &stored);
+                }
+            }
             Ok(_) => {}
             Err(AnkiError::Rejected(error)) if options.require_dictionary_media => {
                 return Err(Failure::new(
@@ -461,10 +479,51 @@ async fn mine(
     if batch.auto {
         tags.push("yomine::auto".to_string());
     }
-    batches::checkpoint(batch, index, Outcome::Attempting)?;
-    let note =
-        NewNote { deck: &format.deck, note_type: &format.model, fields: &fields, tags: &tags };
-    let id = match anki.create_note(&note).await {
+    let note = NewNote { deck: format.deck.clone(), note_type: format.model.clone(), fields, tags };
+    let request = CreateRequest { key: anki::request_key(), note, first_sent: Instant::now() };
+    create(&anki, request, item, options, batch, index).await
+}
+
+/// A create request as sent, kept to resend unchanged: Tsunagi refuses a reused key with
+/// a different body, and a new render can differ.
+struct CreateRequest {
+    key: String,
+    note: NewNote,
+    first_sent: Instant,
+}
+
+/// Tsunagi keeps a key for ten minutes; a later resend runs as a new request.
+const RESEND_WINDOW: Duration = Duration::from_secs(9 * 60);
+
+static UNCONFIRMED: Mutex<Option<CreateRequest>> = Mutex::new(None);
+
+const NOT_CONFIRMED: &str = "Anki did not confirm whether the note was created.";
+
+/// The unconfirmed request with `key`, while resending it is still safe.
+fn unconfirmed(key: &str) -> Option<CreateRequest> {
+    let request = UNCONFIRMED.lock().unwrap().take_if(|r| r.key == key)?;
+    (request.first_sent.elapsed() < RESEND_WINDOW).then_some(request)
+}
+
+fn unconfirmed_stop(error: Option<AnkiError>) -> Failure {
+    let check = format!("{NOT_CONFIRMED} Check Anki before mining it again.");
+    let message = match error {
+        Some(e) => format!("{check} {e}"),
+        None => check,
+    };
+    Failure::new("Creating note", FailureScope::Stop, message)
+}
+
+async fn create(
+    anki: &anki::Anki,
+    request: CreateRequest,
+    item: &BatchItem,
+    options: MineOptions,
+    batch: &mut BatchRecord,
+    index: usize,
+) -> Result<(), Failure> {
+    batches::checkpoint(batch, index, Outcome::Attempting { key: Some(request.key.clone()) })?;
+    let id = match anki.create_note(&request.note, &request.key).await {
         Ok(CreateOutcome::Created(id)) => id,
         Ok(CreateOutcome::Duplicate) => {
             return batches::checkpoint(batch, index, Outcome::Duplicate)
@@ -480,16 +539,13 @@ async fn mine(
             batches::checkpoint(batch, index, Outcome::Failed { error: error.clone() })?;
             return Err(error);
         }
-        Err(e) => {
-            return Err(Failure::new(
-                "Creating note",
-                FailureScope::Stop,
-                format!(
-                    "Anki did not confirm whether the note was created. Check Anki before mining \
-                     it again. {e}"
-                ),
-            ))
+        Err(e) if anki.can_resend_create() => {
+            let message =
+                format!("{NOT_CONFIRMED} Retrying asks again without adding it twice. {e}");
+            *UNCONFIRMED.lock().unwrap() = Some(request);
+            return Err(Failure::new("Creating note", FailureScope::Unknown, message));
         }
+        Err(e) => return Err(unconfirmed_stop(Some(e))),
     };
     batches::checkpoint(
         batch,
@@ -507,7 +563,7 @@ async fn mine(
     let collection = anki.profile().await.ok();
     mined::record_note(
         id,
-        &sentence,
+        &item.sentence,
         &item.lemma,
         Some(batch.source.fingerprint.as_str()),
         Some(batch.id.as_str()),
