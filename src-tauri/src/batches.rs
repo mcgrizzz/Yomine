@@ -139,12 +139,75 @@ impl Failure {
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
 #[serde(rename_all = "snake_case")]
-pub enum MediaState {
+pub enum Part {
+    NotRequested,
+    Skipped,
+    Pending,
+    Done,
+    Failed,
+}
+
+impl Part {
+    /// Still to add; a skipped part is added when the user asks.
+    pub fn missing(self) -> bool {
+        matches!(self, Part::Skipped | Part::Pending | Part::Failed)
+    }
+}
+
+/// A created note's sentence audio and screenshot.
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
+#[serde(from = "StoredMedia")]
+pub struct Media {
+    pub audio: Part,
+    pub picture: Part,
+}
+
+impl Media {
+    pub fn both(part: Part) -> Self {
+        Self { audio: part, picture: part }
+    }
+
+    pub fn missing(self) -> bool {
+        self.audio.missing() || self.picture.missing()
+    }
+
+    pub fn with_missing(self, part: Part) -> Self {
+        let set = |p: Part| if p.missing() { part } else { p };
+        Self { audio: set(self.audio), picture: set(self.picture) }
+    }
+}
+
+/// Older records hold one state for both parts.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum StoredMedia {
+    Parts { audio: Part, picture: Part },
+    Single { media: SingleMedia },
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum SingleMedia {
     NotRequested,
     Pending,
     Complete,
     Failed,
     Skipped,
+}
+
+impl From<StoredMedia> for Media {
+    fn from(stored: StoredMedia) -> Self {
+        match stored {
+            StoredMedia::Parts { audio, picture } => Self { audio, picture },
+            StoredMedia::Single { media } => Self::both(match media {
+                SingleMedia::NotRequested => Part::NotRequested,
+                SingleMedia::Pending => Part::Pending,
+                SingleMedia::Complete => Part::Done,
+                SingleMedia::Failed => Part::Failed,
+                SingleMedia::Skipped => Part::Skipped,
+            }),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Default)]
@@ -159,7 +222,8 @@ pub enum Outcome {
     },
     Created {
         note_id: u64,
-        media: MediaState,
+        #[serde(flatten)]
+        media: Media,
         error: Option<Failure>,
     },
     Duplicate,
@@ -497,7 +561,11 @@ mod tests {
                 scan_text: None,
                 adhoc: false,
                 mine_media: true,
-                outcome: Outcome::Created { note_id: 42, media: MediaState::Pending, error: None },
+                outcome: Outcome::Created {
+                    note_id: 42,
+                    media: Media { audio: Part::Done, picture: Part::Failed },
+                    error: None,
+                },
             }],
             auto: false,
             collection: None,
@@ -510,11 +578,20 @@ mod tests {
         let restored = BatchRecord::from_stored(original.stored()).unwrap();
         assert!(matches!(
             restored.items[0].outcome,
-            Outcome::Created { note_id: 42, media: MediaState::Pending, .. }
+            Outcome::Created {
+                note_id: 42,
+                media: Media { audio: Part::Done, picture: Part::Failed },
+                ..
+            }
         ));
         assert!(restored.source == original.source);
         let keyless = serde_json::from_str(r#"{"status":"attempting"}"#).unwrap();
         assert!(matches!(keyless, Outcome::Attempting { key: None }));
+        let single = r#"{"status":"created","note_id":1,"media":"complete","error":null}"#;
+        let single = serde_json::from_str(single).unwrap();
+        assert!(
+            matches!(single, Outcome::Created { media, .. } if media == Media::both(Part::Done))
+        );
     }
 
     #[test]
@@ -524,7 +601,7 @@ mod tests {
             Outcome::Duplicate,
             Outcome::Attempting { key: None },
             Outcome::Unattempted,
-            Outcome::Created { note_id: 43, media: MediaState::Complete, error: None },
+            Outcome::Created { note_id: 43, media: Media::both(Part::Done), error: None },
         ] {
             let mut item = record.items[0].clone();
             item.outcome = outcome;

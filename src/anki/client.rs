@@ -64,6 +64,30 @@ pub struct NewNote {
     pub note_type: String,
     pub fields: HashMap<String, String>,
     pub tags: Vec<String>,
+    pub attachments: Vec<Attachment>,
+}
+
+impl NewNote {
+    pub(super) fn attachments(&self, kind: AttachmentKind) -> Vec<&Attachment> {
+        self.attachments.iter().filter(|a| a.kind == kind).collect()
+    }
+}
+
+/// A file stored with the note, its reference appended to `fields`.
+#[derive(Serialize)]
+pub struct Attachment {
+    #[serde(skip)]
+    pub kind: AttachmentKind,
+    pub filename: String,
+    /// Base64.
+    pub data: String,
+    pub fields: Vec<String>,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum AttachmentKind {
+    Audio,
+    Picture,
 }
 
 /// A new idempotency key for one create request.

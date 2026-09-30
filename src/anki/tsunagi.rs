@@ -32,6 +32,7 @@ use super::{
         setup_problem,
         Anki,
         AnkiError,
+        AttachmentKind,
         CreateOutcome,
         NewNote,
         NoteEvent,
@@ -293,6 +294,8 @@ pub(super) async fn create_note(
         "modelName": note.note_type,
         "fields": note.fields,
         "tags": note.tags,
+        "audio": note.attachments(AttachmentKind::Audio),
+        "picture": note.attachments(AttachmentKind::Picture),
     });
     let request =
         request(anki, Method::POST, "/v1/notes").header("Idempotency-Key", key).json(&body);
@@ -580,6 +583,7 @@ mod tests {
             note_type: "Basic".into(),
             fields: HashMap::new(),
             tags: Vec::new(),
+            attachments: Vec::new(),
         };
         let anki = server("503 Service Unavailable", r#"{"detail":"Anki took too long"}"#).await;
         assert!(matches!(create_note(&anki, &note, "k").await, Err(AnkiError::Unconfirmed(_))));

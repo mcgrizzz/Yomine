@@ -45,8 +45,9 @@ use crate::{
         FailureKind,
         FailureScope,
         Fallback,
-        MediaState,
+        Media,
         Outcome,
+        Part,
     },
     dto::{
         CardFormatDto,
@@ -58,6 +59,8 @@ use crate::{
     events::LoadingMessage,
     media::{
         media_fields,
+        Cut,
+        EnrichError,
         LineMedia,
         MediaSource,
         Preview,
@@ -104,7 +107,7 @@ pub async fn mine_batch_item(
     let mut batch = batches::load(&batch_id)?;
     batches::require_profile(&batch, "continue it").await?;
     let item = batch.items.get(item_index).ok_or("Batch item not found")?.clone();
-    let (url, media, local_mappings, lexeme) = {
+    let (url, source, local_mappings, lexeme) = {
         let state = state.lock().unwrap();
         if !batch.source.matches(&BatchSource::from_file(&state.file)?) {
             return Err("Load the original source before retrying this batch".into());
@@ -118,9 +121,14 @@ pub async fn mine_batch_item(
     };
     let (mut preview_file, mut preview_image) = (None, None);
     let result = async {
+        let mut show = |preview| match preview {
+            Some(Preview::AnkiFile(file)) => preview_file = Some(file),
+            Some(Preview::DataUri(uri)) => preview_image = Some(uri),
+            None => {}
+        };
         match item.outcome {
             Outcome::Unattempted | Outcome::Failed { .. } => {
-                mine(
+                let preview = mine(
                     &url,
                     &item,
                     lexeme,
@@ -129,48 +137,31 @@ pub async fn mine_batch_item(
                     &mut batch,
                     item_index,
                     local_mappings.as_ref(),
+                    source.as_ref().ok(),
                 )
                 .await?;
+                show(preview);
             }
-            Outcome::Created {
-                note_id,
-                media: MediaState::Pending | MediaState::Failed | MediaState::Skipped,
-                ..
-            } => {
-                let media = media
+            Outcome::Created { note_id, media, .. } if media.missing() => {
+                let source = source
                     .as_ref()
                     .map_err(|reason| Failure::new("Local video", FailureScope::Shared, reason))?;
-                media.validate(&player).await?;
+                source.validate(&player).await?;
+                let media = media.with_missing(Part::Pending);
                 batches::checkpoint(
                     &mut batch,
                     item_index,
-                    Outcome::Created { note_id, media: MediaState::Pending, error: None },
+                    Outcome::Created { note_id, media, error: None },
                 )?;
-                let result =
-                    media.attach(&player, note_id, item.timestamp.as_ref(), &progress).await;
-                let failure = match result {
-                    Ok(preview) => {
-                        match preview {
-                            Some(Preview::AnkiFile(file)) => preview_file = Some(file),
-                            Some(Preview::DataUri(uri)) => preview_image = Some(uri),
-                            None => {}
-                        }
-                        None
-                    }
-                    Err(e) => Some(e.failure()),
-                };
+                let attached = source
+                    .attach(&player, note_id, item.timestamp.as_ref(), media, &progress)
+                    .await;
+                show(attached.preview);
+                let failure = attached.error.map(|e| e.failure());
                 batches::checkpoint(
                     &mut batch,
                     item_index,
-                    Outcome::Created {
-                        note_id,
-                        media: if failure.is_some() {
-                            MediaState::Failed
-                        } else {
-                            MediaState::Complete
-                        },
-                        error: failure.clone(),
-                    },
+                    Outcome::Created { note_id, media: attached.media, error: failure.clone() },
                 )?;
                 if let Some(failure) = failure {
                     return Err(failure);
@@ -180,7 +171,8 @@ pub async fn mine_batch_item(
                 let anki = anki::current();
                 match key.as_deref().and_then(unconfirmed) {
                     Some(request) if anki.can_resend_create() => {
-                        create(&anki, request, &item, options, &mut batch, item_index).await?
+                        let preview = create(&anki, request, &item, &mut batch, item_index).await?;
+                        show(preview);
                     }
                     _ => return Err(unconfirmed_stop(None)),
                 }
@@ -329,7 +321,8 @@ async fn mine(
     batch: &mut BatchRecord,
     index: usize,
     local_mappings: Option<&HashMap<String, FieldMapping>>,
-) -> Result<(), Failure> {
+    source: Option<&MediaSource>,
+) -> Result<Option<Preview>, Failure> {
     let term = item.scan_text.as_ref().unwrap_or(&item.lemma).clone();
     let surface = item.surface.clone();
     let sentence = item.sentence.clone();
@@ -444,6 +437,22 @@ async fn mine(
         ));
     }
 
+    let wanted = match (item.mine_media, options.record) {
+        (false, _) => Media::both(Part::NotRequested),
+        (true, false) => Media::both(Part::Skipped),
+        (true, true) => Media::both(Part::Pending),
+    };
+    let cut = match (source, &item.timestamp) {
+        (Some(source), Some(timestamp)) if wanted.audio == Part::Pending => {
+            if matches!(source, MediaSource::LocalFile { .. }) {
+                let _ = progress.send(LoadingMessage::new("Cutting audio & screenshot…"));
+            }
+            let cut = source.cut(&format.model, timestamp, wanted).await;
+            cut.unwrap_or_else(|error| Cut::failed(wanted, error))
+        }
+        _ => Cut::nothing(wanted),
+    };
+
     let _ = progress.send(LoadingMessage::new("Creating Anki note…"));
 
     let anki = anki::current();
@@ -479,9 +488,22 @@ async fn mine(
     if batch.auto {
         tags.push("yomine::auto".to_string());
     }
-    let note = NewNote { deck: format.deck.clone(), note_type: format.model.clone(), fields, tags };
-    let request = CreateRequest { key: anki::request_key(), note, first_sent: Instant::now() };
-    create(&anki, request, item, options, batch, index).await
+    let note = NewNote {
+        deck: format.deck.clone(),
+        note_type: format.model.clone(),
+        fields,
+        tags,
+        attachments: cut.attachments,
+    };
+    let request = CreateRequest {
+        key: anki::request_key(),
+        note,
+        media: cut.media,
+        media_error: cut.error,
+        preview: cut.preview,
+        first_sent: Instant::now(),
+    };
+    create(&anki, request, item, batch, index).await
 }
 
 /// A create request as sent, kept to resend unchanged: Tsunagi refuses a reused key with
@@ -489,6 +511,10 @@ async fn mine(
 struct CreateRequest {
     key: String,
     note: NewNote,
+    /// The note's parts once it exists, and why one couldn't be cut.
+    media: Media,
+    media_error: Option<String>,
+    preview: Option<Preview>,
     first_sent: Instant,
 }
 
@@ -518,15 +544,15 @@ async fn create(
     anki: &anki::Anki,
     request: CreateRequest,
     item: &BatchItem,
-    options: MineOptions,
     batch: &mut BatchRecord,
     index: usize,
-) -> Result<(), Failure> {
+) -> Result<Option<Preview>, Failure> {
     batches::checkpoint(batch, index, Outcome::Attempting { key: Some(request.key.clone()) })?;
     let id = match anki.create_note(&request.note, &request.key).await {
         Ok(CreateOutcome::Created(id)) => id,
         Ok(CreateOutcome::Duplicate) => {
-            return batches::checkpoint(batch, index, Outcome::Duplicate)
+            batches::checkpoint(batch, index, Outcome::Duplicate)?;
+            return Ok(None);
         }
         Ok(CreateOutcome::Rejected { reason, setup }) => {
             let scope = if setup { FailureScope::Shared } else { FailureScope::Unknown };
@@ -552,12 +578,8 @@ async fn create(
         index,
         Outcome::Created {
             note_id: id,
-            media: match (item.mine_media, options.record) {
-                (false, _) => MediaState::NotRequested,
-                (true, true) => MediaState::Pending,
-                (true, false) => MediaState::Skipped,
-            },
-            error: None,
+            media: request.media,
+            error: request.media_error.map(|e| EnrichError::Failed(e).failure()),
         },
     )?;
     let collection = anki.profile().await.ok();
@@ -569,7 +591,7 @@ async fn create(
         Some(batch.id.as_str()),
         collection.as_deref(),
     );
-    Ok(())
+    Ok(request.preview)
 }
 
 /// A file from Anki's media folder as a data URI; `None` for a type the webview can't show

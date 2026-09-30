@@ -28,6 +28,7 @@ use super::{
         setup_problem,
         Anki,
         AnkiError,
+        AttachmentKind,
         CreateOutcome,
         NewNote,
         NoteInfo,
@@ -213,6 +214,8 @@ pub(super) async fn create_note(anki: &Anki, note: &NewNote) -> Result<CreateOut
             "modelName": note.note_type,
             "fields": note.fields,
             "tags": note.tags,
+            "audio": note.attachments(AttachmentKind::Audio),
+            "picture": note.attachments(AttachmentKind::Picture),
             "options": { "allowDuplicate": false }
         }
     });

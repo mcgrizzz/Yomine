@@ -18,6 +18,8 @@ pub use client::{
     request_key,
     Anki,
     AnkiError,
+    Attachment,
+    AttachmentKind,
     Backend,
     CreateOutcome,
     NewNote,

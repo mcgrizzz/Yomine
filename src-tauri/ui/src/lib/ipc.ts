@@ -801,12 +801,18 @@ export interface BatchFailure {
 	note_type?: string;
 }
 
-export type BatchMedia = 'not_requested' | 'pending' | 'complete' | 'failed' | 'skipped';
+export type BatchPart = 'not_requested' | 'skipped' | 'pending' | 'done' | 'failed';
 
 export type BatchOutcome =
 	| { status: 'unattempted' | 'attempting' | 'duplicate' }
 	| { status: 'failed'; error: BatchFailure }
-	| { status: 'created'; note_id: number; media: BatchMedia; error: BatchFailure | null }
+	| {
+			status: 'created';
+			note_id: number;
+			audio: BatchPart;
+			picture: BatchPart;
+			error: BatchFailure | null;
+	  }
 	| { status: 'deleted'; note_id: number };
 
 export interface BatchItem {

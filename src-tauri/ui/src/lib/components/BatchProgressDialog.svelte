@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { fade } from 'svelte/transition';
 	import Modal from './Modal.svelte';
+	import { mediaParts } from '$lib/batch';
 	import type { BatchRecord } from '$lib/ipc';
 	import {
 		cancelQueue,
@@ -52,12 +53,7 @@
 					[outcomes.filter((o) => o.status === 'duplicate').length, 'already in Anki'],
 					[outcomes.filter((o) => o.status === 'failed').length, 'not created']
 				]
-			: [
-					[
-						outcomes.filter((o) => o.status === 'created' && o.media === 'failed').length,
-						'not recorded'
-					]
-				];
+			: [[outcomes.filter((o) => mediaParts(o).includes('failed')).length, 'not recorded']];
 		return parts.filter(([n]) => n).map(([n, label]) => `${n} ${label}`);
 	});
 
