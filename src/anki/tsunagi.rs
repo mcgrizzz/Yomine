@@ -266,6 +266,12 @@ pub(super) async fn vocab_notes(
     Ok(notes.into_iter().map(NoteInfo::from).collect())
 }
 
+pub(super) async fn delete(anki: &Anki, ids: &[u64]) -> Result<(), AnkiError> {
+    let request = request(anki, Method::POST, "/v1/notes:delete");
+    accepted(anki, request.json(&json!({ "note_ids": ids }))).await?;
+    Ok(())
+}
+
 pub(super) async fn update_fields(
     anki: &Anki,
     note_id: u64,

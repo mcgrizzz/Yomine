@@ -262,7 +262,11 @@ impl Anki {
     }
 
     pub async fn delete(&self, ids: &[u64]) -> Result<(), AnkiError> {
-        ankiconnect::delete(self, ids).await
+        if self.tsunagi() {
+            tsunagi::delete(self, ids).await
+        } else {
+            ankiconnect::delete(self, ids).await
+        }
     }
 
     pub async fn create_note(&self, note: &NewNote<'_>) -> Result<CreateOutcome, AnkiError> {
