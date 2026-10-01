@@ -52,11 +52,20 @@ pub struct ConnectionError {
     detail: String,
 }
 
+#[derive(serde::Serialize)]
+pub struct ConnectionReport {
+    backend: anki::Backend,
+    missing: Option<anki::MissingPermissions>,
+    /// Tsunagi's reason for not saying what's missing.
+    unchecked: Option<String>,
+}
+
 #[tauri::command]
 pub async fn test_anki_connection(
     connection: AnkiConnectionSettings,
-) -> Result<anki::Backend, ConnectionError> {
-    anki::probe(connection.clone()).detect().await.map_err(|error| {
+) -> Result<ConnectionReport, ConnectionError> {
+    let anki = anki::probe(connection.clone());
+    let backend = anki.detect().await.map_err(|error| {
         let message = match &error {
             AnkiError::NotSent(_) | AnkiError::TimedOut(_) => format!(
                 "Cannot reach Anki at {} on port {}. Check the address and that the add-on is running.",
@@ -77,7 +86,15 @@ pub async fn test_anki_connection(
             }
         };
         ConnectionError { message, detail: error.to_string() }
-    })
+    })?;
+    let (missing, unchecked) = match backend {
+        anki::Backend::Tsunagi { .. } => match anki.missing_permissions().await {
+            Ok(missing) => (missing, None),
+            Err(reason) => (None, Some(reason)),
+        },
+        anki::Backend::AnkiConnect => (None, None),
+    };
+    Ok(ConnectionReport { backend, missing, unchecked })
 }
 
 /// A model's sample note plus the engine's field guesses.

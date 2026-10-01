@@ -22,6 +22,8 @@ pub use client::{
     AttachmentKind,
     Backend,
     CreateOutcome,
+    MissingFeature,
+    MissingPermissions,
     NewNote,
     NoteEvent,
     NoteInfo,

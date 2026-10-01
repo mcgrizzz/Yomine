@@ -112,6 +112,21 @@ pub enum CreateOutcome {
     },
 }
 
+/// What Tsunagi doesn't let this app do, as its settings name them.
+#[derive(Serialize)]
+pub struct MissingPermissions {
+    pub app: String,
+    pub role: String,
+    pub features: Vec<MissingFeature>,
+}
+
+#[derive(Serialize)]
+pub struct MissingFeature {
+    pub feature: String,
+    /// The permissions it needs, or what else stands in the way.
+    pub needs: String,
+}
+
 /// A connection to Anki, fixed for as long as the handle is kept.
 pub struct Anki {
     pub(super) connection: AnkiConnectionSettings,
@@ -210,6 +225,13 @@ impl Anki {
             return Err(AnkiError::Rejected("Only Tsunagi announces changes".into()));
         }
         tsunagi::follow_notes(self, on).await
+    }
+
+    /// Yomine's features Tsunagi doesn't allow this app: `None` when all are allowed, or
+    /// when Tsunagi can't report because no profile is open; `Err` with Tsunagi's reason
+    /// when it won't report to this app.
+    pub async fn missing_permissions(&self) -> Result<Option<MissingPermissions>, String> {
+        tsunagi::missing_permissions(self).await
     }
 
     /// The open profile's name, which keys Yomine's copy of its collection.

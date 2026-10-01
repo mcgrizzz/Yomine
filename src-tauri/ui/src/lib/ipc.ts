@@ -1010,7 +1010,21 @@ export interface ConnectionError {
 
 export type AnkiBackend = { kind: 'anki_connect' } | { kind: 'tsunagi'; version: string };
 
-export function testAnkiConnection(connection: AnkiConnectionSettings): Promise<AnkiBackend> {
+/** Yomine features Tsunagi doesn't allow the app, as named in Tsunagi's settings. */
+export interface MissingPermissions {
+	app: string;
+	role: string;
+	features: { feature: string; needs: string }[];
+}
+
+export interface ConnectionReport {
+	backend: AnkiBackend;
+	missing: MissingPermissions | null;
+	/** Tsunagi's reason for not saying what's missing. */
+	unchecked: string | null;
+}
+
+export function testAnkiConnection(connection: AnkiConnectionSettings): Promise<ConnectionReport> {
 	return invoke('test_anki_connection', { connection });
 }
 
