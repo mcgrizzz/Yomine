@@ -56,8 +56,6 @@ pub struct ConnectionError {
 pub struct ConnectionReport {
     backend: anki::Backend,
     missing: Option<anki::MissingPermissions>,
-    /// Tsunagi's reason for not saying what's missing.
-    unchecked: Option<String>,
 }
 
 #[tauri::command]
@@ -87,14 +85,11 @@ pub async fn test_anki_connection(
         };
         ConnectionError { message, detail: error.to_string() }
     })?;
-    let (missing, unchecked) = match backend {
-        anki::Backend::Tsunagi { .. } => match anki.missing_permissions().await {
-            Ok(missing) => (missing, None),
-            Err(reason) => (None, Some(reason)),
-        },
-        anki::Backend::AnkiConnect => (None, None),
+    let missing = match backend {
+        anki::Backend::Tsunagi { .. } => anki.missing_permissions().await,
+        anki::Backend::AnkiConnect => None,
     };
-    Ok(ConnectionReport { backend, missing, unchecked })
+    Ok(ConnectionReport { backend, missing })
 }
 
 /// A model's sample note plus the engine's field guesses.

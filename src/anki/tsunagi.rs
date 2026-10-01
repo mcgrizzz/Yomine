@@ -110,7 +110,7 @@ const FEATURES: [(&str, &[&str]); 7] = [
     ("Open cards in Anki", &["POST /v1/gui:browse", "POST /v1/gui:select-card"]),
 ];
 
-pub(super) async fn missing_permissions(anki: &Anki) -> Result<Option<MissingPermissions>, String> {
+pub(super) async fn missing_permissions(anki: &Anki) -> Option<MissingPermissions> {
     #[derive(Deserialize)]
     struct Report {
         caller: App,
@@ -127,15 +127,7 @@ pub(super) async fn missing_permissions(anki: &Anki) -> Result<Option<MissingPer
         setting: Option<String>,
         reason: Option<String>,
     }
-    let Ok(response) = request(anki, Method::GET, "/v1/capabilities").send().await else {
-        return Ok(None);
-    };
-    // The report itself needs `read:collection`.
-    if response.status() == StatusCode::FORBIDDEN {
-        return Err(anki.redact(refusal(response).await));
-    }
-    let Ok(response) = success(anki, response).await else { return Ok(None) };
-    let Ok(report) = response.json::<Report>().await else { return Ok(None) };
+    let report: Report = send(anki, request(anki, Method::GET, "/v1/capabilities")).await.ok()?;
     let features: Vec<MissingFeature> = FEATURES
         .iter()
         .filter_map(|(feature, operations)| {
@@ -159,11 +151,11 @@ pub(super) async fn missing_permissions(anki: &Anki) -> Result<Option<MissingPer
                 .then(|| MissingFeature { feature: (*feature).into(), needs: needs.join(", ") })
         })
         .collect();
-    Ok((!features.is_empty()).then_some(MissingPermissions {
+    (!features.is_empty()).then_some(MissingPermissions {
         app: report.caller.name,
         role: report.caller.role,
         features,
-    }))
+    })
 }
 
 /// The open profile, which health reports along with the collection's state.
@@ -218,19 +210,15 @@ async fn accepted(anki: &Anki, request: RequestBuilder) -> Result<reqwest::Respo
 async fn success(anki: &Anki, response: reqwest::Response) -> Result<reqwest::Response, AnkiError> {
     let status = response.status();
     if !status.is_success() {
-        let detail = refusal(response).await;
+        #[derive(Deserialize)]
+        struct Refusal {
+            detail: String,
+        }
+        let body = response.text().await.unwrap_or_default();
+        let detail = serde_json::from_str::<Refusal>(&body).map_or(body, |r| r.detail);
         return Err(AnkiError::Rejected(anki.redact(format!("{status}: {detail}"))));
     }
     Ok(response)
-}
-
-async fn refusal(response: reqwest::Response) -> String {
-    #[derive(Deserialize)]
-    struct Refusal {
-        detail: String,
-    }
-    let body = response.text().await.unwrap_or_default();
-    serde_json::from_str::<Refusal>(&body).map_or(body, |r| r.detail)
 }
 
 /// A query answered in full: without a `limit`, one page holds every match.

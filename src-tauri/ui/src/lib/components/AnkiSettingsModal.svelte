@@ -60,8 +60,6 @@
 	let ankiPhase = $state<Phase>('idle');
 	let ankiError = $state<ipc.ConnectionError | null>(null);
 	let ankiMissing = $state<ipc.MissingPermissions | null>(null);
-	let ankiUnchecked = $state<string | null>(null);
-	const ankiLimited = $derived(ankiMissing !== null || ankiUnchecked !== null);
 	let ankiBackend = $state<ipc.AnkiBackend | null>(null);
 	let yomitanPhase = $state<Phase>('idle');
 	let yomitanError = $state<string | null>(null);
@@ -174,7 +172,6 @@
 		ankiError = null;
 		ankiBackend = null;
 		ankiMissing = null;
-		ankiUnchecked = null;
 		clearCatalog();
 	}
 
@@ -195,7 +192,6 @@
 			if (generation !== ankiGeneration) return;
 			ankiBackend = report.backend;
 			ankiMissing = report.missing;
-			ankiUnchecked = report.unchecked;
 			ankiPhase = 'ready';
 			if (catalogPhase !== 'ready') await fetchModels();
 		} catch (error) {
@@ -566,8 +562,8 @@
 						</div>
 						<span
 							class="status"
-							class:ok={ankiPhase === 'ready' && !ankiLimited}
-							class:warning={ankiPhase === 'failed' || ankiLimited}
+							class:ok={ankiPhase === 'ready' && ankiMissing === null}
+							class:warning={ankiPhase === 'failed' || ankiMissing !== null}
 							role="status"
 							>{connectionLabel(ankiPhase)}{ankiBackend
 								? ` · ${ankiBackend.kind === 'tsunagi' ? `Tsunagi ${ankiBackend.version}` : 'AnkiConnect'}`
@@ -582,21 +578,16 @@
 							>{ankiExpanded ? 'Collapse' : 'Configure'}</button
 						>
 					</div>
-					{#if ankiLimited}
+					{#if ankiMissing}
 						<div class="permissions" role="status">
-							{#if ankiMissing}
-								<p>
-									⚠ Tsunagi's role "{ankiMissing.role}" for the app "{ankiMissing.app}" doesn't
-									allow:
-								</p>
-								<ul>
-									{#each ankiMissing.features as missing (missing.feature)}
-										<li>{missing.feature} ({missing.needs})</li>
-									{/each}
-								</ul>
-							{:else}
-								<p>⚠ Tsunagi won't say what Yomine may do: {ankiUnchecked}</p>
-							{/if}
+							<p>
+								⚠ Tsunagi's role "{ankiMissing.role}" for the app "{ankiMissing.app}" doesn't allow:
+							</p>
+							<ul>
+								{#each ankiMissing.features as missing (missing.feature)}
+									<li>{missing.feature} ({missing.needs})</li>
+								{/each}
+							</ul>
 							<p>Change the role in Tsunagi's settings, then test again.</p>
 						</div>
 					{/if}

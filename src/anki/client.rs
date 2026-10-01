@@ -220,10 +220,9 @@ impl Anki {
         tsunagi::follow_notes(self, on).await
     }
 
-    /// Yomine's features Tsunagi doesn't allow this app: `None` when all are allowed, or
-    /// when Tsunagi can't report because no profile is open; `Err` with Tsunagi's reason
-    /// when it won't report to this app.
-    pub async fn missing_permissions(&self) -> Result<Option<MissingPermissions>, String> {
+    /// Yomine's features Tsunagi doesn't allow this app; `None` when all are allowed, or
+    /// when Tsunagi can't report because no profile is open.
+    pub async fn missing_permissions(&self) -> Option<MissingPermissions> {
         tsunagi::missing_permissions(self).await
     }
 

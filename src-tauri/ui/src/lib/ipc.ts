@@ -1020,8 +1020,6 @@ export interface MissingPermissions {
 export interface ConnectionReport {
 	backend: AnkiBackend;
 	missing: MissingPermissions | null;
-	/** Tsunagi's reason for not saying what's missing. */
-	unchecked: string | null;
 }
 
 export function testAnkiConnection(connection: AnkiConnectionSettings): Promise<ConnectionReport> {
