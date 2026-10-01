@@ -474,6 +474,31 @@ pub(super) async fn select_card(anki: &Anki, card_id: u64) -> Result<(), AnkiErr
     Ok(())
 }
 
+pub(super) async fn intervals(anki: &Anki, card_ids: &[u64]) -> Result<Vec<i32>, AnkiError> {
+    #[derive(Deserialize)]
+    struct Latest {
+        card_id: u64,
+        interval: i32,
+    }
+    if card_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let ids = card_ids.iter().map(u64::to_string).collect::<Vec<_>>().join(",");
+    // A new card counts as 0 even with reviews (a reset card), as AnkiConnect answers.
+    let body = json!({
+        "search": format!("cid:{ids} -is:new"),
+        "distinct_on": "card_id",
+        "order": "id:desc",
+        "select": "card_id,interval",
+    });
+    let latest: HashMap<u64, i32> = query::<Latest>(anki, "/v1/reviews/query", body)
+        .await?
+        .into_iter()
+        .map(|review| (review.card_id, review.interval))
+        .collect();
+    Ok(card_ids.iter().map(|id| latest.get(id).copied().unwrap_or(0)).collect())
+}
+
 pub(super) async fn note_types(anki: &Anki) -> Result<Vec<Model>, AnkiError> {
     #[derive(Deserialize)]
     struct NoteType {

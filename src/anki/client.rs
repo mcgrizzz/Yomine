@@ -297,9 +297,14 @@ impl Anki {
         }
     }
 
-    /// In days, or negative seconds while learning; in the order of `card_ids`.
+    /// Each card's latest interval: in days, or negative seconds while learning, and 0 for a
+    /// new card; in the order of `card_ids`.
     pub(crate) async fn intervals(&self, card_ids: &[u64]) -> Result<Vec<i32>, AnkiError> {
-        ankiconnect::intervals(self, card_ids).await
+        if self.tsunagi() {
+            tsunagi::intervals(self, card_ids).await
+        } else {
+            ankiconnect::intervals(self, card_ids).await
+        }
     }
 
     /// Those of `ids` still in Anki; an error rather than a guess when Anki can't say.
