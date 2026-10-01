@@ -1,4 +1,11 @@
-import type { BatchItem, BatchOutcome, BatchRecord, FileLoadResult, SentenceDto } from './ipc';
+import type {
+	BatchItem,
+	BatchOutcome,
+	BatchPart,
+	BatchRecord,
+	FileLoadResult,
+	SentenceDto
+} from './ipc';
 import { termKey } from './table';
 
 export function sameSource(batch: BatchRecord, file: FileLoadResult | null): boolean {
@@ -9,8 +16,17 @@ export function sameSource(batch: BatchRecord, file: FileLoadResult | null): boo
 	);
 }
 
+export function mediaParts(outcome: BatchOutcome): BatchPart[] {
+	return outcome.status === 'created' ? [outcome.audio, outcome.picture] : [];
+}
+
 export function lacksMedia(outcome: BatchOutcome): boolean {
-	return outcome.status === 'created' && ['pending', 'failed', 'skipped'].includes(outcome.media);
+	return mediaParts(outcome).some((p) => p === 'pending' || p === 'failed' || p === 'skipped');
+}
+
+/** A skipped part waits until the user asks for it. */
+export function recordsNow(outcome: BatchOutcome): boolean {
+	return mediaParts(outcome).some((p) => p === 'pending' || p === 'failed');
 }
 
 export function retryIndices(batch: BatchRecord, media = false): number[] {

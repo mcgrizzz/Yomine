@@ -3,7 +3,6 @@
 use std::{
     path::PathBuf,
     sync::{
-        atomic::Ordering,
         Arc,
         Mutex,
     },
@@ -18,10 +17,6 @@ use tauri::{
 };
 use tauri_plugin_dialog::DialogExt;
 use yomine::{
-    anki::{
-        comprehensibility::calculate_sentence_comprehension,
-        AnkiState,
-    },
     core::{
         filename_parser::{
             self,
@@ -33,10 +28,8 @@ use yomine::{
             SourceFileType,
         },
         pipeline::{
-            apply_filters,
             process_sentences,
             process_source_file,
-            AnkiFilter,
         },
         recent_files::RecentFileEntry,
         text_filter,
@@ -52,6 +45,7 @@ use yomine::{
 };
 
 use crate::{
+    anki_sync,
     dto::{
         term_spans_by_sentence,
         EpubBookDto,
@@ -63,7 +57,6 @@ use crate::{
     },
     events::{
         names,
-        AnkiStatus,
         ErrorPayload,
         LoadingMessage,
     },
@@ -437,8 +430,8 @@ async fn load_file(
     // refresh against it in the background via `terms-refreshed`.
     let app_handle = app.clone();
     tauri::async_runtime::spawn(async move {
-        if yomine::anki::api::get_version().await.is_ok() {
-            if let Err(e) = live_refresh(&app_handle).await {
+        if yomine::anki::reachable().await {
+            if let Err(e) = anki_sync::sync(&app_handle, true).await {
                 let _ = app_handle.emit(
                     names::ERROR,
                     ErrorPayload {
@@ -646,8 +639,8 @@ pub(crate) async fn load_asbplayer_into_state(
     // Same background live-Anki refresh as `process_file`.
     let app_handle = app.clone();
     tauri::async_runtime::spawn(async move {
-        if yomine::anki::api::get_version().await.is_ok() {
-            if let Err(e) = live_refresh(&app_handle).await {
+        if yomine::anki::reachable().await {
+            if let Err(e) = anki_sync::sync(&app_handle, true).await {
                 let _ = app_handle.emit(
                     names::ERROR,
                     ErrorPayload {
@@ -666,121 +659,14 @@ pub(crate) async fn load_asbplayer_into_state(
     Ok(payload)
 }
 
-pub(crate) enum RefreshOutcome {
-    /// Terms were re-partitioned against live Anki data, or no file was loaded.
-    Done,
-    /// Anki answered with no cards; only the manual refresh surfaces it, to avoid a
-    /// banner on every file open before setup.
-    NoVocab,
-}
-
-/// Re-partition the loaded terms against **live** Anki data and emit
-/// `terms-refreshed`. Marks the knowledge summary dirty — the live fetch just
-/// rewrote the vocab cache.
-pub(crate) async fn live_refresh(app: &AppHandle) -> Result<RefreshOutcome, String> {
-    let state = app.state::<Mutex<AppState>>();
-    let (tools, base_terms, mut sentences, mappings, file_revision, input_revision) = {
-        let guard = state.lock().unwrap();
-        let tools = guard
-            .language_tools
-            .clone()
-            .ok_or_else(|| "Language tools are still loading".to_string())?;
-        // Nothing loaded → nothing to refresh (egui's RequestRefresh no-ops too).
-        if guard.file.base_terms.is_empty()
-            || guard
-                .dictionary_refresh_pending
-                .as_ref()
-                .is_some_and(|revision| Arc::ptr_eq(revision, &guard.input_revision))
-        {
-            return Ok(RefreshOutcome::Done);
-        }
-        (
-            tools,
-            guard.file.base_terms.clone(),
-            guard.file.sentences.clone(),
-            guard.settings.anki_model_mappings.clone(),
-            guard.file.revision.clone(),
-            guard.input_revision.clone(),
-        )
-    };
-
-    // Mirror egui's `anki_fetching = true` spinner while the live fetch runs.
-    let _ = app.emit(names::ANKI_STATUS, AnkiStatus { connected: true, fetching: true });
-
-    let refreshed =
-        match AnkiState::new(mappings, tools.frequency_manager.clone(), tools.known_interval).await
-        {
-            // Return before re-partitioning: a refresh that learned nothing would blank
-            // every known word. `AnkiState::new` applies the same rule to the disk cache.
-            Ok(state) if state.vocab().is_empty() => {
-                let _ =
-                    app.emit(names::ANKI_STATUS, AnkiStatus { connected: true, fetching: false });
-                return Ok(RefreshOutcome::NoVocab);
-            }
-            Err(e) => {
-                let _ =
-                    app.emit(names::ANKI_STATUS, AnkiStatus { connected: false, fetching: false });
-                return Err(format!("Anki is unreachable: {e}"));
-            }
-            Ok(state) => Arc::new(state),
-        };
-
-    let outcome: Result<(), String> = async {
-        let filter_result =
-            apply_filters(base_terms, &tools, AnkiFilter::Snapshot(Some(refreshed.clone())))
-                .await
-                .map_err(|e| e.to_string())?;
-
-        // Reconstruct the full term set and recompute comprehension from it.
-        let mut all_terms = Vec::new();
-        all_terms.extend(filter_result.terms.iter().cloned());
-        all_terms.extend(filter_result.anki_filtered.iter().cloned());
-        all_terms.extend(filter_result.ignore_filtered.iter().cloned());
-        for sentence in &mut sentences {
-            calculate_sentence_comprehension(sentence, &all_terms);
-        }
-        let file_comprehension = if sentences.is_empty() {
-            0.0
-        } else {
-            sentences.iter().map(|s| s.comprehension).sum::<f32>() / sentences.len() as f32
-        };
-
-        let mut guard = state.lock().unwrap();
-        if !guard.file_update_is_current(&file_revision, &input_revision) {
-            return Ok(());
-        }
-        guard.file.revision = Arc::new(());
-        guard.file.anki_known_lemmas =
-            filter_result.anki_filtered.iter().map(|t| t.lemma_form.clone()).collect();
-        guard.file.ignored_count = filter_result.ignore_filtered.len();
-        guard.file.terms = filter_result.terms;
-        guard.file.base_terms = all_terms;
-        guard.file.sentences = sentences;
-        guard.file.file_comprehension = file_comprehension;
-        guard.set_anki_state(refreshed);
-        // Recompute coverage from the fresh vocab cache (egui resets
-        // `knowledge_summary_attempted`).
-        guard.knowledge_dirty.store(true, Ordering::Relaxed);
-        if let Some(payload) = load_result(&guard.file) {
-            let _ = app.emit(names::TERMS_REFRESHED, payload);
-        }
-        Ok(())
-    }
-    .await;
-
-    let _ =
-        app.emit(names::ANKI_STATUS, AnkiStatus { connected: outcome.is_ok(), fetching: false });
-    outcome?;
-    Ok(RefreshOutcome::Done)
-}
-
 /// Manual "reapply ignorelist and Anki filters" (egui's top-bar 🔄 / F5 / Cmd+R
 /// → `RequestRefresh`). The updated file arrives via the `terms-refreshed` event.
 #[tauri::command]
 pub async fn refresh_terms(app: AppHandle) -> Result<(), String> {
-    match live_refresh(&app).await? {
-        RefreshOutcome::Done => Ok(()),
-        RefreshOutcome::NoVocab => {
+    anki_sync::sync(&app, true).await?;
+    match anki_sync::refresh(&app, anki_sync::Refresh::Full).await? {
+        anki_sync::RefreshOutcome::Done => Ok(()),
+        anki_sync::RefreshOutcome::NoVocab => {
             Err("Anki returned no cards — check the note types mapped in Anki settings".to_string())
         }
     }
@@ -856,8 +742,8 @@ pub async fn reload_current_file(
 
     let app_handle = app.clone();
     tauri::async_runtime::spawn(async move {
-        if yomine::anki::api::get_version().await.is_ok() {
-            if let Err(e) = live_refresh(&app_handle).await {
+        if yomine::anki::reachable().await {
+            if let Err(e) = anki_sync::sync(&app_handle, true).await {
                 let _ = app_handle.emit(
                     names::ERROR,
                     ErrorPayload {

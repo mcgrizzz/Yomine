@@ -10,7 +10,7 @@ import { jlptEnabled, posCatalog, posEnabled } from './controls';
 import { defaultSettings, settings } from './settings';
 import { refreshIgnoredLemmas } from './ignore';
 import { refreshRecommendedDicts } from './dictionaries';
-import { refreshMinedState, yomitanReachable } from './mining';
+import { applyMinedState, refreshMinedState, yomitanReachable } from './mining';
 import { selectedTerms } from './selection';
 import { reviewDialogOpen } from './modals';
 import { autoMode, dropDeselectedReview, onNewVideo } from './auto';
@@ -37,6 +37,7 @@ export async function hydrate(): Promise<void> {
 	let knowledgeEventSeen = false;
 	let fileEventSeen = false;
 	ipc.onLanguageToolsStatus((s) => languageToolsStatus.set(s));
+	ipc.onMinedState(applyMinedState);
 	ipc.onAnkiStatus((s) => {
 		ankiEventSeen = true;
 		ankiStatus.set(s);
@@ -60,6 +61,7 @@ export async function hydrate(): Promise<void> {
 	ipc.onAsbplayerMediaLoaded((r) => {
 		fileEventSeen = true;
 		fileResult.set(r);
+		void refreshMinedState(true);
 		showNotice(`Loaded from asbplayer: ${r.source_file.title}`);
 		onNewVideo();
 	});

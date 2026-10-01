@@ -24,12 +24,11 @@ use yomine::{
     },
 };
 
-/// Already-mined state (issue #3): `added:1` terms + normalized sentence keys.
+/// Already-mined state (issue #3): lemmas mined from the loaded file + normalized
+/// sentence keys.
 #[derive(Serialize, Clone)]
 pub struct MinedStateDto {
-    pub added_terms: Vec<String>,
-    /// `mined::entry_key`s for the same notes — reading-keyed, for the popover.
-    pub added_keys: Vec<String>,
+    pub mined_terms: Vec<String>,
     pub mined_sentences: Vec<String>,
 }
 

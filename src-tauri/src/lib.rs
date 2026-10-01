@@ -1,3 +1,4 @@
+mod anki_sync;
 mod background;
 mod batches;
 mod commands;
@@ -19,7 +20,7 @@ use crate::state::AppState;
 pub fn run() {
     yomine::core::user_themes::migrate_from_settings();
     let settings = yomine::persistence::load_json_or_default::<SettingsData>("settings.json");
-    yomine::anki::api::configure_connection(settings.anki_connection.clone());
+    yomine::anki::configure(settings.anki_connection.clone());
     let websocket_port = settings.websocket_settings.port;
     let mining_mode = settings.mining_mode;
 
@@ -66,6 +67,7 @@ pub fn run() {
             commands::ignore::export_ignore_list,
             commands::anki::get_anki_status,
             commands::anki::test_anki_connection,
+            commands::anki::sync_anki,
             commands::anki::list_anki_models,
             commands::anki::get_anki_sample_note,
             commands::dictionary::list_dictionaries,

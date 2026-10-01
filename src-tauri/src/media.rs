@@ -1,4 +1,5 @@
-//! Sentence audio and a screenshot for a note that already exists.
+//! Sentence audio and a screenshot for a note: cut from a local video, or recorded by
+//! asbplayer.
 
 use std::{
     collections::HashMap,
@@ -14,6 +15,10 @@ use std::{
 };
 
 use base64::Engine;
+use sha2::{
+    Digest,
+    Sha256,
+};
 use tauri::{
     async_runtime::JoinHandle,
     ipc::Channel,
@@ -21,7 +26,9 @@ use tauri::{
 use tokio::sync::OnceCell;
 use yomine::{
     anki::{
-        api as anki_api,
+        self,
+        Attachment,
+        AttachmentKind,
         FieldMapping,
     },
     core::settings::MiningMode,
@@ -40,6 +47,8 @@ use crate::{
         Failure,
         FailureKind,
         FailureScope,
+        Media,
+        Part,
     },
     dto::TimeStampDto,
     events::LoadingMessage,
@@ -138,27 +147,166 @@ impl MediaSource {
         Ok(())
     }
 
+    /// Cuts `note_type`'s missing parts from `timestamp` to attach to the note; asbplayer
+    /// records its media into the note later, so it cuts nothing.
+    pub async fn cut(
+        &self,
+        note_type: &str,
+        timestamp: &TimeStampDto,
+        media: Media,
+    ) -> Result<Cut, String> {
+        let Self::LocalFile { video, ffmpeg_path, format, mappings } = self else {
+            return Ok(Cut::nothing(media));
+        };
+        let (audio_field, picture_field) =
+            media_fields(mappings.get(note_type)).ok_or_else(|| {
+                format!("Choose where {note_type} keeps sentence audio and screenshots in Anki Settings")
+            })?;
+        let cutter = cutter_for(video, ffmpeg_path, format);
+        let clips = cutter.clips(timestamp).await?;
+        let mut cut = Cut::nothing(media);
+        let parts = [
+            (AttachmentKind::Audio, audio_field, &clips.audio),
+            (AttachmentKind::Picture, picture_field, &clips.picture),
+        ];
+        for (kind, field, clip) in parts {
+            let part = part_mut(&mut cut.media, kind);
+            let Some(field) = field else {
+                *part = Part::NotRequested;
+                continue;
+            };
+            if !part.missing() {
+                continue;
+            }
+            let file = clip.as_ref().map_err(String::clone).and_then(|file| {
+                std::fs::read(&file.path)
+                    .map(|bytes| (bytes, file.extension))
+                    .map_err(|e| e.to_string())
+            });
+            match file {
+                Ok((bytes, extension)) => {
+                    let data = base64::engine::general_purpose::STANDARD.encode(&bytes);
+                    if kind == AttachmentKind::Picture {
+                        cut.preview = Some(Preview::DataUri(data_uri(extension, &data)));
+                    }
+                    let filename = clip_name(&bytes, extension);
+                    cut.attachments.push(Attachment {
+                        kind,
+                        filename,
+                        data,
+                        fields: vec![field.into()],
+                    });
+                    *part = Part::Done;
+                }
+                Err(error) => {
+                    cutter.forget(timestamp);
+                    *part = Part::Failed;
+                    cut.error = Some(error);
+                }
+            }
+        }
+        Ok(cut)
+    }
+
+    /// Adds the missing parts of `media` to a note that exists.
     pub async fn attach(
         &self,
         player: &PlayerHandle,
         note_id: u64,
         timestamp: Option<&TimeStampDto>,
+        media: Media,
         progress: &Channel<LoadingMessage>,
-    ) -> Result<Option<Preview>, EnrichError> {
+    ) -> Attached {
         match self {
             Self::Asbplayer { media_id } => {
-                enrich_and_verify(player, note_id, media_id.clone(), timestamp, progress)
+                match enrich_and_verify(player, note_id, media_id.clone(), timestamp, progress)
                     .await
-                    .map(|file| file.map(Preview::AnkiFile))
+                {
+                    Ok(file) => Attached {
+                        media: media.with_missing(Part::Done),
+                        preview: file.map(Preview::AnkiFile),
+                        error: None,
+                    },
+                    Err(error) => Attached::failed(media, error),
+                }
             }
-            Self::LocalFile { video, ffmpeg_path, format, mappings } => {
-                let timestamp =
-                    timestamp.ok_or("This line has no timestamp to cut media from".to_string())?;
+            Self::LocalFile { .. } => {
+                let Some(timestamp) = timestamp else {
+                    return Attached::failed(media, "This line has no timestamp to cut media from");
+                };
                 let _ = progress.send(LoadingMessage::new("Cutting audio & screenshot…"));
-                attach_local(note_id, timestamp, video, ffmpeg_path, format, mappings).await
+                self.attach_cut(note_id, timestamp, media).await
             }
         }
     }
+
+    async fn attach_cut(&self, note_id: u64, timestamp: &TimeStampDto, media: Media) -> Attached {
+        let anki = anki::current();
+        let note = match anki.notes(&[note_id]).await.map(|notes| notes.into_iter().next()) {
+            Ok(Some(note)) => note,
+            Ok(None) => return Attached::failed(media, "Anki no longer has this note"),
+            Err(e) => return Attached::failed(media, e.to_string()),
+        };
+        let cut = match self.cut(&note.note_type, timestamp, media).await {
+            Ok(cut) => cut,
+            Err(error) => return Attached::failed(media, error),
+        };
+        if !cut.attachments.is_empty() {
+            if let Err(e) = anki.attach(note_id, &cut.attachments).await {
+                return Attached::failed(media, e.to_string());
+            }
+        }
+        Attached {
+            media: cut.media,
+            preview: cut.preview,
+            error: cut.error.map(EnrichError::Failed),
+        }
+    }
+}
+
+/// Clips cut for a note, as attachments.
+pub struct Cut {
+    pub attachments: Vec<Attachment>,
+    /// The parts once the attachments are in the note.
+    pub media: Media,
+    pub preview: Option<Preview>,
+    /// Why a part couldn't be cut.
+    pub error: Option<String>,
+}
+
+impl Cut {
+    pub fn nothing(media: Media) -> Self {
+        Self { attachments: Vec::new(), media, preview: None, error: None }
+    }
+
+    pub fn failed(media: Media, error: String) -> Self {
+        Self { error: Some(error), ..Self::nothing(media.with_missing(Part::Failed)) }
+    }
+}
+
+pub struct Attached {
+    pub media: Media,
+    pub preview: Option<Preview>,
+    pub error: Option<EnrichError>,
+}
+
+impl Attached {
+    fn failed(media: Media, error: impl Into<EnrichError>) -> Self {
+        Self { media: media.with_missing(Part::Failed), preview: None, error: Some(error.into()) }
+    }
+}
+
+fn part_mut(media: &mut Media, kind: AttachmentKind) -> &mut Part {
+    match kind {
+        AttachmentKind::Audio => &mut media.audio,
+        AttachmentKind::Picture => &mut media.picture,
+    }
+}
+
+/// Named by content, so a clip attached twice is one file and one reference.
+fn clip_name(bytes: &[u8], extension: &str) -> String {
+    let hash: String = Sha256::digest(bytes)[..8].iter().map(|b| format!("{b:02x}")).collect();
+    format!("yomine-{hash}.{extension}")
 }
 
 const NO_FFMPEG: &str =
@@ -184,67 +332,6 @@ async fn validate_local(video: &Path, ffmpeg_path: &str) -> Result<(), Failure> 
 
 fn find_ffmpeg(configured: &str) -> Option<ffmpeg::Ffmpeg> {
     ffmpeg::find(Some(configured.trim()).filter(|p| !p.is_empty()).map(Path::new))
-}
-
-async fn attach_local(
-    note_id: u64,
-    timestamp: &TimeStampDto,
-    video: &Path,
-    ffmpeg_path: &str,
-    format: &MediaFormat,
-    mappings: &HashMap<String, FieldMapping>,
-) -> Result<Option<Preview>, EnrichError> {
-    let note = anki_api::get_notes(vec![note_id])
-        .await
-        .map_err(|e| e.to_string())?
-        .into_iter()
-        .next()
-        .ok_or("Anki no longer has this note".to_string())?;
-    let (audio_field, picture_field) =
-        media_fields(mappings.get(&note.model_name)).ok_or_else(|| {
-            format!(
-                "Choose where {} keeps sentence audio and screenshots in Anki Settings",
-                note.model_name
-            )
-        })?;
-
-    let cutter = cutter_for(video, ffmpeg_path, format);
-    let clips = cutter.clips(timestamp).await?;
-    let read = |file: &Result<Encoded, String>| {
-        let file = file.as_ref().map_err(String::clone)?;
-        std::fs::read(&file.path).map(|bytes| (bytes, file.extension)).map_err(|e| e.to_string())
-    };
-    let wanted = |field: Option<&str>, file| field.map(|_| read(file)).transpose();
-    let encoded = match (wanted(audio_field, &clips.audio), wanted(picture_field, &clips.picture)) {
-        (Ok(audio), Ok(picture)) => (audio, picture),
-        (Err(error), _) | (_, Err(error)) => {
-            cutter.forget(timestamp);
-            return Err(error.into());
-        }
-    };
-
-    let mut fields: HashMap<String, String> = HashMap::new();
-    let mut preview = None;
-    for (field, file, is_picture) in
-        [(audio_field, encoded.0, false), (picture_field, encoded.1, true)]
-    {
-        let (Some(field), Some((bytes, extension))) = (field, file) else { continue };
-        let name = format!("yomine-{note_id}.{extension}");
-        let data = base64::engine::general_purpose::STANDARD.encode(bytes);
-        let stored = anki_api::store_media_file(&name, &data).await.map_err(|e| e.to_string())?;
-        if let Some(error) = stored.error {
-            return Err(EnrichError::Failed(format!("Anki didn't store {name}: {error}")));
-        }
-        let value =
-            if is_picture { format!("<img src=\"{name}\">") } else { format!("[sound:{name}]") };
-        // Both can go in one field.
-        fields.entry(field.to_string()).or_default().push_str(&value);
-        if is_picture {
-            preview = Some(Preview::DataUri(data_uri(extension, &data)));
-        }
-    }
-    anki_api::update_note_fields(note_id, &fields).await?;
-    Ok(preview)
 }
 
 /// The running batch's clips, cut ahead of its record phase.
@@ -426,6 +513,12 @@ impl From<String> for EnrichError {
     }
 }
 
+impl From<&str> for EnrichError {
+    fn from(error: &str) -> Self {
+        Self::Failed(error.into())
+    }
+}
+
 impl std::fmt::Display for EnrichError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -450,11 +543,10 @@ impl EnrichError {
     }
 }
 
-/// The note's current field values, or `None` when AnkiConnect can't serve it.
+/// The note's current field values, or `None` when Anki can't serve it.
 async fn snapshot_fields(note_id: u64) -> Option<HashMap<String, String>> {
-    let notes = anki_api::get_notes(vec![note_id]).await.ok()?;
-    let note = notes.into_iter().next()?;
-    Some(note.fields.into_iter().map(|(name, field)| (name, field.value)).collect())
+    let notes = anki::current().notes(&[note_id]).await.ok()?;
+    Some(notes.into_iter().next()?.fields)
 }
 
 /// Seek, mine, then verify the enrichment actually changed the note: asbplayer's

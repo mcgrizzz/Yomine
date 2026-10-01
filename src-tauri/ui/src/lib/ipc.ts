@@ -766,9 +766,7 @@ export async function loadAsbplayerMedia(
 
 /** Already-mined state (issue #3); sentences are `normalizeSentence` keys. */
 export interface MinedState {
-	added_terms: string[];
-	/** `entry_key`s for the same notes — reading-keyed, for the popover. */
-	added_keys: string[];
+	mined_terms: string[];
 	mined_sentences: string[];
 }
 
@@ -803,12 +801,18 @@ export interface BatchFailure {
 	note_type?: string;
 }
 
-export type BatchMedia = 'not_requested' | 'pending' | 'complete' | 'failed' | 'skipped';
+export type BatchPart = 'not_requested' | 'skipped' | 'pending' | 'done' | 'failed';
 
 export type BatchOutcome =
 	| { status: 'unattempted' | 'attempting' | 'duplicate' }
 	| { status: 'failed'; error: BatchFailure }
-	| { status: 'created'; note_id: number; media: BatchMedia; error: BatchFailure | null }
+	| {
+			status: 'created';
+			note_id: number;
+			audio: BatchPart;
+			picture: BatchPart;
+			error: BatchFailure | null;
+	  }
 	| { status: 'deleted'; note_id: number };
 
 export interface BatchItem {
@@ -934,6 +938,10 @@ export function getMinedState(): Promise<MinedState> {
 	return invoke('get_mined_state');
 }
 
+export function syncAnki(): Promise<void> {
+	return invoke('sync_anki');
+}
+
 /** Reachability probe; `url` tests a staged value (omitted = saved setting). */
 export function getYomitanStatus(url?: string): Promise<YomitanStatus> {
 	return invoke('get_yomitan_status', { url: url ?? null });
@@ -1000,7 +1008,21 @@ export interface ConnectionError {
 	detail: string;
 }
 
-export function testAnkiConnection(connection: AnkiConnectionSettings): Promise<number> {
+export type AnkiBackend = { kind: 'anki_connect' } | { kind: 'tsunagi'; version: string };
+
+/** Yomine features Tsunagi doesn't allow the app, as named in Tsunagi's settings. */
+export interface MissingPermissions {
+	app: string;
+	role: string;
+	features: { feature: string; needs: string }[];
+}
+
+export interface ConnectionReport {
+	backend: AnkiBackend;
+	missing: MissingPermissions | null;
+}
+
+export function testAnkiConnection(connection: AnkiConnectionSettings): Promise<ConnectionReport> {
 	return invoke('test_anki_connection', { connection });
 }
 
@@ -1190,6 +1212,7 @@ export const onYomitanStatus = (cb: (s: YomitanStatus) => void) => listenTo('yom
 export const onPlayerStatus = (cb: (s: PlayerStatus) => void) => listenTo('player-status', cb);
 export const onTermsRefreshed = (cb: (r: FileLoadResult) => void) =>
 	listenTo('terms-refreshed', cb);
+export const onMinedState = (cb: (s: MinedState) => void) => listenTo('mined-state', cb);
 export const onKnowledgeSummary = (cb: (s: KnowledgeSummary) => void) =>
 	listenTo('knowledge-summary', cb);
 export const onDictionariesChanged = (cb: () => void) =>

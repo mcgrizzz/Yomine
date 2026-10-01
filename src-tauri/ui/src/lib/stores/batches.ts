@@ -6,6 +6,7 @@ import {
 	lacksMedia,
 	needsReview,
 	occurrenceIndex,
+	recordsNow,
 	retryIndices,
 	sameSource,
 	type BatchPhase,
@@ -372,10 +373,7 @@ async function run(
 		if (!mediaRun) {
 			await runPhase('create');
 			const created = batch.items;
-			plan.record.indices = plan.record.indices.filter((i) => {
-				const o = created[i].outcome;
-				return o.status === 'created' && o.media === 'pending';
-			});
+			plan.record.indices = plan.record.indices.filter((i) => recordsNow(created[i].outcome));
 		}
 		await runPhase('record');
 	} catch (error) {

@@ -13,7 +13,7 @@ use serde::{
 use tauri::State;
 use yomine::{
     anki::{
-        api,
+        self,
         mined,
     },
     core::{
@@ -139,7 +139,55 @@ impl Failure {
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
 #[serde(rename_all = "snake_case")]
-pub enum MediaState {
+pub enum Part {
+    NotRequested,
+    Skipped,
+    Pending,
+    Done,
+    Failed,
+}
+
+impl Part {
+    /// Still to add; a skipped part is added when the user asks.
+    pub fn missing(self) -> bool {
+        matches!(self, Part::Skipped | Part::Pending | Part::Failed)
+    }
+}
+
+/// A created note's sentence audio and screenshot.
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
+#[serde(from = "StoredMedia")]
+pub struct Media {
+    pub audio: Part,
+    pub picture: Part,
+}
+
+impl Media {
+    pub fn both(part: Part) -> Self {
+        Self { audio: part, picture: part }
+    }
+
+    pub fn missing(self) -> bool {
+        self.audio.missing() || self.picture.missing()
+    }
+
+    pub fn with_missing(self, part: Part) -> Self {
+        let set = |p: Part| if p.missing() { part } else { p };
+        Self { audio: set(self.audio), picture: set(self.picture) }
+    }
+}
+
+/// Older records hold one state for both parts.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum StoredMedia {
+    Parts { audio: Part, picture: Part },
+    Single { media: SingleMedia },
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum SingleMedia {
     NotRequested,
     Pending,
     Complete,
@@ -147,15 +195,35 @@ pub enum MediaState {
     Skipped,
 }
 
+impl From<StoredMedia> for Media {
+    fn from(stored: StoredMedia) -> Self {
+        match stored {
+            StoredMedia::Parts { audio, picture } => Self { audio, picture },
+            StoredMedia::Single { media } => Self::both(match media {
+                SingleMedia::NotRequested => Part::NotRequested,
+                SingleMedia::Pending => Part::Pending,
+                SingleMedia::Complete => Part::Done,
+                SingleMedia::Failed => Part::Failed,
+                SingleMedia::Skipped => Part::Skipped,
+            }),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Default)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum Outcome {
     #[default]
     Unattempted,
-    Attempting,
+    Attempting {
+        /// The create request's key; `None` in older records.
+        #[serde(default)]
+        key: Option<String>,
+    },
     Created {
         note_id: u64,
-        media: MediaState,
+        #[serde(flatten)]
+        media: Media,
         error: Option<Failure>,
     },
     Duplicate,
@@ -256,7 +324,7 @@ pub fn load(id: &str) -> Result<BatchRecord, String> {
 /// don't exist.
 pub async fn require_profile(batch: &BatchRecord, action: &str) -> Result<(), String> {
     let Some(profile) = &batch.collection else { return Ok(()) };
-    let open = api::active_profile().await.map_err(|e| format!("Anki is unreachable: {e}"))?;
+    let open = anki::current().profile().await.map_err(|e| format!("Anki is unreachable: {e}"))?;
     if open != *profile {
         return Err(format!(
             "This batch was mined into the Anki profile \"{profile}\". Switch Anki to it to {action}."
@@ -265,9 +333,46 @@ pub async fn require_profile(batch: &BatchRecord, action: &str) -> Result<(), St
     Ok(())
 }
 
+/// Lemmas the collection's newest batch from `fingerprint` is creating notes for, or has
+/// created them for without recording them yet: Anki can announce a note before `mine`
+/// records it.
+pub fn unrecorded_lemmas(collection: &str, fingerprint: &str) -> Vec<String> {
+    let batch = db::with(|conn| {
+        db::batches::latest_id(conn, Some(collection))?
+            .map(|id| db::batches::read(conn, &id))
+            .transpose()
+            .map(Option::flatten)
+    });
+    let Some(batch) = batch.ok().flatten().and_then(|b| BatchRecord::from_stored(b).ok()) else {
+        return Vec::new();
+    };
+    if batch.source.fingerprint != fingerprint {
+        return Vec::new();
+    }
+    let created: Vec<u64> = batch
+        .items
+        .iter()
+        .filter_map(|i| match i.outcome {
+            Outcome::Created { note_id, .. } => Some(note_id),
+            _ => None,
+        })
+        .collect();
+    let recorded = db::with(|conn| db::notes::recorded(conn, &created)).unwrap_or_default();
+    batch
+        .items
+        .into_iter()
+        .filter(|item| match item.outcome {
+            Outcome::Attempting { .. } => true,
+            Outcome::Created { note_id, .. } => !recorded.contains(&note_id),
+            _ => false,
+        })
+        .map(|item| item.lemma)
+        .collect()
+}
+
 /// The open Anki profile, or the last one harvested while Anki is unreachable.
 async fn open_profile() -> Result<String, String> {
-    match api::active_profile().await {
+    match anki::current().profile().await {
         Ok(profile) => Ok(profile),
         Err(_) => db::with(|conn| db::anki::active_collection(conn)),
     }
@@ -347,7 +452,8 @@ pub async fn create_batch(
     for item in &mut items {
         item.outcome = Outcome::Unattempted;
     }
-    let profile = api::active_profile().await.map_err(|e| format!("Anki is unreachable: {e}"))?;
+    let profile =
+        anki::current().profile().await.map_err(|e| format!("Anki is unreachable: {e}"))?;
     let now = chrono::Utc::now();
     let batch = BatchRecord {
         id: now.timestamp_nanos_opt().ok_or("Could not assign a batch ID")?.to_string(),
@@ -394,11 +500,12 @@ pub async fn undo_batch(batch_id: String) -> Result<UndoResult, String> {
             _ => None,
         })
         .collect();
-    let existing = api::existing_note_ids_strict(&ids).await?;
+    let anki = anki::current();
+    let existing = anki.existing(&ids).await.map_err(|e| e.to_string())?;
     if !existing.is_empty() {
-        api::delete_notes(&existing).await?;
+        anki.delete(&existing).await.map_err(|e| e.to_string())?;
     }
-    let remaining = api::existing_note_ids_strict(&existing).await?;
+    let remaining = anki.existing(&existing).await.map_err(|e| e.to_string())?;
     mark_deleted(&mut batch, &remaining);
     save(&batch).map_err(|e| format!("Anki deletion was checked, but recovery history could not be saved: {}. Retry Undo to reconcile it.", e.message))?;
     let gone: Vec<u64> = ids.iter().copied().filter(|id| !remaining.contains(id)).collect();
@@ -454,7 +561,11 @@ mod tests {
                 scan_text: None,
                 adhoc: false,
                 mine_media: true,
-                outcome: Outcome::Created { note_id: 42, media: MediaState::Pending, error: None },
+                outcome: Outcome::Created {
+                    note_id: 42,
+                    media: Media { audio: Part::Done, picture: Part::Failed },
+                    error: None,
+                },
             }],
             auto: false,
             collection: None,
@@ -467,9 +578,20 @@ mod tests {
         let restored = BatchRecord::from_stored(original.stored()).unwrap();
         assert!(matches!(
             restored.items[0].outcome,
-            Outcome::Created { note_id: 42, media: MediaState::Pending, .. }
+            Outcome::Created {
+                note_id: 42,
+                media: Media { audio: Part::Done, picture: Part::Failed },
+                ..
+            }
         ));
         assert!(restored.source == original.source);
+        let keyless = serde_json::from_str(r#"{"status":"attempting"}"#).unwrap();
+        assert!(matches!(keyless, Outcome::Attempting { key: None }));
+        let single = r#"{"status":"created","note_id":1,"media":"complete","error":null}"#;
+        let single = serde_json::from_str(single).unwrap();
+        assert!(
+            matches!(single, Outcome::Created { media, .. } if media == Media::both(Part::Done))
+        );
     }
 
     #[test]
@@ -477,9 +599,9 @@ mod tests {
         let mut record = batch();
         for outcome in [
             Outcome::Duplicate,
-            Outcome::Attempting,
+            Outcome::Attempting { key: None },
             Outcome::Unattempted,
-            Outcome::Created { note_id: 43, media: MediaState::Complete, error: None },
+            Outcome::Created { note_id: 43, media: Media::both(Part::Done), error: None },
         ] {
             let mut item = record.items[0].clone();
             item.outcome = outcome;
@@ -488,7 +610,7 @@ mod tests {
         mark_deleted(&mut record, &[43]);
         assert!(matches!(record.items[0].outcome, Outcome::Deleted { note_id: 42 }));
         assert!(matches!(record.items[1].outcome, Outcome::Duplicate));
-        assert!(matches!(record.items[2].outcome, Outcome::Attempting));
+        assert!(matches!(record.items[2].outcome, Outcome::Attempting { .. }));
         assert!(matches!(record.items[3].outcome, Outcome::Unattempted));
         assert!(matches!(record.items[4].outcome, Outcome::Created { note_id: 43, .. }));
     }

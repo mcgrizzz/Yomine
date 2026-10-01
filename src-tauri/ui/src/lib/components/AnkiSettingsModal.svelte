@@ -59,6 +59,8 @@
 	let saveError = $state<string | null>(null);
 	let ankiPhase = $state<Phase>('idle');
 	let ankiError = $state<ipc.ConnectionError | null>(null);
+	let ankiMissing = $state<ipc.MissingPermissions | null>(null);
+	let ankiBackend = $state<ipc.AnkiBackend | null>(null);
 	let yomitanPhase = $state<Phase>('idle');
 	let yomitanError = $state<string | null>(null);
 	let yomitanVersion = $state<string | null>(null);
@@ -168,6 +170,8 @@
 		ankiGeneration++;
 		ankiPhase = 'idle';
 		ankiError = null;
+		ankiBackend = null;
+		ankiMissing = null;
 		clearCatalog();
 	}
 
@@ -184,8 +188,10 @@
 		ankiPhase = 'loading';
 		ankiError = null;
 		try {
-			await ipc.testAnkiConnection({ ...draft.anki_connection });
+			const report = await ipc.testAnkiConnection({ ...draft.anki_connection });
 			if (generation !== ankiGeneration) return;
+			ankiBackend = report.backend;
+			ankiMissing = report.missing;
 			ankiPhase = 'ready';
 			if (catalogPhase !== 'ready') await fetchModels();
 		} catch (error) {
@@ -556,9 +562,12 @@
 						</div>
 						<span
 							class="status"
-							class:ok={ankiPhase === 'ready'}
-							class:warning={ankiPhase === 'failed'}
-							role="status">{connectionLabel(ankiPhase)}</span
+							class:ok={ankiPhase === 'ready' && ankiMissing === null}
+							class:warning={ankiPhase === 'failed' || ankiMissing !== null}
+							role="status"
+							>{connectionLabel(ankiPhase)}{ankiBackend
+								? ` · ${ankiBackend.kind === 'tsunagi' ? `Tsunagi ${ankiBackend.version}` : 'AnkiConnect'}`
+								: ''}</span
 						>
 						<button
 							type="button"
@@ -569,6 +578,19 @@
 							>{ankiExpanded ? 'Collapse' : 'Configure'}</button
 						>
 					</div>
+					{#if ankiMissing}
+						<div class="permissions" role="status">
+							<p>
+								⚠ Tsunagi's role "{ankiMissing.role}" for the app "{ankiMissing.app}" doesn't allow:
+							</p>
+							<ul>
+								{#each ankiMissing.features as missing (missing.feature)}
+									<li>{missing.feature} ({missing.needs})</li>
+								{/each}
+							</ul>
+							<p>Change the role in Tsunagi's settings, then test again.</p>
+						</div>
+					{/if}
 					{#if ankiExpanded}
 						<div id="anki-connection-panel" class="panel">
 							<div class="connection-fields">
@@ -978,7 +1000,7 @@
 	}
 	.connection-row {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) 7.5rem 6.5rem;
+		grid-template-columns: minmax(0, 1fr) 11rem 6.5rem;
 		align-items: center;
 		gap: 0.5rem;
 		padding: 0.65rem 0.75rem;
@@ -1070,6 +1092,19 @@
 	}
 	.warning {
 		color: var(--warning);
+	}
+	.permissions {
+		margin: 0 0.75rem;
+		padding-bottom: 0.65rem;
+		color: var(--warning);
+		font-size: 0.85rem;
+	}
+	.permissions p {
+		margin: 0;
+	}
+	.permissions ul {
+		margin: 0.25rem 0;
+		padding-left: 1.25rem;
 	}
 	.error {
 		color: var(--danger);

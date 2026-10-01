@@ -4,12 +4,10 @@ use std::collections::HashMap;
 
 use yomine::{
     anki,
-    core::{
-        errors::YomineError,
-        settings::{
-            AnkiConnectionSettings,
-            AnkiModelInfo,
-        },
+    anki::AnkiError,
+    core::settings::{
+        AnkiConnectionSettings,
+        AnkiModelInfo,
     },
     yomitan,
 };
@@ -19,8 +17,14 @@ use crate::events::AnkiStatus;
 /// Point-in-time connectivity probe; `fetching` is always `false` here.
 #[tauri::command]
 pub async fn get_anki_status() -> AnkiStatus {
-    let connected = anki::api::get_version().await.is_ok();
-    AnkiStatus { connected, fetching: false }
+    AnkiStatus { connected: anki::reachable().await, fetching: false }
+}
+
+/// Syncs Yomine's copy of the collection in the background, for moments Anki may have
+/// changed (the window regaining focus, a batch ending).
+#[tauri::command]
+pub fn sync_anki(app: tauri::AppHandle) {
+    crate::anki_sync::hint(&app);
 }
 
 /// All note types and their fields, including empty types.
@@ -28,8 +32,8 @@ pub async fn get_anki_status() -> AnkiStatus {
 pub async fn list_anki_models(
     connection: AnkiConnectionSettings,
 ) -> Result<Vec<AnkiModelInfo>, String> {
-    let client = anki::api::AnkiClient::new(connection);
-    let mut models = anki::get_models(&client).await.map_err(|e| e.to_string())?;
+    let anki = anki::probe(connection).detected().await;
+    let mut models = anki.note_types().await.map_err(|e| e.to_string())?;
     models.sort_by(|a, b| a.name.cmp(&b.name));
 
     Ok(models
@@ -48,34 +52,44 @@ pub struct ConnectionError {
     detail: String,
 }
 
+#[derive(serde::Serialize)]
+pub struct ConnectionReport {
+    backend: anki::Backend,
+    missing: Option<anki::MissingPermissions>,
+}
+
 #[tauri::command]
 pub async fn test_anki_connection(
     connection: AnkiConnectionSettings,
-) -> Result<u32, ConnectionError> {
-    anki::api::AnkiClient::new(connection.clone()).get_version().await.map_err(|error| {
+) -> Result<ConnectionReport, ConnectionError> {
+    let anki = anki::probe(connection.clone());
+    let backend = anki.detect().await.map_err(|error| {
         let message = match &error {
-            YomineError::Reqwest(e) if e.is_connect() || e.is_timeout() => format!(
+            AnkiError::NotSent(_) | AnkiError::TimedOut(_) => format!(
                 "Cannot reach Anki at {} on port {}. Check the address and that the add-on is running.",
                 connection.host, connection.port
             ),
-            YomineError::Custom(message)
+            AnkiError::Rejected(message)
                 if message.to_lowercase().contains("key")
                     || message.to_lowercase().contains("auth") =>
             {
                 "Anki rejected the API key. Check Authentication settings.".into()
             }
-            YomineError::Custom(_) => {
+            AnkiError::Rejected(_) => {
                 "Anki rejected the request. Check the add-on configuration.".into()
             }
-            _ => "Anki returned an unexpected response. Check the host, port and add-on configuration."
-                .into(),
+            AnkiError::Unconfirmed(_) => {
+                "Anki returned an unexpected response. Check the host, port and add-on configuration."
+                    .into()
+            }
         };
-        let mut detail = error.to_string();
-        if !connection.api_key.is_empty() {
-            detail = detail.replace(&connection.api_key, "[redacted]");
-        }
-        ConnectionError { message, detail }
-    })
+        ConnectionError { message, detail: error.to_string() }
+    })?;
+    let missing = match backend {
+        anki::Backend::Tsunagi { .. } => anki.missing_permissions().await,
+        anki::Backend::AnkiConnect => None,
+    };
+    Ok(ConnectionReport { backend, missing })
 }
 
 /// A model's sample note plus the engine's field guesses.
@@ -101,9 +115,8 @@ pub async fn get_anki_sample_note(
     model_name: String,
     fields: Vec<String>,
 ) -> Result<SampleNote, String> {
-    let client = anki::api::AnkiClient::new(connection);
-    let sample_note =
-        anki::get_sample_note_for_model(&client, &model_name).await.map_err(|e| e.to_string())?;
+    let anki = anki::probe(connection).detected().await;
+    let sample_note = anki.sample_note(&model_name).await.map_err(|e| e.to_string())?;
     let templates: HashMap<String, String> = yomitan::get_term_card_formats(&yomitan_url)
         .await
         .unwrap_or_default()

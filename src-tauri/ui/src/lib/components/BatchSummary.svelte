@@ -84,9 +84,16 @@
 		if (o.status === 'duplicate') return { text: 'Already in Anki', detail: null };
 		if (o.status === 'deleted') return { text: 'Undone', detail: null };
 		if (o.status !== 'created' || !lacksMedia(o)) return null;
-		if (o.media === 'skipped') return { text: 'Recording skipped', detail: null };
+		if (o.audio === 'skipped' || o.picture === 'skipped') {
+			return { text: 'Recording skipped', detail: null };
+		}
 		if (!o.error) return { text: 'Not recorded yet', detail: null };
-		const text = o.error.kind === 'media_unverified' ? 'Not recorded' : o.error.stage;
+		const missingOnly = (part: string, other: string) => part === 'failed' && other !== 'failed';
+		const text = missingOnly(o.audio, o.picture)
+			? 'No sentence audio'
+			: missingOnly(o.picture, o.audio)
+				? 'No screenshot'
+				: 'Not recorded';
 		return { text, detail: o.error.message };
 	}
 
