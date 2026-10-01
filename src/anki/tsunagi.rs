@@ -67,8 +67,7 @@ static CLIENT: LazyLock<Client> = LazyLock::new(|| {
 
 pub(super) struct Health {
     pub(super) version: String,
-    /// Who Tsunagi took the request to be; `None` from a Tsunagi too old to say.
-    pub(super) caller: Option<Caller>,
+    pub(super) caller: Caller,
 }
 
 /// The app a request counts as: the key's, or the no-key row when the key is missing or
@@ -85,8 +84,7 @@ pub(super) async fn health(anki: &Anki) -> Option<Health> {
     struct Response {
         server: String,
         versions: Versions,
-        #[serde(default)]
-        caller: Option<Caller>,
+        caller: Caller,
     }
     #[derive(Deserialize)]
     struct Versions {
@@ -141,15 +139,15 @@ pub(super) async fn missing_permissions(anki: &Anki) -> Result<Option<MissingPer
         .filter_map(|(feature, operations)| {
             let mut needs: Vec<String> = Vec::new();
             for key in *operations {
-                let need = match report.operations.get(*key) {
-                    Some(op) if op.status == "available" => continue,
-                    Some(Operation { setting: Some(setting), .. }) => {
+                let Some(operation) = report.operations.get(*key) else { continue };
+                let need = match operation {
+                    Operation { status, .. } if status == "available" => continue,
+                    Operation { setting: Some(setting), .. } => {
                         setting.strip_prefix("permissions.").unwrap_or(setting).to_string()
                     }
-                    Some(Operation { reason, .. }) => {
+                    Operation { reason, .. } => {
                         reason.clone().unwrap_or_else(|| "not supported here".into())
                     }
-                    None => "update Tsunagi".into(),
                 };
                 if !needs.contains(&need) {
                     needs.push(need);

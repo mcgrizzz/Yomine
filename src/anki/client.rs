@@ -182,16 +182,10 @@ impl Anki {
             self.version().await?;
             return Ok(Backend::AnkiConnect);
         };
-        match health.caller {
-            Some(caller) if !caller.enabled => {
-                let message =
-                    format!("The app \"{}\" is turned off in Tsunagi's settings", caller.app);
-                return Err(AnkiError::Rejected(message));
-            }
-            Some(_) => {}
-            None => {
-                self.version().await?;
-            }
+        if !health.caller.enabled {
+            let message =
+                format!("The app \"{}\" is turned off in Tsunagi's settings", health.caller.app);
+            return Err(AnkiError::Rejected(message));
         }
         Ok(Backend::Tsunagi { version: health.version })
     }
