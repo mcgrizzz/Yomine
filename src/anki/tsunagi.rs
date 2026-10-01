@@ -29,9 +29,11 @@ use serde_json::json;
 
 use super::{
     client::{
+        files,
         setup_problem,
         Anki,
         AnkiError,
+        Attachment,
         AttachmentKind,
         CreateOutcome,
         MissingFeature,
@@ -157,7 +159,7 @@ pub(super) async fn missing_permissions(anki: &Anki) -> Result<Option<MissingPer
                 .then(|| MissingFeature { feature: (*feature).into(), needs: needs.join(", ") })
         })
         .collect();
-    Ok((!features.is_empty()).then(|| MissingPermissions {
+    Ok((!features.is_empty()).then_some(MissingPermissions {
         app: report.caller.name,
         role: report.caller.role,
         features,
@@ -365,8 +367,8 @@ pub(super) async fn create_note(
         "modelName": note.note_type,
         "fields": note.fields,
         "tags": note.tags,
-        "audio": note.attachments(AttachmentKind::Audio),
-        "picture": note.attachments(AttachmentKind::Picture),
+        "audio": files(&note.attachments, AttachmentKind::Audio),
+        "picture": files(&note.attachments, AttachmentKind::Picture),
     });
     let request =
         request(anki, Method::POST, "/v1/notes").header("Idempotency-Key", key).json(&body);
@@ -404,13 +406,17 @@ pub(super) async fn delete(anki: &Anki, ids: &[u64]) -> Result<(), AnkiError> {
     Ok(())
 }
 
-pub(super) async fn update_fields(
+pub(super) async fn attach(
     anki: &Anki,
     note_id: u64,
-    fields: &HashMap<String, String>,
+    attachments: &[Attachment],
 ) -> Result<(), AnkiError> {
+    let body = json!({
+        "audio": files(attachments, AttachmentKind::Audio),
+        "picture": files(attachments, AttachmentKind::Picture),
+    });
     let request = request(anki, Method::PATCH, &format!("/v1/notes/{note_id}"));
-    accepted(anki, request.json(&json!({ "fields": fields }))).await?;
+    accepted(anki, request.json(&body)).await?;
     Ok(())
 }
 

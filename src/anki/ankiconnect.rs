@@ -25,9 +25,11 @@ use serde_json::json;
 
 use super::{
     client::{
+        files,
         setup_problem,
         Anki,
         AnkiError,
+        Attachment,
         AttachmentKind,
         CreateOutcome,
         NewNote,
@@ -214,8 +216,8 @@ pub(super) async fn create_note(anki: &Anki, note: &NewNote) -> Result<CreateOut
             "modelName": note.note_type,
             "fields": note.fields,
             "tags": note.tags,
-            "audio": note.attachments(AttachmentKind::Audio),
-            "picture": note.attachments(AttachmentKind::Picture),
+            "audio": files(&note.attachments, AttachmentKind::Audio),
+            "picture": files(&note.attachments, AttachmentKind::Picture),
             "options": { "allowDuplicate": false }
         }
     });
@@ -232,7 +234,7 @@ pub(super) async fn create_note(anki: &Anki, note: &NewNote) -> Result<CreateOut
     }
 }
 
-pub(super) async fn update_fields(
+async fn update_fields(
     anki: &Anki,
     note_id: u64,
     fields: &HashMap<String, String>,
@@ -243,6 +245,42 @@ pub(super) async fn update_fields(
         Some(json!({ "note": { "id": note_id, "fields": fields } })),
     )
     .await
+}
+
+pub(super) async fn attach(
+    anki: &Anki,
+    note_id: u64,
+    attachments: &[Attachment],
+) -> Result<(), AnkiError> {
+    let note = notes(anki, &[note_id]).await?.into_iter().next();
+    let note = note.ok_or_else(|| AnkiError::Rejected("Anki no longer has this note".into()))?;
+    let mut references = Vec::new();
+    for attachment in attachments {
+        let stored = store_media(anki, &attachment.filename, &attachment.data).await?;
+        let reference = match attachment.kind {
+            AttachmentKind::Audio => format!("[sound:{stored}]"),
+            AttachmentKind::Picture => format!("<img src=\"{stored}\">"),
+        };
+        references.extend(attachment.fields.iter().map(|f| (f.clone(), reference.clone())));
+    }
+    update_fields(anki, note_id, &with_references(&note.fields, references)).await
+}
+
+/// The fields `references` go in, each with its reference appended unless it's already
+/// there, so attaching a file again doesn't add it twice.
+fn with_references(
+    note: &HashMap<String, String>,
+    references: Vec<(String, String)>,
+) -> HashMap<String, String> {
+    let mut fields: HashMap<String, String> = HashMap::new();
+    for (field, reference) in references {
+        let value =
+            fields.entry(field).or_insert_with_key(|f| note.get(f).cloned().unwrap_or_default());
+        if !value.contains(&reference) {
+            value.push_str(&reference);
+        }
+    }
+    fields
 }
 
 pub(super) async fn store_media(
@@ -274,6 +312,16 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    #[test]
+    fn attaching_keeps_the_field_and_adds_each_file_once() {
+        let audio = "[sound:yomine-a.mp3]".to_string();
+        let picture = "<img src=\"yomine-b.jpg\">".to_string();
+        let note = HashMap::from([("Media".to_string(), audio.clone())]);
+        let refs =
+            vec![("Media".to_string(), picture.clone()), ("Media".to_string(), audio.clone())];
+        assert_eq!(with_references(&note, refs)["Media"], format!("{audio}{picture}"));
+    }
 
     #[test]
     fn undo_lookup_does_not_confuse_errors_with_deleted_notes() {

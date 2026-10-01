@@ -67,10 +67,9 @@ pub struct NewNote {
     pub attachments: Vec<Attachment>,
 }
 
-impl NewNote {
-    pub(super) fn attachments(&self, kind: AttachmentKind) -> Vec<&Attachment> {
-        self.attachments.iter().filter(|a| a.kind == kind).collect()
-    }
+/// Those of `attachments` of one kind, which the add-ons take in separate lists.
+pub(super) fn files(attachments: &[Attachment], kind: AttachmentKind) -> Vec<&Attachment> {
+    attachments.iter().filter(|a| a.kind == kind).collect()
 }
 
 /// A file stored with the note, its reference appended to `fields`.
@@ -334,16 +333,12 @@ impl Anki {
         self.tsunagi()
     }
 
-    /// Replaces only the named fields.
-    pub async fn update_fields(
-        &self,
-        note_id: u64,
-        fields: &HashMap<String, String>,
-    ) -> Result<(), AnkiError> {
+    /// Stores the files and appends each reference to its fields.
+    pub async fn attach(&self, note_id: u64, attachments: &[Attachment]) -> Result<(), AnkiError> {
         if self.tsunagi() {
-            tsunagi::update_fields(self, note_id, fields).await
+            tsunagi::attach(self, note_id, attachments).await
         } else {
-            ankiconnect::update_fields(self, note_id, fields).await
+            ankiconnect::attach(self, note_id, attachments).await
         }
     }
 

@@ -251,35 +251,16 @@ impl MediaSource {
             Ok(cut) => cut,
             Err(error) => return Attached::failed(media, error),
         };
-        let mut attached = Attached {
-            media: cut.media,
-            preview: cut.preview,
-            error: cut.error.map(EnrichError::Failed),
-        };
-        let mut references = Vec::new();
-        for attachment in cut.attachments {
-            match anki.store_media(&attachment.filename, &attachment.data).await {
-                Ok(stored) => {
-                    let markup = reference(attachment.kind, &stored);
-                    references.extend(attachment.fields.into_iter().map(|f| (f, markup.clone())));
-                }
-                Err(e) => {
-                    *part_mut(&mut attached.media, attachment.kind) = Part::Failed;
-                    let error = format!("Anki didn't store {}: {e}", attachment.filename);
-                    attached.error = Some(EnrichError::Failed(error));
-                }
-            }
-        }
-        if attached.media.picture != Part::Done {
-            attached.preview = None;
-        }
-        let fields = with_references(&note.fields, references);
-        if !fields.is_empty() {
-            if let Err(e) = anki.update_fields(note_id, &fields).await {
+        if !cut.attachments.is_empty() {
+            if let Err(e) = anki.attach(note_id, &cut.attachments).await {
                 return Attached::failed(media, e.to_string());
             }
         }
-        attached
+        Attached {
+            media: cut.media,
+            preview: cut.preview,
+            error: cut.error.map(EnrichError::Failed),
+        }
     }
 }
 
@@ -319,30 +300,6 @@ fn part_mut(media: &mut Media, kind: AttachmentKind) -> &mut Part {
     match kind {
         AttachmentKind::Audio => &mut media.audio,
         AttachmentKind::Picture => &mut media.picture,
-    }
-}
-
-/// The fields `references` go in, each with its reference appended unless it's already
-/// there.
-fn with_references(
-    note: &HashMap<String, String>,
-    references: Vec<(String, String)>,
-) -> HashMap<String, String> {
-    let mut fields: HashMap<String, String> = HashMap::new();
-    for (field, reference) in references {
-        let value =
-            fields.entry(field).or_insert_with_key(|f| note.get(f).cloned().unwrap_or_default());
-        if !value.contains(&reference) {
-            value.push_str(&reference);
-        }
-    }
-    fields
-}
-
-fn reference(kind: AttachmentKind, filename: &str) -> String {
-    match kind {
-        AttachmentKind::Audio => format!("[sound:{filename}]"),
-        AttachmentKind::Picture => format!("<img src=\"{filename}\">"),
     }
 }
 
@@ -667,20 +624,5 @@ async fn wait_for_seek_confirmation(player: &PlayerHandle, secs: f32) {
             }
         }
         tokio::time::sleep(SEEK_CONFIRM_POLL).await;
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn retried_media_keeps_the_field_and_adds_each_file_once() {
-        let audio = "[sound:yomine-a.mp3]".to_string();
-        let picture = "<img src=\"yomine-b.jpg\">".to_string();
-        let note = HashMap::from([("Media".to_string(), audio.clone())]);
-        let refs =
-            vec![("Media".to_string(), picture.clone()), ("Media".to_string(), audio.clone())];
-        assert_eq!(with_references(&note, refs)["Media"], format!("{audio}{picture}"));
     }
 }
