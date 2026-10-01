@@ -6,3 +6,9 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - '@sveltejs/kit@2.69.2'
   - '@types/node@26.1.1'
+# Patched versions of transitive dependencies (Dependabot). SvelteKit 2 pins cookie to
+# ^0.6.0; drop these once SvelteKit and Vite require the fixed versions themselves.
+overrides:
+  cookie: ^0.7.0
+  devalue: ^5.9.3
+  postcss: ^8.5.23
