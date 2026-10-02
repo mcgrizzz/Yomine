@@ -230,7 +230,7 @@
 									class="submenu-item"
 									title={entry.file_path}
 									disabled={toolsError}
-									onclick={() => run(() => openRecentFile(entry.file_path))}
+									onclick={() => run(() => openRecentFile(entry))}
 									>{entry.title.trim() || filename(entry.file_path)}{#if entry.mode}<span
 											class="submenu-mode">{modeLabel(entry.mode)}</span
 										>{/if}</button

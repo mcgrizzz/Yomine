@@ -216,8 +216,13 @@ export async function openFolder(): Promise<void> {
 	}
 }
 
-export function openRecentFile(path: string): Promise<void> {
-	return loadAndStore(path);
+/** In the mode it was loaded in; a book in the current one. */
+export async function openRecentFile(entry: ipc.RecentFileEntry): Promise<void> {
+	if (entry.mode) {
+		const { miningMode } = await import('./settings');
+		if (get(miningMode) !== entry.mode && !(await switchMode(entry.mode, false))) return;
+	}
+	return loadAndStore(entry.file_path);
 }
 
 export async function reloadCurrentFile(): Promise<void> {
