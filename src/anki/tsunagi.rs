@@ -60,9 +60,9 @@ static CLIENT: LazyLock<Client> = LazyLock::new(|| {
     Client::builder()
         // Tsunagi binds IPv4 by default; trying ::1 first stalls each request on Windows.
         .resolve_to_addrs("localhost", &loopback)
-        // Tsunagi's server closes a connection idle for 5 s; reusing one near that fails
+        // Tsunagi's server closes a connection idle for 75 s; reusing one near that fails
         // the request as the server closes it.
-        .pool_idle_timeout(Duration::from_secs(2))
+        .pool_idle_timeout(Duration::from_secs(60))
         .build()
         .expect("failed to create Tsunagi HTTP client")
 });
