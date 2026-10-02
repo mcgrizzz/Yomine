@@ -43,13 +43,13 @@
 		mpvLocatePrompt,
 		yomitanReachable,
 		miningMode,
-		setMiningMode,
+		switchMode,
 		playerBusy,
 		localVideo,
 		currentQueue
 	} from '$lib/stores';
 	import { openThemesWindow } from '$lib/ipc';
-	import { filename } from '$lib/recents';
+	import { filename, modeLabel, recentKey } from '$lib/recents';
 
 	type MenuName = 'file' | 'mining' | 'appearance' | 'settings' | 'asb' | 'mpv';
 	let openMenu = $state<MenuName | null>(null);
@@ -225,13 +225,15 @@
 					</button>
 					{#if recentsOpen && $recentFiles.length > 0}
 						<div class="menu-panel submenu">
-							{#each $recentFiles.slice(0, 10) as entry (entry.file_path)}
+							{#each $recentFiles.slice(0, 10) as entry (recentKey(entry))}
 								<button
 									class="submenu-item"
 									title={entry.file_path}
 									disabled={toolsError}
-									onclick={() => run(() => openRecentFile(entry.file_path))}
-									>{entry.title.trim() || filename(entry.file_path)}</button
+									onclick={() => run(() => openRecentFile(entry))}
+									>{entry.title.trim() || filename(entry.file_path)}{#if entry.mode}<span
+											class="submenu-mode">{modeLabel(entry.mode)}</span
+										>{/if}</button
 								>
 							{/each}
 							<div class="menu-sep"></div>
@@ -333,7 +335,7 @@
 					title={mode === 'asbplayer' && $currentQueue
 						? 'A queue of local videos is open. Close it (click the n/N count) to use asbplayer.'
 						: undefined}
-					onclick={() => $miningMode !== mode && setMiningMode(mode)}>{label}</button
+					onclick={() => $miningMode !== mode && switchMode(mode)}>{label}</button
 				>
 			{/each}
 		</div>
@@ -570,6 +572,11 @@
 		max-width: 320px;
 		overflow: hidden;
 		text-overflow: ellipsis;
+	}
+	.submenu-mode {
+		margin-left: 0.5rem;
+		font-size: 0.7rem;
+		color: var(--text-muted);
 	}
 	.spacer {
 		flex: 1;

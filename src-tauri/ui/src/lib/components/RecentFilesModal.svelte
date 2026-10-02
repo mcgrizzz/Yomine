@@ -1,57 +1,123 @@
 <script lang="ts">
 	import Modal from './Modal.svelte';
+	import RecentCard from './RecentCard.svelte';
+	import type { MiningMode, RecentFileEntry } from '$lib/ipc';
 	import { recentFiles, recentFilesModalOpen, openRecentFile } from '$lib/stores';
-	import {
-		fileIcon,
-		filename,
-		formatTermCount,
-		formatFileSize,
-		formatLastOpened
-	} from '$lib/recents';
+	import { filename, recentKey } from '$lib/recents';
 
-	function open(path: string) {
+	type Filter = MiningMode | 'all';
+
+	let filter = $state<Filter>('all');
+	let search = $state('');
+
+	// Books count as Local: they're files on disk, though opening one keeps the mode.
+	const inFilter = (entry: RecentFileEntry, f: Filter) =>
+		f === 'all' || (entry.mode ?? 'local') === f;
+	const filters: [Filter, string][] = [
+		['all', 'All'],
+		['local', 'Local'],
+		['asbplayer', 'asbplayer']
+	];
+	const counts = $derived(
+		Object.fromEntries(
+			filters.map(([f]) => [f, $recentFiles.filter((entry) => inFilter(entry, f)).length])
+		) as Record<Filter, number>
+	);
+	const shown = $derived.by(() => {
+		const f = filter;
+		const query = search.trim().toLowerCase();
+		return $recentFiles.filter(
+			(entry) =>
+				inFilter(entry, f) &&
+				(!query ||
+					[entry.title, entry.subtitle ?? '', filename(entry.file_path)].some((text) =>
+						text.toLowerCase().includes(query)
+					))
+		);
+	});
+
+	function open(entry: RecentFileEntry) {
 		recentFilesModalOpen.set(false);
-		void openRecentFile(path);
+		void openRecentFile(entry);
 	}
 </script>
 
 <Modal
 	open={$recentFilesModalOpen}
-	title="Recent Files ({$recentFiles.length})"
+	title="Recent Files"
 	width="min(620px, 92%)"
 	onclose={() => recentFilesModalOpen.set(false)}
 >
+	<div class="controls">
+		<div class="filters" role="radiogroup" aria-label="Show">
+			{#each filters as [value, label] (value)}
+				<button
+					role="radio"
+					aria-checked={filter === value}
+					class:on={filter === value}
+					onclick={() => (filter = value)}
+					>{label} <span class="count">{counts[value]}</span></button
+				>
+			{/each}
+		</div>
+		<input
+			class="search"
+			type="search"
+			placeholder="Search titles and files"
+			aria-label="Search recent files"
+			bind:value={search}
+		/>
+	</div>
 	{#if $recentFiles.length === 0}
 		<p class="empty">No recent files.</p>
+	{:else if shown.length === 0}
+		<p class="empty">No matching files.</p>
 	{:else}
 		<ul class="list">
-			{#each $recentFiles as entry (entry.file_path)}
-				<li>
-					<button class="recent" title={entry.file_path} onclick={() => open(entry.file_path)}>
-						<span class="recent-name"
-							>{fileIcon(entry.file_path)}
-							{entry.title.trim() || filename(entry.file_path)}</span
-						>
-						{#if entry.subtitle}
-							<span class="recent-file">{entry.subtitle}</span>
-						{/if}
-						{#if entry.title.trim() && entry.title !== filename(entry.file_path)}
-							<span class="recent-file">{filename(entry.file_path)}</span>
-						{/if}
-						<span class="recent-meta">
-							<span class="recent-terms">{formatTermCount(entry.term_count)}</span>
-							{#if entry.creator}<span class="recent-creator">📷 {entry.creator}</span>{/if}
-							<span>{formatLastOpened(entry.last_opened)}</span>
-							<span>{formatFileSize(entry.file_size)}</span>
-						</span>
-					</button>
-				</li>
+			{#each shown as entry (recentKey(entry))}
+				<li><RecentCard {entry} showBadge={filter === 'all'} onopen={() => open(entry)} /></li>
 			{/each}
 		</ul>
 	{/if}
 </Modal>
 
 <style>
+	.controls {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0 1rem 0.6rem;
+	}
+	.filters {
+		display: inline-flex;
+		padding: 2px;
+		border: 1px solid var(--border);
+		border-radius: 999px;
+	}
+	.filters button {
+		padding: 0.15rem 0.7rem;
+		font-size: 0.75rem;
+		color: var(--text-muted);
+		background: transparent;
+		border: none;
+		border-radius: 999px;
+	}
+	.filters button.on {
+		color: var(--bg);
+		background: var(--accent);
+	}
+	.filters button:not(.on):hover {
+		color: var(--text);
+	}
+	.count {
+		opacity: 0.75;
+	}
+	.search {
+		flex: 1 1 10rem;
+		min-width: 0;
+		font-size: 0.8rem;
+	}
 	.empty {
 		margin: 0;
 		padding: 0 1rem;
@@ -61,46 +127,12 @@
 	.list {
 		list-style: none;
 		margin: 0;
-		padding: 0 1rem;
+		padding: 0 1rem 1rem;
 		display: flex;
 		flex-direction: column;
-		gap: 0.4rem;
+		gap: 0.3rem;
 		overflow-y: auto;
-	}
-	.recent {
-		display: flex;
-		flex-direction: column;
-		gap: 0.15rem;
-		width: 100%;
-		padding: 0.5rem 0.7rem;
-		text-align: left;
-		background: var(--bg-raised);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-	}
-	.recent:hover {
-		background: var(--bg-hover);
-		border-color: var(--accent);
-	}
-	.recent-name {
-		font-size: 0.9rem;
-		color: var(--text);
-	}
-	.recent-file {
-		font-size: 0.7rem;
-		color: var(--text-muted);
-	}
-	.recent-meta {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.6rem;
-		font-size: 0.7rem;
-		color: var(--text-muted);
-	}
-	.recent-terms {
-		color: var(--info);
-	}
-	.recent-creator {
-		color: var(--text-muted);
+		/* Fades over the bottom padding, so a card is only faded while more follow. */
+		mask-image: linear-gradient(to bottom, black calc(100% - 1rem), transparent);
 	}
 </style>

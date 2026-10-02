@@ -32,6 +32,7 @@ use yomine::{
             process_source_file,
         },
         recent_files::RecentFileEntry,
+        settings::MiningMode,
         text_filter,
     },
     media::{
@@ -360,7 +361,7 @@ async fn load_file(
     video: Option<OpenedVideo>,
     progress: Channel<LoadingMessage>,
 ) -> Result<FileLoadResult, String> {
-    let (tools, filters, anki_state, input_revision) = {
+    let (tools, filters, anki_state, input_revision, mode) = {
         let mut guard = state.lock().unwrap();
         let tools = guard
             .language_tools
@@ -372,6 +373,7 @@ async fn load_file(
             text_filter::compile_filters(&guard.settings),
             anki_state,
             guard.input_revision.clone(),
+            guard.settings.mining_mode,
         )
     };
 
@@ -386,7 +388,7 @@ async fn load_file(
 
     let opened =
         video.as_ref().map_or(source_file.original_file.clone(), |v| v.path.display().to_string());
-    let paired = record_open(&source_file, &sentences, filter_result.terms.len(), &opened);
+    let paired = record_open(&source_file, &sentences, filter_result.terms.len(), &opened, mode);
     let local_video = match &video {
         Some(video) => Some(video.path.clone()),
         None => paired
@@ -608,6 +610,7 @@ pub(crate) async fn load_asbplayer_into_state(
         &sentences,
         filter_result.terms.len(),
         &source_file.original_file,
+        MiningMode::Asbplayer,
     );
 
     let anki_known_lemmas =
@@ -769,6 +772,7 @@ fn record_open(
     term_count: usize,
     // What the user opened: the video, for subtitles loaded from one.
     opened: &str,
+    mode: MiningMode,
 ) -> Option<PathBuf> {
     let fingerprint = crate::batches::BatchSource::new(source_file, sentences).fingerprint;
     let info = db::sources::SourceInfo {
@@ -797,6 +801,7 @@ fn record_open(
         term_count: Some(term_count as i64),
         file_size: std::fs::metadata(path).map(|m| m.len() as i64).ok(),
         opened_at: db::now_ms(),
+        mode: Some(mode),
     };
     let parts = source_file.epub_chapters.as_deref().unwrap_or_default();
     let recorded = db::with(|conn| {
@@ -821,6 +826,52 @@ fn remember_video(
     if let Err(e) = db::with(|conn| db::sources::set_video(conn, &fingerprint, path.as_deref())) {
         eprintln!("Failed to remember the paired video: {e}");
     }
+}
+
+/// Switches the mining mode. The loaded file is kept for the mode left, and `restore`
+/// brings back the one kept for `mode`; otherwise, or with none kept, nothing is loaded.
+#[tauri::command]
+pub fn switch_mining_mode(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    player: State<'_, PlayerHandle>,
+    mode: MiningMode,
+    restore: bool,
+) -> Result<Option<FileLoadResult>, String> {
+    if crate::batches::RUNNING.load(std::sync::atomic::Ordering::Relaxed) {
+        return Err("Finish or stop the batch before switching modes".into());
+    }
+    let mut guard = state.lock().unwrap();
+    if guard.settings.mining_mode == mode {
+        return Ok(load_result(&guard.file));
+    }
+    let mut settings = guard.settings.clone();
+    settings.mining_mode = mode;
+    yomine::persistence::save_json(&settings, "settings.json").map_err(|e| e.to_string())?;
+    player.set_mode(mode);
+    guard.settings = settings.clone();
+    let left = std::mem::take(&mut guard.file);
+    let kept =
+        std::mem::replace(&mut guard.parked_file, Some(left).filter(|f| f.source_file.is_some()));
+    if let Some(file) = kept.filter(|_| restore) {
+        guard.file = file;
+    }
+    if mode == MiningMode::Asbplayer
+        && guard.file.source_file.is_none()
+        && settings.asbplayer_follow_active_tab
+    {
+        crate::background::LOAD_ACTIVE_TAB.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+    let result = load_result(&guard.file);
+    drop(guard);
+    let _ = app.emit(names::SETTINGS_CHANGED, settings);
+    // The kept file missed any Anki changes made meanwhile.
+    tauri::async_runtime::spawn(async move {
+        if let Err(e) = anki_sync::refresh(&app, anki_sync::Refresh::Live).await {
+            eprintln!("Anki refresh: {e}");
+        }
+    });
+    Ok(result)
 }
 
 /// Pairs a video with the loaded file, or unpairs it with `None`. The pairing is kept

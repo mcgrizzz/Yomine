@@ -6,7 +6,10 @@ use rusqlite::{
     OptionalExtension,
 };
 
-use crate::core::recent_files::RecentFileEntry;
+use crate::core::{
+    recent_files::RecentFileEntry,
+    settings::MiningMode,
+};
 
 /// The source's row id, adding a bare row for a fingerprint not seen before.
 pub fn id(conn: &Connection, fingerprint: &str) -> rusqlite::Result<i64> {
@@ -99,6 +102,14 @@ pub struct Open<'a> {
     pub term_count: Option<i64>,
     pub file_size: Option<i64>,
     pub opened_at: i64,
+    pub mode: Option<MiningMode>,
+}
+
+fn mode_key(mode: MiningMode) -> &'static str {
+    match mode {
+        MiningMode::Local => "local",
+        MiningMode::Asbplayer => "asbplayer",
+    }
 }
 
 pub(super) fn insert_open(
@@ -107,8 +118,9 @@ pub(super) fn insert_open(
     open: &Open,
 ) -> rusqlite::Result<()> {
     conn.execute(
-        "INSERT INTO opens (source_id, path, title, label, creator, term_count, file_size, opened_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        "INSERT INTO opens
+             (source_id, path, title, label, creator, term_count, file_size, opened_at, mode)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         params![
             source,
             open.path,
@@ -117,7 +129,8 @@ pub(super) fn insert_open(
             open.creator,
             open.term_count,
             open.file_size,
-            open.opened_at
+            open.opened_at,
+            open.mode.map(mode_key)
         ],
     )
     .map(|_| ())
@@ -134,21 +147,44 @@ pub fn record_open(
     mark_parts_seen(conn, open.path, epub_parts.iter().map(|p| *p as i64))
 }
 
-/// Each source's latest load, most recent first. A video and the subtitles it loads are
-/// one source, so opening the episode either way leaves one entry.
+/// Each source's latest load in each mining mode, most recent first. A video and the
+/// subtitles it loads are one source, so opening the episode either way leaves one entry
+/// per mode; a book has one entry and no mode, since it mines the same in both.
 pub fn recent(conn: &Connection, limit: usize) -> rusqlite::Result<Vec<RecentFileEntry>> {
+    // Loads from before modes were recorded: asbplayer's subtitles are saved under
+    // asbplayer_subtitles, and anything else was opened from disk. Loads imported
+    // without a source are told apart as books by their extension.
     // SQLite takes the other columns from the row holding max(opened_at).
     conn.prepare(
-        "WITH latest AS (
+        "WITH loads AS (
+             SELECT o.path, o.title, o.label, o.creator, o.opened_at, o.file_size,
+                    o.term_count, o.source_id,
+                    CASE
+                        WHEN s.kind IN ('epub', 'text')
+                          OR (o.source_id IS NULL
+                              AND (lower(o.path) LIKE '%.epub' OR lower(o.path) LIKE '%.txt'))
+                        THEN NULL
+                        ELSE coalesce(o.mode, CASE WHEN instr(o.path, 'asbplayer_subtitles') > 0
+                                                   THEN 'asbplayer' ELSE 'local' END)
+                    END AS mode
+             FROM opens o LEFT JOIN sources s ON s.id = o.source_id),
+         latest AS (
              SELECT path, title, label, creator, max(opened_at) AS opened_at, file_size,
-                    term_count, source_id
-             FROM opens GROUP BY path)
-         SELECT path, title, label, creator, opened_at, file_size, term_count FROM latest AS l
+                    term_count, source_id, mode
+             FROM loads GROUP BY path, mode)
+         SELECT path, title, label, creator, opened_at, file_size, term_count, mode
+         FROM latest AS l
          WHERE source_id IS NULL
-            OR opened_at = (SELECT max(opened_at) FROM latest WHERE source_id = l.source_id)
+            OR opened_at = (SELECT max(opened_at) FROM latest
+                            WHERE source_id = l.source_id AND mode IS l.mode)
          ORDER BY opened_at DESC LIMIT ?1",
     )?
     .query_map(params![limit as i64], |r| {
+        let mode = match r.get::<_, Option<String>>(7)?.as_deref() {
+            Some("local") => Some(MiningMode::Local),
+            Some(_) => Some(MiningMode::Asbplayer),
+            None => None,
+        };
         Ok(RecentFileEntry {
             file_path: r.get(0)?,
             title: r.get(1)?,
@@ -157,6 +193,7 @@ pub fn recent(conn: &Connection, limit: usize) -> rusqlite::Result<Vec<RecentFil
             last_opened: chrono::DateTime::from_timestamp_millis(r.get(4)?).unwrap_or_default(),
             file_size: r.get::<_, Option<i64>>(5)?.map(|n| n as u64),
             term_count: r.get::<_, Option<i64>>(6)?.map(|n| n as usize),
+            mode,
         })
     })?
     .collect()
@@ -180,4 +217,76 @@ pub fn epub_parts_seen(conn: &Connection, path: &str) -> rusqlite::Result<Vec<us
     conn.prepare("SELECT part_id FROM epub_parts_seen WHERE path = ?1")?
         .query_map(params![path], |r| r.get::<_, i64>(0).map(|id| id as usize))?
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::persistence::db::tests::scratch;
+
+    fn load(
+        conn: &Connection,
+        fingerprint: &str,
+        kind: &str,
+        path: &str,
+        at: i64,
+        mode: MiningMode,
+    ) {
+        let info = SourceInfo {
+            fingerprint,
+            kind,
+            title: path,
+            creator: None,
+            char_count: 0,
+            runtime_ms: None,
+        };
+        let open = Open {
+            path,
+            title: path,
+            label: None,
+            creator: None,
+            term_count: None,
+            file_size: None,
+            opened_at: at,
+            mode: Some(mode),
+        };
+        record_open(conn, &info, &open, &[]).unwrap();
+    }
+
+    #[test]
+    fn each_mode_lists_its_own_latest_load_and_books_show_once() {
+        let (dir, conn) = scratch("recent");
+        let asb = "C:/data/asbplayer_subtitles/ep1.srt";
+        load(&conn, "ep1", "subtitles", "D:/anime/ep1.mkv", 1, MiningMode::Local);
+        load(&conn, "ep1", "subtitles", asb, 2, MiningMode::Asbplayer);
+        load(&conn, "ep1", "subtitles", "D:/anime/ep1.srt", 3, MiningMode::Local);
+        load(&conn, "book", "epub", "D:/books/a.epub", 4, MiningMode::Local);
+        load(&conn, "book", "epub", "D:/books/a.epub", 5, MiningMode::Asbplayer);
+        // A load from before modes were recorded.
+        let old = Open {
+            path: "C:/data/asbplayer_subtitles/ep2.srt",
+            title: "ep2",
+            label: None,
+            creator: None,
+            term_count: None,
+            file_size: None,
+            opened_at: 0,
+            mode: None,
+        };
+        insert_open(&conn, None, &old).unwrap();
+
+        let listed: Vec<(String, Option<MiningMode>)> =
+            recent(&conn, 50).unwrap().into_iter().map(|e| (e.file_path, e.mode)).collect();
+        assert_eq!(
+            listed,
+            [
+                ("D:/books/a.epub".into(), None),
+                ("D:/anime/ep1.srt".into(), Some(MiningMode::Local)),
+                (asb.into(), Some(MiningMode::Asbplayer)),
+                ("C:/data/asbplayer_subtitles/ep2.srt".into(), Some(MiningMode::Asbplayer)),
+            ]
+        );
+        drop(conn);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 }

@@ -35,7 +35,8 @@
 		miningMode,
 		localVideo,
 		pairVideo,
-		switchSubtitleTrack
+		switchSubtitleTrack,
+		openRecentFilesModal
 	} from '$lib/stores';
 	import BatchRecovery from '$lib/components/BatchRecovery.svelte';
 	import TopBar from '$lib/components/TopBar.svelte';
@@ -62,15 +63,12 @@
 	import AutoModeToggle from '$lib/components/AutoModeToggle.svelte';
 	import MineAbility from '$lib/components/MineAbility.svelte';
 	import QueueStepper from '$lib/components/QueueStepper.svelte';
-	import {
-		fileIcon,
-		filename,
-		formatTermCount,
-		formatFileSize,
-		formatLastOpened
-	} from '$lib/recents';
+	import RecentCard from '$lib/components/RecentCard.svelte';
+	import { filename, inMode, modeLabel, recentKey } from '$lib/recents';
 
 	onMount(hydrate);
+
+	const modeRecents = $derived($recentFiles.filter((entry) => inMode(entry, $miningMode)));
 
 	const followOn = $derived(
 		($settings?.asbplayer_follow_new_media ?? false) ||
@@ -296,32 +294,19 @@
 
 				{#if $recentFiles.length > 0}
 					<section class="recents">
-						<h2 class="recents-title">Recent Files ({$recentFiles.length})</h2>
+						<div class="recents-head">
+							<h2 class="recents-title">
+								Recent in {modeLabel($miningMode)} ({modeRecents.length})
+							</h2>
+							<button class="recents-all" onclick={openRecentFilesModal}>All recent files ›</button>
+						</div>
+						{#if modeRecents.length === 0}
+							<p class="recents-empty">Nothing opened in {modeLabel($miningMode)} yet.</p>
+						{/if}
 						<ul class="recents-list">
-							{#each $recentFiles as entry (entry.file_path)}
+							{#each modeRecents as entry (recentKey(entry))}
 								<li>
-									<button
-										class="recent"
-										title={entry.file_path}
-										onclick={() => openRecentFile(entry.file_path)}
-									>
-										<span class="recent-name"
-											>{fileIcon(entry.file_path)}
-											{entry.title.trim() || filename(entry.file_path)}</span
-										>
-										{#if entry.subtitle}
-											<span class="recent-file">{entry.subtitle}</span>
-										{/if}
-										{#if entry.title.trim() && entry.title !== filename(entry.file_path)}
-											<span class="recent-file">{filename(entry.file_path)}</span>
-										{/if}
-										<span class="recent-meta">
-											<span class="recent-terms">{formatTermCount(entry.term_count)}</span>
-											{#if entry.creator}<span class="recent-creator">📷 {entry.creator}</span>{/if}
-											<span>{formatLastOpened(entry.last_opened)}</span>
-											<span>{formatFileSize(entry.file_size)}</span>
-										</span>
-									</button>
+									<RecentCard {entry} showBadge={false} onopen={() => openRecentFile(entry)} />
 								</li>
 							{/each}
 						</ul>
@@ -535,11 +520,33 @@
 		display: flex;
 		flex-direction: column;
 	}
+	.recents-head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-bottom: 0.5rem;
+	}
 	.recents-title {
-		margin: 0 0 0.5rem;
+		margin: 0;
 		font-size: 0.85rem;
 		font-weight: 600;
 		color: var(--accent);
+	}
+	.recents-all {
+		padding: 0;
+		background: none;
+		border: none;
+		font-size: 0.75rem;
+		color: var(--text-muted);
+	}
+	.recents-all:hover {
+		color: var(--accent);
+	}
+	.recents-empty {
+		margin: 0;
+		font-size: 0.8rem;
+		color: var(--text-muted);
 	}
 	.recents-list {
 		list-style: none;
@@ -552,42 +559,6 @@
 		flex: 1 1 auto;
 		min-height: 0;
 		overflow-y: auto;
-	}
-	.recent {
-		display: flex;
-		flex-direction: column;
-		gap: 0.15rem;
-		width: 100%;
-		padding: 0.5rem 0.7rem;
-		text-align: left;
-		background: var(--bg-raised);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-	}
-	.recent:hover {
-		background: var(--bg-hover);
-		border-color: var(--accent);
-	}
-	.recent-name {
-		font-size: 0.9rem;
-		color: var(--text);
-	}
-	.recent-file {
-		font-size: 0.7rem;
-		color: var(--text-muted);
-	}
-	.recent-meta {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.6rem;
-		font-size: 0.7rem;
-		color: var(--text-muted);
-	}
-	.recent-terms {
-		color: var(--info);
-	}
-	.recent-creator {
-		color: var(--text-muted);
 	}
 	.error {
 		color: var(--danger);

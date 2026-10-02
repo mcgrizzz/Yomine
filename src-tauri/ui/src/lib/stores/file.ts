@@ -17,13 +17,29 @@ export const recentFiles = writable<ipc.RecentFileEntry[]>([]);
 /** The video local mining cuts the loaded file's media from. */
 export const localVideo = derived(fileResult, ($f) => $f?.local_video ?? null);
 
-/** A video is opened for local mining. Dynamic: a static './settings' import closes the
- * file.ts → settings.ts → controls.ts cycle (see locateMpvAndRetry in player.ts). */
-async function useLocalMode(): Promise<void> {
-	const { miningMode, setMiningMode } = await import('./settings');
-	if (get(miningMode) === 'local') return;
-	await setMiningMode('local');
+/** Switches the mining mode, bringing back the file last loaded in it unless `restore` is
+ * false because a file is about to be opened. Dynamic: a static './settings' import closes
+ * the file.ts → settings.ts → controls.ts cycle (see locateMpvAndRetry in player.ts). */
+export async function switchMode(mode: ipc.MiningMode, restore = true): Promise<boolean> {
+	const { mirrorMiningMode } = await import('./settings');
+	try {
+		fileResult.set(await ipc.switchMiningMode(mode, restore));
+		mirrorMiningMode(mode);
+		void refreshMinedState(true);
+		return true;
+	} catch (err) {
+		lastError.set({ title: 'Mining mode', message: String(err), detail: null });
+		return false;
+	}
+}
+
+/** A video is about to be opened for local mining. */
+async function useLocalMode(): Promise<boolean> {
+	const { miningMode } = await import('./settings');
+	if (get(miningMode) === 'local') return true;
+	if (!(await switchMode('local', false))) return false;
 	showNotice('Switched to Local: audio and screenshots come from the video');
+	return true;
 }
 
 /** Reloads the loaded video with another of its subtitle tracks. */
@@ -160,14 +176,14 @@ async function load(
 		await openEpubPicker(path);
 		return false;
 	}
+	if (isVideoPath(path) && !(await useLocalMode())) return false;
 	try {
 		overlay.set('Processing file…');
 		const result = isVideoPath(path)
 			? await ipc.openVideo(path, null, (msg) => overlay.set(msg.message))
 			: await ipc.processFile(path, (msg) => overlay.set(msg.message), epubChapters, epubLabel);
 		fileResult.set(result);
-		if (isVideoPath(path)) await useLocalMode();
-		// Dynamic for the same import cycle as useLocalMode.
+		// Dynamic for the same import cycle as switchMode.
 		if (result.local_video) void import('./auto').then((auto) => auto.onLocalVideo());
 		void refreshMinedState(true);
 		recentFiles.set(await ipc.getRecentFiles());
@@ -200,8 +216,13 @@ export async function openFolder(): Promise<void> {
 	}
 }
 
-export function openRecentFile(path: string): Promise<void> {
-	return loadAndStore(path);
+/** In the mode it was loaded in; a book in the current one. */
+export async function openRecentFile(entry: ipc.RecentFileEntry): Promise<void> {
+	if (entry.mode) {
+		const { miningMode } = await import('./settings');
+		if (get(miningMode) !== entry.mode && !(await switchMode(entry.mode, false))) return;
+	}
+	return loadAndStore(entry.file_path);
 }
 
 export async function reloadCurrentFile(): Promise<void> {

@@ -19,6 +19,7 @@ use tauri::{
 };
 use yomine::{
     anki,
+    core::settings::MiningMode,
     tools::knowledge_summary::compute_knowledge_summary,
     yomitan,
 };
@@ -196,6 +197,10 @@ fn asbplayer_context(
 /// seen, so it doesn't swap the pick for another tab.
 pub static MANUAL_PICK: AtomicBool = AtomicBool::new(false);
 
+/// Set by switching to asbplayer mode with nothing to restore: follow-active-tab then loads
+/// the active tab without waiting for it to change.
+pub static LOAD_ACTIVE_TAB: AtomicBool = AtomicBool::new(false);
+
 /// asbplayer follow mode + the `asbplayer-context` awareness event.
 async fn poll_asbplayer_follow(app: AppHandle) {
     // `None` = disarmed; `Some(ids)` = armed with the media ids already seen.
@@ -204,20 +209,33 @@ async fn poll_asbplayer_follow(app: AppHandle) {
     let mut last_ctx: Option<crate::events::AsbplayerContext> = None;
 
     loop {
-        let (armed, follow_new, follow_active, poll_secs, mut current_media_id, subtitle_file) = {
+        let (
+            asbplayer_mode,
+            armed,
+            follow_new,
+            follow_active,
+            poll_secs,
+            mut current_media_id,
+            subtitle_file,
+            nothing_loaded,
+        ) = {
             let state = app.state::<Mutex<AppState>>();
             let guard = state.lock().unwrap();
+            let asbplayer_mode = guard.settings.mining_mode == MiningMode::Asbplayer;
             let follow_new = guard.settings.asbplayer_follow_new_media
                 || crate::batches::AUTO.load(Ordering::Relaxed);
             let follow_active = guard.settings.asbplayer_follow_active_tab;
-            let armed = (follow_new || follow_active) && guard.language_tools.is_some();
+            let armed =
+                asbplayer_mode && (follow_new || follow_active) && guard.language_tools.is_some();
             (
+                asbplayer_mode,
                 armed,
                 follow_new,
                 follow_active,
                 guard.settings.asbplayer_poll_secs.max(1),
                 guard.file.asbplayer_media_id.clone(),
                 guard.file.asbplayer_subtitle_file.clone(),
+                guard.file.source_file.is_none(),
             )
         };
         tokio::time::sleep(Duration::from_secs(poll_secs as u64)).await;
@@ -225,7 +243,8 @@ async fn poll_asbplayer_follow(app: AppHandle) {
         let player = app.state::<PlayerHandle>();
         // Only ask asbplayer when someone consumes the answer (follow or an
         // asbplayer session) and a client is actually connected.
-        let relevant = follow_new || follow_active || current_media_id.is_some();
+        let relevant =
+            asbplayer_mode && (follow_new || follow_active || current_media_id.is_some());
         let clients = player.status().await.map(|s| s.ws_clients).unwrap_or(0);
         if !relevant || clients == 0 {
             seen = None;
@@ -292,25 +311,26 @@ async fn poll_asbplayer_follow(app: AppHandle) {
             seen = None;
         }
         let actives_changed = prev_actives.as_ref().is_some_and(|p| p != &actives_now);
+        let load_active = LOAD_ACTIVE_TAB.swap(false, Ordering::Relaxed) && nothing_loaded;
         let just_armed = seen.is_none();
         prev_actives = Some(actives_now.clone());
         if just_armed {
             // Just armed: everything currently bound is old news.
             seen = Some(media.iter().map(|m| m.id.clone()).collect());
-            continue;
+            if !load_active {
+                continue;
+            }
         }
         let seen_ids = seen.as_mut().expect("seeded above");
 
-        // 1) New media (once its subtitles are loaded — they often land a poll
-        //    or two after the video appears). Prefer the active tab.
+        // 1) New media in the active tab, once its subtitles are loaded (they often land a
+        //    poll or two after the video appears). A video opened in the background stays
+        //    unseen until its tab is active.
         let mut target = None;
         if follow_new {
-            let mut fresh: Vec<_> = media
+            target = media
                 .iter()
-                .filter(|m| !seen_ids.contains(&m.id) && !m.loaded_subtitles.is_empty())
-                .collect();
-            fresh.sort_by_key(|m| !m.active);
-            target = fresh.first().copied();
+                .find(|m| !seen_ids.contains(&m.id) && m.active && !m.loaded_subtitles.is_empty());
         }
 
         // 2) Active-tab follow: the loaded video is no longer (one of) the
@@ -322,7 +342,7 @@ async fn poll_asbplayer_follow(app: AppHandle) {
                 !current_is_active
             } else {
                 // File-sourced session: only a fresh activation switches away.
-                actives_changed
+                actives_changed || load_active
             };
             if should_switch {
                 target = media.iter().find(|m| m.active && !m.loaded_subtitles.is_empty());
