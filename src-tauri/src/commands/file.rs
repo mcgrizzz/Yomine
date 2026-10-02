@@ -864,6 +864,7 @@ pub fn switch_mining_mode(
     }
     let result = load_result(&guard.file);
     drop(guard);
+    crate::background::FOLLOW_WAKE.notify_one();
     let _ = app.emit(names::SETTINGS_CHANGED, settings);
     // The kept file missed any Anki changes made meanwhile.
     tauri::async_runtime::spawn(async move {
