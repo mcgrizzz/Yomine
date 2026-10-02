@@ -1,5 +1,17 @@
 // Display helpers mirroring egui's `RecentFileEntry` formatters.
 
+import type { MiningMode, RecentFileEntry } from './ipc';
+
+/** A file loaded in both modes is listed once for each. */
+export const recentKey = (entry: RecentFileEntry): string =>
+	`${entry.mode ?? 'book'}:${entry.file_path}`;
+
+export const modeLabel = (mode: MiningMode): string => (mode === 'local' ? 'Local' : 'asbplayer');
+
+/** Books have no mode and are listed in both. */
+export const inMode = (entry: RecentFileEntry, mode: MiningMode): boolean =>
+	entry.mode === null || entry.mode === mode;
+
 export const filename = (path: string): string => path.split(/[\\/]/).pop() ?? path;
 
 export function fileIcon(path: string): string {

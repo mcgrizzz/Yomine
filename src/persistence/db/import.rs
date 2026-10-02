@@ -85,6 +85,7 @@ pub(super) fn import_json(conn: &Connection, dir: &Path) -> rusqlite::Result<()>
                 term_count: file["term_count"].as_i64(),
                 file_size: file["file_size"].as_i64(),
                 opened_at,
+                mode: None,
             };
             sources::insert_open(conn, None, &open)?;
         }

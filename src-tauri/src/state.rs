@@ -70,6 +70,8 @@ pub struct AppState {
     pub language_tools: Option<LanguageTools>,
     pub settings: SettingsData,
     pub file: FileData,
+    /// The other mining mode's file, restored when switching back to that mode.
+    pub parked_file: Option<FileData>,
     pub analysis_cancel: Arc<AtomicBool>,
     /// Kept for `export_analysis`; only a preview DTO is sent to the UI.
     pub last_analysis: Option<FrequencyAnalysisResult>,
@@ -96,6 +98,7 @@ impl AppState {
             language_tools: None,
             settings,
             file: FileData::default(),
+            parked_file: None,
             analysis_cancel: Arc::new(AtomicBool::new(false)),
             last_analysis: None,
             knowledge_dirty: Arc::new(AtomicBool::new(true)),

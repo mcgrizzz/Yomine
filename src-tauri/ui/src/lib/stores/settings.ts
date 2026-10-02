@@ -70,7 +70,9 @@ export async function saveAppearance(
 export const setMpvPath = (path: string) => patchSettings({ mpv_path: path });
 
 export const miningMode = derived(settings, ($s) => $s?.mining_mode ?? 'asbplayer');
-export const setMiningMode = (mode: ipc.MiningMode) => patchSettings({ mining_mode: mode });
+/** After the backend switched modes, which saved the setting itself. */
+export const mirrorMiningMode = (mode: ipc.MiningMode) =>
+	settings.update((s) => s && { ...s, mining_mode: mode });
 export const setAutoReview = (on: boolean) =>
 	get(settings)?.auto_review === on ? Promise.resolve(true) : patchSettings({ auto_review: on });
 

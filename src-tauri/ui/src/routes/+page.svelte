@@ -35,7 +35,8 @@
 		miningMode,
 		localVideo,
 		pairVideo,
-		switchSubtitleTrack
+		switchSubtitleTrack,
+		openRecentFilesModal
 	} from '$lib/stores';
 	import BatchRecovery from '$lib/components/BatchRecovery.svelte';
 	import TopBar from '$lib/components/TopBar.svelte';
@@ -67,10 +68,15 @@
 		filename,
 		formatTermCount,
 		formatFileSize,
-		formatLastOpened
+		formatLastOpened,
+		inMode,
+		modeLabel,
+		recentKey
 	} from '$lib/recents';
 
 	onMount(hydrate);
+
+	const modeRecents = $derived($recentFiles.filter((entry) => inMode(entry, $miningMode)));
 
 	const followOn = $derived(
 		($settings?.asbplayer_follow_new_media ?? false) ||
@@ -296,9 +302,17 @@
 
 				{#if $recentFiles.length > 0}
 					<section class="recents">
-						<h2 class="recents-title">Recent Files ({$recentFiles.length})</h2>
+						<div class="recents-head">
+							<h2 class="recents-title">
+								Recent in {modeLabel($miningMode)} ({modeRecents.length})
+							</h2>
+							<button class="recents-all" onclick={openRecentFilesModal}>All recent files ›</button>
+						</div>
+						{#if modeRecents.length === 0}
+							<p class="recents-empty">Nothing opened in {modeLabel($miningMode)} yet.</p>
+						{/if}
 						<ul class="recents-list">
-							{#each $recentFiles as entry (entry.file_path)}
+							{#each modeRecents as entry (recentKey(entry))}
 								<li>
 									<button
 										class="recent"
@@ -535,11 +549,33 @@
 		display: flex;
 		flex-direction: column;
 	}
+	.recents-head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-bottom: 0.5rem;
+	}
 	.recents-title {
-		margin: 0 0 0.5rem;
+		margin: 0;
 		font-size: 0.85rem;
 		font-weight: 600;
 		color: var(--accent);
+	}
+	.recents-all {
+		padding: 0;
+		background: none;
+		border: none;
+		font-size: 0.75rem;
+		color: var(--text-muted);
+	}
+	.recents-all:hover {
+		color: var(--accent);
+	}
+	.recents-empty {
+		margin: 0;
+		font-size: 0.8rem;
+		color: var(--text-muted);
 	}
 	.recents-list {
 		list-style: none;

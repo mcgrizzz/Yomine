@@ -133,6 +133,8 @@ export interface RecentFileEntry {
 	last_opened: string;
 	file_size: number | null;
 	term_count: number | null;
+	/** The mining mode it was loaded in; `null` for a book, which either mode lists. */
+	mode: MiningMode | null;
 }
 
 export interface PosInfo {
@@ -611,6 +613,14 @@ export function testTextFilters(
 /** Recently-opened files (existing paths only), most-recent first. */
 export function getRecentFiles(): Promise<RecentFileEntry[]> {
 	return invoke('get_recent_files');
+}
+
+/** The file loaded afterwards: the one kept for `mode` when `restore`, else none. */
+export function switchMiningMode(
+	mode: MiningMode,
+	restore: boolean
+): Promise<FileLoadResult | null> {
+	return invoke('switch_mining_mode', { mode, restore });
 }
 
 /** The ignore list's lemma forms, newest first. */

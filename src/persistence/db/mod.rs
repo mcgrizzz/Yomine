@@ -194,14 +194,21 @@ pub fn open(path: &Path, json_dir: &Path) -> rusqlite::Result<Connection> {
     let tx = conn.transaction()?;
     if version < 1 {
         tx.execute_batch(SCHEMA)?;
-        import::import_json(&tx, json_dir)?;
-        import::import_anki_caches(&tx, json_dir)?;
     }
     if version < 2 {
         // The video paired with a source, which local mining cuts media from.
         tx.execute_batch("ALTER TABLE sources ADD COLUMN video TEXT;")?;
     }
-    tx.pragma_update(None, "user_version", 2)?;
+    if version < 3 {
+        // The mining mode a load happened in; `sources::recent` infers it for older loads.
+        tx.execute_batch("ALTER TABLE opens ADD COLUMN mode TEXT;")?;
+    }
+    // The import writes rows in the current schema, so it runs after every step.
+    if version < 1 {
+        import::import_json(&tx, json_dir)?;
+        import::import_anki_caches(&tx, json_dir)?;
+    }
+    tx.pragma_update(None, "user_version", 3)?;
     tx.commit()?;
     Ok(conn)
 }

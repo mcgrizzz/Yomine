@@ -5,6 +5,8 @@ use serde::{
     Serialize,
 };
 
+use crate::core::settings::MiningMode;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecentFileEntry {
     pub file_path: String,
@@ -15,6 +17,9 @@ pub struct RecentFileEntry {
     pub last_opened: chrono::DateTime<chrono::Utc>,
     pub file_size: Option<u64>,
     pub term_count: Option<usize>,
+    /// The mining mode it was loaded in; `None` for a book, which either mode lists.
+    #[serde(default)]
+    pub mode: Option<MiningMode>,
 }
 
 impl RecentFileEntry {
@@ -35,6 +40,7 @@ impl RecentFileEntry {
             last_opened: chrono::Utc::now(),
             file_size,
             term_count: Some(term_count),
+            mode: None,
         }
     }
 
@@ -94,6 +100,7 @@ impl Default for RecentFileEntry {
             last_opened: chrono::Utc::now(),
             file_size: None,
             term_count: None,
+            mode: None,
         }
     }
 }
