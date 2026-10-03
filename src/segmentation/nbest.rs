@@ -96,6 +96,33 @@ fn is_suspicious(words: &[Word], idx: usize, frequency_manager: &FrequencyManage
     needs_rescue(&words[idx], frequency_manager)
         || follows_ta_as_conditional(words, idx)
         || precedes_stranded_passive(words, idx)
+        || verb_stem_before_copula(&words[idx], words.get(idx + 1), frequency_manager)
+}
+
+/// A verb stem before です or だ is either honorific (お探しです) or a noun misread as a verb
+/// (おつもりです as 積もる); it is the noun when the stem is the commoner word.
+fn verb_stem_before_copula(
+    word: &Word,
+    next: Option<&Word>,
+    frequency_manager: &FrequencyManager,
+) -> bool {
+    let copula = |t: &UnidicToken| {
+        matches!(t.conjugation_type, UnidicTag::JodoushiDesu | UnidicTag::JodoushiDa)
+    };
+    let rank = |form: &str, reading: &str| {
+        frequency_manager.get_harmonic_frequency_for_pair(form, &reading.to_hiragana())
+    };
+    let tokens: Vec<&UnidicToken> =
+        word.tokens.iter().chain(next.and_then(|n| n.tokens.first())).collect();
+    tokens.windows(2).any(|pair| {
+        let stem = pair[0];
+        stem.pos1 == UnidicTag::Doushi
+            && stem.conjugation_form == UnidicTag::Renyoukei
+            && copula(pair[1])
+            && rank(&stem.surface, &stem.surface_hatsuon).is_some_and(|noun| {
+                rank(&stem.lemma_form, &stem.lemma_hatsuon).is_none_or(|verb| noun < verb)
+            })
+    })
 }
 
 /// れる/られる attach only to a verb, so a non-verb before one is a wrong boundary

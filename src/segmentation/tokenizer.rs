@@ -78,10 +78,14 @@ pub(super) fn resolve_citation(word: &mut Word, manager: &FrequencyManager) {
     let lemma = (word.lemma_form.clone(), word.lemma_hatsuon.clone());
     // UniDic's form wins when the deinflector agrees; otherwise it only competes on frequency,
     // so the deinflector's gaps (すん for する) don't lose it, but ください stays ください.
-    let deinflected_lemma = deinflections.contains(&lemma);
+    // The deinflector writes katakana in hiragana (きれる for UniDic's キレる).
+    let deinflected_lemma = deinflections.iter().any(|(form, reading)| {
+        *reading == lemma.1 && fold_katakana(form) == fold_katakana(&lemma.0)
+    });
+    let lemma_deinflected = deinflections.contains(&lemma);
     let mut candidates: Vec<_> = deinflections
         .into_iter()
-        .chain((!deinflected_lemma).then(|| lemma.clone()))
+        .chain((!lemma_deinflected).then(|| lemma.clone()))
         .filter(|(form, reading)| manager.get_harmonic_frequency_for_pair(form, reading).is_some())
         .collect();
     candidates
@@ -290,6 +294,28 @@ fn keep_lexicalized_honorifics(words: &mut [Word], manager: &FrequencyManager) {
     }
 }
 
+/// The type of a word that ends in `word`, where it isn't `word`'s own: a suffix's is the type
+/// it forms (やり方 a noun, 嫌がる a verb), a bare verb stem names a noun (お迎え), and a
+/// number ends a noun (朝イチ).
+fn type_as_last_piece(word: &Word) -> Option<POS> {
+    let first = word.tokens.first()?;
+    if first.pos1 == UnidicTag::Setsubiji {
+        return match first.pos2 {
+            // UniDic files すぎ with the na-adjective suffixes, but 飲みすぎ is a noun.
+            UnidicTag::Keijoushiteki if first.lexeme == "過ぎ" => Some(POS::Noun),
+            UnidicTag::Meishiteki => Some(POS::Noun),
+            UnidicTag::Doushiteki => Some(POS::Verb),
+            UnidicTag::Keiyoushiteki => Some(POS::Adjective),
+            UnidicTag::Keijoushiteki => Some(POS::AdjectivalNoun),
+            _ => None,
+        };
+    }
+    let bare_stem = word.tokens.len() == 1
+        && first.pos1 == UnidicTag::Doushi
+        && first.conjugation_form == UnidicTag::Renyoukei;
+    (bare_stem || word.part_of_speech == POS::Number).then_some(POS::Noun)
+}
+
 #[derive(Clone, Copy)]
 enum PhraseMode {
     Production,
@@ -415,10 +441,12 @@ pub fn extract_words(
         let mut sentence_terms: Vec<Term> = Vec::with_capacity(words.len());
         let mut rule_citations = Vec::with_capacity(words.len());
         let mut grammatical = Vec::with_capacity(words.len());
+        let mut ending_types = Vec::with_capacity(words.len());
         for word in words {
             let span = word.byte_span();
             rule_citations.push(word.has_rule_citation());
             grammatical.push(grammar::is_grammatical(&word));
+            ending_types.push(type_as_last_piece(&word));
             // The highlight span ends at start + surface_form.len(), so the
             // reference must point at the main word, not the segment.
             let ref_start = word.mining_span().0;
@@ -555,7 +583,19 @@ pub fn extract_words(
                     // an exact reading match (複合体) don't need them.
                     let kanji_noun_compound =
                         all_nouns && phrase.lemma_form.chars().all(is_kanji_char);
-                    let min_len = if kanji_noun_compound { 3 } else { 4 };
+                    // A JMdict phrase is no junk n-gram, and it reads as one unit even
+                    // around a particle (しょうがない).
+                    let listed_phrase = jmdict_lexicon::is_phrase(&phrase.surface_form)
+                        || jmdict_lexicon::is_phrase(&phrase.lemma_form);
+                    let word = !listed_phrase
+                        && (jmdict_lexicon::is_word(&phrase.surface_form)
+                            || jmdict_lexicon::is_word(&phrase.lemma_form));
+                    let listed = listed_phrase || word;
+                    // UniDic splits some three-character words across a verb (居+場所); with a
+                    // demonstrative or particle in them (あの人, 森の奥), they stay apart.
+                    let short_word =
+                        word && all_content_words && subrange[0].part_of_speech != POS::Determiner;
+                    let min_len = if kanji_noun_compound || short_word { 3 } else { 4 };
 
                     let override_ratio_threshold = 40.0;
                     let phrase_freq_threshold = 10000;
@@ -568,15 +608,32 @@ pub fn extract_words(
                     // 1-best parse is itself suspect — the corroborated phrase wins.
                     let has_unvalidated_component =
                         word_frequencies.iter().any(|(_, freq)| *freq == u32::MAX as f32);
-                    // A JMdict phrase is no junk n-gram, and it reads as one unit even
-                    // around a particle (しょうがない).
-                    let listed_phrase = jmdict_lexicon::is_phrase(&phrase.surface_form)
-                        || jmdict_lexicon::is_phrase(&phrase.lemma_form);
-                    let word = !listed_phrase
-                        && (jmdict_lexicon::is_word(&phrase.surface_form)
-                            || jmdict_lexicon::is_word(&phrase.lemma_form));
-                    let listed = listed_phrase || word;
 
+                    // お + a verb stem before ください or になる is that verb said politely
+                    // (お通りください, お帰りになる), not the noun they spell.
+                    let after = |k: usize| sentence_terms[..base_len].get(end + k);
+                    let lemma_after = |k: usize, lemmas: &[&str]| {
+                        after(k).is_some_and(|t| lemmas.contains(&t.lemma_form.as_str()))
+                    };
+                    let honorific_frame = subrange[0].part_of_speech == POS::Prefix
+                        && subrange[end - start].part_of_speech == POS::Verb
+                        && (lemma_after(1, &["ください", "くださる", "下さる", "なさる"])
+                            || (after(1).is_some_and(|t| t.surface_form == "に")
+                                && lemma_after(2, &["なる", "成る"])));
+                    if honorific_frame {
+                        continue;
+                    }
+                    // The prefix's own frequency (お at #72) passes the ratio gate, yet お + a
+                    // word far rarer than the word alone is that word said politely (おつもり,
+                    // which Yomitan reads as お積もり); おすすめ is as common as すすめる.
+                    let rest =
+                        word_frequencies[1..].iter().map(|(_, f)| *f).fold(f32::MAX, f32::min);
+                    if subrange[0].part_of_speech == POS::Prefix
+                        && !listed
+                        && frequency as f32 > rest * 10.0
+                    {
+                        continue;
+                    }
                     if !kanji_noun_compound
                         && !has_unvalidated_component
                         && !listed
@@ -589,12 +646,11 @@ pub fn extract_words(
                     // A word takes the type of its last part (用心深い is an adjective), unless
                     // that is a suffix (見えにくい), which isn't a type of word.
                     let last = &subrange[end - start].part_of_speech;
-                    phrase.part_of_speech = if all_nouns {
-                        POS::NounExpression
-                    } else if word && *last != POS::Suffix {
-                        last.clone()
-                    } else {
-                        POS::Expression
+                    phrase.part_of_speech = match &ending_types[end] {
+                        _ if all_nouns => POS::NounExpression,
+                        Some(ending) if word => *ending,
+                        None if word && *last != POS::Suffix => *last,
+                        _ => POS::Expression,
                     };
                     phrase.auto_skip.ambiguous_grammar =
                         grammar::is_ambiguous(&grammatical[start..=end], &phrase);

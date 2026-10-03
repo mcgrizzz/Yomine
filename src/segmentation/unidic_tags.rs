@@ -90,7 +90,8 @@ pub enum UnidicTag {
     JodoushiReru,   //reru 助動詞-レル
 
     //Inflection forms 活用形 *that we care about*
-    Kateikei, //conditional (仮定形-一般 / 仮定形-融合) //conjugation_form
+    Kateikei,  //conditional (仮定形-一般 / 仮定形-融合) //conjugation_form
+    Renyoukei, //continuative (連用形-一般) //conjugation_form
 
     //Classical Auxillaries.. Not sure we need these
     BungojodoushiNari,  //文語助動詞-ナリ-断定
@@ -189,6 +190,7 @@ impl From<&str> for UnidicTag {
 
             "仮定形-一般" => Self::Kateikei,
             "仮定形-融合" => Self::Kateikei,
+            "連用形-一般" => Self::Renyoukei,
 
             "文語助動詞-ナリ-断定" => Self::BungojodoushiNari,
             "文語助動詞-ベシ" => Self::BungojodoushiBeshi,

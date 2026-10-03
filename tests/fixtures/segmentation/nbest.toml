@@ -16,6 +16,11 @@ frequencies = [
 	{ term = "値する", reading = "あたいする", rank = 9000 },
 	{ term = "値", reading = "あたい", rank = 9000 },
 	{ term = "待つ", reading = "まつ", rank = 500 },
+	{ term = "つもり", reading = "つもり", rank = 600, kana = true },
+	{ term = "つもる", reading = "つもる", rank = 42265, kana = true },
+	{ term = "受ける", reading = "うける", rank = 219 },
+	{ term = "お", reading = "お", rank = 72, kana = true },
+	{ term = "おつもり", reading = "おつもり", rank = 15337, kana = true },
 ]
 
 # A bad 口約+束 split could never promote 口約束, so the phrase's presence
@@ -81,3 +86,11 @@ name = "katakana speech is read as the words it spells"
 text = "ウルサクナイモンネ。シルフィエット！"
 terms = [{ surface = "ウルサクナイ", lemma = "うるさい", pos = "Adjective" }, { surface = "シルフィエット" }]
 absent = ["ウルサクナイモンネ"]
+
+# A verb stem before です is honorific (お探しです) or, when the noun is the commoner word, a
+# noun misread as a verb (Frieren S01E18: おつもりです as 積もる). お + つもり stays two words.
+[[case]]
+name = "おつもりです is the noun つもり, not 積もる"
+text = "一級試験を 受けられるおつもりですか？"
+terms = [{ surface = "つもり", lemma = "つもり" }]
+absent = ["つもる", "おつもり"]
