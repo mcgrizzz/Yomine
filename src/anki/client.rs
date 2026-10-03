@@ -183,7 +183,7 @@ impl Anki {
         };
         if !health.caller.enabled {
             let message =
-                format!("The app \"{}\" is turned off in Tsunagi's settings", health.caller.app);
+                format!("The app \"{}\" is turned off in Tsunagi's settings", health.caller.name);
             return Err(AnkiError::Rejected(message));
         }
         Ok(Backend::Tsunagi { version: health.version })
