@@ -156,14 +156,18 @@ pub fn spawn(app: AppHandle, websocket_port: u16, mode: MiningMode) -> PlayerHan
 
 fn current_status(player: &PlayerManager) -> PlayerStatus {
     let mpv_connected = player.mpv_connected();
-    let has_clients = player.ws.has_clients();
+    let has_clients = player.asbplayer_connected();
     let mode = match player.mode {
         MiningMode::Local => "local",
         MiningMode::Asbplayer => "asbplayer",
     };
     // Include the server's own state so the asbplayer dot can show
     // Starting/Error/Stopped, not just "waiting".
-    let (server_state, server_error) = match player.ws.get_server_state() {
+    let server = match player.mode {
+        MiningMode::Asbplayer => player.ws.get_server_state(),
+        MiningMode::Local => ServerState::Stopped,
+    };
+    let (server_state, server_error) = match server {
         ServerState::Running => ("running", None),
         ServerState::Starting => ("starting", None),
         ServerState::Stopped => ("stopped", None),
@@ -222,6 +226,11 @@ async fn run(
                 }
                 let status = current_status(&player);
                 if last_status.as_ref() != Some(&status) {
+                    if status.ws_clients > 0
+                        && last_status.as_ref().is_none_or(|s| s.ws_clients == 0)
+                    {
+                        crate::background::FOLLOW_WAKE.notify_one();
+                    }
                     let _ = app.emit(names::PLAYER_STATUS, status.clone());
                     last_status = Some(status);
                 }
@@ -237,7 +246,7 @@ async fn run(
                     let _ = reply.send(current_status(&player));
                 }
                 PlayerCommand::GetBoundMedia { reply } => {
-                    let server = player.ws.server.clone();
+                    let server = player.asbplayer().cloned();
                     tauri::async_runtime::spawn_blocking(move || {
                         let result = match server {
                             Some(s) => s.get_bound_media().map_err(|e| e.to_string()),
@@ -247,7 +256,7 @@ async fn run(
                     });
                 }
                 PlayerCommand::GetSubtitles { media_id, track_numbers, reply } => {
-                    let server = player.ws.server.clone();
+                    let server = player.asbplayer().cloned();
                     tauri::async_runtime::spawn_blocking(move || {
                         let result = match server {
                             Some(s) => s
@@ -259,7 +268,7 @@ async fn run(
                     });
                 }
                 PlayerCommand::MineSubtitle { fields, post_mine_action, media_id, note_id, reply } => {
-                    let server = player.ws.server.clone();
+                    let server = player.asbplayer().cloned();
                     tauri::async_runtime::spawn_blocking(move || {
                         let result = match server {
                             Some(s) => s

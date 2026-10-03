@@ -76,7 +76,7 @@ pub(super) struct Health {
 /// matches no app.
 #[derive(Deserialize)]
 pub(super) struct Caller {
-    pub(super) app: String,
+    pub(super) name: String,
     pub(super) enabled: bool,
 }
 

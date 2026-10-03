@@ -17,6 +17,7 @@ use tauri::{
     Emitter,
     Manager,
 };
+use tokio::sync::Notify;
 use yomine::{
     anki,
     core::settings::MiningMode,
@@ -201,6 +202,9 @@ pub static MANUAL_PICK: AtomicBool = AtomicBool::new(false);
 /// the active tab without waiting for it to change.
 pub static LOAD_ACTIVE_TAB: AtomicBool = AtomicBool::new(false);
 
+/// Cuts the follow poll's wait short, for a mode switch or a newly connected asbplayer.
+pub static FOLLOW_WAKE: Notify = Notify::const_new();
+
 /// asbplayer follow mode + the `asbplayer-context` awareness event.
 async fn poll_asbplayer_follow(app: AppHandle) {
     // `None` = disarmed; `Some(ids)` = armed with the media ids already seen.
@@ -209,12 +213,18 @@ async fn poll_asbplayer_follow(app: AppHandle) {
     let mut last_ctx: Option<crate::events::AsbplayerContext> = None;
 
     loop {
+        let poll_secs =
+            app.state::<Mutex<AppState>>().lock().unwrap().settings.asbplayer_poll_secs.max(1);
+        tokio::select! {
+            _ = tokio::time::sleep(Duration::from_secs(poll_secs as u64)) => {}
+            _ = FOLLOW_WAKE.notified() => {}
+        }
+
         let (
             asbplayer_mode,
             armed,
             follow_new,
             follow_active,
-            poll_secs,
             mut current_media_id,
             subtitle_file,
             nothing_loaded,
@@ -232,13 +242,11 @@ async fn poll_asbplayer_follow(app: AppHandle) {
                 armed,
                 follow_new,
                 follow_active,
-                guard.settings.asbplayer_poll_secs.max(1),
                 guard.file.asbplayer_media_id.clone(),
                 guard.file.asbplayer_subtitle_file.clone(),
                 guard.file.source_file.is_none(),
             )
         };
-        tokio::time::sleep(Duration::from_secs(poll_secs as u64)).await;
 
         let player = app.state::<PlayerHandle>();
         // Only ask asbplayer when someone consumes the answer (follow or an
