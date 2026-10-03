@@ -12,6 +12,11 @@ use wana_kana::IsJapaneseStr;
 use super::{
     grammar,
     nbest::rescue_words,
+    phrases::{
+        self,
+        Accepted,
+        Rejected,
+    },
     rule_matcher::parse_into_words,
     speaker_labels,
     token_models::UnidicToken,
@@ -317,7 +322,7 @@ fn type_as_last_piece(word: &Word) -> Option<POS> {
 }
 
 #[derive(Clone, Copy)]
-enum PhraseMode {
+pub(super) enum PhraseMode {
     Production,
     Corpus,
 }
@@ -350,7 +355,7 @@ fn as_written(ours: &str, dictionary: String) -> String {
 }
 
 /// Construct candidates independently of the caller's acceptance and suppression policy.
-fn phrase_candidate(
+pub(super) fn phrase_candidate(
     subrange: &[Term],
     manager: &FrequencyManager,
     mode: PhraseMode,
@@ -427,9 +432,40 @@ fn phrase_candidate(
 }
 
 pub fn extract_words(
+    worker: Worker,
+    sentences: &mut [Sentence],
+    frequency_manager: &FrequencyManager,
+) -> Vec<Term> {
+    extract(worker, sentences, frequency_manager, None)
+}
+
+/// Every phrase candidate that a frequency list ranks, as (sentence index, its words,
+/// verdict), for `examples/review.rs --why`.
+pub fn explain_phrases(
+    worker: Worker,
+    sentences: &mut [Sentence],
+    frequency_manager: &FrequencyManager,
+) -> Vec<(usize, String, String)> {
+    let mut verdicts = Vec::new();
+    let mut record = |ord: usize, text: String, verdict: Result<Accepted, Rejected>| {
+        let verdict = match verdict {
+            Ok(accepted) => format!("✓ {accepted:?}"),
+            Err(Rejected::Endpoint | Rejected::Unranked) => return,
+            Err(rejected) => format!("✗ {rejected:?}"),
+        };
+        verdicts.push((ord, text, verdict));
+    };
+    extract(worker, sentences, frequency_manager, Some(&mut record));
+    verdicts
+}
+
+type PhraseTrace<'a> = &'a mut dyn FnMut(usize, String, Result<Accepted, Rejected>);
+
+fn extract(
     mut worker: Worker,
     sentences: &mut [Sentence],
     frequency_manager: &FrequencyManager,
+    mut trace: Option<PhraseTrace>,
 ) -> Vec<Term> {
     let mut terms = Vec::<Term>::new();
     let mut speaker_names = HashSet::new();
@@ -514,6 +550,14 @@ pub fn extract_words(
         let mut suppressed: Vec<bool> = (0..base_len)
             .map(|i| labelled[i] || cut_off(i) || sentence_terms[i].surface_form.trim().is_empty())
             .collect();
+        let ctx = phrases::Context {
+            terms: &sentence_terms,
+            ending_types: &ending_types,
+            grammatical: &grammatical,
+            rule_citations: &rule_citations,
+            manager: frequency_manager,
+        };
+        let mut promoted = Vec::new();
         // A phrase that hides its words also hides phrases inside it (にかけて in 気にかける).
         let mut hidden_through = None;
         for start in 0..base_len {
@@ -524,166 +568,29 @@ pub fn extract_words(
                 if labelled[start..=end].iter().any(|&l| l) {
                     continue;
                 }
-                let subrange = &sentence_terms[start..=end];
-                // Frequency lists carry particle n-grams (あなたに); JMdict lists only real
-                // phrases that begin or end in one (ついでに, にとって), and words (何でもない).
-                let listed_particle_phrase = || {
-                    let text: String = subrange.iter().map(|t| t.full_segment.as_str()).collect();
-                    (subrange.iter().any(phrase_endpoint_ok) && jmdict_lexicon::is_phrase(&text))
-                        || jmdict_lexicon::is_word(&text)
-                };
-                if (!phrase_endpoint_ok(&subrange[0])
-                    || !phrase_endpoint_ok(&subrange[end - start]))
-                    && !listed_particle_phrase()
-                {
-                    continue;
+                let verdict = phrases::judge(&ctx, start, end);
+                if let Some(trace) = trace.as_mut() {
+                    let text = ctx.terms[start..=end].iter().map(|t| t.full_segment.as_str());
+                    trace(
+                        ord,
+                        text.collect(),
+                        verdict.as_ref().map(|p| p.accepted).map_err(|r| *r),
+                    );
                 }
-                let (mut phrase, freq) =
-                    phrase_candidate(subrange, frequency_manager, PhraseMode::Production);
-
-                if let Some(frequency) = freq {
-                    let word_frequencies: Vec<(String, f32)> = subrange
-                        .iter()
-                        .map(|term| {
-                            let freq = term
-                                .frequencies
-                                .get("HARMONIC")
-                                .cloned()
-                                .unwrap_or(u32::max_value());
-                            (term.lemma_form.to_string(), freq as f32)
-                        })
-                        .collect();
-
-                    let mult_frequencies: f32 =
-                        word_frequencies.iter().map(|(_, freq)| *freq as f32).product();
-
-                    let k = subrange.len() as u32;
-                    let score: f32 = (frequency as f32).powf(k as f32) / mult_frequencies;
-
-                    let ratios: Vec<f32> = word_frequencies
-                        .iter()
-                        .map(|(_, freq)| (frequency as f32) / *freq)
-                        .collect();
-
-                    let max_ratio: f32 = ratios.iter().fold(0.0, |acc, &x| acc.max(x));
-                    let char_count = phrase.lemma_form.chars().count();
-
-                    let all_nouns = subrange.iter().all(|term| {
-                        matches!(
-                            term.part_of_speech,
-                            POS::Noun | POS::CompoundNoun | POS::ProperNoun
-                        )
-                    });
-                    let all_content_words = subrange.iter().all(phrase_endpoint_ok);
-
-                    let score_threshold = 10.0;
-                    let ratio_threshold = 120.0;
-                    // The score/ratio gates guard against junk n-gram entries
-                    // some dictionaries carry; all-kanji noun compounds with
-                    // an exact reading match (複合体) don't need them.
-                    let kanji_noun_compound =
-                        all_nouns && phrase.lemma_form.chars().all(is_kanji_char);
-                    // A JMdict phrase is no junk n-gram, and it reads as one unit even
-                    // around a particle (しょうがない).
-                    let listed_phrase = jmdict_lexicon::is_phrase(&phrase.surface_form)
-                        || jmdict_lexicon::is_phrase(&phrase.lemma_form);
-                    let word = !listed_phrase
-                        && (jmdict_lexicon::is_word(&phrase.surface_form)
-                            || jmdict_lexicon::is_word(&phrase.lemma_form));
-                    let listed = listed_phrase || word;
-                    // UniDic splits some three-character words across a verb (居+場所); with a
-                    // demonstrative or particle in them (あの人, 森の奥), they stay apart.
-                    let short_word =
-                        word && all_content_words && subrange[0].part_of_speech != POS::Determiner;
-                    let min_len = if kanji_noun_compound || short_word { 3 } else { 4 };
-
-                    let override_ratio_threshold = 40.0;
-                    let phrase_freq_threshold = 10000;
-
-                    if char_count < min_len {
-                        continue;
+                let Ok(mut phrase) = verdict else { continue };
+                phrase.term.sentence_references.push((ord, term_spans[start].0));
+                promoted.push(phrase.term);
+                if phrase.hides_parts {
+                    for flag in suppressed[start..=end].iter_mut() {
+                        *flag = true;
                     }
-
-                    // A component no dictionary knows (負け+じと's じと) means the
-                    // 1-best parse is itself suspect — the corroborated phrase wins.
-                    let has_unvalidated_component =
-                        word_frequencies.iter().any(|(_, freq)| *freq == u32::MAX as f32);
-
-                    // お + a verb stem before ください or になる is that verb said politely
-                    // (お通りください, お帰りになる), not the noun they spell.
-                    let after = |k: usize| sentence_terms[..base_len].get(end + k);
-                    let lemma_after = |k: usize, lemmas: &[&str]| {
-                        after(k).is_some_and(|t| lemmas.contains(&t.lemma_form.as_str()))
-                    };
-                    let honorific_frame = subrange[0].part_of_speech == POS::Prefix
-                        && subrange[end - start].part_of_speech == POS::Verb
-                        && (lemma_after(1, &["ください", "くださる", "下さる", "なさる"])
-                            || (after(1).is_some_and(|t| t.surface_form == "に")
-                                && lemma_after(2, &["なる", "成る"])));
-                    if honorific_frame {
-                        continue;
-                    }
-                    // The prefix's own frequency (お at #72) passes the ratio gate, yet お + a
-                    // word far rarer than the word alone is that word said politely (おつもり,
-                    // which Yomitan reads as お積もり); おすすめ is as common as すすめる.
-                    let rest =
-                        word_frequencies[1..].iter().map(|(_, f)| *f).fold(f32::MAX, f32::min);
-                    if subrange[0].part_of_speech == POS::Prefix
-                        && !listed
-                        && frequency as f32 > rest * 10.0
-                    {
-                        continue;
-                    }
-                    if !kanji_noun_compound
-                        && !has_unvalidated_component
-                        && !listed
-                        && frequency > phrase_freq_threshold
-                        && max_ratio < override_ratio_threshold
-                    {
-                        continue;
-                    }
-
-                    // A word takes the type of its last part (用心深い is an adjective), unless
-                    // that is a suffix (見えにくい), which isn't a type of word.
-                    let last = &subrange[end - start].part_of_speech;
-                    phrase.part_of_speech = match &ending_types[end] {
-                        _ if all_nouns => POS::NounExpression,
-                        Some(ending) if word => *ending,
-                        None if word && *last != POS::Suffix => *last,
-                        _ => POS::Expression,
-                    };
-                    phrase.auto_skip.ambiguous_grammar =
-                        grammar::is_ambiguous(&grammatical[start..=end], &phrase);
-
-                    if kanji_noun_compound
-                        || listed
-                        || score <= score_threshold
-                        || max_ratio >= ratio_threshold
-                    {
-                        phrase.sentence_references.push((ord, term_spans[start].0));
-                        let freq_map = frequency_manager.build_freq_map(
-                            &phrase.lemma_form,
-                            &phrase.lemma_reading,
-                            phrase.is_kana,
-                        );
-                        phrase.frequencies = freq_map;
-                        sentence_terms.push(phrase);
-
-                        if (all_content_words || listed)
-                            && !rule_citations[start..=end].iter().any(|v| *v)
-                        {
-                            for flag in suppressed[start..=end].iter_mut() {
-                                *flag = true;
-                            }
-                            hidden_through = Some(end);
-                        }
-
-                        // Largest phrase at this start position is accepted; move to next start.
-                        break;
-                    }
+                    hidden_through = Some(end);
                 }
+                // Largest phrase at this start position is accepted; move to next start.
+                break;
             }
         }
+        sentence_terms.extend(promoted);
 
         let mut idx = 0;
         sentence_terms.retain(|_| {
@@ -911,7 +818,7 @@ fn retain_verb_final_candidates(candidates: &mut Vec<(String, String)>, surface:
     }
 }
 
-fn phrase_endpoint_ok(term: &Term) -> bool {
+pub(super) fn phrase_endpoint_ok(term: &Term) -> bool {
     !matches!(term.part_of_speech, POS::Postposition | POS::Copula | POS::Symbol)
 }
 

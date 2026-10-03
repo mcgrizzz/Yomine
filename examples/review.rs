@@ -12,6 +12,7 @@
 //!   cargo run --example review -- 50        # 50 of them
 //!   cargo run --example review -- 30 --file path/to/subs.srt   # sample a file
 //!   cargo run --example review -- --all --file subs.srt        # every line, in order
+//!   cargo run --example review -- --all --file subs.srt --why  # and each phrase's verdict
 
 use rand::seq::SliceRandom;
 use yomine::{
@@ -21,6 +22,7 @@ use yomine::{
         token_dictionary::DictType,
     },
     segmentation::tokenizer::{
+        explain_phrases,
         extract_words,
         init_vibrato,
     },
@@ -30,6 +32,7 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let count: usize = args.first().and_then(|a| a.parse().ok()).unwrap_or(20);
     let all = args.iter().any(|a| a == "--all");
+    let why = args.iter().any(|a| a == "--why");
     let file =
         args.iter().position(|a| a == "--file").and_then(|i| args.get(i + 1)).map(String::from);
 
@@ -87,6 +90,14 @@ fn main() {
                 t.part_of_speech.as_key(),
                 freq
             );
+        }
+        if why {
+            let mut sentences = vec![Sentence { segments: Vec::new(), ..sentences[0].clone() }];
+            for (_, words, verdict) in
+                explain_phrases(tokenizer.new_worker(), &mut sentences, &manager)
+            {
+                println!("       {verdict:<16} {words}");
+            }
         }
     }
     println!();
