@@ -45,6 +45,8 @@ pub enum Rejected {
     PoliteVerb,
     /// お + a word, far rarer than the word alone.
     PoliteForm,
+    /// お + a verb stem that starts a listed phrase (お迎えに来る is お + 迎えに来る).
+    PhraseInside,
     /// Unlisted, ranked past `RARE_RANK`, and not much rarer than its words.
     Rare,
     /// Fails both the score and the ratio gate.
@@ -137,6 +139,14 @@ pub(super) fn judge(ctx: &Context, start: usize, end: usize) -> Result<Phrase, R
                 && lemma_after(2, &["なる", "成る"])));
     if polite_verb {
         return Err(Rejected::PoliteVerb);
+    }
+    let phrase_from_stem = || {
+        (end + 1..ctx.terms.len())
+            .any(|e| judge(ctx, start + 1, e).is_ok_and(|p| p.accepted == Accepted::Listed))
+    };
+    if first.part_of_speech == POS::Prefix && last.part_of_speech == POS::Verb && phrase_from_stem()
+    {
+        return Err(Rejected::PhraseInside);
     }
     // The prefix's own frequency (お at #72) passes the ratio gate, yet お + a word far
     // rarer than the word alone is that word (おつもり, which Yomitan reads as お積もり);

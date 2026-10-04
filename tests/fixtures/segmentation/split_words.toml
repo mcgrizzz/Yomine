@@ -18,6 +18,8 @@ frequencies = [
 	{ term = "嫌がる", reading = "いやがる", rank = 4548 },
 	{ term = "朝イチ", reading = "あさいち", rank = 42495 },
 	{ term = "お迎え", reading = "おむかえ", rank = 7384 },
+	{ term = "迎えに来る", reading = "むかえにくる", rank = 5048 },
+	{ term = "来る", reading = "くる", rank = 42 },
 	{ term = "飲みすぎ", reading = "のみすぎ", rank = 23545 },
 	{ term = "お通り", reading = "おとおり", rank = 152001 },
 	{ term = "通る", reading = "とおる", rank = 1024 },
@@ -71,6 +73,12 @@ terms = [{ surface = "朝イチ", pos = "Noun" }]
 name = "お迎え is a noun"
 text = "お迎えには まだ早いぞ"
 terms = [{ surface = "お迎え", pos = "Noun" }]
+
+[[case]]
+name = "お迎えに来た is お + 迎えに来る"
+text = "息子が お迎えに来たのかと 思ったぜ"
+terms = [{ surface = "迎えに来た", lemma = "迎えに来る" }]
+absent = ["お迎え"]
 
 [[case]]
 name = "飲みすぎ is a noun, though UniDic files すぎ with the na-adjective suffixes"
