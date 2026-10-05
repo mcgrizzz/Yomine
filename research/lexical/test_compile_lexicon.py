@@ -10,10 +10,10 @@ class LexiconTests(unittest.TestCase):
     def setUp(self):
         self.db = sqlite3.connect(":memory:")
         self.addCleanup(self.db.close)
-        self.db.execute("CREATE TABLE pairs(entry_id,reading,spelling,pos)")
+        self.db.execute("CREATE TABLE pairs(entry_id,reading,spelling,pos,misc)")
 
-    def pair(self, entry, reading, spelling, pos='["n"]'):
-        self.db.execute("INSERT INTO pairs VALUES(?,?,?,?)", (entry, reading, spelling, pos))
+    def pair(self, entry, reading, spelling, pos='["n"]', misc="[]"):
+        self.db.execute("INSERT INTO pairs VALUES(?,?,?,?,?)", (entry, reading, spelling, pos, misc))
 
     def rows(self):
         return dict(compile_rows(self.db))
@@ -45,6 +45,18 @@ class LexiconTests(unittest.TestCase):
         self.assertEqual(rows["e\t明日\tあした".encode()], struct.pack("<I", 1))
         self.assertEqual(rows["e\t明日\tあす".encode()], struct.pack("<I", 1))
         self.assertFalse([k for k in rows if k.startswith("e\t表".encode())])
+
+    def test_usually_kana_content_words_are_words(self):
+        self.pair(1, "もったいない", "勿体無い", '["adj-i"]', '["uk"]')
+        self.pair(2, "おすすめ", "お勧め", '["n","vs","adj-no"]', '["uk"]')
+        self.pair(3, "こういう", "こう言う", '["adj-pn"]', '["uk"]')
+        self.pair(4, "なんだって", "何だって", '["int"]', '["uk"]')
+        self.pair(5, "しょくにん", "職人", '["n"]')
+        rows = self.rows()
+        for form in ["もったいない", "おすすめ"]:
+            self.assertIn(("w\t" + form).encode(), rows)
+        for form in ["こういう", "なんだって", "しょくにん"]:
+            self.assertNotIn(("w\t" + form).encode(), rows)
 
     def test_output_is_sorted_and_deterministic(self):
         self.pair(1, "あした", "明日")

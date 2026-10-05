@@ -1,13 +1,13 @@
 {
   "format": "LEXIDX01",
-  "records": 231288,
-  "bytes": 7804719,
-  "sha256": "f9447686da580fb599cb883d4984e80e8dd68f1fd94a362eba58dcf705b385e8",
-  "generator_sha256": "4d8e96ef6e228ee35bcc00121278f4f7346723bb0923e09d6206b7ff9fec9370",
+  "records": 239897,
+  "bytes": 8090638,
+  "sha256": "49ae2a97f8fce7966cd6ff6a67bbaa7afb68bb25012d1807eda8903bbad9e3a0",
+  "generator_sha256": "b0570de79dad40ce98685e7efc7eaa6f6913dce6a2a23512e354def94e4e6700",
   "jmdict": {
     "url": "https://www.edrdg.org/pub/Nihongo/JMdict_e.gz",
-    "sha256": "0de58e3f759ab43b754ea9d95d7681cd1175dc0121d286b2753a6f9cabd96691",
-    "created": "2026-09-29"
+    "sha256": "ae62e02885b73807b49705f92c7050143b424fa87c6ede6efbc6eed8c317692b",
+    "created": "2026-10-05"
   },
   "phrase_pos": [
     "adv",

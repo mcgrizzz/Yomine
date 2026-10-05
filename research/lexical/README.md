@@ -27,7 +27,8 @@ python3 research/lexical/compile_lexicon.py --db /tmp/new-lexical-reference.sqli
 ```
 
 `jmdict-lexicon.bin` holds JMdict phrase forms (expressions, adverbs, conjunctions,
-particles), every JMdict spelling with kanji, the i-adjectives ending in ない, and the
+particles), every JMdict spelling with kanji, the kana readings of content words JMdict
+marks as usually written in kana (もったいない), the i-adjectives ending in ない, and the
 entries of spellings read more than one way.
 
 Review and test regenerated data before replacing the bundled binary and manifest.

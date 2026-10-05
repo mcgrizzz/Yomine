@@ -20,9 +20,11 @@ pub(crate) fn is_phrase(form: &str) -> bool {
     lookup(format!("p\t{}", form.normalize_long_vowel())).is_some()
 }
 
-/// JMdict lists `form` as a word spelled with kanji, of any part of speech (二日酔い).
+/// JMdict lists `form` as a word spelled with kanji, of any part of speech (二日酔い), or as a
+/// word usually written in kana (もったいない), whose readings the lexicon keeps in hiragana.
 pub(crate) fn is_word(form: &str) -> bool {
-    lookup(format!("w\t{}", form.normalize_long_vowel())).is_some()
+    let word = |form: &str| lookup(format!("w\t{}", form.normalize_long_vowel())).is_some();
+    word(form) || word(&fold_katakana(form))
 }
 
 /// JMdict lists `reading` as an i-adjective ending in ない (つまらない, くだらない).
@@ -59,6 +61,16 @@ mod tests {
         for form in ["あなたに", "いたから", "したんだ", "子らしい", "にカット"]
         {
             assert!(!is_phrase(form), "{form}");
+        }
+    }
+
+    #[test]
+    fn usually_kana_content_words_are_words() {
+        for form in ["もったいない", "ありえない", "カッコよい"] {
+            assert!(is_word(form), "{form}");
+        }
+        for form in ["こういう", "いいか"] {
+            assert!(!is_word(form), "{form}");
         }
     }
 

@@ -5,6 +5,7 @@ import argparse
 import collections
 import hashlib
 import json
+import re
 import sqlite3
 import struct
 import unicodedata
@@ -16,6 +17,9 @@ from source_policy import source_manifest
 
 MAGIC = b"LEXIDX01"
 PHRASE_POS = {"exp", "adv", "conj", "prt"}
+# Nouns, verbs and i-/na-adjectives; pre-noun adjectives (こういう), interjections and the
+# copula would take the type of their last piece when joined.
+CONTENT_POS = re.compile(r"(n|n-.*|v.*|adj-i|adj-ix|adj-na|adj-no)")
 
 
 def has_kanji(text):
@@ -25,8 +29,10 @@ def has_kanji(text):
 def compile_rows(db):
     """`p\\tform`: a JMdict expression, adverb, conjunction or particle, valued by how many
     senses its entries give it (one byte, capped at 255).
-    `w\\tspelling`: a JMdict spelling with kanji, of any part of speech (二日酔い). Kana-only
-    forms are left out: a run of kana tokens spells some JMdict reading too often (いいか).
+    `w\\tspelling`: a JMdict spelling with kanji, of any part of speech (二日酔い), and the
+    kana reading of a content word JMdict says is usually written in kana (もったいない). Other
+    kana-only forms are left out: a run of kana tokens spells some JMdict reading too often
+    (いいか).
     `a\\treading`: a JMdict i-adjective ending in ない, which UniDic reads as a verb and ない
     (つまらない as つまる).
     `e\\tspelling\\treading`: entries listing the spelling under that reading, kept only
@@ -37,7 +43,8 @@ def compile_rows(db):
     readings = collections.defaultdict(set)
     words = set()
     nai_adjectives = set()
-    for entry, reading, spelling, pos in db.execute("SELECT entry_id,reading,spelling,pos FROM pairs"):
+    for entry, reading, spelling, pos, misc in db.execute(
+            "SELECT entry_id,reading,spelling,pos,misc FROM pairs"):
         reading = normalize_long_vowel(reading)
         # Unfolded, so に+カット can't pass for にかっと.
         pair = (entry, reading, normalize_long_vowel(unicodedata.normalize("NFKC", spelling)))
@@ -45,6 +52,9 @@ def compile_rows(db):
         # Phrase promotion never considers a shorter form.
         if has_kanji(pair[2]) and len(pair[2]) >= 3:
             words.add(pair[2])
+        usually_kana = "uk" in json.loads(misc)
+        if usually_kana and any(CONTENT_POS.fullmatch(p) for p in json.loads(pos)) and len(reading) >= 3:
+            words.add(reading)
         if set(json.loads(pos)) & PHRASE_POS:
             phrase_pairs.add(pair)
         if "adj-i" in json.loads(pos) and reading.endswith("ない"):
