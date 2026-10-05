@@ -101,7 +101,7 @@ pub(super) async fn health(anki: &Anki) -> Option<Health> {
 
 /// The operations Yomine uses, by what the user can't do without them.
 const FEATURES: [(&str, &[&str]); 7] = [
-    ("Read your cards", &["POST /v1/notes/query", "GET /v1/models"]),
+    ("Read your cards", &["POST /v1/notes/query", "GET /v1/note-types"]),
     ("See changes in Anki as they happen", &["GET /v1/events"]),
     ("Save mined notes", &["POST /v1/notes", "POST /v1/media"]),
     ("Add audio and screenshots later", &["PATCH /v1/notes/{id}"]),
@@ -249,7 +249,7 @@ pub(super) async fn edited_since(
 ) -> Result<Vec<u64>, AnkiError> {
     let body = json!({
         "search": search,
-        "where": [format!("mod >= {}", since / 1000)],
+        "where": [format!("modified >= {}", since / 1000)],
         "select": "id",
         "shape": "scalar",
     });
@@ -279,7 +279,7 @@ pub(super) async fn existing(anki: &Anki, ids: &[u64]) -> Result<Vec<u64>, AnkiE
 #[derive(Deserialize)]
 struct Note {
     id: u64,
-    model_name: String,
+    note_type_name: String,
     cards: Vec<u64>,
     fields: Vec<Field>,
 }
@@ -288,7 +288,7 @@ impl From<Note> for NoteInfo {
     fn from(note: Note) -> Self {
         NoteInfo {
             id: note.id,
-            note_type: note.model_name,
+            note_type: note.note_type_name,
             fields: note.fields.into_iter().map(|f| (f.name, f.value)).collect(),
             cards: note.cards,
         }
@@ -301,7 +301,7 @@ pub(super) async fn notes(anki: &Anki, ids: &[u64]) -> Result<Vec<NoteInfo>, Ank
     }
     let body = json!({
         "where": [format!("id in {}", json!(ids))],
-        "select": "id,model_name,cards,fields[].(name,value)",
+        "select": "id,note_type_name,cards,fields[].(name,value)",
     });
     let notes: Vec<Note> = query(anki, "/v1/notes/query", body).await?;
     Ok(notes.into_iter().map(NoteInfo::from).collect())
@@ -324,8 +324,8 @@ pub(super) async fn vocab_notes(
         .collect();
     let list = |values: serde_json::Value| values.to_string();
     let body = json!({
-        "where": [format!("id in {}", list(json!(ids))), format!("model_name in {}", list(json!(types)))],
-        "select": format!("id,model_name,cards,fields[name in {}].(name,value)", list(json!(fields))),
+        "where": [format!("id in {}", list(json!(ids))), format!("note_type_name in {}", list(json!(types)))],
+        "select": format!("id,note_type_name,cards,fields[name in {}].(name,value)", list(json!(fields))),
     });
     let notes: Vec<Note> = query(anki, "/v1/notes/query", body).await?;
     Ok(notes.into_iter().map(NoteInfo::from).collect())
@@ -352,7 +352,7 @@ pub(super) async fn create_note(
     }
     let body = json!({
         "deckName": note.deck,
-        "modelName": note.note_type,
+        "noteTypeName": note.note_type,
         "fields": note.fields,
         "tags": note.tags,
         "audio": files(&note.attachments, AttachmentKind::Audio),
@@ -495,7 +495,7 @@ pub(super) async fn note_types(anki: &Anki) -> Result<Vec<Model>, AnkiError> {
         fields: Vec<String>,
     }
     let request =
-        request(anki, Method::GET, "/v1/models").query(&[("select", "id,name,fields[].name")]);
+        request(anki, Method::GET, "/v1/note-types").query(&[("select", "id,name,fields[].name")]);
     let page: Page<NoteType> = send(anki, request).await?;
     Ok(page
         .items
