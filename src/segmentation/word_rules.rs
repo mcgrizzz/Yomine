@@ -506,7 +506,8 @@ pub fn create_default_rules() -> Vec<Rule> {
             name: "suru-possible + suru",
             current: TokenMatcher {
                 pos1: Matcher::Any(vec![UnidicTag::Meishi]),
-                pos3: Matcher::Any(vec![UnidicTag::Sahenkanou]),
+                // サ変形状詞可能 nouns (安心) can be na-adjectives too.
+                pos3: Matcher::Any(vec![UnidicTag::Sahenkanou, UnidicTag::Sahenkeijoushikanou]),
                 ..Default::default()
             },
             next: Some(TokenMatcher {

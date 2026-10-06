@@ -24,14 +24,6 @@ use crate::{
 const MIN_CHARS: usize = 4;
 /// Kanji noun compounds (複合体) and JMdict words UniDic splits (居+場所) can be this short.
 const MIN_CHARS_WORD: usize = 3;
-/// The score and ratio gates guard against junk n-gram entries some frequency lists carry.
-const MAX_SCORE: f32 = 10.0;
-const MIN_RATIO: f32 = 120.0;
-/// An unlisted phrase past this rank needs a ratio of at least `RARE_MIN_RATIO`.
-const RARE_RANK: u32 = 10_000;
-const RARE_MIN_RATIO: f32 = 40.0;
-/// お + a word this many times rarer than the word alone is that word said politely.
-const POLITE_RARITY: f32 = 10.0;
 
 /// Why a run of words isn't promoted.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -43,14 +35,11 @@ pub enum Rejected {
     TooShort,
     /// お + a verb stem before ください or になる.
     PoliteVerb,
-    /// お + a word, far rarer than the word alone.
-    PoliteForm,
     /// お + a verb stem that starts a listed phrase (お迎えに来る is お + 迎えに来る).
     PhraseInside,
-    /// Unlisted, ranked past `RARE_RANK`, and not much rarer than its words.
-    Rare,
-    /// Fails both the score and the ratio gate.
-    Weak,
+    /// Neither a kanji noun compound nor listed in JMdict: frequency lists carry n-grams of
+    /// words that only happen to sit together (どうする, 探し続ける).
+    Unlisted,
 }
 
 /// Why a run of words is promoted.
@@ -59,8 +48,6 @@ pub enum Accepted {
     KanjiCompound,
     /// JMdict lists it as a phrase or a word.
     Listed,
-    /// Passes the score or the ratio gate.
-    Cohesive,
 }
 
 pub(super) struct Phrase {
@@ -95,20 +82,15 @@ pub(super) fn judge(ctx: &Context, start: usize, end: usize) -> Result<Phrase, R
         return Err(Rejected::Endpoint);
     }
     let (mut phrase, frequency) = phrase_candidate(subrange, ctx.manager, PhraseMode::Production);
-    let frequency = frequency.ok_or(Rejected::Unranked)?;
-
-    let word_ranks: Vec<f32> = subrange
-        .iter()
-        .map(|t| t.frequencies.get("HARMONIC").copied().unwrap_or(u32::MAX) as f32)
-        .collect();
-    let score = (frequency as f32).powf(subrange.len() as f32) / word_ranks.iter().product::<f32>();
-    let max_ratio = word_ranks.iter().map(|rank| frequency as f32 / rank).fold(0.0, f32::max);
+    if frequency.is_none() {
+        return Err(Rejected::Unranked);
+    }
 
     let all_nouns = subrange
         .iter()
         .all(|t| matches!(t.part_of_speech, POS::Noun | POS::CompoundNoun | POS::ProperNoun));
     let all_content_words = subrange.iter().all(phrase_endpoint_ok);
-    // All-kanji noun compounds with an exact reading match (複合体) skip the junk gates.
+    // All-kanji noun compounds with an exact reading match (複合体) need no listing.
     let kanji_noun_compound = all_nouns && phrase.lemma_form.chars().all(is_kanji_char);
     // A JMdict phrase is no junk n-gram, and it reads as one unit even
     // around a particle (しょうがない).
@@ -148,33 +130,12 @@ pub(super) fn judge(ctx: &Context, start: usize, end: usize) -> Result<Phrase, R
     {
         return Err(Rejected::PhraseInside);
     }
-    // The prefix's own frequency (お at #72) passes the ratio gate, yet お + a word far
-    // rarer than the word alone is that word (おつもり, which Yomitan reads as お積もり);
-    // おすすめ is as common as すすめる.
-    let rest = word_ranks[1..].iter().copied().fold(f32::MAX, f32::min);
-    if first.part_of_speech == POS::Prefix && !listed && frequency as f32 > rest * POLITE_RARITY {
-        return Err(Rejected::PoliteForm);
-    }
-    // A component no dictionary knows (負け+じと's じと) means the
-    // 1-best parse is itself suspect — the corroborated phrase wins.
-    let has_unvalidated_component = word_ranks.contains(&(u32::MAX as f32));
-    if !kanji_noun_compound
-        && !has_unvalidated_component
-        && !listed
-        && frequency > RARE_RANK
-        && max_ratio < RARE_MIN_RATIO
-    {
-        return Err(Rejected::Rare);
-    }
-
     let accepted = if kanji_noun_compound {
         Accepted::KanjiCompound
     } else if listed {
         Accepted::Listed
-    } else if score <= MAX_SCORE || max_ratio >= MIN_RATIO {
-        Accepted::Cohesive
     } else {
-        return Err(Rejected::Weak);
+        return Err(Rejected::Unlisted);
     };
 
     phrase.part_of_speech = phrase_type(all_nouns, word, last, &ctx.ending_types[end]);
