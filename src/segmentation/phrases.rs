@@ -43,22 +43,13 @@ pub enum Rejected {
     PhraseInside,
     /// Opens with a particle (につれて), yet its verb goes on into a subsidiary verb (連れていく).
     VerbChain,
-    /// Neither a kanji noun compound nor listed in JMdict: frequency lists carry n-grams of
-    /// words that only happen to sit together (どうする, 探し続ける).
+    /// JMdict doesn't list it: frequency lists carry n-grams of words that only happen to sit
+    /// together (どうする, 探し続ける, 戦闘経験).
     Unlisted,
-}
-
-/// Why a run of words is promoted.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Accepted {
-    KanjiCompound,
-    /// JMdict lists it as a phrase or a word.
-    Listed,
 }
 
 pub(super) struct Phrase {
     pub term: Term,
-    pub accepted: Accepted,
     /// The words inside it stop being terms of their own.
     pub hides_parts: bool,
 }
@@ -121,7 +112,6 @@ pub(super) fn judge(ctx: &Context, start: usize, end: usize) -> Result<Phrase, R
         .iter()
         .all(|t| matches!(t.part_of_speech, POS::Noun | POS::CompoundNoun | POS::ProperNoun));
     let all_content_words = subrange.iter().all(phrase_endpoint_ok);
-    // All-kanji noun compounds with an exact reading match (複合体) need no listing.
     let kanji_noun_compound = all_nouns && phrase.lemma_form.chars().all(is_kanji_char);
     // A JMdict phrase is no junk n-gram, and it reads as one unit even
     // around a particle (しょうがない).
@@ -160,21 +150,14 @@ pub(super) fn judge(ctx: &Context, start: usize, end: usize) -> Result<Phrase, R
     if polite_verb {
         return Err(Rejected::PoliteVerb);
     }
-    let phrase_from_stem = || {
-        (end + 1..ctx.terms.len())
-            .any(|e| judge(ctx, start + 1, e).is_ok_and(|p| p.accepted == Accepted::Listed))
-    };
+    let phrase_from_stem = || (end + 1..ctx.terms.len()).any(|e| judge(ctx, start + 1, e).is_ok());
     if first.part_of_speech == POS::Prefix && last.part_of_speech == POS::Verb && phrase_from_stem()
     {
         return Err(Rejected::PhraseInside);
     }
-    let accepted = if kanji_noun_compound {
-        Accepted::KanjiCompound
-    } else if listed {
-        Accepted::Listed
-    } else {
+    if !listed {
         return Err(Rejected::Unlisted);
-    };
+    }
 
     phrase.part_of_speech = phrase_type(all_nouns, word, last, &ctx.facts[end].ending_type);
     let grammatical: Vec<bool> = ctx.facts[start..=end].iter().map(|f| f.grammatical).collect();
@@ -183,7 +166,7 @@ pub(super) fn judge(ctx: &Context, start: usize, end: usize) -> Result<Phrase, R
         ctx.manager.build_freq_map(&phrase.lemma_form, &phrase.lemma_reading, phrase.is_kana);
     let hides_parts =
         (all_content_words || listed) && !ctx.facts[start..=end].iter().any(|f| f.rule_citation);
-    Ok(Phrase { term: phrase, accepted, hides_parts })
+    Ok(Phrase { term: phrase, hides_parts })
 }
 
 /// A word takes the type of its last part (用心深い is an adjective), or the type that part

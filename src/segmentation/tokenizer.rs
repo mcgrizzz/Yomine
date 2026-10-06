@@ -13,7 +13,6 @@ use super::{
     nbest::rescue_words,
     phrases::{
         self,
-        Accepted,
         Rejected,
     },
     rule_matcher::parse_into_words,
@@ -361,12 +360,10 @@ pub(super) fn phrase_candidate(
     // UniDic can read a component differently inside a compound (表 as ひょう, but
     // 表沙汰 is おもてざた; 何 as なに, but 何でもない is なんでもない), so a spelling every
     // dictionary reads one way takes that reading.
-    let kanji_nouns = subrange
-        .iter()
-        .all(|t| matches!(t.part_of_speech, POS::Noun | POS::CompoundNoun | POS::ProperNoun))
-        && phrase.surface_form.chars().all(is_kanji_char);
-    let one_word = kanji_nouns || jmdict_lexicon::is_word(&phrase.surface_form);
-    if frequency.is_none() && matches!(mode, PhraseMode::Production) && one_word {
+    if frequency.is_none()
+        && matches!(mode, PhraseMode::Production)
+        && jmdict_lexicon::is_word(&phrase.surface_form)
+    {
         let sole = manager.sole_reading(&phrase.surface_form).and_then(|reading| {
             let reading = as_written(&phrase.full_segment_reading, reading);
             phrase_frequency(manager, &phrase.surface_form, &reading).map(|rank| (reading, rank))
@@ -424,9 +421,9 @@ pub fn explain_phrases(
     frequency_manager: &FrequencyManager,
 ) -> Vec<(usize, String, String)> {
     let mut verdicts = Vec::new();
-    let mut record = |ord: usize, text: String, verdict: Result<Accepted, Rejected>| {
+    let mut record = |ord: usize, text: String, verdict: Result<(), Rejected>| {
         let verdict = match verdict {
-            Ok(accepted) => format!("✓ {accepted:?}"),
+            Ok(()) => "✓".to_string(),
             Err(Rejected::Endpoint | Rejected::Unranked) => return,
             Err(rejected) => format!("✗ {rejected:?}"),
         };
@@ -436,7 +433,7 @@ pub fn explain_phrases(
     verdicts
 }
 
-type PhraseTrace<'a> = &'a mut dyn FnMut(usize, String, Result<Accepted, Rejected>);
+type PhraseTrace<'a> = &'a mut dyn FnMut(usize, String, Result<(), Rejected>);
 
 fn extract(
     mut worker: Worker,
@@ -539,11 +536,7 @@ fn extract(
                 let verdict = phrases::judge(&ctx, start, end);
                 if let Some(trace) = trace.as_mut() {
                     let text = ctx.terms[start..=end].iter().map(|t| t.full_segment.as_str());
-                    trace(
-                        ord,
-                        text.collect(),
-                        verdict.as_ref().map(|p| p.accepted).map_err(|r| *r),
-                    );
+                    trace(ord, text.collect(), verdict.as_ref().map(|_| ()).map_err(|r| *r));
                 }
                 let Ok(mut phrase) = verdict else { continue };
                 phrase.term.sentence_references.push((ord, term_spans[start].0));

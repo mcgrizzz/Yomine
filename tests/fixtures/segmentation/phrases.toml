@@ -1,5 +1,5 @@
 # Phrase/compound promotion: adjacent words are promoted to one term when JMdict
-# lists the result or it's an all-kanji noun compound, and a frequency list ranks it
+# lists the result and a frequency list ranks it
 # (phrases::judge). The synthetic dictionary supplies the ranks and readings. Compound readings in dictionaries carry
 # rendaku (かいしゃ → がいしゃ), which the naive component concat lacks; the
 # lookup tries voiced variants at component boundaries and adopts the reading
@@ -49,9 +49,9 @@ frequencies = [
 	{ term = "とおり", reading = "とおり", rank = 600, kana = true },
 	{ term = "気をつける", reading = "きをつける", rank = 900 },
 	{ term = "つける", reading = "つける", rank = 300 },
-	{ term = "映画鑑賞", reading = "ええがかんしょう", rank = 48649 },
+	{ term = "映画監督", reading = "ええがかんとく", rank = 30440 },
 	{ term = "映画", reading = "えいが", rank = 900 },
-	{ term = "鑑賞", reading = "かんしょう", rank = 8600 },
+	{ term = "監督", reading = "かんとく", rank = 3000 },
 	{ term = "表沙汰", reading = "おもてざた", rank = 26427 },
 	{ term = "気にかける", reading = "きにかける", rank = 6082 },
 	{ term = "にかけて", reading = "にかけて", rank = 3776, kana = true },
@@ -153,11 +153,11 @@ name = "phrase with an interior を matches its dictionary reading"
 text = "気をつけて。"
 terms = [{ surface = "気をつけて", lemma = "気をつける", reading = "きをつける", pos = "Expression" }]
 
-# BCCWJ writes readings as pronounced (映画鑑賞 as ええがかんしょう).
+# BCCWJ writes readings as pronounced (映画監督 as ええがかんとく).
 [[case]]
 name = "pronounced-style dictionary reading still matches"
-text = "趣味は映画鑑賞です。"
-terms = [{ surface = "映画鑑賞", pos = "NounExpression" }]
+text = "彼は映画監督です。"
+terms = [{ surface = "映画監督", pos = "NounExpression" }]
 
 # UniDic reads 表 as ひょう here; the compound is only ever おもてざた.
 [[case]]
