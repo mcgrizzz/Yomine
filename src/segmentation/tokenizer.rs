@@ -10,7 +10,6 @@ use vibrato::{
 use wana_kana::IsJapaneseStr;
 
 use super::{
-    grammar,
     nbest::rescue_words,
     phrases::{
         self,
@@ -299,28 +298,6 @@ fn keep_lexicalized_honorifics(words: &mut [Word], manager: &FrequencyManager) {
     }
 }
 
-/// The type of a word that ends in `word`, where it isn't `word`'s own: a suffix's is the type
-/// it forms (やり方 a noun, 嫌がる a verb), a bare verb stem names a noun (お迎え), and a
-/// number ends a noun (朝イチ).
-fn type_as_last_piece(word: &Word) -> Option<POS> {
-    let first = word.tokens.first()?;
-    if first.pos1 == UnidicTag::Setsubiji {
-        return match first.pos2 {
-            // UniDic files すぎ with the na-adjective suffixes, but 飲みすぎ is a noun.
-            UnidicTag::Keijoushiteki if first.lexeme == "過ぎ" => Some(POS::Noun),
-            UnidicTag::Meishiteki => Some(POS::Noun),
-            UnidicTag::Doushiteki => Some(POS::Verb),
-            UnidicTag::Keiyoushiteki => Some(POS::Adjective),
-            UnidicTag::Keijoushiteki => Some(POS::AdjectivalNoun),
-            _ => None,
-        };
-    }
-    let bare_stem = word.tokens.len() == 1
-        && first.pos1 == UnidicTag::Doushi
-        && first.conjugation_form == UnidicTag::Renyoukei;
-    (bare_stem || word.part_of_speech == POS::Number).then_some(POS::Noun)
-}
-
 #[derive(Clone, Copy)]
 pub(super) enum PhraseMode {
     Production,
@@ -475,14 +452,10 @@ fn extract(
 
         let mut term_spans: Vec<(usize, usize)> = Vec::with_capacity(words.len());
         let mut sentence_terms: Vec<Term> = Vec::with_capacity(words.len());
-        let mut rule_citations = Vec::with_capacity(words.len());
-        let mut grammatical = Vec::with_capacity(words.len());
-        let mut ending_types = Vec::with_capacity(words.len());
+        let mut facts = Vec::with_capacity(words.len());
         for word in words {
             let span = word.byte_span();
-            rule_citations.push(word.has_rule_citation());
-            grammatical.push(grammar::is_grammatical(&word));
-            ending_types.push(type_as_last_piece(&word));
+            facts.push(phrases::WordFacts::of(&word));
             // The highlight span ends at start + surface_form.len(), so the
             // reference must point at the main word, not the segment.
             let ref_start = word.mining_span().0;
@@ -550,13 +523,8 @@ fn extract(
         let mut suppressed: Vec<bool> = (0..base_len)
             .map(|i| labelled[i] || cut_off(i) || sentence_terms[i].surface_form.trim().is_empty())
             .collect();
-        let ctx = phrases::Context {
-            terms: &sentence_terms,
-            ending_types: &ending_types,
-            grammatical: &grammatical,
-            rule_citations: &rule_citations,
-            manager: frequency_manager,
-        };
+        let ctx =
+            phrases::Context { terms: &sentence_terms, facts: &facts, manager: frequency_manager };
         let mut promoted = Vec::new();
         // A phrase that hides its words also hides phrases inside it (にかけて in 気にかける).
         let mut hidden_through = None;

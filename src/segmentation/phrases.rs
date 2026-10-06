@@ -8,7 +8,11 @@ use super::{
         phrase_endpoint_ok,
         PhraseMode,
     },
-    word::POS,
+    unidic_tags::UnidicTag,
+    word::{
+        Word,
+        POS,
+    },
 };
 use crate::{
     core::{
@@ -37,6 +41,8 @@ pub enum Rejected {
     PoliteVerb,
     /// お + a verb stem that starts a listed phrase (お迎えに来る is お + 迎えに来る).
     PhraseInside,
+    /// Opens with a particle (につれて), yet its verb goes on into a subsidiary verb (連れていく).
+    VerbChain,
     /// Neither a kanji noun compound nor listed in JMdict: frequency lists carry n-grams of
     /// words that only happen to sit together (どうする, 探し続ける).
     Unlisted,
@@ -60,10 +66,35 @@ pub(super) struct Phrase {
 /// One sentence's words, before any phrase is added, and what is known about each.
 pub(super) struct Context<'a> {
     pub terms: &'a [Term],
-    pub ending_types: &'a [Option<POS>],
-    pub grammatical: &'a [bool],
-    pub rule_citations: &'a [bool],
+    pub facts: &'a [WordFacts],
     pub manager: &'a FrequencyManager,
+}
+
+/// What phrase promotion needs to know about a word, from its UniDic tokens.
+pub(super) struct WordFacts {
+    /// The type of a word ending in this one, where it isn't this word's own.
+    ending_type: Option<POS>,
+    grammatical: bool,
+    rule_citation: bool,
+    /// Ends in the conjunctive て/で (連れて).
+    te_form: bool,
+    /// A subsidiary verb or adjective (いく in 連れていく).
+    subsidiary: bool,
+}
+
+impl WordFacts {
+    pub(super) fn of(word: &Word) -> Self {
+        let last = word.tokens.last();
+        Self {
+            ending_type: type_as_last_piece(word),
+            grammatical: grammar::is_grammatical(word),
+            rule_citation: word.has_rule_citation(),
+            te_form: last.is_some_and(|t| {
+                t.pos2 == UnidicTag::Setsuzokujoshi && matches!(t.surface.as_str(), "て" | "で")
+            }),
+            subsidiary: grammar::is_subsidiary(word),
+        }
+    }
 }
 
 /// The phrase over `terms[start..=end]`, or why there is none.
@@ -108,6 +139,13 @@ pub(super) fn judge(ctx: &Context, start: usize, end: usize) -> Result<Phrase, R
         return Err(Rejected::TooShort);
     }
 
+    // A phrase opening with a particle (につれて, について) is grammar that ends its clause.
+    if first.part_of_speech == POS::Postposition
+        && ctx.facts[end].te_form
+        && ctx.facts.get(end + 1).is_some_and(|f| f.subsidiary)
+    {
+        return Err(Rejected::VerbChain);
+    }
     // お + a verb stem before ください or になる is that verb said politely
     // (お通りください, お帰りになる), not the noun they spell.
     let after = |k: usize| ctx.terms.get(end + k);
@@ -138,13 +176,13 @@ pub(super) fn judge(ctx: &Context, start: usize, end: usize) -> Result<Phrase, R
         return Err(Rejected::Unlisted);
     };
 
-    phrase.part_of_speech = phrase_type(all_nouns, word, last, &ctx.ending_types[end]);
-    phrase.auto_skip.ambiguous_grammar =
-        grammar::is_ambiguous(&ctx.grammatical[start..=end], &phrase);
+    phrase.part_of_speech = phrase_type(all_nouns, word, last, &ctx.facts[end].ending_type);
+    let grammatical: Vec<bool> = ctx.facts[start..=end].iter().map(|f| f.grammatical).collect();
+    phrase.auto_skip.ambiguous_grammar = grammar::is_ambiguous(&grammatical, &phrase);
     phrase.frequencies =
         ctx.manager.build_freq_map(&phrase.lemma_form, &phrase.lemma_reading, phrase.is_kana);
     let hides_parts =
-        (all_content_words || listed) && !ctx.rule_citations[start..=end].contains(&true);
+        (all_content_words || listed) && !ctx.facts[start..=end].iter().any(|f| f.rule_citation);
     Ok(Phrase { term: phrase, accepted, hides_parts })
 }
 
@@ -157,4 +195,26 @@ fn phrase_type(all_nouns: bool, word: bool, last: &Term, ending: &Option<POS>) -
         None if word && last.part_of_speech != POS::Suffix => last.part_of_speech,
         _ => POS::Expression,
     }
+}
+
+/// The type of a word that ends in `word`, where it isn't `word`'s own: a suffix's is the type
+/// it forms (やり方 a noun, 嫌がる a verb), a bare verb stem names a noun (お迎え), and a
+/// number ends a noun (朝イチ).
+fn type_as_last_piece(word: &Word) -> Option<POS> {
+    let first = word.tokens.first()?;
+    if first.pos1 == UnidicTag::Setsubiji {
+        return match first.pos2 {
+            // UniDic files すぎ with the na-adjective suffixes, but 飲みすぎ is a noun.
+            UnidicTag::Keijoushiteki if first.lexeme == "過ぎ" => Some(POS::Noun),
+            UnidicTag::Meishiteki => Some(POS::Noun),
+            UnidicTag::Doushiteki => Some(POS::Verb),
+            UnidicTag::Keiyoushiteki => Some(POS::Adjective),
+            UnidicTag::Keijoushiteki => Some(POS::AdjectivalNoun),
+            _ => None,
+        };
+    }
+    let bare_stem = word.tokens.len() == 1
+        && first.pos1 == UnidicTag::Doushi
+        && first.conjugation_form == UnidicTag::Renyoukei;
+    (bare_stem || word.part_of_speech == POS::Number).then_some(POS::Noun)
 }

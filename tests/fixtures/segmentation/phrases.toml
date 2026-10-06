@@ -6,6 +6,9 @@
 # that matched.
 
 frequencies = [
+	{ term = "に連れて", reading = "につれて", rank = 43358 },
+	{ term = "からといって", reading = "からといって", rank = 2500, kana = true },
+	{ term = "連れる", reading = "つれる", rank = 3000 },
 	{ term = "株式会社", reading = "かぶしきがいしゃ", rank = 1000 },
 	{ term = "株式", reading = "かぶしき", rank = 2000 },
 	{ term = "会社", reading = "かいしゃ", rank = 300 },
@@ -176,3 +179,15 @@ name = "a phrase that hides its words hides phrases inside it"
 text = "いつも気にかけてくださる。"
 terms = [{ surface = "気にかけて", lemma = "気にかける", pos = "Expression" }]
 absent = ["にかけて"]
+
+# A phrase opening with a particle (につれて) ends its clause; a verb going on into a helper
+# verb (連れていく) is a verb.
+[[case]]
+name = "a verb chain is not a compound particle"
+text = "あなたの旅に連れていってくれませんか？"
+absent = ["に連れて"]
+
+[[case]]
+name = "a compound particle may end a clause before an ordinary verb"
+text = "魔王を倒したからといって終わりじゃない"
+terms = [{ surface = "からといって" }]
