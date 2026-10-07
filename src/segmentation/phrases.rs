@@ -26,7 +26,8 @@ use crate::{
 };
 
 const MIN_CHARS: usize = 4;
-/// Kanji noun compounds (複合体) and JMdict words UniDic splits (居+場所) can be this short.
+/// Kanji noun compounds (複合体), JMdict words UniDic splits (居+場所) and JMdict phrases with
+/// a kanji (何度も) can be this short.
 const MIN_CHARS_WORD: usize = 3;
 
 /// Why a run of words isn't promoted.
@@ -124,7 +125,10 @@ pub(super) fn judge(ctx: &Context, start: usize, end: usize) -> Result<Phrase, R
 
     // With a demonstrative or particle in them (あの人, 森の奥), three characters are two words.
     let short_word = word && all_content_words && first.part_of_speech != POS::Determiner;
-    let min_chars = if kanji_noun_compound || short_word { MIN_CHARS_WORD } else { MIN_CHARS };
+    // In kana, three characters spell some JMdict expression too often (それに, これは).
+    let short_phrase = listed_phrase && phrase.surface_form.chars().any(is_kanji_char);
+    let min_chars =
+        if kanji_noun_compound || short_word || short_phrase { MIN_CHARS_WORD } else { MIN_CHARS };
     if phrase.lemma_form.chars().count() < min_chars {
         return Err(Rejected::TooShort);
     }

@@ -45,6 +45,8 @@ frequencies = [
 	{ term = "あなたに", reading = "あなたに", rank = 2000, kana = true },
 	{ term = "あなた", reading = "あなた", rank = 100, kana = true },
 	{ term = "そのとおり", reading = "そのとおり", rank = 12000, kana = true },
+	{ term = "何度も", reading = "なんども", rank = 2000 },
+	{ term = "それに", reading = "それに", rank = 1000, kana = true },
 	{ term = "その", reading = "その", rank = 500, kana = true },
 	{ term = "とおり", reading = "とおり", rank = 600, kana = true },
 	{ term = "気をつける", reading = "きをつける", rank = 900 },
@@ -172,6 +174,17 @@ name = "JMdict phrase passes the frequency gates"
 text = "そのとおりです。"
 terms = [{ surface = "そのとおり", pos = "Expression" }]
 absent = ["とおり"]
+
+[[case]]
+name = "a three-character JMdict phrase with a kanji is promoted"
+text = "何度も往復した。"
+terms = [{ surface = "何度も", pos = "Expression" }]
+
+# JMdict lists それに, but in kana three characters are usually just two words.
+[[case]]
+name = "a three-character kana JMdict phrase is not promoted"
+text = "それにする。"
+absent = ["それに"]
 
 # にかけて is a JMdict phrase too, but inside 気にかける it is no unit of its own.
 [[case]]
