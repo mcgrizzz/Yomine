@@ -23,8 +23,20 @@ pub(crate) fn is_phrase(form: &str) -> bool {
 /// JMdict lists `form` as a word spelled with kanji, of any part of speech (二日酔い), or as a
 /// word usually written in kana (もったいない), whose readings the lexicon keeps in hiragana.
 pub(crate) fn is_word(form: &str) -> bool {
+    let form = &ascii_width(form);
     let word = |form: &str| lookup(format!("w\t{}", form.normalize_long_vowel())).is_some();
     word(form) || word(&fold_katakana(form))
+}
+
+/// The lexicon keys spellings in NFKC, which writes full-width letters and digits as ASCII
+/// (１度 as 1度).
+fn ascii_width(form: &str) -> String {
+    form.chars()
+        .map(|c| match c {
+            '！'..='～' => char::from_u32(c as u32 - 0xFEE0).unwrap_or(c),
+            _ => c,
+        })
+        .collect()
 }
 
 /// JMdict lists `reading` as an i-adjective ending in ない (つまらない, くだらない).
@@ -71,6 +83,13 @@ mod tests {
         }
         for form in ["こういう", "いいか"] {
             assert!(!is_word(form), "{form}");
+        }
+    }
+
+    #[test]
+    fn two_character_spellings_are_words() {
+        for form in ["一体", "お金", "１度"] {
+            assert!(is_word(form), "{form}");
         }
     }
 

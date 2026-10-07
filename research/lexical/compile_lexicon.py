@@ -49,8 +49,7 @@ def compile_rows(db):
         # Unfolded, so に+カット can't pass for にかっと.
         pair = (entry, reading, normalize_long_vowel(unicodedata.normalize("NFKC", spelling)))
         pair_senses[pair] += 1
-        # Phrase promotion never considers a shorter form.
-        if has_kanji(pair[2]) and len(pair[2]) >= 3:
+        if has_kanji(pair[2]):
             words.add(pair[2])
         usually_kana = "uk" in json.loads(misc)
         if usually_kana and any(CONTENT_POS.fullmatch(p) for p in json.loads(pos)) and len(reading) >= 3:

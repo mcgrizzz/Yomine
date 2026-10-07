@@ -146,7 +146,7 @@ fn analyze_sentence(worker: &mut Worker, text: &str, manager: &FrequencyManager)
     let words = reparse_katakana_speech(worker, words, manager);
     let mut words =
         split_unvalidated_compounds(rescue_words(worker, text, words, manager), manager);
-    keep_lexicalized_honorifics(&mut words, manager);
+    keep_listed_words(&mut words, manager);
     tag_katakana_interjections(worker, &mut words);
     words
 }
@@ -268,31 +268,39 @@ fn has_interjection_reading(worker: &mut Worker, surface: &str) -> bool {
     })
 }
 
-/// The honorific rule mines the noun after お/ご (嬢 in お嬢様). A prefixed word the
-/// dictionaries list is a word of its own, so it stays whole, read the way they
-/// mostly read it: UniDic reads 兄 in お兄さん as あに, and BCCWJ inherits that.
-fn keep_lexicalized_honorifics(words: &mut [Word], manager: &FrequencyManager) {
+/// The honorific and counter rules mine the part after the first (嬢 in お嬢様, 度 in
+/// 一度). A word JMdict lists whole is a word of its own (一体, "what on earth"), so it
+/// stays whole. It keeps UniDic's reading when a frequency list ranks it (一日 as いちにち
+/// or ついたち, by context), else takes the one the lists mostly give: UniDic reads 兄 in
+/// お兄さん as あに.
+fn keep_listed_words(words: &mut [Word], manager: &FrequencyManager) {
     for word in words {
-        let (Some(prefix), Some(_)) = (word.tokens.first(), word.main_word.as_ref()) else {
+        let (Some(first), Some(main)) = (word.tokens.first(), word.main_word.as_ref()) else {
             continue;
         };
-        if prefix.pos1 != super::unidic_tags::UnidicTag::Settouji
-            || !matches!(prefix.surface.as_str(), "お" | "ご" | "御")
-        {
+        if main.start_byte == first.start_byte {
             continue;
         }
-        let reading = manager
-            .majority_reading(&word.surface_form)
-            .map(|reading| as_written(&word.surface_hatsuon, reading))
+        // The lexicon holds kana spellings only for words usually written in kana, so a kana
+        // word (ごちそう) is left to the frequency lists.
+        if !word.surface_form.as_str().is_kana() && !jmdict_lexicon::is_word(&word.surface_form) {
+            continue;
+        }
+        let reading = phrase_frequency(manager, &word.surface_form, &word.surface_hatsuon)
+            .map(|_| word.surface_hatsuon.clone())
             .or_else(|| {
-                phrase_frequency(manager, &word.surface_form, &word.surface_hatsuon)
-                    .map(|_| word.surface_hatsuon.clone())
+                manager
+                    .majority_reading(&word.surface_form)
+                    .map(|reading| as_written(&word.surface_hatsuon, reading))
             });
         if let Some(reading) = reading {
             word.main_word = None;
             word.lemma_form = word.surface_form.clone();
             word.surface_hatsuon = reading.clone();
             word.lemma_hatsuon = reading;
+            if word.part_of_speech == POS::Counter {
+                word.part_of_speech = POS::Noun;
+            }
         }
     }
 }

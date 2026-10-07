@@ -1,9 +1,9 @@
 {
   "format": "LEXIDX01",
-  "records": 239897,
-  "bytes": 8090638,
-  "sha256": "49ae2a97f8fce7966cd6ff6a67bbaa7afb68bb25012d1807eda8903bbad9e3a0",
-  "generator_sha256": "b0570de79dad40ce98685e7efc7eaa6f6913dce6a2a23512e354def94e4e6700",
+  "records": 306481,
+  "bytes": 9678228,
+  "sha256": "e034aeb88bc936d5c1bb54d792ad8b462cad0964ee861c35333533d4bd7d2753",
+  "generator_sha256": "56d80e30d63584a2af1d5ce14fb6af79b009646b878395aa9463a73ab68147fa",
   "jmdict": {
     "url": "https://www.edrdg.org/pub/Nihongo/JMdict_e.gz",
     "sha256": "ae62e02885b73807b49705f92c7050143b424fa87c6ede6efbc6eed8c317692b",
