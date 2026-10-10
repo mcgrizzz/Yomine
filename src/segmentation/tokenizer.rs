@@ -86,6 +86,21 @@ pub(super) fn resolve_citation(word: &mut Word, manager: &FrequencyManager) {
         *reading == lemma.1 && fold_katakana(form) == fold_katakana(&lemma.0)
     });
     let lemma_deinflected = deinflections.contains(&lemma);
+    // UniDic files a potential form under the verb it comes from: なれる (and なれん) under
+    // 成る, read ナル.
+    let potential_of = word
+        .tokens
+        .first()
+        .filter(|t| {
+            t.pos1 == UnidicTag::Doushi
+                && fold_katakana(&t.lexeme_reading) != fold_katakana(&t.lemma_hatsuon)
+        })
+        .and_then(|t| {
+            pairwise_deinflection(&lemma.0, &lemma.1).into_iter().find(|(form, reading)| {
+                fold_katakana(reading) == fold_katakana(&t.lexeme_reading)
+                    && manager.get_harmonic_frequency_for_pair(form, reading).is_some()
+            })
+        });
     let mut candidates: Vec<_> = deinflections
         .into_iter()
         .chain((!lemma_deinflected).then(|| lemma.clone()))
@@ -102,9 +117,9 @@ pub(super) fn resolve_citation(word: &mut Word, manager: &FrequencyManager) {
     let selected = exception
         .map(|pair| (pair, CitationProvenance::LexicalException))
         .or_else(|| {
-            candidates
-                .iter()
-                .find(|pair| deinflected_lemma && **pair == lemma)
+            potential_of
+                .as_ref()
+                .or_else(|| candidates.iter().find(|pair| deinflected_lemma && **pair == lemma))
                 .or(candidates.first())
                 .cloned()
                 .map(|pair| (pair, CitationProvenance::ValidatedDeinflection))
