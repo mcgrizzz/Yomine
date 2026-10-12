@@ -7,6 +7,7 @@ use std::{
             AtomicBool,
             Ordering,
         },
+        Arc,
         Mutex,
     },
     time::Duration,
@@ -136,9 +137,12 @@ pub(crate) async fn refresh_knowledge_summary(app: &AppHandle) {
         let anki_state = guard.anki_state();
         let frequency_manager =
             guard.language_tools.as_ref().map(|tools| tools.frequency_manager.clone());
-        anki_state.zip(frequency_manager).map(|(a, f)| (a, f, guard.knowledge_dirty.clone()))
+        let revision = guard.input_revision.clone();
+        anki_state
+            .zip(frequency_manager)
+            .map(|(a, f)| (a, f, guard.knowledge_dirty.clone(), revision))
     };
-    let Some((anki_state, frequency_manager, dirty)) = pending else { return };
+    let Some((anki_state, frequency_manager, dirty, revision)) = pending else { return };
     if let Ok(summary) = tauri::async_runtime::spawn_blocking(move || {
         compute_knowledge_summary(&anki_state, frequency_manager)
     })
@@ -149,10 +153,18 @@ pub(crate) async fn refresh_knowledge_summary(app: &AppHandle) {
         {
             let state = app.state::<Mutex<AppState>>();
             let mut guard = state.lock().unwrap();
+            // Measured from inputs that have since changed; `knowledge_dirty` stays set, so
+            // the next poll measures the new ones.
+            if !Arc::ptr_eq(&guard.input_revision, &revision) {
+                return;
+            }
             // The horizon only moves outward: a dip in coverage (a batch of new cards,
             // retired ones) mustn't pull auto mode back to commoner words.
-            let reached = guard.knowledge_summary.as_ref().and_then(|s| s.horizon);
-            dto.horizon = dto.horizon.max(reached);
+            if Arc::ptr_eq(&guard.horizon_revision, &revision) {
+                let reached = guard.knowledge_summary.as_ref().and_then(|s| s.horizon);
+                dto.horizon = dto.horizon.max(reached);
+            }
+            guard.horizon_revision = revision;
             guard.knowledge_summary = Some(dto.clone());
         }
         let _ = yomine::persistence::save_json(&dto, crate::state::KNOWLEDGE_SUMMARY_CACHE);
