@@ -124,6 +124,8 @@ pub struct UnidicToken {
     pub lemma_hatsuon: String,
     /// UniDic lexical form (すごい → 凄い), distinct from the written base `lemma_form`.
     pub lexeme: String,
+    /// The lexeme's reading (ナル for なれる, whose lexeme is 成る).
+    pub lexeme_reading: String,
 
     /// Byte span in the source sentence; 0..0 for synthetic/test tokens.
     pub start_byte: usize,
@@ -153,6 +155,7 @@ impl From<(String, RawToken)> for UnidicToken {
         let surface_hatsuon = replace_missing(spelled(raw.kana, raw.pron));
         let mut lemma_form = replace_missing(raw.orth_base);
         let lexeme = replace_missing(raw.lemma);
+        let lexeme_reading = replace_missing(raw.l_form);
         let mut lemma_hatsuon = replace_missing(spelled(raw.kana_base, raw.pron_base));
         // UniDic files 信じる/感じる under the literary 信ずる/感ずる; a じ-stem is the
         // modern verb.
@@ -178,6 +181,7 @@ impl From<(String, RawToken)> for UnidicToken {
             lemma_form: lemma_form,
             lemma_hatsuon: lemma_hatsuon,
             lexeme,
+            lexeme_reading,
             start_byte: 0,
             end_byte: 0,
         }

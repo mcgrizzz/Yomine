@@ -134,6 +134,14 @@ fn choose_entry(
     };
     let candidates: Vec<(usize, &TermDictionaryEntry)> =
         entries.iter().enumerate().filter(|(_, e)| whole(e)).collect();
+    // Yomitan scans a suru verb (心配する) as its noun, whose entry covers the verb.
+    if candidates.is_empty() && text == term {
+        if let (Some(noun), Some(noun_reading)) =
+            (term.strip_suffix("する"), reading.strip_suffix("する"))
+        {
+            return choose_entry(entries, noun, noun, noun_reading, lexeme);
+        }
+    }
     let Some(&(first, _)) = candidates.first() else { return EntryChoice::PartOnly };
     let reading = reading.to_hiragana();
     let reads = |h: &Headword| h.reading.to_hiragana() == reading;
@@ -333,6 +341,16 @@ mod tests {
         );
         assert_eq!(
             choose_entry(&partial, "ハイターが", "ハイター", "はいた", None),
+            EntryChoice::Entry(0)
+        );
+    }
+
+    #[test]
+    fn a_suru_verb_takes_its_nouns_entry() {
+        // Yomitan's answers for 心配する.
+        let entries = [entry("心配", "しんぱい", "心配"), entry("心", "こころ", "心")];
+        assert_eq!(
+            choose_entry(&entries, "心配する", "心配する", "しんぱいする", None),
             EntryChoice::Entry(0)
         );
     }

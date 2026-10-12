@@ -6,6 +6,8 @@ import type { QueueItem } from '$lib/stores/mining';
 /** The horizon before the user's Anki coverage is known, about where a beginner's is. */
 export const DEFAULT_HORIZON = 1000;
 const FULL_FREQUENCY_POINTS = 40;
+/** `HORIZON_PER_FRONTIER` in knowledge_summary.rs: the frontier is where coverage falls off. */
+const HORIZON_PER_FRONTIER = 3;
 
 /** Full points up to the horizon, where the user's knowledge reaches (`KnowledgeSummary`),
  * then 20 fewer per tenfold step past it. */
@@ -101,13 +103,15 @@ export function autoPick(
 				opts.horizon,
 				opts.prefs
 			),
+			fromFrontier: Math.abs(Math.log((harmonic(term) * HORIZON_PER_FRONTIER) / opts.horizon)),
 			first: Math.min(...term.sentence_references.map(([i]) => i))
 		}))
-		// Words inside the horizon tie on frequency points, so the commoner goes first.
+		// Words inside the horizon tie on frequency points. Users mine most near their
+		// frontier; the commonest words without a card are mostly grammar they already know.
 		.sort(
 			(a, b) =>
 				b.points - a.points ||
-				harmonic(a.term) - harmonic(b.term) ||
+				a.fromFrontier - b.fromFrontier ||
 				b.term.sentence_references.length - a.term.sentence_references.length ||
 				a.first - b.first
 		);

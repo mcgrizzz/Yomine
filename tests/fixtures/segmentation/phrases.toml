@@ -1,12 +1,14 @@
-# Phrase/compound promotion: adjacent words are promoted to one expression term
-# when the compound exists in the frequency data and its score beats the
-# components (extract_words' phrase loop). Entirely frequency-driven — the
-# synthetic dictionary controls it. Compound readings in dictionaries carry
+# Phrase/compound promotion: adjacent words are promoted to one term when JMdict
+# lists the result and a frequency list ranks it
+# (phrases::judge). The synthetic dictionary supplies the ranks and readings. Compound readings in dictionaries carry
 # rendaku (かいしゃ → がいしゃ), which the naive component concat lacks; the
 # lookup tries voiced variants at component boundaries and adopts the reading
 # that matched.
 
 frequencies = [
+	{ term = "に連れて", reading = "につれて", rank = 43358 },
+	{ term = "からといって", reading = "からといって", rank = 2500, kana = true },
+	{ term = "連れる", reading = "つれる", rank = 3000 },
 	{ term = "株式会社", reading = "かぶしきがいしゃ", rank = 1000 },
 	{ term = "株式", reading = "かぶしき", rank = 2000 },
 	{ term = "会社", reading = "かいしゃ", rank = 300 },
@@ -43,13 +45,15 @@ frequencies = [
 	{ term = "あなたに", reading = "あなたに", rank = 2000, kana = true },
 	{ term = "あなた", reading = "あなた", rank = 100, kana = true },
 	{ term = "そのとおり", reading = "そのとおり", rank = 12000, kana = true },
+	{ term = "何度も", reading = "なんども", rank = 2000 },
+	{ term = "それに", reading = "それに", rank = 1000, kana = true },
 	{ term = "その", reading = "その", rank = 500, kana = true },
 	{ term = "とおり", reading = "とおり", rank = 600, kana = true },
 	{ term = "気をつける", reading = "きをつける", rank = 900 },
 	{ term = "つける", reading = "つける", rank = 300 },
-	{ term = "映画鑑賞", reading = "ええがかんしょう", rank = 48649 },
+	{ term = "映画監督", reading = "ええがかんとく", rank = 30440 },
 	{ term = "映画", reading = "えいが", rank = 900 },
-	{ term = "鑑賞", reading = "かんしょう", rank = 8600 },
+	{ term = "監督", reading = "かんとく", rank = 3000 },
 	{ term = "表沙汰", reading = "おもてざた", rank = 26427 },
 	{ term = "気にかける", reading = "きにかける", rank = 6082 },
 	{ term = "にかけて", reading = "にかけて", rank = 3776, kana = true },
@@ -110,7 +114,7 @@ terms = [{ surface = "気になった", lemma = "気になる", pos = "Expressio
 [[case]]
 name = "相変わらず promotes and suppresses its stranded prefix"
 text = "相変わらずひどいこと言うなぁ"
-terms = [{ surface = "相変わらず", lemma = "相変わらず", reading = "あいかわらず", pos = "Expression" }]
+terms = [{ surface = "相変わらず", lemma = "相変わらず", reading = "あいかわらず", pos = "Adverb" }]
 absent = ["相"]
 
 # JMdict lists 気になる, so it reads as one unit despite the particle.
@@ -120,21 +124,21 @@ text = "彼のことが気になる。"
 terms = [{ surface = "気になる", pos = "Expression" }]
 absent = ["気", "なる"]
 
-# JMdict has no 水を飲む: a free combination keeps its component words.
+# JMdict has no 水を飲む: a free combination stays its component words.
 [[case]]
 name = "unlisted particle-containing phrase keeps its components"
 text = "水を飲む。"
 terms = [
-	{ surface = "水を飲む", pos = "Expression" },
 	{ surface = "水", lemma = "水" },
 	{ surface = "飲む", lemma = "飲む" },
 ]
+absent = ["水を飲む"]
 
 # Frequency lists keep particle n-grams; JMdict lists only real ones (ついでに).
 [[case]]
 name = "phrase ending in a particle needs a JMdict listing"
 text = "ついでにあなたに聞く。"
-terms = [{ surface = "ついでに", pos = "Expression" }]
+terms = [{ surface = "ついでに", pos = "Adverb" }]
 absent = ["ついで", "あなたに"]
 
 # UniDic mis-lexicalizes 負けじと as 負け+じと(副詞); じと validates in no
@@ -142,7 +146,7 @@ absent = ["ついで", "あなたに"]
 [[case]]
 name = "負けじと promoted over the mis-tokenized 負け+じと"
 text = "私は客の出す音に圧倒されながらも、負けじと、「いらっしゃいませ」"
-terms = [{ surface = "負けじと", lemma = "負けじと", reading = "まけじと", pos = "Expression" }]
+terms = [{ surface = "負けじと", lemma = "負けじと", reading = "まけじと", pos = "Adverb" }]
 absent = ["負け", "じと"]
 
 # Dictionaries spell an interior を as を; read as pronounced (お) it never matches.
@@ -151,11 +155,11 @@ name = "phrase with an interior を matches its dictionary reading"
 text = "気をつけて。"
 terms = [{ surface = "気をつけて", lemma = "気をつける", reading = "きをつける", pos = "Expression" }]
 
-# BCCWJ writes readings as pronounced (映画鑑賞 as ええがかんしょう).
+# BCCWJ writes readings as pronounced (映画監督 as ええがかんとく).
 [[case]]
 name = "pronounced-style dictionary reading still matches"
-text = "趣味は映画鑑賞です。"
-terms = [{ surface = "映画鑑賞", pos = "NounExpression" }]
+text = "彼は映画監督です。"
+terms = [{ surface = "映画監督", pos = "NounExpression" }]
 
 # UniDic reads 表 as ひょう here; the compound is only ever おもてざた.
 [[case]]
@@ -171,9 +175,32 @@ text = "そのとおりです。"
 terms = [{ surface = "そのとおり", pos = "Expression" }]
 absent = ["とおり"]
 
+[[case]]
+name = "a three-character JMdict phrase with a kanji is promoted"
+text = "何度も往復した。"
+terms = [{ surface = "何度も", pos = "Adverb" }]
+
+# JMdict lists それに, but in kana three characters are usually just two words.
+[[case]]
+name = "a three-character kana JMdict phrase is not promoted"
+text = "それにする。"
+absent = ["それに"]
+
 # にかけて is a JMdict phrase too, but inside 気にかける it is no unit of its own.
 [[case]]
 name = "a phrase that hides its words hides phrases inside it"
 text = "いつも気にかけてくださる。"
 terms = [{ surface = "気にかけて", lemma = "気にかける", pos = "Expression" }]
 absent = ["にかけて"]
+
+# A phrase opening with a particle (につれて) ends its clause; a verb going on into a helper
+# verb (連れていく) is a verb.
+[[case]]
+name = "a verb chain is not a compound particle"
+text = "あなたの旅に連れていってくれませんか？"
+absent = ["に連れて"]
+
+[[case]]
+name = "a compound particle may end a clause before an ordinary verb"
+text = "魔王を倒したからといって終わりじゃない"
+terms = [{ surface = "からといって" }]

@@ -309,7 +309,7 @@ pub fn get_default_pos(token: &UnidicToken) -> POS {
         },
         UnidicTag::Doushi => POS::Verb,
         UnidicTag::Keiyoushi => POS::Adjective,
-        UnidicTag::Keijoushi => POS::Adjective,
+        UnidicTag::Keijoushi => POS::AdjectivalNoun,
         UnidicTag::Fukushi => POS::Adverb,
         UnidicTag::Joshi => POS::Postposition,
         UnidicTag::Jodoushi => match token.conjugation_type {

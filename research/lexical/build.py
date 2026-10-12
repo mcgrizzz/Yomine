@@ -14,7 +14,7 @@ from pathlib import Path
 
 from source_policy import include_source, policy_manifest
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 SOURCE_URLS = {
     "jmdict": "https://www.edrdg.org/pub/Nihongo/JMdict_e.gz",
     "jitendex": "https://github.com/stephenmk/stephenmk.github.io/releases/latest/download/jitendex-yomitan.zip",
@@ -46,7 +46,7 @@ def entry_record(entry):
     for sense in entry.findall("sense"):
         inherited_pos = values(sense, "pos") or inherited_pos
         senses.append({"pos": inherited_pos, "spellings": values(sense, "stagk"),
-                       "readings": values(sense, "stagr")})
+                       "readings": values(sense, "stagr"), "misc": values(sense, "misc")})
     return {"id": int(entry.findtext("ent_seq")), "spellings": spellings,
             "readings": readings, "senses": senses}
 
@@ -66,7 +66,7 @@ def legal_pairs(record):
                     continue
                 yield (record["id"], normalize(reading["text"]), spelling["text"],
                        packed(sense["pos"]), packed(spelling["info"]),
-                       packed(reading["info"]), int(reading["no_kanji"]))
+                       packed(reading["info"]), int(reading["no_kanji"]), packed(sense["misc"]))
 
 
 def parse_jmdict(path):
@@ -102,7 +102,7 @@ def build(jmdict, jitendex, frequency_dir, output):
     db.executescript("""
     CREATE TABLE metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
     CREATE TABLE pairs(entry_id INTEGER, reading TEXT, spelling TEXT, pos TEXT,
-        spelling_info TEXT, reading_info TEXT, no_kanji INTEGER);
+        spelling_info TEXT, reading_info TEXT, no_kanji INTEGER, misc TEXT);
     CREATE TABLE jitendex(sequence INTEGER, term TEXT, reading TEXT);
     CREATE TABLE frequencies(dictionary TEXT, term TEXT, reading TEXT, rank INTEGER,
         kana_marker INTEGER, source_bank TEXT, source_row INTEGER);
@@ -116,7 +116,7 @@ def build(jmdict, jitendex, frequency_dir, output):
     manifest["jmdict"].update(metadata)
     count = 0
     for record in records:
-        db.executemany("INSERT INTO pairs VALUES (?,?,?,?,?,?,?)", legal_pairs(record))
+        db.executemany("INSERT INTO pairs VALUES (?,?,?,?,?,?,?,?)", legal_pairs(record))
         count += 1
     db.commit()
     print(f"JMdict: {count} entries", flush=True)

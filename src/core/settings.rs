@@ -153,17 +153,20 @@ impl Default for AutoMine {
         Self {
             stop: AutoMineStop::Count,
             limit: 10,
-            // JLPT verbs and adjectives inside the horizon score 80; with these points a
-            // typical anime episode has about 44 such terms, so the cap usually decides.
+            // Inside the horizon, JLPT nouns, verbs and adjectives score at least 80 and words
+            // without a level at most 70. Someone with only Kaishi 1.5k sees about 60 such
+            // terms an episode, so the cap usually decides.
             min_score: 80,
             max_cards: Some(40),
+            // Frequency points are flat inside the horizon, so these order whole groups: a
+            // gap between nouns and verbs would give a beginner's first picks to nouns only.
             pos_points: points(&[
-                ("Noun", 30),
+                ("Noun", 25),
+                ("Verb", 25),
                 ("SuruVerb", 30),
-                ("AdjectivalNoun", 25),
+                ("AdjectivalNoun", 30),
                 ("Adjective", 20),
-                ("Verb", 20),
-                ("Adverb", 0),
+                ("Adverb", 5),
                 ("ProperNoun", -10),
                 ("Pronoun", -10),
             ]),

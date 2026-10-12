@@ -37,11 +37,11 @@ fn flush_run(run: &mut Vec<UnidicToken>, out: &mut Vec<UnidicToken>) {
         return;
     }
     let surface: String = run.iter().map(|t| t.surface.as_str()).collect();
-    // A lone single-digit token already reads correctly from the lexicon
+    // A lone single-digit numeral already reads correctly from the lexicon
     // (8 → ハチ). Everything else needs synthesis: multi-token runs read
     // digit-by-digit (22 → ニニ), and a single multi-digit OOV token's
     // "reading" is just its surface digits (3000 → "3000").
-    if run.len() == 1 && surface.chars().count() == 1 {
+    if run.len() == 1 && surface.chars().count() == 1 && run[0].pos2 == UnidicTag::Suushi {
         out.push(run.pop().unwrap());
         return;
     }
@@ -52,11 +52,12 @@ fn flush_run(run: &mut Vec<UnidicToken>, out: &mut Vec<UnidicToken>) {
             let first = run.first().unwrap();
             out.push(UnidicToken {
                 lexeme: String::new(),
+                lexeme_reading: String::new(),
                 surface: surface.clone(),
-                pos1: first.pos1.clone(),
-                pos2: first.pos2.clone(),
-                pos3: first.pos3.clone(),
-                pos4: first.pos4.clone(),
+                pos1: UnidicTag::Meishi,
+                pos2: UnidicTag::Suushi,
+                pos3: UnidicTag::Unset,
+                pos4: UnidicTag::Unset,
                 conjugation_type: first.conjugation_type.clone(),
                 conjugation_form: first.conjugation_form.clone(),
                 surface_hatsuon: reading.clone(),
@@ -74,9 +75,10 @@ fn flush_run(run: &mut Vec<UnidicToken>, out: &mut Vec<UnidicToken>) {
     }
 }
 
-/// A token that is purely Arabic digits (ASCII or fullwidth) tagged 数詞.
+/// A token that is purely Arabic digits (ASCII or fullwidth): a 数詞, or a noun UniDic keeps
+/// as a word of its own with an English reading (50 as フィフティー).
 fn is_digit_token(token: &UnidicToken) -> bool {
-    token.pos2 == UnidicTag::Suushi
+    (token.pos2 == UnidicTag::Suushi || token.pos1 == UnidicTag::Meishi)
         && !token.surface.is_empty()
         && token.surface.chars().all(|c| c.is_ascii_digit() || ('０'..='９').contains(&c))
 }

@@ -4,6 +4,12 @@
 # readings must survive into the word AND the display segment must carry the
 # full-segment reading, not the main word's.
 
+frequencies = [
+	{ term = "一度", reading = "いちど", rank = 300 },
+	{ term = "一日", reading = "ついたち", rank = 500 },
+	{ term = "一日", reading = "いちにち", rank = 900 },
+]
+
 [[case]]
 name = "date compound keeps digit readings (the 8月22日 bug)"
 text = "8月22日に行きます。"
@@ -47,3 +53,30 @@ segments = [
 	{ surface = "。", pos = "Symbol" },
 ]
 terms = [{ surface = "８時半", pos = "Counter" }]
+
+# UniDic keeps some ASCII numbers as words of their own, tagged as common nouns with an
+# English reading (50 as フィフティー), so they never joined their counter.
+[[case]]
+name = "an ASCII number UniDic reads as English joins its counter"
+text = "50年に一度の流星群"
+segments = [
+	{ surface = "50年", reading = "ごじゅうねん", pos = "Counter" },
+	{ surface = "に" },
+	{ surface = "一度" },
+	{ surface = "の" },
+	{ surface = "流星" },
+	{ surface = "群" },
+]
+absent = ["年に一度"]
+
+[[case]]
+name = "a number + counter JMdict lists is a word, not its counter"
+text = "50年に一度の流星群"
+terms = [{ surface = "一度", lemma = "一度", reading = "いちど", pos = "Noun" }]
+absent = ["度"]
+
+# 一日 is ついたち or いちにち; UniDic reads it from the sentence.
+[[case]]
+name = "a listed number + counter keeps UniDic's reading in context"
+text = "一日頑張った"
+terms = [{ surface = "一日", reading = "いちにち" }]

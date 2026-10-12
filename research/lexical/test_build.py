@@ -28,6 +28,11 @@ class LexicalIndexTests(unittest.TestCase):
                           "<sense><stagk>乙</stagk><pos>adv</pos></sense>")
         self.assertEqual([(r[1], r[2], r[3]) for r in rows], [("こう", "甲", '["n"]'), ("こう", "乙", '["adv"]'), ("おつ", "乙", '["adv"]')])
 
+    def test_sense_misc_is_kept(self):
+        rows = self.pairs("<k_ele><keb>勿体無い</keb></k_ele><r_ele><reb>もったいない</reb></r_ele>"
+                          "<sense><pos>adj-i</pos><misc>uk</misc></sense><sense><pos>adj-i</pos></sense>")
+        self.assertEqual([r[7] for r in rows], ['["uk"]', "[]"])
+
     def test_no_kanji_is_not_an_alias_to_the_written_form(self):
         rows = self.pairs("<k_ele><keb>甲</keb></k_ele><r_ele><reb>こう</reb><re_nokanji/></r_ele><sense><pos>n</pos></sense>")
         self.assertEqual(rows[0][2], "こう")

@@ -5,6 +5,7 @@ import argparse
 import collections
 import hashlib
 import json
+import re
 import sqlite3
 import struct
 import unicodedata
@@ -16,17 +17,41 @@ from source_policy import source_manifest
 
 MAGIC = b"LEXIDX01"
 PHRASE_POS = {"exp", "adv", "conj", "prt"}
+# Nouns, verbs and i-/na-adjectives; pre-noun adjectives (こういう), interjections and the
+# copula would take the type of their last piece when joined.
+CONTENT_POS = re.compile(r"(n|n-.*|v.*|adj-i|adj-ix|adj-na|adj-no)")
+# A word's type code (jmdict_lexicon.rs reads them) and the JMdict tags that give it, best
+# first. vs is left out: a noun that takes する is still a noun (お迎え).
+WORD_TYPES = [("v", r"v[1245knrz].*|vs-[ics]"), ("i", r"adj-ix?"), ("a", r"adj-na"),
+              ("n", r"n|n-.*"), ("o", r"pn"), ("d", r"adv.*"), ("c", r"conj"), ("j", r"int"),
+              ("p", r"adj-pn")]
 
 
 def has_kanji(text):
     return any("㐀" <= c <= "鿿" or c == "々" for c in text)
 
 
+def word_type(pos):
+    """An expression stays one (ことになる is exp and v5r); otherwise the best type the tags give."""
+    if "exp" in pos:
+        return "e"
+    return next((code for code, tags in WORD_TYPES if any(re.fullmatch(tags, p) for p in pos)), None)
+
+
+def best_type(codes):
+    order = [code for code, _ in WORD_TYPES] + ["e"]
+    return min((c for c in codes if c), key=order.index, default=None)
+
+
 def compile_rows(db):
     """`p\\tform`: a JMdict expression, adverb, conjunction or particle, valued by how many
-    senses its entries give it (one byte, capped at 255).
-    `w\\tspelling`: a JMdict spelling with kanji, of any part of speech (二日酔い). Kana-only
-    forms are left out: a run of kana tokens spells some JMdict reading too often (いいか).
+    senses its entries give it (one byte, capped at 255), then its type code.
+    `w\\tspelling`: a JMdict spelling with kanji, of any part of speech (二日酔い), and the
+    kana reading of a content word JMdict says is usually written in kana (もったいない). Other
+    kana-only forms are left out: a run of kana tokens spells some JMdict reading too often
+    (いいか). Valued by its type code.
+    A form's type code is `word_type` of each entry's first sense that applies to it, the best
+    across entries; empty when no tag gives one.
     `a\\treading`: a JMdict i-adjective ending in ない, which UniDic reads as a verb and ない
     (つまらない as つまる).
     `e\\tspelling\\treading`: entries listing the spelling under that reading, kept only
@@ -37,14 +62,22 @@ def compile_rows(db):
     readings = collections.defaultdict(set)
     words = set()
     nai_adjectives = set()
-    for entry, reading, spelling, pos in db.execute("SELECT entry_id,reading,spelling,pos FROM pairs"):
+    first_sense = {}
+    for entry, reading, spelling, pos, misc in db.execute(
+            "SELECT entry_id,reading,spelling,pos,misc FROM pairs ORDER BY rowid"):
         reading = normalize_long_vowel(reading)
         # Unfolded, so に+カット can't pass for にかっと.
         pair = (entry, reading, normalize_long_vowel(unicodedata.normalize("NFKC", spelling)))
         pair_senses[pair] += 1
-        # Phrase promotion never considers a shorter form.
-        if has_kanji(pair[2]) and len(pair[2]) >= 3:
+        usually_kana = "uk" in json.loads(misc)
+        # How directly the entry writes the form: as spelled, as the reading of a word
+        # usually written in kana, or only as a reading (どうだい for 同大).
+        for form, how in {(pair[2], 0), (reading, 0 if reading == pair[2] else 1 if usually_kana else 2)}:
+            first_sense.setdefault((form, entry, how), word_type(json.loads(pos)))
+        if has_kanji(pair[2]):
             words.add(pair[2])
+        if usually_kana and any(CONTENT_POS.fullmatch(p) for p in json.loads(pos)) and len(reading) >= 3:
+            words.add(reading)
         if set(json.loads(pos)) & PHRASE_POS:
             phrase_pairs.add(pair)
         if "adj-i" in json.loads(pos) and reading.endswith("ない"):
@@ -65,8 +98,15 @@ def compile_rows(db):
         if len(variants) > 1:
             for reading in variants:
                 entries[(spelling, reading)].add(entry)
-    rows = [(("p\t" + form).encode(), bytes([min(senses, 255)])) for form, senses in phrases.items()]
-    rows += [(("w\t" + form).encode(), b"") for form in words]
+    # The entries that write a form most directly decide its type: はいはい is an interjection,
+    # though 這い這い (crawling) is also read はいはい.
+    types = collections.defaultdict(lambda: collections.defaultdict(set))
+    for (form, _, how), code in first_sense.items():
+        types[form][how].add(code)
+    type_code = lambda form: (best_type(types[form][min(types[form])]) or "").encode()
+    rows = [(("p\t" + form).encode(), bytes([min(senses, 255)]) + type_code(form))
+            for form, senses in phrases.items()]
+    rows += [(("w\t" + form).encode(), type_code(form)) for form in words]
     rows += [(("a\t" + reading).encode(), b"") for reading in nai_adjectives]
     rows += [(f"e\t{spelling}\t{reading}".encode(), b"".join(struct.pack("<I", e) for e in sorted(ids)))
              for (spelling, reading), ids in entries.items()]

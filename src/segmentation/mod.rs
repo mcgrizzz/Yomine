@@ -2,6 +2,8 @@ pub mod nbest;
 
 mod grammar;
 
+mod phrases;
+
 mod speaker_labels;
 
 pub mod numbers;

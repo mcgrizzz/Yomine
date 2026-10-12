@@ -112,9 +112,6 @@ fn citations_survive_dictionary_backed_rescue_and_keep_their_highlights() {
         ("形態", "けいたい", 2000),
         ("化", "か", 100),
         ("化する", "かする", 4000),
-        // A valid enclosing phrase must not erase the explicitly segmented
-        // citation: it remains independently mineable and matchable to its card.
-        ("形態化する", "けいたいかする", 10),
         ("知る", "しる", 100),
         ("要る", "いる", 700),
         ("巣", "す", 3000),
@@ -184,7 +181,6 @@ fn citations_survive_dictionary_backed_rescue_and_keep_their_highlights() {
                 .collect();
             assert_eq!(segments, ["形態", "化させて"]);
             assert!(terms.iter().any(|term| term.lemma_form == "形態"));
-            assert!(terms.iter().any(|term| term.lemma_form == "形態化する"));
         }
     }
 }

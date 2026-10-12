@@ -81,9 +81,26 @@ fn decode_html_entities(text: &str) -> String {
 pub fn clean_subtitle_text(raw: &str) -> String {
     // Entity-encoded tags (&lt;i&gt; from asbplayer/YouTube) must decode before the tag strip sees them.
     let text = decode_html_entities(raw);
+    let text = join_wrapped_lines(&text);
     let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
     let text = KANA_READING_REGEX.replace_all(&text, "");
     STRIP_INLINE_TAGS.replace_all(&text, "").trim().to_string()
+}
+
+/// Joins a cue's lines with no space between Japanese letters: some subtitles wrap at a width,
+/// mid-word (引っか / かる).
+fn join_wrapped_lines(text: &str) -> String {
+    let letter = |c: char| is_kanji_char(c) || matches!(c, '\u{3040}'..='\u{30FF}');
+    let mut joined = String::with_capacity(text.len());
+    for line in text.lines().map(str::trim) {
+        let wrapped =
+            joined.chars().last().is_some_and(letter) && line.chars().next().is_some_and(letter);
+        if !joined.is_empty() && !wrapped {
+            joined.push(' ');
+        }
+        joined.push_str(line);
+    }
+    joined
 }
 
 /// Consecutive same-text cues this close are one line split in two, often at a scene cut.
@@ -361,6 +378,15 @@ mod tests {
         assert_eq!(clean_subtitle_text("<c.japanese>字幕</c>"), "字幕");
         assert_eq!(clean_subtitle_text("<span style=\"x\">言葉</span>"), "言葉");
         assert_eq!(clean_subtitle_text("<em>強調</em>と<strong>太字</strong>"), "強調と太字");
+    }
+
+    #[test]
+    fn rejoins_a_word_wrapped_across_lines() {
+        // Frieren S01E15's broadcast subtitles wrap at a width, mid-word.
+        assert_eq!(clean_subtitle_text("ミミックに引っか\nかるので｡"), "ミミックに引っかかるので｡");
+        assert_eq!(clean_subtitle_text("２か月も経\r\nっていない"), "２か月も経っていない");
+        assert_eq!(clean_subtitle_text("行くぞ。\n（フェルン）はい"), "行くぞ。 （フェルン）はい");
+        assert_eq!(clean_subtitle_text("Hello\nworld"), "Hello world");
     }
 
     #[test]

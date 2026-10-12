@@ -14,6 +14,11 @@ frequencies = [
 	{ term = "いい子ぶる", reading = "いいこぶる", rank = 52420 },
 	{ term = "ぶる", reading = "ぶる", rank = 4738, kana = true },
 	{ term = "ぶっ", reading = "ぶっ", rank = 8802, kana = true },
+	{ term = "きる", reading = "きる", rank = 1113, kana = true },
+	{ term = "きれる", reading = "きれる", rank = 2484, kana = true },
+	{ term = "キレる", reading = "きれる", rank = 9721, kana = true },
+	{ term = "ぼく", reading = "ぼく", rank = 3878, kana = true },
+	{ term = "ボケる", reading = "ぼける", rank = 12598, kana = true },
 ]
 
 [[case]]
@@ -25,3 +30,15 @@ terms = [{ surface = "すん", lemma = "する", reading = "する" }]
 name = "ぶった is the suffix ぶる, not a word ぶっ"
 text = "今さら いい子ぶったって"
 absent = ["ぶっ"]
+
+# The deinflector writes a katakana verb in hiragana, and the potential reading (きれる as
+# きる's) is the commoner word.
+[[case]]
+name = "キレちゃった is キレる, not きる"
+text = "それで フェルンが キレちゃったの"
+terms = [{ surface = "キレちゃった", lemma = "キレる", reading = "きれる" }]
+
+[[case]]
+name = "ボケた is ボケる, not ぼく"
+text = "まだ ボケたふり 続けているの？"
+terms = [{ surface = "ボケた", lemma = "ボケる", reading = "ぼける" }]

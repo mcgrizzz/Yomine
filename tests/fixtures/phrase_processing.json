@@ -70,7 +70,6 @@
     ],
     "families": [
       null,
-      null,
       null
     ],
     "production": [
@@ -133,36 +132,6 @@
         ],
         "surface_form": "化させて",
         "surface_reading": "かさせて"
-      },
-      {
-        "auto_skip": {
-          "ambiguous_grammar": false,
-          "speaker_name": false,
-          "spelling_in_anki": false
-        },
-        "comprehension": 0.0,
-        "frequencies": {
-          "HARMONIC": 10,
-          "test": 10
-        },
-        "full_segment": "形態化させて",
-        "full_segment_reading": "けいたいかさせて",
-        "id": 1,
-        "is_kana": false,
-        "jlpt_level": null,
-        "lemma_form": "形態化する",
-        "lemma_reading": "けいたいかする",
-        "lexeme": null,
-        "part_of_speech": "Expression",
-        "possible_known_match": null,
-        "sentence_references": [
-          [
-            0,
-            0
-          ]
-        ],
-        "surface_form": "形態化させて",
-        "surface_reading": "けいたいかさせて"
       }
     ],
     "segments": [
@@ -636,7 +605,7 @@
         "lemma_form": "何となく",
         "lemma_reading": "なんとなく",
         "lexeme": null,
-        "part_of_speech": "Expression",
+        "part_of_speech": "Adverb",
         "possible_known_match": null,
         "sentence_references": [
           [
