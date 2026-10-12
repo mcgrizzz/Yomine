@@ -279,7 +279,9 @@
 	{/if}
 
 	{#if sentenceMined}
-		<span class="sentence-mined" title="This sentence is already in one of your Anki notes">✓</span>
+		<span class="sentence-mined" title="This sentence is already in one of your Anki notes"
+			>✓ Mined</span
+		>
 	{/if}
 
 	{#if $ankiFilterActive}
@@ -414,9 +416,12 @@
 		justify-content: center;
 		padding: 0.2rem 0.45rem;
 		font-size: 0.78rem;
+		font-weight: 600;
 		line-height: 1;
+		white-space: nowrap;
 		color: var(--success);
 		background: color-mix(in srgb, var(--success) 12%, transparent);
+		border: 1px solid color-mix(in srgb, var(--success) 45%, transparent);
 		border-radius: var(--radius);
 		cursor: help;
 	}
