@@ -3,7 +3,10 @@ use super::{
     frequency_manager::fold_katakana,
     kana_preference::SortedIndex,
 };
-use crate::core::utils::NormalizeLongVowel;
+use crate::{
+    core::utils::NormalizeLongVowel,
+    segmentation::word::POS,
+};
 
 const DATA: &[u8] = include_bytes!("../../assets/jmdict-lexicon.bin");
 
@@ -26,6 +29,29 @@ pub(crate) fn is_word(form: &str) -> bool {
     let form = &ascii_width(form);
     let word = |form: &str| lookup(format!("w\t{}", form.normalize_long_vowel())).is_some();
     word(form) || word(&fold_katakana(form))
+}
+
+/// The type JMdict's first sense gives `form` (本当に an adverb, お迎え a noun), when the
+/// lexicon lists it as a word or phrase.
+pub(crate) fn word_type(form: &str) -> Option<POS> {
+    let form = ascii_width(form);
+    let form = form.normalize_long_vowel();
+    let code = lookup(format!("w\t{form}"))
+        .and_then(|value| value.first())
+        .or_else(|| lookup(format!("p\t{form}")).and_then(|value| value.get(1)))?;
+    Some(match code {
+        b'v' => POS::Verb,
+        b'i' => POS::Adjective,
+        b'a' => POS::AdjectivalNoun,
+        b'n' => POS::Noun,
+        b'o' => POS::Pronoun,
+        b'd' => POS::Adverb,
+        b'c' => POS::Conjunction,
+        b'j' => POS::Interjection,
+        b'p' => POS::Determiner,
+        b'e' => POS::Expression,
+        _ => return None,
+    })
 }
 
 /// The lexicon keys spellings in NFKC, which writes full-width letters and digits as ASCII
@@ -91,6 +117,20 @@ mod tests {
         for form in ["一体", "お金", "１度"] {
             assert!(is_word(form), "{form}");
         }
+    }
+
+    #[test]
+    fn listed_forms_carry_jmdict_types() {
+        for (form, pos) in [
+            ("本当に", POS::Adverb),
+            ("それとも", POS::Conjunction),
+            ("お迎え", POS::Noun),
+            ("大丈夫", POS::AdjectivalNoun),
+            ("ことになる", POS::Expression),
+        ] {
+            assert_eq!(word_type(form), Some(pos), "{form}");
+        }
+        assert_eq!(word_type("あなたに"), None);
     }
 
     #[test]

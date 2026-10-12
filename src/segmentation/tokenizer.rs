@@ -110,8 +110,10 @@ pub(super) fn resolve_citation(word: &mut Word, manager: &FrequencyManager) {
         .sort_by_key(|(form, reading)| manager.get_harmonic_frequency_for_pair(form, reading));
     match word.part_of_speech {
         POS::Verb => retain_verb_final_candidates(&mut candidates, &word.surface_form),
-        // An adjective stem can deinflect as a verb (のろ as 乗る's imperative).
-        POS::Adjective => candidates.retain(|pair| pair.0.ends_with('い') || *pair == lemma),
+        // An adjective stem can deinflect as a verb (のろ as 乗る's imperative, 好き as 好く).
+        POS::Adjective | POS::AdjectivalNoun => {
+            candidates.retain(|pair| pair.0.ends_with('い') || *pair == lemma)
+        }
         _ => {}
     }
     let selected = exception

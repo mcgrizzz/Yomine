@@ -114,7 +114,7 @@ terms = [{ surface = "気になった", lemma = "気になる", pos = "Expressio
 [[case]]
 name = "相変わらず promotes and suppresses its stranded prefix"
 text = "相変わらずひどいこと言うなぁ"
-terms = [{ surface = "相変わらず", lemma = "相変わらず", reading = "あいかわらず", pos = "Expression" }]
+terms = [{ surface = "相変わらず", lemma = "相変わらず", reading = "あいかわらず", pos = "Adverb" }]
 absent = ["相"]
 
 # JMdict lists 気になる, so it reads as one unit despite the particle.
@@ -138,7 +138,7 @@ absent = ["水を飲む"]
 [[case]]
 name = "phrase ending in a particle needs a JMdict listing"
 text = "ついでにあなたに聞く。"
-terms = [{ surface = "ついでに", pos = "Expression" }]
+terms = [{ surface = "ついでに", pos = "Adverb" }]
 absent = ["ついで", "あなたに"]
 
 # UniDic mis-lexicalizes 負けじと as 負け+じと(副詞); じと validates in no
@@ -146,7 +146,7 @@ absent = ["ついで", "あなたに"]
 [[case]]
 name = "負けじと promoted over the mis-tokenized 負け+じと"
 text = "私は客の出す音に圧倒されながらも、負けじと、「いらっしゃいませ」"
-terms = [{ surface = "負けじと", lemma = "負けじと", reading = "まけじと", pos = "Expression" }]
+terms = [{ surface = "負けじと", lemma = "負けじと", reading = "まけじと", pos = "Adverb" }]
 absent = ["負け", "じと"]
 
 # Dictionaries spell an interior を as を; read as pronounced (お) it never matches.
@@ -178,7 +178,7 @@ absent = ["とおり"]
 [[case]]
 name = "a three-character JMdict phrase with a kanji is promoted"
 text = "何度も往復した。"
-terms = [{ surface = "何度も", pos = "Expression" }]
+terms = [{ surface = "何度も", pos = "Adverb" }]
 
 # JMdict lists それに, but in kana three characters are usually just two words.
 [[case]]

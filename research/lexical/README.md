@@ -29,7 +29,8 @@ python3 research/lexical/compile_lexicon.py --db /tmp/new-lexical-reference.sqli
 `jmdict-lexicon.bin` holds JMdict phrase forms (expressions, adverbs, conjunctions,
 particles), every JMdict spelling with kanji, the kana readings of content words JMdict
 marks as usually written in kana (もったいない), the i-adjectives ending in ない, and the
-entries of spellings read more than one way.
+entries of spellings read more than one way. Phrases and words carry the type JMdict's first
+sense gives them (本当に an adverb, お迎え a noun).
 
 Review and test regenerated data before replacing the bundled binary and manifest.
 A code-only generator refactor must reproduce the existing binary checksum.

@@ -310,6 +310,50 @@ pub fn create_default_rules() -> Vec<Rule> {
                 main_word_policy: None,
             },
         },
+        // A suffix that forms an adjective (子供っぽい) or a na-adjective (一時的, 不安げ) makes
+        // the noun one.
+        Rule {
+            name: "Adjectival suffix to noun",
+            current: TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Setsubiji]),
+                pos2: Matcher::Any(vec![UnidicTag::Keiyoushiteki]),
+                ..Default::default()
+            },
+            next: None,
+            prev: Some(TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Meishi]),
+                ..Default::default()
+            }),
+            prev_word: WordMatcher::None,
+            action: RuleAction::MergeWithPrevious {
+                attach_prev: true,
+                attach_prev_lemma: true,
+                update_prev_pos: Some(POS::Adjective),
+                main_word_policy: None,
+            },
+        },
+        Rule {
+            name: "Na-adjectival suffix to noun",
+            current: TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Setsubiji]),
+                pos2: Matcher::Any(vec![UnidicTag::Keijoushiteki]),
+                // UniDic files すぎ with these, but 十時過ぎ is a noun.
+                custom_predicate: Some(|t| t.lexeme != "過ぎ"),
+                ..Default::default()
+            },
+            next: None,
+            prev: Some(TokenMatcher {
+                pos1: Matcher::Any(vec![UnidicTag::Meishi]),
+                ..Default::default()
+            }),
+            prev_word: WordMatcher::None,
+            action: RuleAction::MergeWithPrevious {
+                attach_prev: true,
+                attach_prev_lemma: true,
+                update_prev_pos: Some(POS::AdjectivalNoun),
+                main_word_policy: None,
+            },
+        },
         Rule {
             name: "Suffix to noun",
             current: TokenMatcher {

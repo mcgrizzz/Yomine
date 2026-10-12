@@ -163,7 +163,10 @@ pub(super) fn judge(ctx: &Context, start: usize, end: usize) -> Result<Phrase, R
         return Err(Rejected::Unlisted);
     }
 
-    phrase.part_of_speech = phrase_type(all_nouns, word, last, &ctx.facts[end].ending_type);
+    let jmdict_type = jmdict_lexicon::word_type(&phrase.lemma_form)
+        .or_else(|| jmdict_lexicon::word_type(&phrase.surface_form));
+    phrase.part_of_speech =
+        phrase_type(all_nouns, word, last, &ctx.facts[end].ending_type, jmdict_type);
     let grammatical: Vec<bool> = ctx.facts[start..=end].iter().map(|f| f.grammatical).collect();
     phrase.auto_skip.ambiguous_grammar = grammar::is_ambiguous(&grammatical, &phrase);
     phrase.frequencies =
@@ -173,13 +176,22 @@ pub(super) fn judge(ctx: &Context, start: usize, end: usize) -> Result<Phrase, R
     Ok(Phrase { term: phrase, hides_parts })
 }
 
-/// A word takes the type of its last part (用心深い is an adjective), or the type that part
-/// forms (`type_as_last_piece`: やり方 is a noun); anything else is an expression.
-fn phrase_type(all_nouns: bool, word: bool, last: &Term, ending: &Option<POS>) -> POS {
-    match ending {
+/// JMdict's type where it gives one (本当に an adverb). Otherwise a word takes the type of its
+/// last part (用心深い is an adjective), or the type that part forms (`type_as_last_piece`:
+/// やり方 is a noun); anything else is an expression.
+fn phrase_type(
+    all_nouns: bool,
+    word: bool,
+    last: &Term,
+    ending: &Option<POS>,
+    jmdict: Option<POS>,
+) -> POS {
+    match (ending, jmdict) {
         _ if all_nouns => POS::NounExpression,
-        Some(ending) if word => *ending,
-        None if word && last.part_of_speech != POS::Suffix => last.part_of_speech,
+        // JMdict lists the noun of a suru verb (親孝行 in 親孝行して).
+        (_, Some(jmdict)) if last.part_of_speech != POS::SuruVerb => jmdict,
+        (Some(ending), _) if word => *ending,
+        (None, _) if word && last.part_of_speech != POS::Suffix => last.part_of_speech,
         _ => POS::Expression,
     }
 }
