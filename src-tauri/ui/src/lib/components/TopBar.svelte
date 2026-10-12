@@ -237,7 +237,7 @@
 								>
 							{/each}
 							<div class="menu-sep"></div>
-							<button onclick={() => run(openRecentFilesModal)}>More…</button>
+							<button onclick={() => run(openRecentFilesModal)}>All Recent Files…</button>
 						</div>
 					{/if}
 				</div>
@@ -249,7 +249,6 @@
 				>
 				<div class="menu-sep"></div>
 				<button onclick={() => run(openDataFolder)}>Open Data Folder</button>
-				<button onclick={() => run(openAboutModal)}>About Yomine</button>
 			</div>
 		{/if}
 	</div>
@@ -259,15 +258,15 @@
 		<button class="menu-trigger" onclick={(e) => toggleMenu('mining', e)}>Mining</button>
 		{#if openMenu === 'mining'}
 			<div class="menu-panel">
-				<button onclick={() => run(openIgnoreModal)} disabled={!toolsReady}>Ignore List</button>
-				<button onclick={() => run(openPosModal)}>Part of Speech Filters</button>
-				<button onclick={() => run(openTextFiltersModal)}>Text Filters</button>
-				<button onclick={() => run(openFrequencyModal)}>Frequency Dictionaries</button>
-				<button onclick={() => run(openAutoModal)}>✦ Auto Mode</button>
+				<button onclick={() => run(openIgnoreModal)} disabled={!toolsReady}>Ignore List…</button>
+				<button onclick={() => run(openPosModal)}>Part of Speech Filters…</button>
+				<button onclick={() => run(openTextFiltersModal)}>Text Filters…</button>
+				<button onclick={() => run(openFrequencyModal)}>Frequency Dictionaries…</button>
+				<button onclick={() => run(openAutoModal)}>✦ Auto Mode…</button>
 				<div class="menu-sep"></div>
 				<button onclick={() => run(openBatchSummary)} disabled={!$lastBatch}>Last Batch…</button>
 				<button onclick={() => run(openAnalyzerModal)} disabled={!toolsReady}
-					>Frequency Analyzer</button
+					>Frequency Analyzer…</button
 				>
 			</div>
 		{/if}
@@ -277,8 +276,8 @@
 		<button class="menu-trigger" onclick={(e) => toggleMenu('appearance', e)}>Appearance</button>
 		{#if openMenu === 'appearance'}
 			<div class="menu-panel">
-				<button onclick={() => run(() => void openThemesWindow())}>Themes</button>
-				<button onclick={() => run(openAppearanceModal)}>General</button>
+				<button onclick={() => run(() => void openThemesWindow())}>Themes…</button>
+				<button onclick={() => run(openAppearanceModal)}>Appearance Settings…</button>
 			</div>
 		{/if}
 	</div>
@@ -288,12 +287,14 @@
 		<button class="menu-trigger" onclick={(e) => toggleMenu('settings', e)}>Settings</button>
 		{#if openMenu === 'settings'}
 			<div class="menu-panel">
-				<button onclick={() => run(openAnkiModal)}>Anki</button>
-				<button onclick={() => run(openLocalMediaModal)}>Local Media</button>
-				<button onclick={() => run(openWebsocketModal)}>WebSocket Server</button>
+				<button onclick={() => run(openAnkiModal)}>Anki…</button>
+				<button onclick={() => run(openLocalMediaModal)}>Local Media…</button>
+				<button onclick={() => run(openWebsocketModal)}>WebSocket Server…</button>
 				<button onclick={() => run(openProfilesModal)}>Profiles…</button>
 				<div class="menu-sep"></div>
-				<button onclick={() => run(openSetupModal)}>Setup Checklist</button>
+				<button onclick={() => run(openSetupModal)}>Setup Checklist…</button>
+				<div class="menu-sep"></div>
+				<button onclick={() => run(openAboutModal)}>About Yomine…</button>
 			</div>
 		{/if}
 	</div>
