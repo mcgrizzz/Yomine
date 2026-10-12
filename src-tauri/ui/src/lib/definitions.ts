@@ -7,8 +7,30 @@ export function cachedEntries(text: string): DefinitionEntry[] | undefined {
 	return cache.get(text);
 }
 
-export async function fetchEntries(text: string): Promise<DefinitionEntry[]> {
-	const result = await renderDefinition(text);
+const waiting: (() => void)[] = [];
+let busy = false;
+
+/** Runs Yomitan lookups one at a time, `first` ahead of those waiting. Yomitan answers them in
+ * turn anyway, and the backend fails one it waits on too long (10 s for definitions, 2 s for
+ * default entries), so a burst of lookups would fail its last ones. */
+export function inTurn<T>(run: () => Promise<T>, first = false): Promise<T> {
+	return new Promise<T>((resolve, reject) => {
+		const task = () => void run().then(resolve, reject).finally(nextLookup);
+		if (first) waiting.unshift(task);
+		else waiting.push(task);
+		if (!busy) nextLookup();
+	});
+}
+
+function nextLookup(): void {
+	const task = waiting.shift();
+	busy = task !== undefined;
+	task?.();
+}
+
+/** `first` for a lookup someone is waiting on (a hover), ahead of a list's. */
+export async function fetchEntries(text: string, first = false): Promise<DefinitionEntry[]> {
+	const result = await inTurn(() => renderDefinition(text), first);
 	cache.set(text, result);
 	return result;
 }

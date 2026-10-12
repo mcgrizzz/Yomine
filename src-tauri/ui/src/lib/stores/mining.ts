@@ -2,6 +2,7 @@
 // state (issue #3).
 
 import { writable } from 'svelte/store';
+import { inTurn } from '$lib/definitions';
 import * as ipc from '$lib/ipc';
 import { lastError } from './ui';
 
@@ -16,6 +17,38 @@ export const sessionMinedSentences = writable<Set<string>>(new Set());
 export const miningTerm = writable<string | null>(null);
 /** lemma → Anki note id for this session's mines ("open in Anki"). */
 export const minedNoteIds = writable<Record<string, number>>({});
+/** Terms Yomitan has no entry for all of, by `termKey`, with the start it matched if known.
+ * Mining them fails, so auto mode skips them. Learned from lookups, for this session only. */
+export const partOnlyTerms = writable<Map<string, string | null>>(new Map());
+
+export function markPartOnly(key: string, matched: string | null): void {
+	partOnlyTerms.update((m) => (m.get(key) ? m : new Map(m).set(key, matched)));
+}
+
+const defaultEntries = new Map<string, Promise<ipc.DefaultEntry | null>>();
+
+/** `ipc.getDefaultEntry`, once per term and scan this session; `null` when the lookup failed. */
+export function defaultEntry(
+	key: string,
+	lemma: string,
+	scanText: string | null
+): Promise<ipc.DefaultEntry | null> {
+	const id = `${key}\n${scanText ?? ''}`;
+	const cached = defaultEntries.get(id);
+	if (cached) return cached;
+	const entry = inTurn(() => ipc.getDefaultEntry(key, lemma, scanText)).then(
+		(d) => {
+			if (d.index === null) markPartOnly(key, d.matched);
+			return d;
+		},
+		() => {
+			defaultEntries.delete(id);
+			return null;
+		}
+	);
+	defaultEntries.set(id, entry);
+	return entry;
+}
 /** Gates the mine button — no yomitan-api, no card content. */
 export const yomitanReachable = writable(false);
 /** Yomitan term card formats; >1 turns on per-format mine/queue buttons. */

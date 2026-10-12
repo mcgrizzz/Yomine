@@ -100,8 +100,9 @@ pub async fn matched_source(base_url: &str, text: &str, entry_index: usize) -> O
 pub enum EntryChoice {
     Entry(usize),
     /// No entry matches all of the term, only its start: the name ハイター scans as 排他 over
-    /// ハイタ. Mining that entry would make a card for a different word.
-    PartOnly,
+    /// ハイタ. Mining that entry would make a card for a different word. Holds the longest
+    /// start matched.
+    PartOnly(Option<String>),
 }
 
 /// `None` when Yomitan didn't answer.
@@ -142,7 +143,14 @@ fn choose_entry(
             return choose_entry(entries, noun, noun, noun_reading, lexeme);
         }
     }
-    let Some(&(first, _)) = candidates.first() else { return EntryChoice::PartOnly };
+    let Some(&(first, _)) = candidates.first() else {
+        let matched = entries
+            .iter()
+            .flat_map(|e| e.headwords.iter().flat_map(|h| &h.sources))
+            .map(|s| &s.original_text)
+            .max_by_key(|t| t.chars().count());
+        return EntryChoice::PartOnly(matched.cloned());
+    };
     let reading = reading.to_hiragana();
     let reads = |h: &Headword| h.reading.to_hiragana() == reading;
     let is_lexeme = |h: &Headword| lexeme.is_some_and(|l| h.term == l);
@@ -330,7 +338,7 @@ mod tests {
         let partial = [entry("排他", "はいた", "ハイタ"), entry("羽板", "はいた", "ハイタ")];
         assert_eq!(
             choose_entry(&partial, "ハイター", "ハイター", "ハイター", None),
-            EntryChoice::PartOnly
+            EntryChoice::PartOnly(Some("ハイタ".into()))
         );
 
         let with_whole =

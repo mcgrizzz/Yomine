@@ -18,6 +18,7 @@ import { asbContext, backgroundTab, playerStatus } from './player';
 import { adhocQueue, dropAdhoc, queuedMineOptions, queueAdhoc, setSelected } from './selection';
 import {
 	minedNoteIds,
+	markPartOnly,
 	minedTerms,
 	miningTerm,
 	normalizeSentence,
@@ -317,6 +318,7 @@ async function run(
 					);
 				}
 				clearUnchangedSelection(current);
+				if (step.failure?.kind === 'part_only') markPartOnly(current.key, null);
 				// Left for "Retry failed" in the summary; the same item fails again right away, or always.
 				const unpaused = ['transient', 'part_only'];
 				if (!step.failure || cancelled || unpaused.includes(step.failure.kind ?? '')) break;

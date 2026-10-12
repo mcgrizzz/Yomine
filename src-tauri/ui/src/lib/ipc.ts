@@ -872,12 +872,18 @@ export interface MineOptions {
 }
 
 /** The entry mining picks when none was chosen, as an index into the scan of `scanText`.
- * `null` when no entry matches the whole term. */
+ * `index` is `null` when no entry matches the whole term; `matched` is then the longest start
+ * an entry matched. */
+export interface DefaultEntry {
+	index: number | null;
+	matched: string | null;
+}
+
 export function getDefaultEntry(
 	key: string,
 	lemma: string,
 	scanText: string | null
-): Promise<number | null> {
+): Promise<DefaultEntry> {
 	return invoke('get_default_entry', { key, lemma, scanText });
 }
 

@@ -52,6 +52,8 @@ export interface PickOptions {
 	prefs: AutoMine;
 	horizon: number;
 	isMined: (term: Term) => boolean;
+	/** Yomitan has no entry for all of it, so mining it would fail. */
+	isPartOnly: (term: Term) => boolean;
 	minedSentences: Set<string>;
 	normalize: (sentence: string) => string;
 }
@@ -64,6 +66,7 @@ function skipped(t: Term, opts: PickOptions): boolean {
 		// No frequency list ranks it, so it's likely a misparse or a name.
 		harmonic(t) === Infinity ||
 		opts.isMined(t) ||
+		opts.isPartOnly(t) ||
 		// A one-kana "word" is nearly always a misparse fragment (け in ぱんけぇき) or a
 		// mislabeled particle, yet frequency lists rank that kana highly (で at 8).
 		SINGLE_KANA.test(t.lemma_form) ||
