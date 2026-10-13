@@ -272,7 +272,11 @@
 			invalid={!valid}
 			onsave={save}
 			oncancel={form.revert}
-			onrestore={restoreDefault}
+			restore={{
+				label: 'Reset Auto Mode Settings',
+				title: 'Restore cards per video and scoring to their defaults.',
+				run: restoreDefault
+			}}
 		/>
 	{/snippet}
 </Modal>

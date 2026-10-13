@@ -7,7 +7,7 @@
 		onsave?: () => void;
 		submits?: string;
 		oncancel: () => void;
-		onrestore?: () => void;
+		restore?: { label: string; title: string; run: () => void };
 		/** Disables Save even when there are changes. */
 		invalid?: boolean;
 		/** Shown instead of the modified notice. */
@@ -15,7 +15,7 @@
 		/** Disables every button while a save runs. */
 		busy?: boolean;
 		saveLabel?: string;
-		/** Extra buttons, placed before Restore Default. */
+		/** Extra buttons, placed before the reset button. */
 		children?: Snippet;
 	}
 
@@ -24,7 +24,7 @@
 		onsave,
 		submits,
 		oncancel,
-		onrestore,
+		restore,
 		invalid = false,
 		problem = null,
 		busy = false,
@@ -46,11 +46,11 @@
 		disabled={!form.dirty || invalid || busy}
 		onclick={submits ? undefined : onsave}>{saveLabel}</button
 	>
-	<button disabled={!form.dirty || busy} onclick={oncancel}>Cancel</button>
+	<button disabled={!form.dirty || busy} onclick={oncancel}>Discard Changes</button>
 	<div class="end">
 		{@render children?.()}
-		{#if onrestore}
-			<button disabled={busy} onclick={onrestore}>Restore Default</button>
+		{#if restore}
+			<button disabled={busy} title={restore.title} onclick={restore.run}>{restore.label}</button>
 		{/if}
 	</div>
 </footer>

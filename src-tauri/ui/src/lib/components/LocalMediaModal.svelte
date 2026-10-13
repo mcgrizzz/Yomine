@@ -229,7 +229,12 @@
 			invalid={!valid}
 			onsave={save}
 			oncancel={form.revert}
-			onrestore={restoreDefault}
+			restore={{
+				label: 'Reset Local Media Settings',
+				title:
+					'Restore the ffmpeg path and the sentence audio and screenshot settings to their defaults.',
+				run: restoreDefault
+			}}
 		/>
 	{/snippet}
 </Modal>

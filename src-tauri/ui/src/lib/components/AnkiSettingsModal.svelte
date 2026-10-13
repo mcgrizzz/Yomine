@@ -943,7 +943,12 @@
 			busy={saving}
 			submits="anki-settings-form"
 			oncancel={revert}
-			onrestore={restoreDefault}
+			restore={{
+				label: 'Reset Anki Settings',
+				title:
+					'Restore connection settings, the Yomitan URL, all note type mappings, and the comprehension interval to defaults.',
+				run: restoreDefault
+			}}
 		/>
 	{/snippet}
 </Modal>

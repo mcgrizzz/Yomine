@@ -195,7 +195,16 @@
 				{exportMessage.text}
 			</p>
 		{/if}
-		<SettingsFooter {form} onsave={save} oncancel={form.revert} onrestore={restoreDefault}>
+		<SettingsFooter
+			{form}
+			onsave={save}
+			oncancel={form.revert}
+			restore={{
+				label: 'Reset Ignore List',
+				title: 'Replace your terms with the default list and remove every file from the list.',
+				run: restoreDefault
+			}}
+		>
 			<button onclick={exportTerms}>Export…</button>
 		</SettingsFooter>
 	{/snippet}

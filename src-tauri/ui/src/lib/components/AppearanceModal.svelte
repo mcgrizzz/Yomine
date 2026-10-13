@@ -1,6 +1,6 @@
 <script lang="ts">
 	// Staged, but live-previews while adjusting so the user can judge readability;
-	// Cancel/✕/backdrop revert the preview to the saved value.
+	// Discard Changes/✕/backdrop revert the preview to the saved value.
 	import { settingsDraft } from '$lib/settingsDraft.svelte';
 	import Modal from './Modal.svelte';
 	import SettingsFooter from './SettingsFooter.svelte';
@@ -161,7 +161,16 @@
 	<p class="hint">Table columns: right-click the term-table header to reorder or hide.</p>
 
 	{#snippet footer()}
-		<SettingsFooter {form} onsave={save} oncancel={form.revert} onrestore={restoreDefault} />
+		<SettingsFooter
+			{form}
+			onsave={save}
+			oncancel={form.revert}
+			restore={{
+				label: 'Reset Appearance Settings',
+				title: 'Restore UI scale, definition scale and sentence marking to their defaults.',
+				run: restoreDefault
+			}}
+		/>
 	{/snippet}
 </Modal>
 

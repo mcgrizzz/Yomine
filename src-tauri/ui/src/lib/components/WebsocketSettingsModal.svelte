@@ -79,7 +79,11 @@
 			invalid={!valid || !pollValid}
 			onsave={save}
 			oncancel={form.revert}
-			onrestore={restoreDefault}
+			restore={{
+				label: 'Reset WebSocket Settings',
+				title: 'Restore the server port and the asbplayer poll interval to their defaults.',
+				run: restoreDefault
+			}}
 		/>
 	{/snippet}
 </Modal>
