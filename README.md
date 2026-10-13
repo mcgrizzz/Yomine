@@ -20,7 +20,7 @@ Yomine turns Japanese books, subtitles, and videos into ranked vocabulary lists 
 
 <div align="center">
 
-![Usage GIF](https://github.com/user-attachments/assets/6f8ae7df-dbfd-4c74-8572-05f9b452c22e)
+<img width="1400" height="806" alt="yomine-hero" src="https://github.com/user-attachments/assets/203106d9-8101-4b17-bad0-84ffd833abe5" />
 
 </div>
 
