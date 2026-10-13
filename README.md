@@ -16,7 +16,7 @@
 ### A Japanese vocabulary mining tool for extracting the most useful words from real content.
 
 
-Yomine turns subtitle files into a ranked vocabulary list, hides words you already know with Anki, and streamlines making new cards.
+Yomine turns Japanese books, subtitles, and videos into ranked vocabulary lists and hides words you already know through Anki. Select words to mine, or let auto mode pick them for you.
 
 <div align="center">
 
@@ -34,16 +34,16 @@ Yomine turns subtitle files into a ranked vocabulary list, hides words you alrea
 
 <table>
   <tr>
-    <td width="50%"><strong>⛏️ One-click & batch mining</strong><br>Create individual cards or mine a queue using your Yomitan card formats.</td>
-    <td width="50%"><strong>📖 Yomitan definitions</strong><br>Hold <strong>Shift</strong> over a term to view or mine an alternative definition.</td>
+    <td width="50%"><strong>⛏️ Batch mining</strong><br>Select terms and mine them together using your Yomitan card formats.</td>
+    <td width="50%"><strong>📖 Yomitan definitions</strong><br>Hold <strong>Shift</strong> over a term to view its definitions and choose which one to mine.</td>
+  </tr>
+  <tr>
+    <td><strong>✦ Auto mode</strong><br>Picks the most useful cards from each new video, scored against what you already know, and mines them or lets you review them first.</td>
+    <td><strong>🔊 Card media</strong><br>Add sentence audio and screenshots to your cards automatically, cut from local videos with ffmpeg or recorded through asbplayer.</td>
   </tr>
   <tr>
     <td><strong>🧠 Anki-aware results</strong><br>Hide known terms and view coverage, estimated knowledge, and sentence comprehension.</td>
     <td><strong>🔎 Ranking & filters</strong><br>Sort and filter by frequency, JLPT, part of speech, regex and more.</td>
-  </tr>
-  <tr>
-    <td><strong>🎬 asbplayer & MPV</strong><br>Load subtitles, follow videos, seek timestamps, or launch MPV from Yomine.</td>
-    <td><strong>🔊 Card media</strong><br>One click mining workflows support adding audio and screenshots via asbplayer automatically.</td>
   </tr>
   <tr>
     <td><strong>🎨 Customizable UI</strong><br>Choose from 14 themes, create your own, reorder columns, and scale the interface.</td>
@@ -51,14 +51,14 @@ Yomine turns subtitle files into a ranked vocabulary list, hides words you alrea
   </tr>
 </table>
 
-Supports `.srt`, `.ass`, `.ssa`, `.txt`, and `.epub` files. A premade frequency dictionary generated from the [AniList Top 500](https://github.com/user-attachments/files/31227863/Anilist.Top.500.zip) is also available.
+Supports `.srt`, `.ass`, `.ssa`, `.txt`, and `.epub` files, and videos (`.mkv`, `.mp4`, `.webm` and more) with Japanese subtitles beside them or embedded.
 
 ## Quick start
 
-1. **[Download the latest release](https://github.com/mcgrizzz/Yomine/releases/latest)** for your platform.
-2. Launch Yomine. The tokenizer and default JPDB frequency dictionary install automatically.
-3. Open **Settings → Setup Checklist** and connect Anki through [Tsunagi](https://ankiweb.net/shared/info/666370974) (recommended) or [AnkiConnect](https://ankiweb.net/shared/info/2055492159).
-4. Drop in a subtitle file or load one from asbplayer.
+1. **[Download Yomine](https://github.com/mcgrizzz/Yomine/releases/latest)** for your platform.
+2. Launch it. Language tools and the default frequency dictionary install automatically.
+3. Follow **Settings → Setup Checklist** to finish setup.
+4. Drop in a subtitle file or video, or load one from asbplayer.
 
 <details>
 <summary><strong>Platform installation notes</strong></summary>
@@ -78,47 +78,50 @@ Supports `.srt`, `.ass`, `.ssa`, `.txt`, and `.epub` files. A premade frequency 
 
 Install [**Tsunagi**](https://ankiweb.net/shared/info/666370974) (recommended), then restart Anki.
 
-**Add-on code:** `666370974` · **Requires:** Anki 26.08 or newer
+**Code:** `666370974` · **Anki:** 26.08+  
+*Live updates · Safe, undoable changes · Permission guidance*
 
-With Tsunagi:
-- **Live updates:** Yomine's table updates as soon as notes change in Anki.
-- **Undoable changes:** Safe changes to your collection which can be undone with **Edit → Undo** in Anki.
-- **Permission guidance:** Yomine's Anki settings show any missing permissions.
+| Your setup | What to do |
+|---|---|
+| Switching from AnkiConnect | Use Tsunagi's **Take over** option to preserve the port and key. |
+| Anki older than 26.08 | Install [AnkiConnect](https://ankiweb.net/shared/info/2055492159) instead: `2055492159`. Restart Anki. |
 
-**Already using AnkiConnect?** Use Tsunagi's **Take over** option to keep AnkiConnect's port and key, so Yomitan and asbplayer keep working.
+### 2. Add your note types
 
-**Using older Anki?** Install [AnkiConnect](https://ankiweb.net/shared/info/2055492159) instead (code `2055492159`), then restart Anki.
+Open **Settings → Anki** and add the note types you use.
 
-### 2. Map your Anki fields
+- **Common note types:** fields are filled in automatically. Check and adjust if needed.
+- **Local video mining:** also check the sentence audio and picture fields.
 
-In Yomine, open **Settings → Anki** and map the term, reading, and optional sentence fields for each note type.
-
-### 3. Enable one-click mining (optional)
+### 3. Connect Yomitan
 
 1. Install [yomitan-api](https://github.com/yomidevs/yomitan-api).
 2. Enable the API in Yomitan.
-3. Configure at least one term card format in Yomitan.
+3. Configure at least one term card format.
 
-Yomine connects to `http://127.0.0.1:19633` by default. Change this address in **Settings → Anki** if needed.
-
-</details>
-
-<details>
-<summary><strong>asbplayer & MPV</strong></summary>
-
-- **asbplayer:** enable **MISC → WebSocket client**. Yomine uses port `8766` by default. Its asbplayer menu can load subtitles or follow new videos and the active tab.
-- **MPV:** choose a video from Yomine's MPV menu. If needed, locate the MPV executable when prompted.
-
-asbplayer supports seeking, audio, and screenshots. MPV supports seeking only.
+**Default API address:** `http://127.0.0.1:19633`  
+Change it under **Settings → Anki** if needed.
 
 </details>
 
 <details>
-<summary><strong>Frequency dictionaries & ignore lists</strong></summary>
+<summary><strong>Local videos, asbplayer & MPV</strong></summary>
 
-- Open **Mining → Frequency Dictionaries** to install, import, update, toggle, or weight Yomitan-compatible frequency dictionaries.
-- Open **Mining → Ignore List** to remove, import, or export ignored terms.
-- Use **Mining → Frequency Analyzer** to generate a frequency dictionary from your own files.
+Choose **Local** or **asbplayer** in the top bar for card audio and screenshots.
+
+- **Local:** open videos or a folder. Locate or download ffmpeg under **Settings → Local Media**, where you can also adjust media settings.
+- **asbplayer:** enable **MISC → WebSocket client** (default port `8766`), then load or follow videos from Yomine's asbplayer menu.
+- **MPV:** choose a video from Yomine's MPV menu and locate the executable if prompted. MPV supports seeking only.
+
+</details>
+
+<details>
+<summary><strong>Auto mode, dictionaries & ignore lists</strong></summary>
+
+- **Mining → Auto Mode:** configure picks, then choose Review or Mine beside the file title.
+- **Mining → Frequency Dictionaries:** manage dictionaries and weights. You can also import the [AniList Top 500 dictionary](https://github.com/user-attachments/files/31227863/Anilist.Top.500.zip).
+- **Mining → Ignore List:** manage ignored terms.
+- **Mining → Frequency Analyzer:** generate a dictionary from your files.
 
 </details>
 
