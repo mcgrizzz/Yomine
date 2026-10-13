@@ -1,17 +1,19 @@
 import { derived, get, writable } from 'svelte/store';
 import * as ipc from '$lib/ipc';
-import { autoPick, DEFAULT_HORIZON, type NextInLine } from '$lib/autopick';
-import { applyControls } from '$lib/table';
+import { autoPick, DEFAULT_HORIZON, type AutoPick, type NextInLine } from '$lib/autopick';
+import { applyControls, termKey } from '$lib/table';
 import { autoLedger, mineQueue } from './batches';
 import { freqFilter, jlptEnabled, posEnabled } from './controls';
 import { advanceQueue, fileResult, localVideo } from './file';
 import { showPossibleKnownMatches } from './knowledgeView';
 import {
+	defaultEntry,
 	isMinedTerm,
 	minedSentences,
 	minedTerms,
 	miningTerm,
 	normalizeSentence,
+	partOnlyTerms,
 	playerBusy,
 	refreshMinedState,
 	sessionMinedSentences,
@@ -20,7 +22,7 @@ import {
 } from './mining';
 import { batchSummaryOpen, reviewDialogOpen } from './modals';
 import { playerStatus } from './player';
-import { setSelected } from './selection';
+import { selectedTerms, setSelected } from './selection';
 import { ankiStatus, knowledge } from './status';
 import { miningMode, setAutoReview, settings } from './settings';
 import { lastError, showNotice } from './ui';
@@ -143,28 +145,87 @@ function pick(file: ipc.FileLoadResult, prefs: ipc.AutoMine) {
 		jlpt: get(jlptEnabled)
 	});
 	const mined = get(minedTerms);
+	const partOnly = get(partOnlyTerms);
 	return autoPick(terms, file.sentences, {
 		prefs,
 		horizon: get(knowledge)?.horizon ?? DEFAULT_HORIZON,
 		isMined: (t) => isMinedTerm(t, mined),
+		isPartOnly: (t) => partOnly.has(termKey(t)),
 		minedSentences: new Set([...get(minedSentences), ...get(sessionMinedSentences)]),
 		normalize: normalizeSentence
 	});
 }
 
-/** Selects auto mode's picks, each on its chosen sentence. */
-export async function selectPicks(): Promise<ReturnType<typeof pick> | null> {
+type Picked = ReturnType<typeof pick>;
+
+/** Looks each pick up in Yomitan; one it has no entry for all of gives way to the next in
+ * line, and `swap` hears each change. The final picks, or `null` once another file loads.
+ * A failed lookup lets the pick through: mining reports it if it's wrong. */
+async function checkPicks(
+	file: ipc.FileLoadResult,
+	prefs: ipc.AutoMine,
+	result: Picked,
+	swap?: (dropped: string[], added: AutoPick[], next: NextInLine[]) => void
+): Promise<Picked | null> {
+	let pending = result.picks;
+	for (;;) {
+		const found = await Promise.all(
+			pending.map((p) => defaultEntry(p.item.key, p.item.lemma, null))
+		);
+		if (get(fileResult) !== file) return null;
+		const dropped = pending.filter((_, n) => found[n]?.index === null).map((p) => p.item.key);
+		if (dropped.length === 0) return result;
+		const before = new Set(result.picks.map((p) => p.item.key));
+		result = pick(file, prefs);
+		pending = result.picks.filter((p) => !before.has(p.item.key));
+		swap?.(dropped, pending, result.next);
+	}
+}
+
+function select(picks: AutoPick[]): void {
+	const occIdx = new Map(picks.map((p) => [p.item.key, p.occIdx]));
+	setSelected([...occIdx.keys()], true, (key) => ({
+		occIdx: occIdx.get(key) ?? 0,
+		userChosen: false
+	}));
+}
+
+/** Set while selected picks are looked up in Yomitan; mining and review wait for it. */
+export const checkingPicks = writable(false);
+let checksRunning = 0;
+
+/** Selects auto mode's picks, each on its chosen sentence. Picks Yomitan can't define whole
+ * are swapped for the next in line as the lookups come back. */
+export async function selectPicks(): Promise<Picked | null> {
 	const prefs = get(settings)?.auto_mine;
 	if (!prefs || !get(fileResult)) return null;
 	await refreshMinedState(true);
 	const file = get(fileResult);
 	if (!file) return null;
 	const result = pick(file, prefs);
-	const occIdx = new Map(result.picks.map((p) => [p.item.key, p.occIdx]));
-	setSelected([...occIdx.keys()], true, (key) => ({
-		occIdx: occIdx.get(key) ?? 0,
-		userChosen: false
-	}));
+	select(result.picks);
+	checksRunning++;
+	checkingPicks.set(true);
+	void checkPicks(file, prefs, result, (dropped, added, next) => {
+		if (get(miningTerm) !== null) return;
+		// Only as many as were still selected: the user may have cleared some meanwhile.
+		const selected = get(selectedTerms);
+		const replaced = added.slice(0, dropped.filter((k) => selected.has(k)).length);
+		setSelected(dropped, false);
+		select(replaced);
+		review.update((r) =>
+			r?.fingerprint === file.batch_source.fingerprint
+				? {
+						...r,
+						keys: [
+							...r.keys.filter((k) => !dropped.includes(k)),
+							...replaced.map((p) => p.item.key)
+						],
+						next
+					}
+				: r
+		);
+	}).finally(() => checkingPicks.set(--checksRunning > 0));
 	return result;
 }
 
@@ -290,7 +351,9 @@ export function autoMine(force = false): Promise<void> {
 		await refreshMinedState(true);
 		const file = get(fileResult);
 		if (get(autoMode) !== 'mine' || file?.batch_source.fingerprint !== fingerprint) return;
-		const items = pick(file, prefs).picks.map((p) => p.item);
+		const checked = await checkPicks(file, prefs, pick(file, prefs));
+		if (!checked || get(autoMode) !== 'mine' || get(fileResult) !== file) return;
+		const items = checked.picks.map((p) => p.item);
 		if (items.length === 0) {
 			await recordProcessed(fingerprint, title, null);
 			showNotice(`Auto mode found nothing to mine in ${title}`);

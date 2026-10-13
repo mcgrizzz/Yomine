@@ -46,4 +46,5 @@ export const openAutoModal = (): void => autoModalOpen.set(true);
 export const reviewDialogOpen = writable(false);
 
 export const batchSummaryOpen = writable(false);
-export const openBatchSummary = (): void => batchSummaryOpen.set(true);
+export const batchHistoryOpen = writable(false);
+export const openBatchHistory = (): void => batchHistoryOpen.set(true);

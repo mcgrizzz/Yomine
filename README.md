@@ -57,7 +57,7 @@ Supports `.srt`, `.ass`, `.ssa`, `.txt`, and `.epub` files. A premade frequency 
 
 1. **[Download the latest release](https://github.com/mcgrizzz/Yomine/releases/latest)** for your platform.
 2. Launch Yomine. The tokenizer and default JPDB frequency dictionary install automatically.
-3. Open **Settings → Setup Checklist** and connect [AnkiConnect](https://ankiweb.net/shared/info/2055492159).
+3. Open **Settings → Setup Checklist** and connect Anki through [Tsunagi](https://ankiweb.net/shared/info/666370974) (recommended) or [AnkiConnect](https://ankiweb.net/shared/info/2055492159).
 4. Drop in a subtitle file or load one from asbplayer.
 
 <details>
@@ -74,10 +74,32 @@ Supports `.srt`, `.ass`, `.ssa`, `.txt`, and `.epub` files. A premade frequency 
 <details>
 <summary><strong>Anki & Yomitan</strong></summary>
 
-1. Install [AnkiConnect](https://ankiweb.net/shared/info/2055492159) with add-on code `2055492159`, then restart Anki.
-2. Open **Settings → Anki** in Yomine and map the term, reading, and optional sentence fields for each notetype.
-3. For one-click mining, install [yomitan-api](https://github.com/yomidevs/yomitan-api), enable the API in Yomitan, and configure at least one term card format.
-4. Yomine connects to the default yomitan-api server at `http://127.0.0.1:19633`. This can be changed in Settings -> Anki.
+### 1. Connect Anki
+
+Install [**Tsunagi**](https://ankiweb.net/shared/info/666370974) (recommended), then restart Anki.
+
+**Add-on code:** `666370974` · **Requires:** Anki 26.08 or newer
+
+With Tsunagi:
+- **Live updates:** Yomine's table updates as soon as notes change in Anki.
+- **Undoable changes:** Safe changes to your collection which can be undone with **Edit → Undo** in Anki.
+- **Permission guidance:** Yomine's Anki settings show any missing permissions.
+
+**Already using AnkiConnect?** Use Tsunagi's **Take over** option to keep AnkiConnect's port and key, so Yomitan and asbplayer keep working.
+
+**Using older Anki?** Install [AnkiConnect](https://ankiweb.net/shared/info/2055492159) instead (code `2055492159`), then restart Anki.
+
+### 2. Map your Anki fields
+
+In Yomine, open **Settings → Anki** and map the term, reading, and optional sentence fields for each note type.
+
+### 3. Enable one-click mining (optional)
+
+1. Install [yomitan-api](https://github.com/yomidevs/yomitan-api).
+2. Enable the API in Yomitan.
+3. Configure at least one term card format in Yomitan.
+
+Yomine connects to `http://127.0.0.1:19633` by default. Change this address in **Settings → Anki** if needed.
 
 </details>
 

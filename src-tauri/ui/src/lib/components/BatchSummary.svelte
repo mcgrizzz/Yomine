@@ -4,9 +4,10 @@
 	import AutoLedger from './AutoLedger.svelte';
 	import AutoWaiting from './AutoWaiting.svelte';
 	import { openNotesInAnki, type BatchItem, type BatchRecord } from '$lib/ipc';
-	import { lacksMedia, retryIndices, sameSource } from '$lib/batch';
+	import { batchStatus, lacksMedia, retryIndices, sameSource } from '$lib/batch';
 	import {
 		batchSaveError,
+		lastBatch,
 		restoreBatchSelection,
 		retryBatch,
 		undoLastBatch
@@ -16,7 +17,8 @@
 	import { openInAnki, playerBusy } from '$lib/stores/mining';
 	import { lastError } from '$lib/stores/ui';
 
-	let { batch, onclose }: { batch: BatchRecord; onclose: () => void } = $props();
+	let { batch, onclose, onback }: { batch: BatchRecord; onclose: () => void; onback?: () => void } =
+		$props();
 
 	type Row = { item: BatchItem; index: number };
 	type Group = 'review' | 'notCreated' | 'noMedia' | 'created' | 'duplicate' | 'deleted';
@@ -51,14 +53,14 @@
 	);
 	const retryCount = $derived(retryIndices(batch).length);
 	const mediaCount = $derived(retryIndices(batch, true).length);
+	// The backend retries and undoes only the profile's newest batch.
+	const latest = $derived(batch.id === $lastBatch?.id);
 	const sourceMatches = $derived(sameSource(batch, $fileResult));
 	const blocked = $derived($playerBusy || !!$batchSaveError || !sourceMatches);
 	const unattempted = $derived(
 		groups.notCreated.filter((r) => r.item.outcome.status === 'unattempted').length
 	);
-	const status = $derived(
-		batch.finished_at === null ? 'Interrupted' : unattempted > 0 ? 'Stopped early' : 'Complete'
-	);
+	const status = $derived(batchStatus(batch));
 	const unrecorded = $derived(
 		groups.noMedia.some(({ item: { outcome: o } }) => {
 			return o.status === 'created' && o.error?.kind === 'media_unverified';
@@ -149,7 +151,7 @@
 	</ul>
 {/snippet}
 
-<Modal title="Batch summary" width="min(44rem, calc(100vw - 2rem))" {onclose}>
+<Modal title="Batch summary" width="min(44rem, calc(100vw - 2rem))" {onclose} {onback}>
 	<div class="body">
 		<header class="heading">
 			<h2 title={batch.source.title}>{batch.source.title}</h2>
@@ -178,19 +180,20 @@
 			{/each}
 		</ul>
 
-		{#if batch.auto && $autoMode !== 'off'}
+		{#if latest && batch.auto && $autoMode !== 'off'}
 			<details class="auto">
 				<summary><AutoWaiting /></summary>
 				<AutoLedger />
 			</details>
 		{/if}
 
-		{#if $batchSaveError}
+		{#if !latest}
+			<p class="notice">A newer batch has been mined, so this one can't be retried or undone.</p>
+		{:else if $batchSaveError}
 			<p class="notice alert">
 				{$batchSaveError} Retry and undo are unavailable until the saved record can be verified.
 			</p>
-		{/if}
-		{#if !sourceMatches}
+		{:else if !sourceMatches}
 			<p class="notice">Load the original source to retry cards or restore the selection.</p>
 		{/if}
 
@@ -218,13 +221,15 @@
 									: 'Open a tag to see why a card failed.'}
 							</p>
 						</div>
-						<button
-							class="primary"
-							disabled={blocked || retryCount === 0}
-							onclick={() => retryBatch()}
-						>
-							Mine {plural(retryCount, 'card')}
-						</button>
+						{#if latest}
+							<button
+								class="primary"
+								disabled={blocked || retryCount === 0}
+								onclick={() => retryBatch()}
+							>
+								Mine {plural(retryCount, 'card')}
+							</button>
+						{/if}
 					</div>
 					{@render rowList(groups.notCreated)}
 				</section>
@@ -235,17 +240,23 @@
 					<div class="panel-head">
 						<div>
 							<h3>{plural(groups.noMedia.length, 'card')} without audio or screenshot</h3>
-							<p>These cards are in Anki. Retry media adds the recording to the same cards.</p>
+							<p>
+								These cards are in Anki.{latest
+									? ' Retry media adds the recording to the same cards.'
+									: ''}
+							</p>
 						</div>
-						<button
-							class="primary"
-							disabled={blocked || mediaCount === 0}
-							onclick={() => retryBatch(true)}
-						>
-							Retry media
-						</button>
+						{#if latest}
+							<button
+								class="primary"
+								disabled={blocked || mediaCount === 0}
+								onclick={() => retryBatch(true)}
+							>
+								Retry media
+							</button>
+						{/if}
 					</div>
-					{#if unrecorded}
+					{#if latest && unrecorded}
 						<div class="steps"><RecordingSteps retryLabel="Retry media" /></div>
 					{/if}
 					{@render rowList(groups.noMedia)}
@@ -288,15 +299,19 @@
 					}}>Delete notes</button
 				>
 			{:else}
-				<button
-					class="undo"
-					disabled={$playerBusy || !!$batchSaveError || createdIds.length === 0}
-					onclick={() => (confirmUndo = true)}>Undo batch…</button
-				>
+				{#if latest}
+					<button
+						class="undo"
+						disabled={$playerBusy || !!$batchSaveError || createdIds.length === 0}
+						onclick={() => (confirmUndo = true)}>Undo batch…</button
+					>
+				{/if}
 				<span class="spacer"></span>
-				<button disabled={$playerBusy || !sourceMatches} onclick={restoreBatchSelection}>
-					Restore selection
-				</button>
+				{#if latest}
+					<button disabled={$playerBusy || !sourceMatches} onclick={restoreBatchSelection}>
+						Restore selection
+					</button>
+				{/if}
 				<button disabled={createdIds.length === 0} onclick={openCreated}>
 					Open in Anki ({createdIds.length})
 				</button>

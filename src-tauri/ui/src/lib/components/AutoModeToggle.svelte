@@ -8,6 +8,7 @@
 		autoMode,
 		autoReview,
 		autoSkipped,
+		checkingPicks,
 		fileResult,
 		miningMode,
 		playerBusy,
@@ -81,7 +82,10 @@
 	{#if $autoReview !== null && !$reviewDialogOpen}
 		<button
 			class="select-picks waiting-review"
-			title="Auto mode's picks for this video are selected and waiting for you to check them"
+			disabled={$checkingPicks}
+			title={$checkingPicks
+				? 'Checking the picks in Yomitan…'
+				: "Auto mode's picks for this video are selected and waiting for you to check them"}
 			onclick={() => reviewDialogOpen.set(true)}
 		>
 			<span class="sparkle" aria-hidden="true">✦</span> Review {waitingPicks} pick{waitingPicks ===

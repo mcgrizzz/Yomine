@@ -13,6 +13,8 @@
 		/** False leaves the backdrop inert, so a stray click cannot dismiss. */
 		dismissible?: boolean;
 		oninteract?: () => void;
+		/** Shows a Back button before the title, for a dialog with a second view. */
+		onback?: () => void;
 		actions?: Snippet;
 		footer?: Snippet;
 		children: Snippet;
@@ -27,6 +29,7 @@
 		flush = false,
 		dismissible = true,
 		oninteract,
+		onback,
 		actions,
 		footer,
 		children
@@ -100,6 +103,9 @@
 		style="width: {width}; max-height: {maxHeight}"
 	>
 		<header>
+			{#if onback}
+				<button class="back" onclick={onback}><span aria-hidden="true">←</span> Back</button>
+			{/if}
 			<h2 id={headingId} {title}>{title}</h2>
 			{#if actions}
 				<div class="head-actions">{@render actions()}</div>
@@ -171,7 +177,7 @@
 		border-bottom: 1px solid var(--border);
 	}
 	header h2 {
-		margin: 0;
+		margin: 0 auto 0 0;
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -187,5 +193,9 @@
 	}
 	.close {
 		padding: 0.1rem 0.4rem;
+	}
+	.back {
+		flex-shrink: 0;
+		padding: 0.2rem 0.6rem;
 	}
 </style>

@@ -10,7 +10,6 @@
 	} from '$lib/autopick';
 	import { cachedEntries, entryLabel, fetchEntries, glossarySummary } from '$lib/definitions';
 	import {
-		getDefaultEntry,
 		getLineMedia,
 		prepareMedia,
 		type DefinitionEntry,
@@ -22,9 +21,11 @@
 		addReviewPick,
 		adhocQueue,
 		autoReview,
+		checkingPicks,
 		cardFormats,
 		dropAdhoc,
 		fileResult,
+		defaultEntry,
 		knowledge,
 		localVideo,
 		miningMode,
@@ -215,7 +216,8 @@
 	}
 
 	// Yomitan entries by scan text, and each row's default entry.
-	let entries = $state<Record<string, DefinitionEntry[]>>({});
+	/** `null` when Yomitan didn't answer. */
+	let entries = $state<Record<string, DefinitionEntry[] | null>>({});
 	let defaults = $state<Record<string, number | null>>({});
 	const requested = new Set<string>();
 	const scanOf = (row: Row) => row.scanText ?? row.lemma;
@@ -226,31 +228,33 @@
 			untrack(() => {
 				if (!requested.has(text)) {
 					requested.add(text);
-					const hit = cachedEntries(text);
-					if (hit) entries[text] = hit;
-					else
-						fetchEntries(text).then(
-							(list) => (entries[text] = list),
-							() => (entries[text] = [])
-						);
+					load(text);
 				}
 				if (row.term && !(row.key in defaults)) {
 					defaults[row.key] = -1;
-					getDefaultEntry(row.key, row.lemma, row.scanText ?? null).then(
-						(i) => (defaults[row.key] = i),
-						() => (defaults[row.key] = 0)
+					defaultEntry(row.key, row.lemma, row.scanText ?? null).then(
+						(d) => (defaults[row.key] = d ? d.index : 0)
 					);
 				}
 			});
 		}
 	});
 
+	function load(text: string) {
+		const hit = cachedEntries(text);
+		if (hit) entries[text] = hit;
+		else
+			fetchEntries(text).then(
+				(list) => (entries[text] = list),
+				() => (entries[text] = null)
+			);
+	}
+
 	/** `undefined` while Yomitan or the default entry is still loading. */
 	function entryOf(row: Row): DefinitionEntry | null | undefined {
 		const list = entries[scanOf(row)];
 		const index = row.entryIndex ?? defaults[row.key];
-		if (list === undefined || index === undefined || (index !== null && index < 0))
-			return undefined;
+		if (!list || index === undefined || (index !== null && index < 0)) return undefined;
 		return index === null ? null : (list.find((e) => e.index === index) ?? null);
 	}
 
@@ -444,11 +448,13 @@
 										><Furigana surface={row.lemma} reading={row.reading} /></span
 									>
 									<span class="meaning">
-										{entry
-											? glossarySummary(entry.glossary_html, 3)
-											: entry === null
-												? 'No dictionary entry'
-												: ''}
+										{entries[scanOf(row)] === null
+											? "Yomitan didn't answer"
+											: entry
+												? glossarySummary(entry.glossary_html, 3)
+												: entry === null
+													? 'No dictionary entry'
+													: 'Looking up…'}
 									</span>
 								</span>
 								<span class="line context">
@@ -668,7 +674,18 @@
 							>
 						{/if}
 					</div>
-					{#if list === undefined || chosen === undefined}
+					{#if list === null}
+						<p class="quiet">
+							Yomitan didn't answer.
+							<button
+								class="link"
+								onclick={() => {
+									delete entries[scanOf(row)];
+									load(scanOf(row));
+								}}>Try again</button
+							>
+						</p>
+					{:else if list === undefined || chosen === undefined}
 						<p class="quiet">Looking up the definition…</p>
 					{:else if chosen === null}
 						<p class="quiet">Yomitan has no entry for this word.</p>
@@ -686,7 +703,8 @@
 		<footer>
 			<button
 				class="primary"
-				disabled={$queuedCount === 0 || !canMine}
+				disabled={$queuedCount === 0 || !canMine || $checkingPicks}
+				title={$checkingPicks ? 'Checking the picks in Yomitan…' : undefined}
 				onclick={() => {
 					onclose();
 					onmine();

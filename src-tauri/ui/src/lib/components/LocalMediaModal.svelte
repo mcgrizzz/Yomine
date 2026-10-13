@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
+	import { open as openDialog } from '@tauri-apps/plugin-dialog';
 	import { settingsDraft } from '$lib/settingsDraft.svelte';
 	import Modal from './Modal.svelte';
 	import SettingsFooter from './SettingsFooter.svelte';
@@ -40,7 +41,14 @@
 	);
 
 	let ffmpeg = $state<ipc.FfmpegStatus | null>(null);
+	/** The ffmpeg found without the custom path; undefined while checking. */
+	let detected = $state<string | null | undefined>(undefined);
 	let configuring = $state(false);
+	/** Custom size chosen while both limits are still 0. */
+	let customSize = $state(false);
+	const sizeLimited = $derived(
+		customSize || draft.media_format.max_width > 0 || draft.media_format.max_height > 0
+	);
 	let ffmpegChecked = '';
 	let progress = $state<string | null>(null);
 	let downloadError = $state<string | null>(null);
@@ -50,6 +58,7 @@
 		untrack(() => {
 			downloadError = null;
 			configuring = false;
+			customSize = false;
 		});
 		// After the draft has loaded the saved path.
 		void tick().then(checkFfmpeg);
@@ -58,8 +67,34 @@
 	async function checkFfmpeg() {
 		const configured = draft.ffmpeg_path.trim();
 		ffmpegChecked = configured;
-		const status = await ipc.getFfmpegStatus(configured).catch(() => null);
-		if (ffmpegChecked === configured) ffmpeg = status;
+		const status = (path: string) => ipc.getFfmpegStatus(path).catch(() => null);
+		const [withCustom, automatic] = await Promise.all([
+			status(configured),
+			configured ? status('') : null
+		]);
+		if (ffmpegChecked !== configured) return;
+		ffmpeg = withCustom;
+		detected = (configured ? automatic : withCustom)?.path ?? null;
+	}
+
+	async function browse() {
+		const picked = await openDialog({ title: 'Choose the ffmpeg executable' });
+		if (typeof picked !== 'string') return;
+		draft.ffmpeg_path = picked;
+		await checkFfmpeg();
+	}
+
+	function chooseSize(custom: boolean) {
+		customSize = custom;
+		if (!custom) {
+			draft.media_format.max_width = 0;
+			draft.media_format.max_height = 0;
+		}
+	}
+
+	function revert() {
+		customSize = false;
+		form.revert();
 	}
 
 	async function downloadFfmpeg() {
@@ -81,43 +116,78 @@
 	}
 
 	function restoreDefault() {
+		customSize = false;
 		if ($defaultSettings) form.value = fields($defaultSettings);
 	}
 
-	const detail = $derived(
-		progress ??
-			(ffmpeg === null
-				? 'Checking…'
-				: ffmpeg.path === 'ffmpeg'
-					? 'Using the copy on PATH'
-					: ffmpeg.path
-						? ffmpeg.path
-						: ffmpeg.downloadable
-							? 'Download it, or enter its path under Configure.'
-							: 'Install it, or enter its path under Configure.')
+	const detectedText = $derived(
+		detected === undefined
+			? 'Looking for ffmpeg…'
+			: detected === 'ffmpeg'
+				? 'Detected automatically: the copy on PATH'
+				: detected
+					? `Detected automatically: ${detected}`
+					: ffmpeg?.downloadable
+						? 'Not detected automatically. Download it, or choose the executable.'
+						: 'Not detected automatically. Install it, or choose the executable.'
+	);
+	const customIgnored = $derived(
+		!!ffmpeg && !!draft.ffmpeg_path.trim() && ffmpeg.path !== draft.ffmpeg_path.trim()
 	);
 </script>
+
+{#snippet amount(key: 'pad_start_ms' | 'pad_end_ms', unit: string)}
+	<span class="unit"
+		><input
+			id={`media-${key}`}
+			type="number"
+			min="0"
+			max="10000"
+			step="1"
+			bind:value={draft.media_format[key]}
+		/><span aria-hidden="true">{unit}</span></span
+	>
+{/snippet}
+
+{#snippet limit(key: 'max_width' | 'max_height', label: string)}
+	<div class="field">
+		<label for={`media-${key}`}>{label}</label>
+		<span class="unit"
+			><input
+				id={`media-${key}`}
+				type="number"
+				min="0"
+				max="10000"
+				step="1"
+				placeholder="Original"
+				value={draft.media_format[key] || ''}
+				oninput={(e) =>
+					(draft.media_format[key] =
+						e.currentTarget.value === '' ? 0 : e.currentTarget.valueAsNumber)}
+			/><span aria-hidden="true">px</span></span
+		>
+	</div>
+{/snippet}
 
 <Modal
 	open={$localMediaModalOpen}
 	title="Local Media"
-	width="min(560px, 94%)"
+	width="min(600px, 94%)"
 	onclose={form.request}
 	oninteract={form.disarm}
 >
 	<div class="body">
-		<p class="hint">How sentence audio and screenshots are cut from videos on your computer.</p>
+		<p class="hint">Configure sentence audio and screenshots from local videos.</p>
 		<div class="card">
 			<div class="card-row">
-				<div>
-					<strong>ffmpeg</strong>
-					<p class="hint path" role="status">{detail}</p>
-				</div>
+				<strong>ffmpeg</strong>
 				<span
 					class="status"
 					class:ok={!!ffmpeg?.path}
 					class:warning={ffmpeg !== null && !ffmpeg.path}
-					>{ffmpeg === null ? 'Checking' : ffmpeg.path ? 'Found' : 'Not found'}</span
+					title={ffmpeg?.path ?? undefined}
+					role="status"
+					>{progress ?? (ffmpeg === null ? 'Checking…' : ffmpeg.path ? 'Found' : 'Not found')}</span
 				>
 				<div class="actions">
 					{#if ffmpeg && !ffmpeg.path && ffmpeg.downloadable}<button
@@ -136,91 +206,75 @@
 				</div>
 			</div>
 			{#if configuring}<div id="ffmpeg-panel" class="panel">
-					<div class="rows">
-						<label for="ffmpeg-path">Path</label><input
-							id="ffmpeg-path"
-							bind:value={draft.ffmpeg_path}
-							onchange={checkFfmpeg}
-							placeholder="Find automatically"
-							spellcheck="false"
-							autocomplete="off"
-						/>
+					<div class="field">
+						<label for="ffmpeg-path">Custom executable (optional)</label>
+						<div class="input-row">
+							<input
+								id="ffmpeg-path"
+								bind:value={draft.ffmpeg_path}
+								onchange={checkFfmpeg}
+								placeholder="Detect automatically"
+								spellcheck="false"
+								autocomplete="off"
+							/><button type="button" onclick={browse}>Browse…</button>
+						</div>
 					</div>
-					<p class="hint indent">Leave it empty to use ffmpeg from PATH or the downloaded copy.</p>
+					<p class="hint path">{detectedText}</p>
+					{#if customIgnored}<p class="error">
+							That file doesn't run as ffmpeg{detected ? ', so Yomine uses the detected one' : ''}.
+						</p>{/if}
 				</div>{/if}
 		</div>
 		{#if downloadError}<p class="error">Download failed: {downloadError}</p>{/if}
 
-		<section aria-labelledby="audio-heading">
-			<h3 id="audio-heading">Sentence audio</h3>
-			<div class="rows">
-				<label for="media-audio">Format</label>
-				<select id="media-audio" bind:value={draft.media_format.audio}
-					><option value="mp3">MP3</option><option value="opus">Opus</option></select
-				>
-				<span class="label" id="padding-label">Padding</span>
-				<div class="inline" role="group" aria-labelledby="padding-label">
-					<label class="sub" for="media-pad_start_ms">Before</label>
-					<span class="unit"
-						><input
-							id="media-pad_start_ms"
-							type="number"
-							min="0"
-							max="10000"
-							step="1"
-							bind:value={draft.media_format.pad_start_ms}
-						/><span aria-hidden="true">ms</span></span
-					>
-					<label class="sub" for="media-pad_end_ms">After</label>
-					<span class="unit"
-						><input
-							id="media-pad_end_ms"
-							type="number"
-							min="0"
-							max="10000"
-							step="1"
-							bind:value={draft.media_format.pad_end_ms}
-						/><span aria-hidden="true">ms</span></span
+		<div class="columns">
+			<section aria-labelledby="audio-heading">
+				<h3 id="audio-heading">Sentence audio</h3>
+				<div class="field">
+					<label for="media-audio">Format</label>
+					<select id="media-audio" bind:value={draft.media_format.audio}
+						><option value="mp3">MP3</option><option value="opus">Opus</option></select
 					>
 				</div>
-			</div>
-		</section>
+				<div class="pair">
+					<div class="field">
+						<label for="media-pad_start_ms">Before sentence</label>
+						{@render amount('pad_start_ms', 'ms')}
+					</div>
+					<div class="field">
+						<label for="media-pad_end_ms">After sentence</label>
+						{@render amount('pad_end_ms', 'ms')}
+					</div>
+				</div>
+			</section>
 
-		<section aria-labelledby="screenshot-heading">
-			<h3 id="screenshot-heading">Screenshot</h3>
-			<div class="rows">
-				<label for="media-image">Format</label>
-				<select id="media-image" bind:value={draft.media_format.image}
-					><option value="jpeg">JPEG</option><option value="png">PNG</option></select
-				>
-				<span class="label" id="size-label">Max size</span>
-				<div class="inline" role="group" aria-labelledby="size-label">
-					<span class="unit"
-						><input
-							id="media-max_width"
-							type="number"
-							min="0"
-							max="10000"
-							step="1"
-							aria-label="Maximum width"
-							bind:value={draft.media_format.max_width}
-						/><span aria-hidden="true">px</span></span
-					><span class="times" aria-hidden="true">×</span><span class="unit"
-						><input
-							id="media-max_height"
-							type="number"
-							min="0"
-							max="10000"
-							step="1"
-							aria-label="Maximum height"
-							bind:value={draft.media_format.max_height}
-						/><span aria-hidden="true">px</span></span
+			<section aria-labelledby="screenshot-heading">
+				<h3 id="screenshot-heading">Screenshot</h3>
+				<div class="field">
+					<label for="media-image">Format</label>
+					<select id="media-image" bind:value={draft.media_format.image}
+						><option value="jpeg">JPEG</option><option value="png">PNG</option></select
 					>
 				</div>
-				<p class="hint note">0 keeps the video's width or height.</p>
-			</div>
-		</section>
-		{#if !valid}<p class="error">Enter padding and sizes as whole numbers from 0 to 10000.</p>{/if}
+				<div class="field">
+					<label for="media-size">Size</label>
+					<select
+						id="media-size"
+						value={sizeLimited ? 'custom' : 'original'}
+						onchange={(e) => chooseSize(e.currentTarget.value === 'custom')}
+						><option value="original">Original size</option><option value="custom"
+							>Custom size</option
+						></select
+					>
+				</div>
+				{#if sizeLimited}<div class="pair">
+						{@render limit('max_width', 'Max width')}
+						{@render limit('max_height', 'Max height')}
+					</div>
+					<p class="hint">Larger screenshots shrink to fit and keep their shape.</p>{/if}
+			</section>
+		</div>
+		{#if !valid}<p class="error">Enter times and sizes as whole numbers from 0 to 10000.</p>{/if}
 	</div>
 
 	{#snippet footer()}
@@ -228,8 +282,13 @@
 			{form}
 			invalid={!valid}
 			onsave={save}
-			oncancel={form.revert}
-			onrestore={restoreDefault}
+			oncancel={revert}
+			restore={{
+				label: 'Reset Local Media Settings',
+				title:
+					'Restore the ffmpeg path and the sentence audio and screenshot settings to their defaults.',
+				run: restoreDefault
+			}}
 		/>
 	{/snippet}
 </Modal>
@@ -241,7 +300,7 @@
 		padding: 0 1rem;
 	}
 	h3 {
-		margin: 0 0 0.6rem;
+		margin: 0;
 		font-size: 0.95rem;
 	}
 	p {
@@ -264,7 +323,7 @@
 		grid-template-columns: minmax(0, 1fr) auto auto;
 		align-items: center;
 		gap: 0.75rem;
-		padding: 0.65rem 0.75rem;
+		padding: 0.3rem 0.75rem;
 	}
 	.path {
 		overflow-wrap: anywhere;
@@ -294,27 +353,47 @@
 	.warning {
 		color: var(--warning);
 	}
-	.rows {
+	.columns {
 		display: grid;
-		grid-template-columns: 5.5rem minmax(0, 1fr);
-		align-items: center;
-		gap: 0.6rem 0.75rem;
+		grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+		gap: 1.25rem 2rem;
 	}
-	.indent {
-		margin-left: 6.25rem;
+	section {
+		display: grid;
+		align-content: start;
+		gap: 0.75rem;
 	}
-	.rows select {
-		justify-self: start;
-		min-width: 9rem;
+	.field {
+		display: grid;
+		justify-items: start;
+		gap: 0.3rem;
 	}
-	.inline {
+	.pair {
 		display: flex;
 		flex-wrap: wrap;
-		align-items: center;
-		gap: 0.45rem;
+		gap: 0.75rem;
 	}
-	label,
-	.label {
+	.input-row {
+		display: flex;
+		gap: 0.5rem;
+		width: 100%;
+	}
+	.input-row input {
+		flex: 1;
+	}
+	.panel .field {
+		justify-items: stretch;
+	}
+	/* Wide enough for "Original size", so every dropdown matches. */
+	section select {
+		width: 11rem;
+	}
+	section select,
+	.unit {
+		box-sizing: border-box;
+		height: 2.2rem;
+	}
+	label {
 		font-size: 0.85rem;
 	}
 	input,
@@ -343,7 +422,9 @@
 	}
 	/* Outranks app.css's input:not(...):not(...):not(...) surface. */
 	.unit input[type='number'] {
-		width: 4.5rem;
+		width: 5.5rem;
+		height: 100%;
+		padding-block: 0;
 		padding-right: 0.25rem;
 		border: 0;
 		background: transparent;
@@ -356,20 +437,6 @@
 		color: var(--text-muted);
 		font-size: 0.8rem;
 	}
-	.sub {
-		color: var(--text-muted);
-		font-size: 0.8rem;
-	}
-	.sub:not(:first-child) {
-		margin-left: 0.6rem;
-	}
-	.times {
-		color: var(--text-muted);
-	}
-	.note {
-		grid-column: 2;
-		margin: -0.3rem 0 0;
-	}
 	.quiet {
 		background: transparent;
 		border-color: transparent;
@@ -378,22 +445,5 @@
 		color: var(--danger);
 		font-size: 0.85rem;
 		overflow-wrap: anywhere;
-	}
-	@media (max-width: 520px) {
-		.card-row {
-			grid-template-columns: minmax(0, 1fr) auto;
-		}
-		.actions {
-			grid-column: 1 / -1;
-		}
-		.rows {
-			grid-template-columns: 1fr;
-		}
-		.note {
-			grid-column: 1;
-		}
-		.indent {
-			margin-left: 0;
-		}
 	}
 </style>

@@ -82,6 +82,9 @@ pub struct AppState {
     /// Cached for `get_knowledge_summary` — the event fires only on change, so
     /// without this the widget sits blank after a webview reload.
     pub knowledge_summary: Option<KnowledgeSummaryDto>,
+    /// The `input_revision` the saved horizon was measured under. It only grows while that
+    /// holds: new settings or dictionaries measure it afresh.
+    pub horizon_revision: Arc<()>,
     /// From the last catalog fetch; installs resolve their download URL here so
     /// the frontend only ever passes a title.
     pub recommended_catalog: Vec<crate::recommended::RecommendedEntry>,
@@ -92,8 +95,10 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(settings: SettingsData) -> Self {
+        let input_revision = Arc::new(());
         Self {
-            input_revision: Arc::new(()),
+            horizon_revision: input_revision.clone(),
+            input_revision,
             dictionary_refresh_pending: None,
             language_tools: None,
             settings,

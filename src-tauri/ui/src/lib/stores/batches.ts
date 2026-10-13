@@ -18,6 +18,7 @@ import { asbContext, backgroundTab, playerStatus } from './player';
 import { adhocQueue, dropAdhoc, queuedMineOptions, queueAdhoc, setSelected } from './selection';
 import {
 	minedNoteIds,
+	markPartOnly,
 	minedTerms,
 	miningTerm,
 	normalizeSentence,
@@ -26,7 +27,7 @@ import {
 	sessionMinedSentences,
 	type QueueItem
 } from './mining';
-import { batchSummaryOpen } from './modals';
+import { batchHistoryOpen, batchSummaryOpen } from './modals';
 import { lastError, showNotice } from './ui';
 
 export type PauseChoice = 'retry' | 'without_dictionary_media' | 'skip' | 'stop';
@@ -258,6 +259,7 @@ async function run(
 	cancelled = false;
 	batchPreviews.set([]);
 	batchSummaryOpen.set(false);
+	batchHistoryOpen.set(false);
 	let batch = items ? null : previous;
 	let fatal = false;
 	let started = false;
@@ -317,6 +319,7 @@ async function run(
 					);
 				}
 				clearUnchangedSelection(current);
+				if (step.failure?.kind === 'part_only') markPartOnly(current.key, null);
 				// Left for "Retry failed" in the summary; the same item fails again right away, or always.
 				const unpaused = ['transient', 'part_only'];
 				if (!step.failure || cancelled || unpaused.includes(step.failure.kind ?? '')) break;

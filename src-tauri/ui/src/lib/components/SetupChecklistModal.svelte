@@ -48,7 +48,7 @@
 		const mappingsEmpty = !$settings || Object.keys($settings.anki_model_mappings).length === 0;
 		const count = st?.frequency_dict_count ?? 0;
 
-		// Only AnkiConnect has a helpUrl: the README anchors the others pointed at no
+		// Only the Anki connection has a helpUrl: the README anchors the others pointed at no
 		// longer exist. Restore them against the docs site, not the README.
 		return [
 			{
@@ -70,11 +70,11 @@
 				actionText: '+ Install Dictionary'
 			},
 			{
-				title: 'AnkiConnect Enabled and Detected',
-				description: 'Required for Anki integration',
+				title: 'Anki Connected',
+				description: 'Tsunagi (recommended, Anki 26.08+) or AnkiConnect',
 				status: s(st?.anki_connected ?? false),
 				optional: false,
-				helpUrl: 'https://ankiweb.net/shared/info/2055492159',
+				helpUrl: 'https://ankiweb.net/shared/info/666370974',
 				action: null,
 				actionText: null
 			},

@@ -14,6 +14,7 @@
 	import {
 		adhocQueue,
 		ankiStatus,
+		checkingPicks,
 		asbContext,
 		backgroundTab,
 		cardFormats,
@@ -27,6 +28,7 @@
 		mineQueueState,
 		minedNoteIds,
 		isMinedTerm,
+		partOnlyTerms,
 		minedTerms,
 		miningTerm,
 		normalizeSentence,
@@ -348,6 +350,8 @@
 	const renderCols = $derived(editColumns ? editCols.map((c) => c.id) : visibleCols);
 	const gridTemplate = $derived(['1.5rem', ...renderCols.map((id) => COLUMN_TRACKS[id])].join(' '));
 
+	const CHECKING_PICKS = 'Checking the picks in Yomitan…';
+
 	// Mining needs Yomitan (renders the card) + AnkiConnect (stores it).
 	const canMine = $derived($yomitanReachable && $ankiStatus.connected);
 	const busyReason = $derived(
@@ -534,14 +538,19 @@
 		</span>
 		<button
 			class="bulk-btn"
-			title="Check each term's sentence, definition and card format before mining"
+			disabled={$checkingPicks}
+			title={$checkingPicks
+				? CHECKING_PICKS
+				: "Check each term's sentence, definition and card format before mining"}
 			onclick={() => reviewDialogOpen.set(true)}>Review…</button
 		>
 		{#if canMine}
 			<button
 				class="bulk-btn primary"
-				disabled={$miningTerm !== null || $playerBusy}
-				title={busyReason ?? 'Mine the selected terms one by one, in timestamp order' + mediaNote}
+				disabled={$miningTerm !== null || $playerBusy || $checkingPicks}
+				title={$checkingPicks
+					? CHECKING_PICKS
+					: (busyReason ?? 'Mine the selected terms one by one, in timestamp order' + mediaNote)}
 				onclick={startBatch}>Mine {$queuedCount}</button
 			>
 		{/if}
@@ -733,6 +742,13 @@
 							{:else}
 								<span class="chip mined" title="This term already has a recent Anki card">✓</span>
 							{/if}
+						{:else if $partOnlyTerms.has(termKey(term))}
+							{@const matched = $partOnlyTerms.get(termKey(term))}
+							<span
+								class="chip part-only"
+								title={`Yomitan has no entry for all of ${term.lemma_form}${matched ? ` (it matches ${matched})` : ''}. Auto mode skips it; mining it fails.`}
+								>⊘</span
+							>
 						{/if}
 					</span>
 				{:else if id === 'jlpt'}
@@ -997,6 +1013,11 @@
 	.warn:disabled {
 		opacity: 0.5;
 		cursor: default;
+	}
+	.part-only {
+		color: var(--text-muted);
+		background: color-mix(in srgb, var(--text-muted) 12%, transparent);
+		cursor: help;
 	}
 	/* Ignored-in-place: greyed until the next refresh drops the row. */
 	.term.ignored {

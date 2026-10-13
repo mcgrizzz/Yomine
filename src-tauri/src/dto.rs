@@ -32,6 +32,14 @@ pub struct MinedStateDto {
     pub mined_sentences: Vec<String>,
 }
 
+/// `index` is `None` when no entry matches the whole term; `matched` is then the longest
+/// start an entry matched.
+#[derive(Serialize)]
+pub struct DefaultEntryDto {
+    pub index: Option<usize>,
+    pub matched: Option<String>,
+}
+
 #[derive(Serialize, Clone, PartialEq)]
 pub struct YomitanStatusDto {
     pub reachable: bool,

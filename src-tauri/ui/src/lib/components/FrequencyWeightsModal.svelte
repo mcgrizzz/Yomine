@@ -346,7 +346,17 @@
 	{/if}
 
 	{#snippet footer()}
-		<SettingsFooter {form} onsave={save} oncancel={form.revert} onrestore={restoreDefault}>
+		<SettingsFooter
+			{form}
+			onsave={save}
+			oncancel={form.revert}
+			restore={{
+				label: 'Reset Dictionary Settings',
+				title:
+					'Turn every dictionary on, set every weight to 1 and unhide hidden dictionaries. Installed dictionaries are kept.',
+				run: restoreDefault
+			}}
+		>
 			<button disabled={busyTitle !== null} onclick={importFromFile}>
 				{busyTitle === '(import)' ? 'Importing…' : 'Import from file…'}
 			</button>

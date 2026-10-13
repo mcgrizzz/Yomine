@@ -1,6 +1,6 @@
 <script lang="ts">
 	// Staged, but live-previews while adjusting so the user can judge readability;
-	// Cancel/✕/backdrop revert the preview to the saved value.
+	// Discard Changes/✕/backdrop revert the preview to the saved value.
 	import { settingsDraft } from '$lib/settingsDraft.svelte';
 	import Modal from './Modal.svelte';
 	import SettingsFooter from './SettingsFooter.svelte';
@@ -83,94 +83,128 @@
 <Modal
 	open={$appearanceModalOpen}
 	title="Appearance"
-	width="min(420px, 92%)"
+	width="min(600px, 94%)"
 	onclose={form.request}
 	oninteract={form.disarm}
 >
-	<div class="scale-row">
-		<label for="ui-scale">UI scale:</label>
-		<button
-			class="step"
-			aria-label="Decrease scale"
-			disabled={draft.pct <= MIN_PCT}
-			onclick={() => step(-STEP)}>−</button
-		>
-		<input
-			id="ui-scale"
-			type="range"
-			min={MIN_PCT}
-			max={MAX_PCT}
-			step={STEP}
-			bind:value={draft.pct}
-		/>
-		<button
-			class="step"
-			aria-label="Increase scale"
-			disabled={draft.pct >= MAX_PCT}
-			onclick={() => step(STEP)}>+</button
-		>
-		<span class="value">{draft.pct}%</span>
-	</div>
-	<p class="hint">Scales the whole interface — text, controls, and spacing.</p>
-
-	<div class="scale-row">
-		<label for="definition-scale">Definition scale:</label>
-		<button
-			class="step"
-			aria-label="Decrease definition scale"
-			disabled={draft.defPct <= DEF_MIN_PCT}
-			onclick={() => stepDef(-STEP)}>−</button
-		>
-		<input
-			id="definition-scale"
-			type="range"
-			min={DEF_MIN_PCT}
-			max={MAX_PCT}
-			step={STEP}
-			bind:value={draft.defPct}
-		/>
-		<button
-			class="step"
-			aria-label="Increase definition scale"
-			disabled={draft.defPct >= MAX_PCT}
-			onclick={() => stepDef(STEP)}>+</button
-		>
-		<span class="value">{draft.defPct}%</span>
-	</div>
-	<p class="hint">Scales the Shift+Hover definition popover, on top of the UI scale.</p>
-
-	<div class="coloring-row">
-		<label for="sentence-coloring">Sentence marking:</label>
-		<select id="sentence-coloring" bind:value={draft.coloring}>
-			<option value="knowledge">Knowledge underlines</option>
-			<option value="none">None</option>
-		</select>
-	</div>
-	{#if draft.coloring === 'knowledge'}
-		<div class="underline-toggles">
-			{#each STATES as s (s)}
-				<label class="state-toggle">
-					<input type="checkbox" bind:checked={draft.toggles[s]} />
-					<span style="border-bottom: 2.5px solid {STATE_COLORS[s]}">{STATE_LABELS[s]}</span>
-				</label>
-			{/each}
+	<div class="body">
+		<div class="group">
+			<label for="ui-scale">UI scale</label>
+			<div class="scale-row">
+				<button
+					class="step"
+					aria-label="Decrease scale"
+					disabled={draft.pct <= MIN_PCT}
+					onclick={() => step(-STEP)}>−</button
+				>
+				<input
+					id="ui-scale"
+					type="range"
+					min={MIN_PCT}
+					max={MAX_PCT}
+					step={STEP}
+					bind:value={draft.pct}
+				/>
+				<button
+					class="step"
+					aria-label="Increase scale"
+					disabled={draft.pct >= MAX_PCT}
+					onclick={() => step(STEP)}>+</button
+				>
+				<span class="value">{draft.pct}%</span>
+			</div>
+			<p class="hint">Scales the entire interface.</p>
 		</div>
-		<p class="hint">Underlines words by Anki state; untick a state to hide it.</p>
-	{/if}
 
-	<p class="hint">Table columns: right-click the term-table header to reorder or hide.</p>
+		<div class="group">
+			<label for="definition-scale">Definition scale</label>
+			<div class="scale-row">
+				<button
+					class="step"
+					aria-label="Decrease definition scale"
+					disabled={draft.defPct <= DEF_MIN_PCT}
+					onclick={() => stepDef(-STEP)}>−</button
+				>
+				<input
+					id="definition-scale"
+					type="range"
+					min={DEF_MIN_PCT}
+					max={MAX_PCT}
+					step={STEP}
+					bind:value={draft.defPct}
+				/>
+				<button
+					class="step"
+					aria-label="Increase definition scale"
+					disabled={draft.defPct >= MAX_PCT}
+					onclick={() => stepDef(STEP)}>+</button
+				>
+				<span class="value">{draft.defPct}%</span>
+			</div>
+			<p class="hint">Relative to UI scale; applies to Shift+Hover definitions.</p>
+		</div>
+
+		<div class="group">
+			<label for="sentence-coloring">Sentence marking</label>
+			<select id="sentence-coloring" bind:value={draft.coloring}>
+				<option value="knowledge">Knowledge underlines</option>
+				<option value="none">None</option>
+			</select>
+			{#if draft.coloring === 'knowledge'}
+				<fieldset>
+					<legend>Underline these states:</legend>
+					<div class="underline-toggles">
+						{#each STATES as s (s)}
+							<label class="state-toggle">
+								<input type="checkbox" bind:checked={draft.toggles[s]} />
+								<span style="border-bottom: 2.5px solid {STATE_COLORS[s]}">{STATE_LABELS[s]}</span>
+							</label>
+						{/each}
+					</div>
+				</fieldset>
+			{/if}
+		</div>
+
+		<div class="group">
+			<span class="label">Table columns</span>
+			<p class="hint">Right-click the table header to reorder or hide columns.</p>
+		</div>
+	</div>
 
 	{#snippet footer()}
-		<SettingsFooter {form} onsave={save} oncancel={form.revert} onrestore={restoreDefault} />
+		<SettingsFooter
+			{form}
+			onsave={save}
+			oncancel={form.revert}
+			restore={{
+				label: 'Reset Appearance Settings',
+				title: 'Restore UI scale, definition scale and sentence marking to their defaults.',
+				run: restoreDefault
+			}}
+		/>
 	{/snippet}
 </Modal>
 
 <style>
+	.body {
+		display: grid;
+		gap: 1.25rem;
+		padding: 0 1rem;
+	}
+	.group {
+		display: grid;
+		justify-items: start;
+		gap: 0.35rem;
+	}
+	.group > label,
+	.label {
+		font-size: 0.85rem;
+	}
 	.scale-row {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0 1rem;
+		justify-self: stretch;
 	}
 	.scale-row input[type='range'] {
 		flex: 1;
@@ -181,20 +215,24 @@
 		font-size: 0.95rem;
 		line-height: 1.2;
 	}
-	.coloring-row {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0 1rem;
+	select {
+		min-width: 14rem;
 	}
-	.coloring-row select {
-		flex: 1;
+	fieldset {
+		margin: 0.35rem 0 0;
+		padding: 0;
+		border: 0;
+	}
+	legend {
+		margin-bottom: 0.35rem;
+		padding: 0;
+		font-size: 0.85rem;
+		color: var(--text-muted);
 	}
 	.underline-toggles {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 0.4rem 1rem;
-		padding: 0 1rem;
 	}
 	.state-toggle {
 		display: inline-flex;
@@ -212,7 +250,6 @@
 	}
 	.hint {
 		margin: 0;
-		padding: 0 1rem;
 		font-size: 0.85rem;
 		color: var(--text-muted);
 	}

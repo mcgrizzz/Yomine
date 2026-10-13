@@ -32,7 +32,7 @@
 		openAutoModal,
 		openAnalyzerModal,
 		openAboutModal,
-		openBatchSummary,
+		openBatchHistory,
 		lastBatch,
 		openDataFolder,
 		refreshTerms,
@@ -237,7 +237,7 @@
 								>
 							{/each}
 							<div class="menu-sep"></div>
-							<button onclick={() => run(openRecentFilesModal)}>More…</button>
+							<button onclick={() => run(openRecentFilesModal)}>All Recent Files</button>
 						</div>
 					{/if}
 				</div>
@@ -249,7 +249,6 @@
 				>
 				<div class="menu-sep"></div>
 				<button onclick={() => run(openDataFolder)}>Open Data Folder</button>
-				<button onclick={() => run(openAboutModal)}>About Yomine</button>
 			</div>
 		{/if}
 	</div>
@@ -265,7 +264,7 @@
 				<button onclick={() => run(openFrequencyModal)}>Frequency Dictionaries</button>
 				<button onclick={() => run(openAutoModal)}>✦ Auto Mode</button>
 				<div class="menu-sep"></div>
-				<button onclick={() => run(openBatchSummary)} disabled={!$lastBatch}>Last Batch…</button>
+				<button onclick={() => run(openBatchHistory)} disabled={!$lastBatch}>Batches</button>
 				<button onclick={() => run(openAnalyzerModal)} disabled={!toolsReady}
 					>Frequency Analyzer</button
 				>
@@ -278,7 +277,7 @@
 		{#if openMenu === 'appearance'}
 			<div class="menu-panel">
 				<button onclick={() => run(() => void openThemesWindow())}>Themes</button>
-				<button onclick={() => run(openAppearanceModal)}>General</button>
+				<button onclick={() => run(openAppearanceModal)}>Appearance Settings</button>
 			</div>
 		{/if}
 	</div>
@@ -291,9 +290,11 @@
 				<button onclick={() => run(openAnkiModal)}>Anki</button>
 				<button onclick={() => run(openLocalMediaModal)}>Local Media</button>
 				<button onclick={() => run(openWebsocketModal)}>WebSocket Server</button>
-				<button onclick={() => run(openProfilesModal)}>Profiles…</button>
+				<button onclick={() => run(openProfilesModal)}>Profiles</button>
 				<div class="menu-sep"></div>
 				<button onclick={() => run(openSetupModal)}>Setup Checklist</button>
+				<div class="menu-sep"></div>
+				<button onclick={() => run(openAboutModal)}>About Yomine</button>
 			</div>
 		{/if}
 	</div>

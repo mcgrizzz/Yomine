@@ -109,7 +109,7 @@
 			return;
 		}
 		entries = null;
-		fetchEntries(lookup).then(
+		fetchEntries(lookup, true).then(
 			(result) => {
 				if (lookup === text) entries = result;
 			},

@@ -88,6 +88,12 @@ pub(crate) fn hint(app: &AppHandle) {
     if FOLLOWING.load(Ordering::Relaxed) {
         return;
     }
+    sync_in_background(app);
+}
+
+/// A sync in the background even while following Tsunagi, whose events report changes made
+/// in Anki, not Yomine's own (new mappings).
+pub(crate) fn sync_in_background(app: &AppHandle) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         if let Err(e) = sync(&app, false).await {

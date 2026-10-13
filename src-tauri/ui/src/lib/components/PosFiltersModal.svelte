@@ -103,7 +103,16 @@
 	</div>
 
 	{#snippet footer()}
-		<SettingsFooter {form} onsave={save} oncancel={form.revert} onrestore={restoreDefault} />
+		<SettingsFooter
+			{form}
+			onsave={save}
+			oncancel={form.revert}
+			restore={{
+				label: 'Reset Part of Speech Filters',
+				title: 'Restore which parts of speech are shown to the defaults.',
+				run: restoreDefault
+			}}
+		/>
 	{/snippet}
 </Modal>
 
