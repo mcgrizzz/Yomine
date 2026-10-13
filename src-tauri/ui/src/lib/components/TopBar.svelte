@@ -32,7 +32,7 @@
 		openAutoModal,
 		openAnalyzerModal,
 		openAboutModal,
-		openBatchSummary,
+		openBatchHistory,
 		lastBatch,
 		openDataFolder,
 		refreshTerms,
@@ -264,7 +264,7 @@
 				<button onclick={() => run(openFrequencyModal)}>Frequency Dictionaries</button>
 				<button onclick={() => run(openAutoModal)}>✦ Auto Mode</button>
 				<div class="menu-sep"></div>
-				<button onclick={() => run(openBatchSummary)} disabled={!$lastBatch}>Last Batch</button>
+				<button onclick={() => run(openBatchHistory)} disabled={!$lastBatch}>Batches</button>
 				<button onclick={() => run(openAnalyzerModal)} disabled={!toolsReady}
 					>Frequency Analyzer</button
 				>

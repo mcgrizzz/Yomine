@@ -917,6 +917,10 @@ export function getLastBatch(): Promise<BatchRecord | null> {
 	return invoke('get_last_batch');
 }
 
+export function listBatches(): Promise<BatchRecord[]> {
+	return invoke('list_batches');
+}
+
 export function createBatch(
 	source: BatchSource,
 	items: BatchItem[],

@@ -3,6 +3,7 @@
 	import BatchPauseDialog from './BatchPauseDialog.svelte';
 	import BatchProgressDialog from './BatchProgressDialog.svelte';
 	import BatchSummary from './BatchSummary.svelte';
+	import BatchHistory from './BatchHistory.svelte';
 	import {
 		batchPause,
 		batchPreviews,
@@ -15,7 +16,7 @@
 		resumeBatch,
 		selectBatchTarget
 	} from '$lib/stores/batches';
-	import { batchSummaryOpen } from '$lib/stores/modals';
+	import { batchHistoryOpen, batchSummaryOpen } from '$lib/stores/modals';
 	import type { BatchRecord } from '$lib/ipc';
 
 	const NARROW = 'min(30rem, calc(100vw - 2rem))';
@@ -87,8 +88,8 @@
 				{/if}
 			</ul>
 			<p>
-				Yomine keeps only the most recent batch. After you start a new one, the last batch can't be
-				retried or undone.
+				After you start a new one, the last batch can't be retried or undone. It stays listed under
+				Mining › Batches.
 			</p>
 		</div>
 		{#snippet footer()}
@@ -110,6 +111,8 @@
 	<BatchProgressDialog progress={$mineQueueState} batch={$lastBatch} previews={$batchPreviews} />
 {:else if $batchSummaryOpen && $lastBatch}
 	<BatchSummary batch={$lastBatch} onclose={() => batchSummaryOpen.set(false)} />
+{:else if $batchHistoryOpen}
+	<BatchHistory />
 {/if}
 
 <style>

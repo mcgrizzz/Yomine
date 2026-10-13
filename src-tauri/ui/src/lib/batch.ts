@@ -16,6 +16,11 @@ export function sameSource(batch: BatchRecord, file: FileLoadResult | null): boo
 	);
 }
 
+export function batchStatus(batch: BatchRecord): 'Interrupted' | 'Stopped early' | 'Complete' {
+	if (batch.finished_at === null) return 'Interrupted';
+	return batch.items.some((i) => i.outcome.status === 'unattempted') ? 'Stopped early' : 'Complete';
+}
+
 export function mediaParts(outcome: BatchOutcome): BatchPart[] {
 	return outcome.status === 'created' ? [outcome.audio, outcome.picture] : [];
 }

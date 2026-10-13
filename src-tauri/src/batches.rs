@@ -434,6 +434,21 @@ pub async fn get_last_batch() -> Result<Option<BatchRecord>, String> {
     .transpose()
 }
 
+/// The open Anki profile's batches, newest first.
+#[tauri::command]
+pub async fn list_batches() -> Result<Vec<BatchRecord>, String> {
+    let profile = open_profile().await?;
+    db::with(|conn| {
+        db::batches::ids(conn, &profile)?
+            .iter()
+            .filter_map(|id| db::batches::read(conn, id).transpose())
+            .collect::<Result<Vec<_>, _>>()
+    })?
+    .into_iter()
+    .map(BatchRecord::from_stored)
+    .collect()
+}
+
 #[tauri::command]
 pub async fn create_batch(
     state: State<'_, Mutex<AppState>>,

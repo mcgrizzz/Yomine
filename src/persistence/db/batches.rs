@@ -33,6 +33,16 @@ pub fn latest_id(conn: &Connection, collection: Option<&str>) -> rusqlite::Resul
     .optional()
 }
 
+/// An Anki profile's batches, newest first.
+pub fn ids(conn: &Connection, collection: &str) -> rusqlite::Result<Vec<String>> {
+    conn.prepare(
+        "SELECT id FROM batches WHERE collection = ?1 OR collection IS NULL
+         ORDER BY started_at DESC, id DESC",
+    )?
+    .query_map(params![collection], |r| r.get(0))?
+    .collect()
+}
+
 pub fn read(conn: &Connection, id: &str) -> rusqlite::Result<Option<StoredBatch>> {
     let Some(mut batch) = conn
         .query_row(

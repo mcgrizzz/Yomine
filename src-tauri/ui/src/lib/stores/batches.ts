@@ -27,7 +27,7 @@ import {
 	sessionMinedSentences,
 	type QueueItem
 } from './mining';
-import { batchSummaryOpen } from './modals';
+import { batchHistoryOpen, batchSummaryOpen } from './modals';
 import { lastError, showNotice } from './ui';
 
 export type PauseChoice = 'retry' | 'without_dictionary_media' | 'skip' | 'stop';
@@ -259,6 +259,7 @@ async function run(
 	cancelled = false;
 	batchPreviews.set([]);
 	batchSummaryOpen.set(false);
+	batchHistoryOpen.set(false);
 	let batch = items ? null : previous;
 	let fatal = false;
 	let started = false;
