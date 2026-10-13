@@ -133,6 +133,7 @@ fn import_batch(conn: &Connection, batch: &Value, now: i64) -> rusqlite::Result<
         path: batch["source"]["locator"].as_str().unwrap_or_default().to_string(),
         started_at: batch["started_at"].as_i64().unwrap_or(now),
         finished_at: batch["finished_at"].as_i64(),
+        run_ms: None,
         auto: batch["auto"].as_bool().unwrap_or(false),
         collection: None,
         items: items.iter().map(Value::to_string).collect(),

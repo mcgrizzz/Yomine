@@ -78,6 +78,8 @@
 				Cutting each line's audio and a screenshot from the video.
 			{:else if !creating}
 				asbplayer plays each line in the video tab to record it. Keep that tab open.
+			{:else if progress.recordsNext && $miningMode === 'local'}
+				Adding each card to Anki with its audio and a screenshot from the video.
 			{:else if progress.recordsNext}
 				Adding the cards to Anki first. Audio and screenshots are recorded once every card exists.
 			{:else}
@@ -107,7 +109,8 @@
 			</span>
 		</div>
 
-		{#if latest && !creating && $miningMode !== 'local'}
+		<!-- Local mode cuts clips while creating each card; asbplayer's arrive only while recording. -->
+		{#if latest && $miningMode !== 'local'}
 			<figure class="single">
 				<img src={latest.src} alt="Screenshot recorded for {latest.lemma}" />
 				<figcaption>
@@ -116,7 +119,7 @@
 					<span class="last-sentence" lang="ja" title={latest.sentence}>{latest.sentence}</span>
 				</figcaption>
 			</figure>
-		{:else if latest && !creating}
+		{:else if latest}
 			<div class="shots" role="list" aria-label="Recorded screenshots">
 				{#each slots as shot, i (i)}
 					<div class="shot" role="listitem" class:latest={shot?.id === latest.id}>
@@ -153,6 +156,9 @@
 
 <style>
 	.body {
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
 		padding: 0.25rem 1rem 0.75rem;
 	}
 	p {
@@ -242,12 +248,15 @@
 	.shots {
 		display: grid;
 		grid-template-columns: repeat(3, 1fr);
+		grid-template-rows: repeat(3, minmax(0, 1fr));
 		gap: 0.3rem;
 		margin-top: 0.6rem;
+		/* Full size when the window has room; shorter rows instead of a scrollbar when not. */
+		aspect-ratio: 16 / 9;
+		min-height: 6rem;
 	}
 	.shot {
 		position: relative;
-		aspect-ratio: 16 / 9;
 		overflow: hidden;
 		border-radius: var(--radius-sm);
 		background: var(--bg-raised);

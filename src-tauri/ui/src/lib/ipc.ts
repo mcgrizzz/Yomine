@@ -843,6 +843,8 @@ export interface BatchRecord {
 	id: string;
 	started_at: number;
 	finished_at: number | null;
+	/** Time spent mining across its runs, excluding pauses; null for older batches. */
+	run_ms: number | null;
 	source: BatchSource;
 	items: BatchItem[];
 	auto: boolean;
@@ -929,8 +931,8 @@ export function createBatch(
 	return invoke('create_batch', { source, items, auto });
 }
 
-export function finishBatch(batchId: string): Promise<BatchRecord> {
-	return invoke('finish_batch', { batchId });
+export function finishBatch(batchId: string, runMs: number): Promise<BatchRecord> {
+	return invoke('finish_batch', { batchId, runMs });
 }
 
 export function undoBatch(batchId: string): Promise<BatchUndoResult> {

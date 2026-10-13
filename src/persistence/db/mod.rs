@@ -203,12 +203,16 @@ pub fn open(path: &Path, json_dir: &Path) -> rusqlite::Result<Connection> {
         // The mining mode a load happened in; `sources::recent` infers it for older loads.
         tx.execute_batch("ALTER TABLE opens ADD COLUMN mode TEXT;")?;
     }
+    if version < 4 {
+        // Time spent mining across a batch's runs; NULL for batches from before it was kept.
+        tx.execute_batch("ALTER TABLE batches ADD COLUMN run_ms INTEGER;")?;
+    }
     // The import writes rows in the current schema, so it runs after every step.
     if version < 1 {
         import::import_json(&tx, json_dir)?;
         import::import_anki_caches(&tx, json_dir)?;
     }
-    tx.pragma_update(None, "user_version", 3)?;
+    tx.pragma_update(None, "user_version", 4)?;
     tx.commit()?;
     Ok(conn)
 }

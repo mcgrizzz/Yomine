@@ -15,6 +15,7 @@ pub struct StoredBatch {
     pub path: String,
     pub started_at: i64,
     pub finished_at: Option<i64>,
+    pub run_ms: Option<i64>,
     pub auto: bool,
     /// The Anki profile it mines into; empty for batches from before profiles were
     /// recorded, which count for every profile.
@@ -47,7 +48,7 @@ pub fn read(conn: &Connection, id: &str) -> rusqlite::Result<Option<StoredBatch>
     let Some(mut batch) = conn
         .query_row(
             "SELECT b.started_at, b.finished_at, b.auto, b.path, s.fingerprint, coalesce(s.title, ''),
-                 b.collection
+                 b.collection, b.run_ms
              FROM batches b JOIN sources s ON s.id = b.source_id WHERE b.id = ?1",
             params![id],
             |r| {
@@ -55,6 +56,7 @@ pub fn read(conn: &Connection, id: &str) -> rusqlite::Result<Option<StoredBatch>
                     id: id.to_string(),
                     started_at: r.get(0)?,
                     finished_at: r.get(1)?,
+                    run_ms: r.get(7)?,
                     auto: r.get(2)?,
                     path: r.get(3)?,
                     fingerprint: r.get(4)?,
@@ -79,9 +81,9 @@ pub fn read(conn: &Connection, id: &str) -> rusqlite::Result<Option<StoredBatch>
 pub(super) fn put(conn: &Connection, batch: &StoredBatch) -> rusqlite::Result<i64> {
     let source = sources::id(conn, &batch.fingerprint)?;
     conn.execute(
-        "INSERT INTO batches (id, source_id, path, started_at, finished_at, auto, collection)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-         ON CONFLICT (id) DO UPDATE SET finished_at = excluded.finished_at",
+        "INSERT INTO batches (id, source_id, path, started_at, finished_at, auto, collection, run_ms)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+         ON CONFLICT (id) DO UPDATE SET finished_at = excluded.finished_at, run_ms = excluded.run_ms",
         params![
             batch.id,
             source,
@@ -89,7 +91,8 @@ pub(super) fn put(conn: &Connection, batch: &StoredBatch) -> rusqlite::Result<i6
             batch.started_at,
             batch.finished_at,
             batch.auto,
-            batch.collection
+            batch.collection,
+            batch.run_ms
         ],
     )?;
     conn.execute("DELETE FROM batch_items WHERE batch_id = ?1", params![batch.id])?;
@@ -129,6 +132,7 @@ mod tests {
             path: "test.srt".into(),
             started_at,
             finished_at: None,
+            run_ms: None,
             auto: false,
             collection: collection.map(Into::into),
             items: vec![r#"{"note":42}"#.into()],
