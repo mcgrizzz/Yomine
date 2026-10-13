@@ -107,6 +107,14 @@
 
 	const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
+	function duration(ms: number): string {
+		const secs = Math.max(1, Math.round(ms / 1000));
+		if (secs < 60) return plural(secs, 'second');
+		const mins = Math.floor(secs / 60);
+		if (mins < 60) return `${mins} min ${secs % 60} sec`;
+		return `${Math.floor(mins / 60)} hr ${mins % 60} min`;
+	}
+
 	async function openCreated() {
 		try {
 			await openNotesInAnki(createdIds);
@@ -159,6 +167,9 @@
 				{new Date(batch.started_at).toLocaleString()} ·
 				<span class:attention={status !== 'Complete'}>{status}</span>
 				· {plural(batch.items.length, 'card')}
+				{#if batch.finished_at !== null && batch.run_ms !== null}
+					in {duration(batch.run_ms)}
+				{/if}
 			</p>
 		</header>
 

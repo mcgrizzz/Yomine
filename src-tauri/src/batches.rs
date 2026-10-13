@@ -256,6 +256,10 @@ pub struct BatchRecord {
     pub id: String,
     pub started_at: i64,
     pub finished_at: Option<i64>,
+    /// Time spent mining across its runs, excluding pauses; empty for batches from
+    /// before it was kept.
+    #[serde(default)]
+    pub run_ms: Option<i64>,
     pub source: BatchSource,
     pub items: Vec<BatchItem>,
     #[serde(default)]
@@ -275,6 +279,7 @@ impl BatchRecord {
             path: self.source.locator.clone(),
             started_at: self.started_at,
             finished_at: self.finished_at,
+            run_ms: self.run_ms,
             auto: self.auto,
             collection: self.collection.clone(),
             items: self
@@ -296,6 +301,7 @@ impl BatchRecord {
             id: stored.id,
             started_at: stored.started_at,
             finished_at: stored.finished_at,
+            run_ms: stored.run_ms,
             source: BatchSource {
                 title: stored.title,
                 locator: stored.path,
@@ -474,6 +480,7 @@ pub async fn create_batch(
         id: now.timestamp_nanos_opt().ok_or("Could not assign a batch ID")?.to_string(),
         started_at: now.timestamp_millis(),
         finished_at: None,
+        run_ms: Some(0),
         source: current,
         items,
         auto,
@@ -484,10 +491,12 @@ pub async fn create_batch(
 }
 
 #[tauri::command]
-pub async fn finish_batch(batch_id: String) -> Result<BatchRecord, String> {
+pub async fn finish_batch(batch_id: String, run_ms: i64) -> Result<BatchRecord, String> {
     let _operation = OPERATION.try_lock().map_err(|_| "Mining or undo is already running")?;
     let mut batch = load(&batch_id)?;
     batch.finished_at = Some(chrono::Utc::now().timestamp_millis());
+    // An older batch stays unknown rather than showing only this run.
+    batch.run_ms = batch.run_ms.map(|ms| ms + run_ms);
     save(&batch).map_err(|e| e.message)?;
     Ok(batch)
 }
@@ -560,6 +569,7 @@ mod tests {
             id: "first".into(),
             started_at: 1,
             finished_at: None,
+            run_ms: None,
             source: BatchSource {
                 title: "Test".into(),
                 locator: "test.srt".into(),

@@ -263,6 +263,8 @@ async function run(
 	let batch = items ? null : previous;
 	let fatal = false;
 	let started = false;
+	let startedAt = 0;
+	let pausedMs = 0;
 	const options: ipc.MineOptions = { record: true, require_dictionary_media: true };
 	let target: string | null = null;
 	let finished: ipc.BatchRecord | null = null;
@@ -323,7 +325,9 @@ async function run(
 				// Left for "Retry failed" in the summary; the same item fails again right away, or always.
 				const unpaused = ['transient', 'part_only'];
 				if (!step.failure || cancelled || unpaused.includes(step.failure.kind ?? '')) break;
+				const pausedAt = performance.now();
 				const choice = await pausePrompt.ask({ item: current, failure: step.failure });
+				pausedMs += performance.now() - pausedAt;
 				if (choice === 'retry') continue;
 				if (choice === 'without_dictionary_media') {
 					options.require_dictionary_media = false;
@@ -365,6 +369,7 @@ async function run(
 		if (!batch) return null;
 		lastBatch.set(batch);
 		started = true;
+		startedAt = performance.now();
 		if (mediaRun) {
 			plan.record.indices = selected;
 		} else {
@@ -396,7 +401,8 @@ async function run(
 	} finally {
 		if (batch && started && !fatal) {
 			try {
-				batch = await ipc.finishBatch(batch.id);
+				const runMs = Math.round(performance.now() - startedAt - pausedMs);
+				batch = await ipc.finishBatch(batch.id, runMs);
 				lastBatch.set(batch);
 				if (!cancelled) finished = batch;
 			} catch (error) {
