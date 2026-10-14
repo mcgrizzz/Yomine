@@ -83,12 +83,13 @@ fn main() {
                 _ => "#—".to_string(),
             };
             println!(
-                "     ・{:<12} → {} ({})  [{}] {}",
+                "     ・{:<12} → {} ({})  [{}] {}{}",
                 t.full_segment,
                 t.lemma_form,
                 t.lemma_reading,
                 t.part_of_speech.as_key(),
-                freq
+                freq,
+                if t.auto_skip.grammar { "  grammar" } else { "" }
             );
         }
         if why {

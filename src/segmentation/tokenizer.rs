@@ -155,17 +155,80 @@ pub(super) fn resolve_citation(word: &mut Word, manager: &FrequencyManager) {
 fn analyze_sentence(worker: &mut Worker, text: &str, manager: &FrequencyManager) -> Vec<Word> {
     worker.reset_sentence(text);
     worker.tokenize();
-    let tokens = worker
+    let mut tokens: Vec<UnidicToken> = worker
         .token_iter()
-        .map(|token| UnidicToken::from_parts(token.surface(), token.feature(), token.range_byte()))
+        .map(|t| UnidicToken::from_parts(t.surface(), t.feature(), t.range_byte()))
         .collect();
+    if final_particle_mid_clause(&tokens) {
+        worker.tokenize_nbest(FINAL_PARTICLE_PATHS);
+        let better = (1..worker.num_nbest_paths())
+            .filter_map(|p| {
+                let path = worker.nbest_token_iter(p)?;
+                Some(
+                    path.map(|t| UnidicToken::from_parts(t.surface(), t.feature(), t.range_byte()))
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .find(|path| !final_particle_mid_clause(path));
+        if let Some(better) = better {
+            tokens = better;
+        }
+    }
+    read_one_day(&mut tokens);
     let words = parse_into_words(tokens).unwrap_or_default();
     let words = reparse_katakana_speech(worker, words, manager);
     let mut words =
         split_unvalidated_compounds(rescue_words(worker, text, words, manager), manager);
     keep_listed_words(&mut words, manager);
     tag_katakana_interjections(worker, &mut words);
+    read_contracted_prohibitive(&mut words);
     words
+}
+
+/// UniDic reads んな as そんな wherever it appears, but right after a verb it is るな with る
+/// contracted (言わせんな, 来んな): the prohibitive particle な.
+fn read_contracted_prohibitive(words: &mut [Word]) {
+    for i in 1..words.len() {
+        let after_verb = words[i - 1]
+            .tokens
+            .last()
+            .is_some_and(|t| matches!(t.pos1, UnidicTag::Doushi | UnidicTag::Jodoushi));
+        let word = &mut words[i];
+        let [token] = word.tokens.as_slice() else {
+            continue;
+        };
+        if after_verb && token.surface == "んな" && token.lexeme == "そんな" {
+            word.part_of_speech = POS::Postposition;
+            word.lemma_form = "な".into();
+            word.lemma_hatsuon = "な".into();
+            word.citation = None;
+        }
+    }
+}
+
+/// UniDic often reads 一日 as ついたち, the 1st, which it is only after a month (四月一日);
+/// elsewhere it is いちにち (今日一日).
+fn read_one_day(tokens: &mut [UnidicToken]) {
+    for i in 0..tokens.len() {
+        let after_month = i > 0 && tokens[i - 1].surface == "月";
+        let token = &mut tokens[i];
+        if token.surface == "一日" && token.surface_hatsuon == "ツイタチ" && !after_month {
+            token.surface_hatsuon = "イチニチ".into();
+            token.lemma_hatsuon = "イチニチ".into();
+        }
+    }
+}
+
+const FINAL_PARTICLE_PATHS: usize = 5;
+
+/// A sentence-final particle ends its clause, so one followed by が, を or も is a misparse
+/// (か + い for 甲斐 in 待ったかいがあった). A quote can end in one (行くかと思った).
+fn final_particle_mid_clause(tokens: &[UnidicToken]) -> bool {
+    tokens.windows(2).any(|w| {
+        w[0].pos2 == UnidicTag::Shuujoshi
+            && w[1].pos1 == UnidicTag::Joshi
+            && matches!(w[1].surface.as_str(), "が" | "を" | "も")
+    })
 }
 
 /// Some characters speak in katakana (ウルサクナイモンネ), which UniDic can't read and

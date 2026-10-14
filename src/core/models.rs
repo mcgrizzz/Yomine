@@ -153,8 +153,8 @@ pub struct AutoSkip {
     pub spelling_in_anki: bool,
     /// Every occurrence sits inside a name the file's speaker labels use (善 of 善逸).
     pub speaker_name: bool,
-    /// A phrase of grammatical words only that JMdict gives several senses (ことになる).
-    pub ambiguous_grammar: bool,
+    /// A phrase of grammatical words only (ことになる, ありそう): grammar rather than vocabulary.
+    pub grammar: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

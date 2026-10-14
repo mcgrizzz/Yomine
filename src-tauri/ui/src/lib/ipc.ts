@@ -18,7 +18,7 @@ export type JlptLevel = 'N5' | 'N4' | 'N3' | 'N2' | 'N1';
 export interface AutoSkip {
 	spelling_in_anki: boolean;
 	speaker_name: boolean;
-	ambiguous_grammar: boolean;
+	grammar: boolean;
 }
 
 export interface Term {

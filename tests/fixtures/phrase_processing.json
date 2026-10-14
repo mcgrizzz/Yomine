@@ -25,7 +25,7 @@
     "corpus": [
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "grammar": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -47,7 +47,7 @@
       },
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "grammar": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -75,7 +75,7 @@
     "production": [
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "grammar": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -105,7 +105,7 @@
       },
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "grammar": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -166,7 +166,7 @@
     "corpus": [
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "grammar": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -193,7 +193,7 @@
     "production": [
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "grammar": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -248,7 +248,7 @@
     "corpus": [
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "grammar": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -275,7 +275,7 @@
     "production": [
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "grammar": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -330,7 +330,7 @@
     "corpus": [
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "grammar": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -357,7 +357,7 @@
     "production": [
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "grammar": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -412,7 +412,7 @@
     "corpus": [
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "grammar": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -439,7 +439,7 @@
     "production": [
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "grammar": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -514,7 +514,7 @@
     "corpus": [
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "grammar": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -536,7 +536,7 @@
       },
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "grammar": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -558,7 +558,7 @@
       },
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "grammar": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -588,7 +588,7 @@
     "production": [
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "grammar": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -705,7 +705,7 @@
     "corpus": [
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "grammar": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -727,7 +727,7 @@
       },
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "grammar": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -749,7 +749,7 @@
       },
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "grammar": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -771,7 +771,7 @@
       },
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "grammar": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -793,7 +793,7 @@
       },
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "grammar": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -815,7 +815,7 @@
       },
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "grammar": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -844,7 +844,7 @@
     "production": [
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "grammar": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -873,7 +873,7 @@
       },
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "grammar": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -903,7 +903,7 @@
       },
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "grammar": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },

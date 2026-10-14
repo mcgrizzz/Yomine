@@ -6,6 +6,8 @@
 # that matched.
 
 frequencies = [
+	{ term = "聖杖", reading = "せいじょう", rank = 117103 },
+	{ term = "そうです", reading = "そうです", rank = 1000, kana = true },
 	{ term = "に連れて", reading = "につれて", rank = 43358 },
 	{ term = "からといって", reading = "からといって", rank = 2500, kana = true },
 	{ term = "連れる", reading = "つれる", rank = 3000 },
@@ -204,3 +206,16 @@ absent = ["に連れて"]
 name = "a compound particle may end a clause before an ordinary verb"
 text = "魔王を倒したからといって終わりじゃない"
 terms = [{ surface = "からといって" }]
+
+# UniDic splits 聖杖 into 聖 + 杖; a JMdict word all in kanji may be two characters.
+[[case]]
+name = "a two-kanji JMdict word split by UniDic is one term"
+text = "聖杖の証じゃ 無理だよね？"
+terms = [{ surface = "聖杖" }]
+absent = ["聖"]
+
+# The そう of appearance (できそう) belongs to the verb; JMdict's そうです is the adverb そう.
+[[case]]
+name = "そうです after a verb stem is not the interjection"
+text = "長生きできそうです"
+absent = ["そうです"]
