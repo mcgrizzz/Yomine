@@ -333,6 +333,7 @@ export interface SettingsData {
 	media_format: MediaFormat;
 	/** Empty finds ffmpeg on PATH or uses the downloaded copy. */
 	ffmpeg_path: string;
+	tmdb_api_key: string;
 }
 
 export interface TextFilterSetting {
@@ -943,6 +944,21 @@ export function getMediaPreview(filename: string): Promise<string | null> {
 	return invoke('get_media_preview', { filename });
 }
 
+/** A source's show or film on TMDB (`catalog::Match`). */
+export interface MediaMatch {
+	fingerprint: string;
+	work: { kind: 'tv' | 'movie'; tmdb_id: number; title: string; original_title: string };
+	season: number | null;
+	episode: number | null;
+	episode_title: string | null;
+	/** Its file name, another file with the same episode's text, or the user. */
+	matched_by: 'name' | 'content' | 'user';
+}
+
+export function getMediaMatch(fingerprint: string): Promise<MediaMatch | null> {
+	return invoke('get_media_match', { fingerprint });
+}
+
 export function mineBatchItem(
 	batchId: string,
 	itemIndex: number,
@@ -1243,6 +1259,8 @@ export const onDictionariesChanged = (cb: () => void) =>
  * freshly loaded file. */
 export const onAsbplayerMediaLoaded = (cb: (r: FileLoadResult) => void) =>
 	listenTo('asbplayer-media-loaded', cb);
+/** A source was matched after it loaded. */
+export const onMediaMatched = (cb: (m: MediaMatch) => void) => listenTo('media-matched', cb);
 
 /** asbplayer target awareness — a bound media id is mined/seeked directly;
  * without one, commands fall through to asbplayer's active tab. */

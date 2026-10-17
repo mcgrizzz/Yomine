@@ -1,4 +1,5 @@
 pub mod anki;
+pub mod catalog;
 pub mod core;
 pub mod dictionary;
 pub mod epub;

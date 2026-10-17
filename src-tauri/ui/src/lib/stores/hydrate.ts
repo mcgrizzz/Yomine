@@ -5,7 +5,7 @@ import { dragHovering, initProgress, lastError, showNotice } from './ui';
 import { ankiStatus, knowledge, languageToolsStatus } from './status';
 import { checkForUpdate } from './update';
 import { asbContext, playerStatus } from './player';
-import { fileResult, openPaths, recentFiles } from './file';
+import { fileResult, mediaMatch, openPaths, recentFiles } from './file';
 import { jlptEnabled, posCatalog, posEnabled } from './controls';
 import { defaultSettings, settings } from './settings';
 import { refreshIgnoredLemmas } from './ignore';
@@ -66,6 +66,21 @@ export async function hydrate(): Promise<void> {
 		onNewVideo();
 	});
 	ipc.onAsbplayerContext((c) => asbContext.set(c));
+	ipc.onMediaMatched((m) => {
+		if (get(fileResult)?.batch_source.fingerprint === m.fingerprint) mediaMatch.set(m);
+	});
+	// A match made before the file reached the page is read back here.
+	let matchedFor: string | null = null;
+	fileResult.subscribe((r) => {
+		const fingerprint = r?.batch_source.fingerprint ?? null;
+		if (fingerprint === matchedFor) return;
+		matchedFor = fingerprint;
+		mediaMatch.set(null);
+		if (!fingerprint) return;
+		void ipc.getMediaMatch(fingerprint).then((m) => {
+			if (m && matchedFor === fingerprint) mediaMatch.set(m);
+		});
+	});
 	ipc.onDictionariesChanged(() => {
 		refreshSetupStatus();
 	});

@@ -386,7 +386,8 @@ async fn load_file(
 
     let opened =
         video.as_ref().map_or(source_file.original_file.clone(), |v| v.path.display().to_string());
-    let paired = record_open(&source_file, &sentences, filter_result.terms.len(), &opened, mode);
+    let paired =
+        record_open(&app, &source_file, &sentences, filter_result.terms.len(), &opened, mode);
     let local_video = match &video {
         Some(video) => Some(video.path.clone()),
         None => paired
@@ -604,6 +605,7 @@ pub(crate) async fn load_asbplayer_into_state(
             .map_err(|e| e.to_string())?;
 
     let local_video = record_open(
+        app,
         &source_file,
         &sentences,
         filter_result.terms.len(),
@@ -765,6 +767,7 @@ pub async fn reload_current_file(
 /// parts, and returns the video paired with the source. Failures are only logged, so
 /// history never fails an otherwise-good load.
 fn record_open(
+    app: &AppHandle,
     source_file: &SourceFile,
     sentences: &[Sentence],
     term_count: usize,
@@ -806,6 +809,10 @@ fn record_open(
         db::sources::record_open(conn, &info, &open, parts)?;
         db::sources::video(conn, &fingerprint)
     });
+    if info.kind == "subtitles" {
+        let lines = sentences.iter().map(|s| s.text.clone()).collect();
+        crate::media_match::spawn(app.clone(), fingerprint.clone(), opened.to_string(), lines);
+    }
     recorded
         .unwrap_or_else(|e| {
             eprintln!("Failed to record the file in history: {e}");

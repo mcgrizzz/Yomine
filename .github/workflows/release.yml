@@ -175,6 +175,8 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Embedded as Yomine's TMDB key (catalog::tmdb::api_key).
+          YOMINE_TMDB_KEY: ${{ secrets.TMDB_API_KEY }}
           # Updater artifact signing; also makes tauri-action generate and
           # upload latest.json for the in-app updater.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -190,6 +192,7 @@ jobs:
         if: ${{ inputs.build_only }}
         uses: tauri-apps/tauri-action@v0
         env:
+          YOMINE_TMDB_KEY: ${{ secrets.TMDB_API_KEY }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:

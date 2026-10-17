@@ -7,6 +7,8 @@ import { epubChapterModalOpen } from './modals';
 
 /** The currently loaded file + its terms, or `null` before any file is opened. */
 export const fileResult = writable<ipc.FileLoadResult | null>(null);
+/** The loaded file's show or film, once matched. */
+export const mediaMatch = writable<ipc.MediaMatch | null>(null);
 
 /** Gates the per-sentence comprehension bars — without Anki filtering every
  * sentence reads 0%. */

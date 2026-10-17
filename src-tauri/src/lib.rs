@@ -5,6 +5,7 @@ mod commands;
 mod dto;
 mod events;
 mod media;
+mod media_match;
 mod player_task;
 mod recommended;
 mod state;
@@ -32,6 +33,7 @@ pub fn run() {
         .manage(Mutex::new(AppState::new(settings)))
         .invoke_handler(tauri::generate_handler![
             commands::lifecycle::load_language_tools,
+            media_match::get_media_match,
             commands::lifecycle::get_pos_catalog,
             commands::lifecycle::get_settings,
             commands::lifecycle::get_default_settings,

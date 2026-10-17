@@ -61,6 +61,9 @@ jobs:
         working-directory: src-tauri/ui
       - name: Build test installers
         uses: tauri-apps/tauri-action@v0
+        env:
+          # Empty for pull requests from forks, which then build without TMDB matching.
+          YOMINE_TMDB_KEY: ${{ secrets.TMDB_API_KEY }}
         with:
           args: >-
             ${{ matrix.args }}
