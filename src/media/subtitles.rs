@@ -74,22 +74,61 @@ fn extension(path: &Path) -> Option<String> {
     path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase)
 }
 
+const TAG_FLAGS: &[&str] = &["forced", "sdh", "cc", "hi", "signs", "songs", "full", "default"];
+
+/// ffmpeg's three-letter code for a language as subtitle names write it.
+fn language_code(part: &str) -> Option<&'static str> {
+    Some(match part {
+        "ja" | "jp" | "jpn" | "jap" | "japanese" => "jpn",
+        "en" | "eng" | "english" => "eng",
+        "es" | "spa" => "spa",
+        "fr" | "fre" | "fra" => "fra",
+        "de" | "ger" | "deu" => "deu",
+        "it" | "ita" => "ita",
+        "pt" | "por" => "por",
+        "ru" | "rus" => "rus",
+        "ko" | "kor" => "kor",
+        "zh" | "chi" | "zho" => "zho",
+        _ => return None,
+    })
+}
+
+/// Whether one dotted part of a name is a language tag: `ja`, `ja-JP`, `ja[cc]`, `forced`.
+fn is_language_tag(part: &str) -> bool {
+    let part = part.to_ascii_lowercase();
+    let (part, bracketed) = match part.strip_suffix(']').and_then(|p| p.split_once('[')) {
+        Some((part, flag)) => (part.to_string(), Some(flag.to_string())),
+        None => (part, None),
+    };
+    let mut pieces = part.split(['-', '_']);
+    let first = pieces.next().unwrap_or_default();
+    (language_code(first).is_some() || TAG_FLAGS.contains(&first))
+        && pieces.all(|p| p.len() == 2 || TAG_FLAGS.contains(&p))
+        && bracketed.is_none_or(|f| TAG_FLAGS.contains(&f.as_str()))
+}
+
+/// A subtitle file's stem without its language tag: `ep01` for `ep01.jpn.forced`.
+pub fn strip_language_tag(stem: &str) -> &str {
+    let mut base = stem;
+    while let Some((rest, part)) = base.rsplit_once('.') {
+        if rest.is_empty() || !is_language_tag(part) {
+            break;
+        }
+        base = rest;
+    }
+    base
+}
+
 /// The language tag in `ep01.ja.srt`, normalised to ffmpeg's three-letter codes.
 /// Tags can carry flags too: `jpn.forced`, `ja-JP`, `en.sdh`.
 fn tag_language(tag: &str) -> (Option<String>, Vec<String>) {
-    const FLAGS: &[&str] = &["forced", "sdh", "cc", "hi", "signs", "songs", "full", "default"];
     let mut language = None;
     let mut flags = Vec::new();
     for part in tag.split(['.', '_', '-']).map(str::to_ascii_lowercase).filter(|p| !p.is_empty()) {
-        let code = match part.as_str() {
-            "ja" | "jp" | "jpn" | "jap" | "japanese" => Some("jpn"),
-            "en" | "eng" | "english" => Some("eng"),
-            _ => None,
-        };
-        match code {
+        match language_code(&part) {
             Some(code) if language.is_none() => language = Some(code.to_string()),
             Some(_) => {}
-            None if FLAGS.contains(&part.as_str()) => flags.push(part),
+            None if TAG_FLAGS.contains(&part.as_str()) => flags.push(part),
             // A region after the language, as in ja-JP.
             None if language.is_some() => {}
             None => language = Some(part),
@@ -144,13 +183,16 @@ pub fn sidecars(video: &Path) -> Vec<SubtitleChoice> {
 pub fn sibling_video(subtitle: &Path) -> Option<PathBuf> {
     let dir = subtitle.parent()?;
     let stem = subtitle.file_stem()?.to_str()?;
-    let base = stem.rsplit_once('.').map_or(stem, |(base, _)| base);
+    let one_tag = stem.rsplit_once('.').map_or(stem, |(base, _)| base);
+    let base = strip_language_tag(stem);
     std::fs::read_dir(dir)
         .ok()?
         .filter_map(|entry| entry.ok().map(|e| e.path()))
         .filter(|path| is_video(path))
         .find(|path| {
-            path.file_stem().and_then(|s| s.to_str()).is_some_and(|s| s == stem || s == base)
+            path.file_stem()
+                .and_then(|s| s.to_str())
+                .is_some_and(|s| s == stem || s == one_tag || s == base)
         })
 }
 
@@ -394,6 +436,7 @@ mod tests {
             ]
         );
         assert_eq!(sibling_video(&dir.join("ep01.ja.ass")), Some(dir.join("ep01.mkv")));
+        assert_eq!(sibling_video(&dir.join("ep01.jpn.forced.srt")), Some(dir.join("ep01.mkv")));
         assert_eq!(sibling_video(&dir.join("ep02.srt")), None);
         std::fs::remove_dir_all(&dir).unwrap();
     }

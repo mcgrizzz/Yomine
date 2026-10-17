@@ -96,16 +96,14 @@ pub(crate) fn load_result(file: &FileData) -> Option<FileLoadResult> {
 }
 
 /// Construct a `SourceFile` from a filesystem path, parsing title/creator from the
-/// filename the same way the egui file modal does. EPUBs prefer the metadata title
+/// path, its folders included. EPUBs prefer the metadata title
 /// and carry the picker's selection label for the top bar and recents to render.
 fn source_file_from_path(
     path: &str,
     epub_chapters: Option<Vec<usize>>,
     epub_label: Option<String>,
 ) -> SourceFile {
-    let filename =
-        std::path::Path::new(path).file_name().and_then(|n| n.to_str()).unwrap_or("Unknown");
-    let media_info = filename_parser::parse_filename(filename);
+    let media_info = filename_parser::parse_filename(path);
     let metadata = media_info.get_metadata_string();
     let file_type = SourceFileType::from_extension(path);
     let is_epub = matches!(file_type, SourceFileType::EPUB);

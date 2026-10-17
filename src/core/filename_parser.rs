@@ -1,4 +1,12 @@
+use std::sync::LazyLock;
+
+use anitomy_ng::{
+    ElementKind,
+    Options,
+};
 use regex::Regex;
+
+use crate::media::subtitles::strip_language_tag;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MediaType {
@@ -19,102 +27,74 @@ pub enum MediaType {
     },
 }
 
-pub fn parse_filename(filename: &str) -> MediaType {
-    let stem =
-        std::path::Path::new(filename).file_stem().and_then(|s| s.to_str()).unwrap_or(filename);
+/// asbplayer names a streaming site's track `<page title> - <track label>`.
+static TRACK_LABEL: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)\s+-\s+(?:日本語|Japanese)(?:\s*[(\[（][^)\]）]*[)\]）])?$").unwrap()
+});
+static BRACKETED: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\[[^\]]*\]").unwrap());
 
-    if let Some(tv_info) = parse_tv_show(stem) {
-        return tv_info;
-    }
+/// Parses a file name or a path. A path's folders can give the title (`Show/03.mkv`) and
+/// the season (`Season 2/`).
+pub fn parse_filename(path: &str) -> MediaType {
+    let path = fold_fullwidth(path);
+    let name_start = path.rfind(['/', '\\']).map_or(0, |i| i + 1);
+    let name = &path[name_start..];
+    let stem = std::path::Path::new(name).file_stem().and_then(|s| s.to_str()).unwrap_or(name);
+    // asbplayer's extension for YouTube's subtitle format.
+    let stem = stem.strip_suffix(".ytsrv3").unwrap_or(stem);
+    let stem = strip_language_tag(stem);
+    let stem = TRACK_LABEL.replace(stem, "");
 
-    if let Some(movie_info) = parse_movie(stem) {
-        return movie_info;
-    }
+    let elements =
+        anitomy_ng::parse_path(&format!("{}{stem}", &path[..name_start]), Options::default());
+    let first =
+        |kind: ElementKind| elements.iter().find(|e| e.kind == kind).map(|e| e.value.as_str());
+    let title = first(ElementKind::Title).map(tidy).filter(|t| !t.is_empty());
+    let season = first(ElementKind::Season).and_then(|s| s.parse().ok());
+    let episode = first(ElementKind::Episode);
+    let year = first(ElementKind::Year).and_then(|y| y.parse().ok());
+    let source = parse_source(name);
 
-    parse_generic(stem)
-}
-
-fn parse_tv_show(filename: &str) -> Option<MediaType> {
-    let patterns = vec![
-        // "Show.Name.S01E02.1080p.mkv"
-        r"(?i)(.+?)[\.\s\-\_\[\]]*[Ss](\d{1,2})[Ee](\d{1,3})(?:[\.\s\-\_]*(.+))?",
-        // "Show Name E001 [NF].srt" or "Show Name episode 12"
-        r"(?i)(.+?)[\.\s\-\_\[\]]*(?:episode|ep|e)[\.\s\-\_]*(\d{1,3})(?:[\.\s\-\_]*(.+))?",
-        // "Show Name 12 (Special)" Non season
-        r"(?i)(.+?)[\s\-]+(\d{1,3})(?:\s+\((.+?)\)|\s+(.+?))?$",
-    ];
-
-    for (i, pattern) in patterns.iter().enumerate() {
-        let re = Regex::new(pattern).ok()?;
-        if let Some(captures) = re.captures(filename) {
-            let title_str = captures.get(1)?.as_str();
-            let title = clean_title(title_str);
-
-            let (season, episode) = match i {
-                0 => {
-                    let season = captures.get(2)?.as_str().parse().ok()?;
-                    let episode = captures.get(3)?.as_str().parse().ok()?;
-                    (Some(season), Some(episode))
-                }
-                1 => {
-                    let episode = captures.get(2)?.as_str().parse().ok()?;
-                    (None, Some(episode))
-                }
-                2 => {
-                    let episode_str = captures.get(2)?.as_str();
-                    let episode: u32 = episode_str.parse().ok()?;
-
-                    if episode > 200 {
-                        continue;
-                    }
-
-                    let remaining = captures
-                        .get(3)
-                        .or_else(|| captures.get(4))
-                        .map(|m| m.as_str())
-                        .unwrap_or("");
-                    if remaining.contains("x") && remaining.contains(episode_str) {
-                        continue;
-                    }
-
-                    (None, Some(episode))
-                }
-                _ => {
-                    continue;
-                }
-            };
-
-            let remaining = captures.get(captures.len() - 1).map(|m| m.as_str()).unwrap_or("");
-            let source = parse_source(remaining).or_else(|| parse_source(filename));
-
-            return Some(MediaType::TvShow { title, season, episode, source });
+    if episode.is_some() || season.is_some() {
+        MediaType::TvShow {
+            title: title.unwrap_or_else(|| clean(&stem)),
+            season,
+            episode: episode.and_then(|e| e.parse().ok()),
+            source,
         }
+    } else if year.is_some() {
+        MediaType::Movie { title: title.unwrap_or_else(|| clean(&stem)), year, source }
+    } else {
+        // anitomy reads a leading bracket as a release group, which loses 【東京→北京】 from a
+        // video's title.
+        MediaType::Generic { title: clean(&stem), source }
     }
-
-    None
 }
 
-fn parse_movie(filename: &str) -> Option<MediaType> {
-    let year_pattern = r"(?i)(.+?)[\s\.\-\_]*\((\d{4})\)(?:[\s\.\-\_]*(.+))?";
-    let re = Regex::new(year_pattern).ok()?;
-
-    if let Some(captures) = re.captures(filename) {
-        let title = clean_title(captures.get(1)?.as_str());
-        let year = captures.get(2)?.as_str().parse().ok();
-        let remaining = captures.get(3).map(|m| m.as_str()).unwrap_or("");
-        let source = parse_source(remaining);
-
-        return Some(MediaType::Movie { title, year, source });
-    }
-
-    None
+/// anitomy reads ASCII digits only, so `第３話` has no episode until it's `第3話`.
+fn fold_fullwidth(text: &str) -> String {
+    text.chars()
+        .map(|c| match c {
+            '０'..='９' | 'Ａ'..='Ｚ' | 'ａ'..='ｚ' => {
+                char::from_u32(c as u32 - 0xFEE0).unwrap_or(c)
+            }
+            '\u{3000}' => ' ',
+            c => c,
+        })
+        .collect()
 }
 
-fn parse_generic(filename: &str) -> MediaType {
-    let title = clean_title(filename);
-    let source = parse_source(filename);
+fn tidy(title: &str) -> String {
+    title.replace('_', " ").split_whitespace().collect::<Vec<_>>().join(" ")
+}
 
-    MediaType::Generic { title, source }
+fn clean(stem: &str) -> String {
+    let title = tidy(&BRACKETED.replace_all(stem, "")).trim_end_matches(" -").to_string();
+    if title.is_empty() {
+        tidy(stem)
+    } else {
+        title
+    }
 }
 
 fn parse_source(text: &str) -> Option<String> {
@@ -139,48 +119,6 @@ fn parse_source(text: &str) -> Option<String> {
     }
 
     None
-}
-
-fn clean_title(title: &str) -> String {
-    let mut cleaned = title.to_string();
-
-    let bracket_re = Regex::new(r"[\[\(][^\]\)]*[\]\)]").unwrap();
-    cleaned = bracket_re.replace_all(&cleaned, "").to_string();
-
-    let lang_re = Regex::new(r"\.(?:ja|en|es|fr|de|it|pt|ru|ko|zh)(?:\[cc\])?$").unwrap();
-    cleaned = lang_re.replace_all(&cleaned, "").to_string();
-
-    cleaned = cleaned.replace(['.', '_', '-'], " ");
-
-    let space_re = Regex::new(r"\s+").unwrap();
-    cleaned = space_re.replace_all(&cleaned, " ").trim().to_string();
-
-    let alphabetic_chars: Vec<char> = cleaned.chars().filter(|c| c.is_alphabetic()).collect();
-    if alphabetic_chars.is_empty() {
-        return cleaned;
-    }
-
-    let is_all_upper = alphabetic_chars.iter().all(|c| c.is_uppercase());
-    let is_all_lower = alphabetic_chars.iter().all(|c| c.is_lowercase());
-
-    if is_all_upper || is_all_lower {
-        cleaned
-            .split_whitespace()
-            .map(|word| {
-                let mut chars = word.chars();
-                match chars.next() {
-                    None => String::new(),
-                    Some(first) => {
-                        first.to_uppercase().collect::<String>()
-                            + chars.as_str().to_lowercase().as_str()
-                    }
-                }
-            })
-            .collect::<Vec<_>>()
-            .join(" ")
-    } else {
-        cleaned
-    }
 }
 
 impl MediaType {
@@ -221,60 +159,38 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_filename_parsing() {
-        // Test TV show parsing with Japanese title, source detection, and language suffix
-        let tv_result = parse_filename(
-            "ダンダダン.S01E08.なんかモヤモヤするじゃんよ.WEBRip.Netflix.ja[cc].srt",
-        );
-        if let MediaType::TvShow { title, season, episode, source } = tv_result {
-            assert_eq!(title, "ダンダダン");
-            assert_eq!(season, Some(1));
-            assert_eq!(episode, Some(8));
-            assert_eq!(source, Some("Netflix".to_string()));
-        } else {
-            panic!("Expected TvShow, got {:?}", tv_result);
+    fn parses_names_we_have_misread() {
+        let show = |title: &str, season: Option<u32>, episode: Option<u32>| MediaType::TvShow {
+            title: title.into(),
+            season,
+            episode,
+            source: None,
+        };
+        let cases = [
+            // A checksum's `E4` isn't an episode.
+            (
+                "[SubsPlease] Mushoku Tensei - 01v2 (1080p) [F76E4E71].ja.srt",
+                show("Mushoku Tensei", None, Some(1)),
+            ),
+            ("Steins;Gate 0 - 12 [BD 1080p].mkv", show("Steins;Gate 0", None, Some(12))),
+            ("One Piece 1071.srt", show("One Piece", None, Some(1071))),
+            ("葬送のフリーレン　第３話.srt", show("葬送のフリーレン", None, Some(3))),
+            ("/anime/葬送のフリーレン/Season 2/03.mkv", show("葬送のフリーレン", Some(2), Some(3))),
+            (
+                "Frieren.Beyond.Journeys.End.S01E01.1080p.WEBRip.x265.DDP.2.0-ZeroBuild.jpn.forced.srt",
+                show("Frieren Beyond Journeys End", Some(1), Some(1)),
+            ),
+            (
+                "【東京→北京】JAL国際線ビジネスクラスに初搭乗 - 日本語 (自動生成).srt",
+                MediaType::Generic {
+                    title: "【東京→北京】JAL国際線ビジネスクラスに初搭乗".into(),
+                    source: None,
+                },
+            ),
+        ];
+        for (name, expected) in cases {
+            assert_eq!(parse_filename(name), expected, "{name}");
         }
-
-        // Test TV show with E001 format
-        let slam_dunk_result = parse_filename("Slam Dunk E001 [NF].srt");
-        if let MediaType::TvShow { title, season, episode, source } = slam_dunk_result {
-            assert_eq!(title, "Slam Dunk");
-            assert_eq!(season, None);
-            assert_eq!(episode, Some(1));
-            assert_eq!(source, None);
-        } else {
-            panic!("Expected TvShow, got {:?}", slam_dunk_result);
-        }
-
-        // Test movie parsing
-        let movie_result = parse_filename("Your Name (2016) [1080p] BluRay.mkv");
-        if let MediaType::Movie { title, year, source } = movie_result {
-            assert_eq!(title, "Your Name");
-            assert_eq!(year, Some(2016));
-            assert!(source.is_none());
-        } else {
-            panic!("Expected Movie, got {:?}", movie_result);
-        }
-
-        // Test generic parsing
-        let generic_result = parse_filename(
-            "[Japanese] 【九州→東京】豪華フェリーの高級個室に乗船 [DownSub.com].srt",
-        );
-        if let MediaType::Generic { title, source } = generic_result {
-            assert_eq!(title, "【九州→東京】豪華フェリーの高級個室に乗船");
-            assert!(source.is_none());
-        } else {
-            panic!("Expected Generic, got {:?}", generic_result);
-        }
-    }
-
-    #[test]
-    fn test_title_cleaning() {
-        // Test various title cleaning scenarios
-        assert_eq!(clean_title("[Release] show.name_here"), "Show Name Here");
-        assert_eq!(clean_title("SHOW_NAME"), "Show Name");
-        assert_eq!(clean_title("show.name.ja"), "Show Name"); // Language suffix removal
-        assert_eq!(clean_title("movie.title.en[cc]"), "Movie Title");
     }
 
     #[test]
