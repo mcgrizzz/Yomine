@@ -951,12 +951,55 @@ export interface MediaMatch {
 	season: number | null;
 	episode: number | null;
 	episode_title: string | null;
-	/** Its file name, another file with the same episode's text, or the user. */
-	matched_by: 'name' | 'content' | 'user';
+	/** Linked by its file name, another file with the same episode's text, or the user;
+	 * `suggested` is an uncertain match waiting for the user. */
+	matched_by: 'name' | 'content' | 'user' | 'suggested';
+}
+
+/** A TMDB search result (`catalog::tmdb::Candidate`). */
+export interface MediaCandidate {
+	id: number;
+	title: string;
+	original_title: string;
+	original_language: string;
+	/** `YYYY-MM-DD`, or empty when TMDB has no date. */
+	release_date: string;
+}
+
+/** A TMDB entry the user named (`catalog::Reference`). */
+export interface MediaReference {
+	kind: 'tv' | 'movie';
+	tmdb_id: number;
+	season: number | null;
+	episode: number | null;
 }
 
 export function getMediaMatch(fingerprint: string): Promise<MediaMatch | null> {
 	return invoke('get_media_match', { fingerprint });
+}
+
+export interface MediaSearch {
+	/** The searched kind, or the kind a pasted link names. */
+	kind: 'tv' | 'movie';
+	results: MediaCandidate[];
+	/** The season and episode of a pasted episode link. */
+	season: number | null;
+	episode: number | null;
+}
+
+/** Searches TMDB by title, or finds the entry a pasted TMDB link or ID names. */
+export function searchMedia(text: string, kind: 'tv' | 'movie'): Promise<MediaSearch> {
+	return invoke('search_media', { text, kind });
+}
+
+/** Links the source to the entry, and its title's other files with it. */
+export function setMediaMatch(fingerprint: string, reference: MediaReference): Promise<MediaMatch> {
+	return invoke('set_media_match', { fingerprint, reference });
+}
+
+/** Marks the source, and its title's other files, as not a show or film. */
+export function clearMediaMatch(fingerprint: string): Promise<void> {
+	return invoke('clear_media_match', { fingerprint });
 }
 
 export function mineBatchItem(

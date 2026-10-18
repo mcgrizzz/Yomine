@@ -37,10 +37,8 @@
 		pairVideo,
 		switchSubtitleTrack,
 		openRecentFilesModal,
-		mediaMatch,
-		openExternal
+		mediaMatch
 	} from '$lib/stores';
-	import type { MediaMatch } from '$lib/ipc';
 	import BatchRecovery from '$lib/components/BatchRecovery.svelte';
 	import TopBar from '$lib/components/TopBar.svelte';
 	import TermTable from '$lib/components/TermTable.svelte';
@@ -67,6 +65,7 @@
 	import MineAbility from '$lib/components/MineAbility.svelte';
 	import QueueStepper from '$lib/components/QueueStepper.svelte';
 	import RecentCard from '$lib/components/RecentCard.svelte';
+	import MediaMatchChip from '$lib/components/MediaMatchChip.svelte';
 	import { filename, inMode, modeLabel, recentKey } from '$lib/recents';
 
 	onMount(hydrate);
@@ -89,18 +88,6 @@
 	const toolsError = $derived(
 		typeof $languageToolsStatus === 'object' ? $languageToolsStatus.error : null
 	);
-
-	const MATCHED_BY = {
-		name: 'its file name',
-		content: 'another file with the same subtitles',
-		user: 'you'
-	};
-	function tmdbUrl(m: MediaMatch): string {
-		const work = `https://www.themoviedb.org/${m.work.kind}/${m.work.tmdb_id}`;
-		return m.work.kind === 'tv' && m.season !== null && m.episode !== null
-			? `${work}/season/${m.season}/episode/${m.episode}`
-			: work;
-	}
 
 	// F5 / Ctrl+R refresh terms (and block the webview's page reload).
 	function onKeydown(e: KeyboardEvent) {
@@ -143,16 +130,12 @@
 							>
 						{/if}
 						<span class="chips">
-							{#if $mediaMatch}
-								{@const m = $mediaMatch}
-								<button
-									class="tab-chip match"
-									title={`${m.work.title}${m.episode_title ? ` — ${m.episode_title}` : ''}\nMatched by ${MATCHED_BY[m.matched_by]}. Click to open it on TMDB.`}
-									onclick={() => openExternal(tmdbUrl(m))}
-									>{m.work.original_title || m.work.title}{m.season !== null && m.episode !== null
-										? ` · S${m.season}E${m.episode}`
-										: ''}</button
-								>
+							{#if timed || $mediaMatch}
+								<MediaMatchChip
+									fingerprint={$fileResult.batch_source.fingerprint}
+									match={$mediaMatch}
+									fileTitle={$fileResult.source_file.title}
+								/>
 							{/if}
 							{#if $fileResult.subtitle_tracks.length > 1}
 								<select
@@ -448,10 +431,6 @@
 	button.tab-chip:hover {
 		background: color-mix(in srgb, currentColor 20%, transparent);
 		border-color: currentColor;
-	}
-	.tab-chip.match {
-		color: var(--text);
-		background: var(--bg-raised);
 	}
 	.tab-chip.ok {
 		color: var(--success);

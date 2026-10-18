@@ -34,6 +34,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::lifecycle::load_language_tools,
             media_match::get_media_match,
+            media_match::search_media,
+            media_match::set_media_match,
+            media_match::clear_media_match,
             commands::lifecycle::get_pos_catalog,
             commands::lifecycle::get_settings,
             commands::lifecycle::get_default_settings,

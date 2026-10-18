@@ -25,7 +25,7 @@ pub fn api_key(user: Option<&str>) -> Option<String> {
         .or_else(|| option_env!("YOMINE_TMDB_KEY").map(str::to_string))
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Candidate {
     pub id: i64,
     #[serde(default, alias = "name")]
@@ -34,6 +34,8 @@ pub struct Candidate {
     pub original_title: String,
     #[serde(default)]
     pub original_language: String,
+    #[serde(default, alias = "first_air_date")]
+    pub release_date: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -103,6 +105,10 @@ impl Tmdb {
         }
         let path = format!("/search/{}", kind.as_str());
         Ok(self.get::<Results>(&path, &params).await?.map_or_else(Vec::new, |r| r.results))
+    }
+
+    pub async fn details(&self, kind: Kind, id: i64) -> Result<Option<Candidate>, YomineError> {
+        self.get(&format!("/{}/{id}", kind.as_str()), &[]).await
     }
 
     pub async fn alternative_titles(

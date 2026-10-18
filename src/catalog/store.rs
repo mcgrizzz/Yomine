@@ -1,4 +1,5 @@
-//! TMDB's answers kept on disk and shared by every profile, so a show is searched once.
+//! TMDB's answers kept on disk and shared by every profile, so a show is searched once, and
+//! the user's corrections to them.
 
 use std::sync::Mutex;
 
@@ -27,9 +28,9 @@ const NOT_FOUND_KEPT_MS: i64 = 7 * DAY_MS;
 /// A season without a file's episode may still be airing.
 const SEASON_STALE_MS: i64 = DAY_MS;
 
-/// Only a cache: a different `VERSION` drops the tables rather than migrating them.
+/// Only a cache: a different `VERSION` drops these tables rather than migrating them.
 const VERSION: i64 = 1;
-const SCHEMA: &str = "
+const CACHE_SCHEMA: &str = "
 DROP TABLE IF EXISTS titles;
 DROP TABLE IF EXISTS seasons;
 DROP TABLE IF EXISTS shows;
@@ -59,6 +60,27 @@ CREATE TABLE shows (
     fetched_at INTEGER NOT NULL
 );
 ";
+/// The user's answers, kept across cache versions until the user changes them.
+const CORRECTIONS_SCHEMA: &str = "
+CREATE TABLE IF NOT EXISTS corrections (
+    key TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    -- NULL when the user said the title isn't a show or film.
+    tmdb_id INTEGER,
+    title TEXT,
+    original_title TEXT,
+    at INTEGER NOT NULL
+);
+-- Where a title's season numbering lands on TMDB: the file's season (0 for none) becomes
+-- `tmdb_season`, and its episode numbers move by `episode_offset`.
+CREATE TABLE IF NOT EXISTS season_corrections (
+    key TEXT NOT NULL,
+    season INTEGER NOT NULL,
+    tmdb_season INTEGER NOT NULL,
+    episode_offset INTEGER NOT NULL,
+    PRIMARY KEY (key, season)
+);
+";
 
 static DB: Mutex<Option<Connection>> = Mutex::new(None);
 
@@ -76,9 +98,10 @@ fn open(path: &std::path::Path) -> rusqlite::Result<Connection> {
     conn.busy_timeout(std::time::Duration::from_secs(5))?;
     let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
     if version != VERSION {
-        conn.execute_batch(SCHEMA)?;
+        conn.execute_batch(CACHE_SCHEMA)?;
         conn.pragma_update(None, "user_version", VERSION)?;
     }
+    conn.execute_batch(CORRECTIONS_SCHEMA)?;
     Ok(conn)
 }
 
@@ -211,4 +234,110 @@ pub fn set_seasons(show: i64, seasons: &[(u32, u32)]) -> Result<(), YomineError>
         )
         .map(|_| ())
     })
+}
+
+/// The user's answer for a title: `Some(None)` when they said it isn't a show or film.
+pub fn correction(key: &str) -> Result<Option<Option<Work>>, YomineError> {
+    with(|conn| {
+        conn.query_row(
+            "SELECT kind, tmdb_id, title, original_title FROM corrections WHERE key = ?1",
+            params![key],
+            |r| {
+                let kind = Kind::from_key(&r.get::<_, String>(0)?);
+                Ok(match (kind, r.get::<_, Option<i64>>(1)?) {
+                    (Some(kind), Some(tmdb_id)) => Some(Work {
+                        kind,
+                        tmdb_id,
+                        title: r.get::<_, Option<String>>(2)?.unwrap_or_default(),
+                        original_title: r.get::<_, Option<String>>(3)?.unwrap_or_default(),
+                    }),
+                    _ => None,
+                })
+            },
+        )
+        .optional()
+    })
+}
+
+/// Season corrections stay while the title keeps its work.
+pub fn set_correction(key: &str, kind: Kind, work: Option<&Work>) -> Result<(), YomineError> {
+    with(|conn| {
+        let current: Option<Option<i64>> = conn
+            .query_row("SELECT tmdb_id FROM corrections WHERE key = ?1", params![key], |r| r.get(0))
+            .optional()?;
+        if current.flatten() != work.map(|w| w.tmdb_id) {
+            conn.execute("DELETE FROM season_corrections WHERE key = ?1", params![key])?;
+        }
+        conn.execute(
+            "INSERT OR REPLACE INTO corrections (key, kind, tmdb_id, title, original_title, at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                key,
+                kind.as_str(),
+                work.map(|w| w.tmdb_id),
+                work.map(|w| w.title.as_str()),
+                work.map(|w| w.original_title.as_str()),
+                now()
+            ],
+        )
+        .map(|_| ())
+    })
+}
+
+/// The TMDB season and episode offset for a title's season, as the user corrected it.
+pub fn season_correction(key: &str, season: u32) -> Result<Option<(u32, i64)>, YomineError> {
+    with(|conn| {
+        conn.query_row(
+            "SELECT tmdb_season, episode_offset FROM season_corrections
+             WHERE key = ?1 AND season = ?2",
+            params![key, season],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .optional()
+    })
+}
+
+pub fn set_season_correction(
+    key: &str,
+    season: u32,
+    tmdb_season: u32,
+    offset: i64,
+) -> Result<(), YomineError> {
+    with(|conn| {
+        conn.execute(
+            "INSERT OR REPLACE INTO season_corrections (key, season, tmdb_season, episode_offset)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![key, season, tmdb_season, offset],
+        )
+        .map(|_| ())
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn corrections_outlast_a_new_cache_version() {
+        let path = std::env::temp_dir().join(format!(
+            "yomine-catalog-{}-{}.db",
+            std::process::id(),
+            now()
+        ));
+        let conn = open(&path).unwrap();
+        conn.execute(
+            "INSERT INTO corrections (key, kind, tmdb_id, at) VALUES ('tv:re zero:', 'tv', 65942, 0)",
+            [],
+        )
+        .unwrap();
+        conn.pragma_update(None, "user_version", VERSION + 1).unwrap();
+        drop(conn);
+
+        let conn = open(&path).unwrap();
+        let kept: i64 =
+            conn.query_row("SELECT count(*) FROM corrections", [], |r| r.get(0)).unwrap();
+        assert_eq!(kept, 1);
+        drop(conn);
+        std::fs::remove_file(path).unwrap();
+    }
 }

@@ -4,6 +4,9 @@ pub mod signature;
 pub mod store;
 pub mod tmdb;
 
+use std::sync::LazyLock;
+
+use regex::Regex;
 use serde::{
     Deserialize,
     Serialize,
@@ -91,6 +94,50 @@ impl Query {
             _ => None,
         }
     }
+
+    /// What searches and corrections are kept under.
+    pub fn key(&self) -> String {
+        format!(
+            "{}:{}:{}",
+            self.kind.as_str(),
+            normalize_title(&self.title),
+            self.year.map(|y| y.to_string()).unwrap_or_default()
+        )
+    }
+}
+
+/// A TMDB entry the user named.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Reference {
+    pub kind: Kind,
+    pub tmdb_id: i64,
+    pub season: Option<u32>,
+    pub episode: Option<u32>,
+}
+
+impl Reference {
+    /// A TMDB link (`themoviedb.org/tv/55925-hanzawa-naoki/season/2/episode/3`), or a bare ID
+    /// of the given kind.
+    pub fn parse(text: &str, kind: Kind) -> Option<Self> {
+        static LINK: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new(
+                r"themoviedb\.org/(tv|movie)/(\d+)[^/?#]*(?:/season/(\d+)(?:/episode/(\d+))?)?",
+            )
+            .unwrap()
+        });
+        let text = text.trim();
+        if let Ok(tmdb_id) = text.parse() {
+            return Some(Reference { kind, tmdb_id, season: None, episode: None });
+        }
+        let link = LINK.captures(text)?;
+        let number = |i: usize| link.get(i).and_then(|m| m.as_str().parse().ok());
+        Some(Reference {
+            kind: Kind::from_key(&link[1])?,
+            tmdb_id: link[2].parse().ok()?,
+            season: number(3),
+            episode: number(4),
+        })
+    }
 }
 
 pub struct Resolved {
@@ -106,28 +153,37 @@ static RESOLVING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 /// time, so a queue of one show's episodes searches for the show once.
 pub async fn resolve(tmdb: &Tmdb, query: &Query) -> Result<Option<Resolved>, YomineError> {
     let _one_at_a_time = RESOLVING.lock().await;
-    let key = format!(
-        "{}:{}:{}",
-        query.kind.as_str(),
-        normalize_title(&query.title),
-        query.year.map(|y| y.to_string()).unwrap_or_default()
-    );
-    let (work, exact) = match store::title(&key)? {
-        Some(store::CachedTitle { work: None, .. }) => return Ok(None),
-        Some(store::CachedTitle { work: Some(work), exact }) => (work, exact),
-        None => {
-            let found = search(tmdb, query).await?;
-            store::set_title(&key, query.kind, found.as_ref().map(|(w, _)| w), {
-                found.as_ref().is_some_and(|(_, exact)| *exact)
-            })?;
-            match found {
-                Some(found) => found,
-                None => return Ok(None),
+    let key = query.key();
+    let (work, exact) = match store::correction(&key)? {
+        Some(None) => return Ok(None),
+        Some(Some(work)) => (work, true),
+        None => match store::title(&key)? {
+            Some(store::CachedTitle { work: None, .. }) => return Ok(None),
+            Some(store::CachedTitle { work: Some(work), exact }) => (work, exact),
+            None => {
+                let found = search(tmdb, query).await?;
+                store::set_title(&key, query.kind, found.as_ref().map(|(w, _)| w), {
+                    found.as_ref().is_some_and(|(_, exact)| *exact)
+                })?;
+                match found {
+                    Some(found) => found,
+                    None => return Ok(None),
+                }
             }
-        }
+        },
     };
     let episode = match (query.kind, query.episode) {
-        (Kind::Tv, Some(number)) => find_episode(tmdb, work.tmdb_id, query.season, number).await?,
+        (Kind::Tv, Some(number)) => {
+            match store::season_correction(&key, query.season.unwrap_or(0))? {
+                Some((season, offset)) => match u32::try_from(i64::from(number) + offset) {
+                    Ok(number) => {
+                        episode_in(tmdb, work.tmdb_id, season, number).await?.map(|e| (season, e))
+                    }
+                    Err(_) => None,
+                },
+                None => find_episode(tmdb, work.tmdb_id, query.season, number).await?,
+            }
+        }
         _ => None,
     };
     let confident = exact && (query.kind == Kind::Movie || episode.is_some());
@@ -141,6 +197,52 @@ pub async fn resolve(tmdb: &Tmdb, query: &Query) -> Result<Option<Resolved>, Yom
         None => Match { work, season: query.season, episode: query.episode, episode_title: None },
     };
     Ok(Some(Resolved { found, confident }))
+}
+
+/// Keeps the user's match for the query's title and, for a show, where its season numbering
+/// lands on TMDB, so the title's other files follow it.
+pub fn remember(query: &Query, found: &Match) -> Result<(), YomineError> {
+    let key = query.key();
+    store::set_correction(&key, found.work.kind, Some(&found.work))?;
+    if let (Some(number), Some(season), Some(episode)) =
+        (query.episode, found.season, found.episode)
+    {
+        let offset = i64::from(episode) - i64::from(number);
+        store::set_season_correction(&key, query.season.unwrap_or(0), season, offset)?;
+    }
+    Ok(())
+}
+
+/// Keeps the user's answer that the query's title isn't a show or film.
+pub fn forget(query: &Query) -> Result<(), YomineError> {
+    store::set_correction(&query.key(), query.kind, None)
+}
+
+/// The match a reference names, with TMDB's titles. The user's season and episode stand
+/// even where TMDB doesn't list them.
+pub async fn lookup(tmdb: &Tmdb, reference: &Reference) -> Result<Option<Match>, YomineError> {
+    let Some(details) = tmdb.details(reference.kind, reference.tmdb_id).await? else {
+        return Ok(None);
+    };
+    let work = Work {
+        kind: reference.kind,
+        tmdb_id: reference.tmdb_id,
+        title: details.title,
+        original_title: details.original_title,
+    };
+    if work.kind == Kind::Movie {
+        return Ok(Some(Match { work, season: None, episode: None, episode_title: None }));
+    }
+    let episode = match (reference.season, reference.episode) {
+        (Some(season), Some(number)) => episode_in(tmdb, work.tmdb_id, season, number).await?,
+        _ => None,
+    };
+    Ok(Some(Match {
+        work,
+        season: reference.season,
+        episode: reference.episode,
+        episode_title: episode.map(|e| e.name).filter(|n| !n.is_empty()),
+    }))
 }
 
 /// The search's best result and whether one of its titles is the query's.
@@ -250,6 +352,28 @@ pub fn normalize_title(title: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_tmdb_links_and_bare_ids() {
+        let reference =
+            |kind, tmdb_id, season, episode| Reference { kind, tmdb_id, season, episode };
+        assert_eq!(
+            Reference::parse(
+                "https://www.themoviedb.org/tv/55925-hanzawa-naoki/season/2/episode/3?language=ja",
+                Kind::Movie
+            ),
+            Some(reference(Kind::Tv, 55925, Some(2), Some(3)))
+        );
+        assert_eq!(
+            Reference::parse("themoviedb.org/movie/129-spirited-away", Kind::Tv),
+            Some(reference(Kind::Movie, 129, None, None))
+        );
+        assert_eq!(
+            Reference::parse(" 209867 ", Kind::Tv),
+            Some(reference(Kind::Tv, 209867, None, None))
+        );
+        assert_eq!(Reference::parse("Frieren", Kind::Tv), None);
+    }
 
     #[test]
     fn titles_compare_without_width_accents_or_punctuation() {

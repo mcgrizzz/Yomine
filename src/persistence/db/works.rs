@@ -52,12 +52,10 @@ pub fn link(
     found: &Match,
     by: MatchedBy,
 ) -> rusqlite::Result<()> {
-    let source = super::sources::id(conn, fingerprint)?;
-    let current: Option<String> =
-        conn.query_row("SELECT matched_by FROM sources WHERE id = ?1", [source], |r| r.get(0))?;
-    if current.as_deref() == Some(MatchedBy::User.as_str()) && by != MatchedBy::User {
+    if by != MatchedBy::User && user_decided(conn, fingerprint)? {
         return Ok(());
     }
+    let source = super::sources::id(conn, fingerprint)?;
     let work = work_id(conn, &found.work)?;
     let episode = match found.episode {
         Some(number) => {
@@ -70,6 +68,52 @@ pub fn link(
         params![source, work, episode, by.as_str()],
     )
     .map(|_| ())
+}
+
+/// Clears the source's link. `by_user` records that the user said it isn't a show or film,
+/// so automatic matching leaves it alone.
+pub fn unlink(conn: &Connection, fingerprint: &str, by_user: bool) -> rusqlite::Result<()> {
+    if !by_user && user_decided(conn, fingerprint)? {
+        return Ok(());
+    }
+    let source = super::sources::id(conn, fingerprint)?;
+    conn.execute(
+        "UPDATE sources SET work_id = NULL, episode_id = NULL, matched_by = ?2 WHERE id = ?1",
+        params![source, by_user.then_some(MatchedBy::User.as_str())],
+    )
+    .map(|_| ())
+}
+
+/// Whether the user linked the source, or said it isn't a show or film.
+pub fn user_decided(conn: &Connection, fingerprint: &str) -> rusqlite::Result<bool> {
+    conn.query_row(
+        "SELECT EXISTS (SELECT 1 FROM sources WHERE fingerprint = ?1 AND matched_by = ?2)",
+        params![fingerprint, MatchedBy::User.as_str()],
+        |r| r.get(0),
+    )
+}
+
+/// The path the source was last opened from.
+pub fn opened_path(conn: &Connection, fingerprint: &str) -> rusqlite::Result<Option<String>> {
+    conn.query_row(
+        "SELECT o.path FROM opens o JOIN sources s ON s.id = o.source_id
+         WHERE s.fingerprint = ?1 ORDER BY o.opened_at DESC LIMIT 1",
+        params![fingerprint],
+        |r| r.get(0),
+    )
+    .optional()
+}
+
+/// Sources matched by their name, with the path each was last opened from.
+pub fn matched_by_name(conn: &Connection) -> rusqlite::Result<Vec<(String, String)>> {
+    conn.prepare(
+        "SELECT s.fingerprint,
+                (SELECT o.path FROM opens o WHERE o.source_id = s.id
+                 ORDER BY o.opened_at DESC LIMIT 1) AS path
+         FROM sources s WHERE s.matched_by = ?1 AND path IS NOT NULL",
+    )?
+    .query_map(params![MatchedBy::Name.as_str()], |r| Ok((r.get(0)?, r.get(1)?)))?
+    .collect()
 }
 
 fn work_id(conn: &Connection, work: &Work) -> rusqlite::Result<i64> {
@@ -227,6 +271,10 @@ mod tests {
         link(&conn, "a", &frieren(3), MatchedBy::User).unwrap();
         link(&conn, "a", &frieren(4), MatchedBy::Name).unwrap();
         assert_eq!(source_match(&conn, "a").unwrap(), Some((frieren(3), MatchedBy::User)));
+
+        unlink(&conn, "a", false).unwrap();
+        assert_eq!(source_match(&conn, "a").unwrap(), Some((frieren(3), MatchedBy::User)));
+        assert!(matched_by_name(&conn).unwrap().is_empty());
 
         link(&conn, "b", &frieren(3), MatchedBy::Name).unwrap();
         let episodes: i64 =
