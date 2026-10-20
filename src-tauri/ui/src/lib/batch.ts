@@ -16,10 +16,22 @@ export function sameSource(batch: BatchRecord, file: FileLoadResult | null): boo
 	);
 }
 
-export function batchStatus(batch: BatchRecord): 'Interrupted' | 'Stopped early' | 'Complete' {
+export type BatchStatus = 'Interrupted' | 'Stopped early' | 'Undone' | 'Partly undone' | 'Complete';
+
+export function batchStatus(batch: BatchRecord): BatchStatus {
+	const has = (status: BatchOutcome['status']) =>
+		batch.items.some((i) => i.outcome.status === status);
+	if (has('deleted') && !has('created')) return 'Undone';
 	if (batch.finished_at === null) return 'Interrupted';
-	return batch.items.some((i) => i.outcome.status === 'unattempted') ? 'Stopped early' : 'Complete';
+	if (has('unattempted')) return 'Stopped early';
+	return has('deleted') ? 'Partly undone' : 'Complete';
 }
+
+/** A batch that didn't get through its cards, which a retry can finish. */
+export const unfinished = (status: BatchStatus) =>
+	status === 'Interrupted' || status === 'Stopped early';
+
+export const undone = (status: BatchStatus) => status === 'Undone' || status === 'Partly undone';
 
 export function mediaParts(outcome: BatchOutcome): BatchPart[] {
 	return outcome.status === 'created' ? [outcome.audio, outcome.picture] : [];

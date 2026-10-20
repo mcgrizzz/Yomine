@@ -4,7 +4,14 @@
 	import AutoLedger from './AutoLedger.svelte';
 	import AutoWaiting from './AutoWaiting.svelte';
 	import { openNotesInAnki, type BatchItem, type BatchRecord } from '$lib/ipc';
-	import { batchStatus, lacksMedia, retryIndices, sameSource } from '$lib/batch';
+	import {
+		batchStatus,
+		lacksMedia,
+		retryIndices,
+		sameSource,
+		undone,
+		unfinished
+	} from '$lib/batch';
 	import {
 		batchSaveError,
 		lastBatch,
@@ -165,7 +172,7 @@
 			<h2 title={batch.source.title}>{batch.source.title}</h2>
 			<p class="meta">
 				{new Date(batch.started_at).toLocaleString()} ·
-				<span class:attention={status !== 'Complete'}>{status}</span>
+				<span class:attention={unfinished(status)} class:undone={undone(status)}>{status}</span>
 				· {plural(batch.items.length, 'card')}
 				{#if batch.finished_at !== null && batch.run_ms !== null}
 					in {duration(batch.run_ms)}
@@ -366,6 +373,9 @@
 	}
 	.attention {
 		color: var(--warning);
+	}
+	.undone {
+		color: var(--danger);
 	}
 	.bar {
 		display: flex;
