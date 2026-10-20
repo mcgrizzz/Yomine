@@ -71,6 +71,7 @@ pub struct MappingGuess {
     pub sentence: Option<String>,
     pub sentence_audio: Option<String>,
     pub picture: Option<String>,
+    pub source: Option<String>,
     pub detected: Option<&'static str>,
     /// The detected note type lacks some of its usual fields, so those were guessed.
     pub fields_differ: bool,
@@ -92,6 +93,7 @@ pub fn guess_mapping(
         sentence: guess_sentence_field(sample, available_fields),
         sentence_audio: guess_sentence_audio_field(available_fields, templates),
         picture: guess_picture_field(available_fields, templates),
+        source: guess_source_field(available_fields, templates),
         ..Default::default()
     };
     if let Some(known) = super::known_note_types::detect(model_name, available_fields) {
@@ -110,8 +112,25 @@ pub fn guess_mapping(
                 guess.fields_differ = true;
             }
         }
+        if let Some(field) = known.source.filter(|f| available_fields.iter().any(|a| a == f)) {
+            guess.source = Some(field.to_string());
+        }
     }
     guess
+}
+
+/// Where a card's source goes: the field Yomitan fills with the page's title, else one
+/// named for it.
+pub fn guess_source_field(
+    available_fields: &[String],
+    templates: &HashMap<String, String>,
+) -> Option<String> {
+    const NAMES: &[&str] = &["miscinfo", "source", "sourceinfo", "sentencesource"];
+    available_fields
+        .iter()
+        .find(|f| templates.get(*f).is_some_and(|t| t.contains("{document-title}")))
+        .or_else(|| available_fields.iter().find(|f| NAMES.contains(&norm(f).as_str())))
+        .cloned()
 }
 
 fn norm(s: &str) -> String {
@@ -187,7 +206,7 @@ pub fn guess_field_mappings(
             }
 
             if is_likely_term(trimmed_value) {
-                if trimmed_value.chars().any(|c| is_char_kanji(c)) {
+                if trimmed_value.chars().any(is_char_kanji) {
                     best_term = Some(field_name.clone());
                     term_index = Some(field_index);
                     break;

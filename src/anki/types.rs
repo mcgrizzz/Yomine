@@ -18,6 +18,10 @@ pub struct FieldMapping {
     pub sentence_audio_field: Option<String>,
     #[serde(default)]
     pub picture_field: Option<String>,
+    /// Where local mining writes what a card was mined from: `None` until it's chosen, which
+    /// uses a known note type's field, and empty when the user chose none.
+    #[serde(default)]
+    pub source_field: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

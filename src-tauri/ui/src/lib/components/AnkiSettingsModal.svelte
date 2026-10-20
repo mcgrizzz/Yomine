@@ -36,7 +36,8 @@
 						...fields,
 						sentence_field: fields.sentence_field ?? null,
 						sentence_audio_field: fields.sentence_audio_field ?? null,
-						picture_field: fields.picture_field ?? null
+						picture_field: fields.picture_field ?? null,
+						source_field: fields.source_field ?? null
 					}
 				])
 			),
@@ -313,6 +314,8 @@
 				mapping.sentence_audio_field = result.guessed_sentence_audio;
 				mapping.picture_field = result.guessed_picture;
 			}
+			// Mappings saved before the source field existed.
+			mapping.source_field ??= result.guessed_source ?? '';
 		} catch (error) {
 			if (generation === ankiGeneration) sampleErrors[name] = String(error);
 		}
@@ -324,6 +327,7 @@
 		mapping.sentence_field = guess.guessed_sentence;
 		mapping.sentence_audio_field = guess.guessed_sentence_audio;
 		mapping.picture_field = guess.guessed_picture;
+		mapping.source_field = guess.guessed_source ?? '';
 		if (Object.values(mapping).some(Boolean)) autoFilled = new Set(autoFilled).add(name);
 	}
 
@@ -430,7 +434,8 @@
 			reading_field: '',
 			sentence_field: null,
 			sentence_audio_field: null,
-			picture_field: null
+			picture_field: null,
+			source_field: null
 		};
 	}
 
@@ -583,7 +588,7 @@
 )}
 	{@const optional = field !== 'term_field' && field !== 'reading_field'}
 	<select id={`anki-${id}-${name}`} bind:value={mapping[field]}
-		><option value={optional ? null : ''} disabled={!optional}
+		><option value={optional && field !== 'source_field' ? null : ''} disabled={!optional}
 			>{optional ? 'None' : 'Choose a field…'}</option
 		>{#each fieldOptions(name, mapping[field]) as option}<option value={option}>{option}</option
 			>{/each}</select
@@ -622,10 +627,11 @@
 		<section aria-labelledby="anki-media-heading">
 			<h4 id="anki-media-heading">Save local media to Anki</h4>
 			<p class="hint">
-				When you mine from a local video, Yomine saves the sentence audio and screenshot here.
+				When you mine from a local video, Yomine saves the sentence audio, the screenshot, and the
+				episode with a link to it on TMDB here.
 			</p>
 			<div class="media-rows">
-				{#each [['sentence_audio_field', 'Sentence audio', 'sentence-audio'], ['picture_field', 'Picture', 'picture']] as [key, label, id]}
+				{#each [['sentence_audio_field', 'Sentence audio', 'sentence-audio'], ['picture_field', 'Picture', 'picture'], ['source_field', 'Source', 'source']] as [key, label, id]}
 					<label for={`anki-${id}-${name}`}>{label}</label>
 					{@render fieldSelect(name, mapping, key as keyof ipc.FieldMapping, id)}
 				{/each}

@@ -215,6 +215,9 @@ export interface FieldMapping {
 	/** Where local mining writes the sentence audio and screenshot. */
 	sentence_audio_field?: string | null;
 	picture_field?: string | null;
+	/** Where local mining writes what a card was mined from: `null` until it's chosen, which
+	 * uses a known note type's field, and `''` when the user chose none. */
+	source_field?: string | null;
 }
 
 /** A note type with its fields (`core::settings::AnkiModelInfo`). `sample_note`
@@ -233,6 +236,7 @@ export interface SampleNote {
 	guessed_sentence: string | null;
 	guessed_sentence_audio: string | null;
 	guessed_picture: string | null;
+	guessed_source: string | null;
 	/** A known note type ("Lapis") the guesses came from. */
 	detected: string | null;
 	fields_differ: boolean;

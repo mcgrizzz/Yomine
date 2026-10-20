@@ -101,6 +101,7 @@ pub struct SampleNote {
     pub guessed_sentence: Option<String>,
     pub guessed_sentence_audio: Option<String>,
     pub guessed_picture: Option<String>,
+    pub guessed_source: Option<String>,
     /// A known note type ("Lapis") the guesses came from.
     pub detected: Option<String>,
     pub fields_differ: bool,
@@ -133,6 +134,7 @@ pub async fn get_anki_sample_note(
         guessed_sentence: guess.sentence,
         guessed_sentence_audio: guess.sentence_audio,
         guessed_picture: guess.picture,
+        guessed_source: guess.source,
         detected: guess.detected.map(str::to_string),
         fields_differ: guess.fields_differ,
     })
