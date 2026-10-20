@@ -610,7 +610,7 @@
 			<h4 id="anki-read-heading">Read from Anki</h4>
 			<p class="hint">Yomine finds the words and sentences you already have in these fields.</p>
 			<div class="mapping-fields">
-				{#each [['term_field', 'Term', 'term'], ['reading_field', 'Reading', 'reading'], ['sentence_field', 'Sentence (optional)', 'sentence']] as [key, label, id]}
+				{#each [['term_field', 'Term', 'term'], ['reading_field', 'Reading', 'reading'], ['sentence_field', 'Sentence', 'sentence']] as [key, label, id]}
 					{@const field = key as keyof ipc.FieldMapping}
 					{@const value = mapping[field]}
 					{@const example = value ? sample?.sample_note?.[value] : undefined}
