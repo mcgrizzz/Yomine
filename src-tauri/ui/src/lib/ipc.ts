@@ -135,6 +135,8 @@ export interface RecentFileEntry {
 	term_count: number | null;
 	/** The mining mode it was loaded in; `null` for a book, which either mode lists. */
 	mode: MiningMode | null;
+	/** The show or film its source is matched to. */
+	media: Media | null;
 }
 
 export interface PosInfo {
@@ -944,13 +946,17 @@ export function getMediaPreview(filename: string): Promise<string | null> {
 	return invoke('get_media_preview', { filename });
 }
 
-/** A source's show or film on TMDB (`catalog::Match`). */
-export interface MediaMatch {
-	fingerprint: string;
+/** A show or film on TMDB, and the episode (`catalog::Match`). */
+export interface Media {
 	work: { kind: 'tv' | 'movie'; tmdb_id: number; title: string; original_title: string };
 	season: number | null;
 	episode: number | null;
 	episode_title: string | null;
+}
+
+/** A source's show or film. */
+export interface MediaMatch extends Media {
+	fingerprint: string;
 	/** Linked by its file name, another file with the same episode's text, or the user;
 	 * `suggested` is an uncertain match waiting for the user. */
 	matched_by: 'name' | 'content' | 'user' | 'suggested';
@@ -978,6 +984,54 @@ export function getMediaMatch(fingerprint: string): Promise<MediaMatch | null> {
 	return invoke('get_media_match', { fingerprint });
 }
 
+/** The matched sources among these, by fingerprint. */
+export function getMediaMatches(fingerprints: string[]): Promise<Record<string, Media>> {
+	return invoke('get_media_matches', { fingerprints });
+}
+
+/** A TMDB episode (`catalog::tmdb::Episode`). */
+export interface TmdbEpisode {
+	number: number;
+	name: string;
+}
+
+/** The season's aired episodes, numbered as matches are shown; `null` without a TMDB key. */
+export function getSeasonEpisodes(show: number, season: number): Promise<TmdbEpisode[] | null> {
+	return invoke('get_season_episodes', { show, season });
+}
+
+/** An episode file in the folder of an opened one (`media_match::FoundEpisode`). */
+export interface FoundEpisode extends Media {
+	path: string;
+	/** Whether it has Japanese or untagged subtitles to mine; `null` while that's checked. */
+	subtitles: boolean | null;
+}
+
+/** The episodes in the folders of these opened files, as `[path, show]`, of the shows each
+ * folder's opened files are matched to. What a file is stays known until it changes, and
+ * `rescan` looks at every file again. Each is sent as soon as it's matched, then again once
+ * its subtitles are checked. Nothing found is added to the history. */
+export function findEpisodes(
+	opened: [string, number][],
+	rescan: boolean,
+	onFound: (episode: FoundEpisode) => void
+): Promise<void> {
+	const found = new Channel<FoundEpisode>();
+	found.onmessage = onFound;
+	return invoke('find_episodes', { opened, rescan, found });
+}
+
+/** An episode the active collection has notes from (`media_match::MinedEpisode`). */
+export interface MinedEpisode {
+	show: number;
+	season: number | null;
+	episode: number;
+}
+
+export function getMinedEpisodes(): Promise<MinedEpisode[]> {
+	return invoke('get_mined_episodes');
+}
+
 export interface MediaSearch {
 	/** The searched kind, or the kind a pasted link names. */
 	kind: 'tv' | 'movie';
@@ -985,6 +1039,10 @@ export interface MediaSearch {
 	/** The season and episode of a pasted episode link. */
 	season: number | null;
 	episode: number | null;
+}
+
+export function hasBuiltinTmdbKey(): Promise<boolean> {
+	return invoke('has_builtin_tmdb_key');
 }
 
 /** Searches TMDB by title, or finds the entry a pasted TMDB link or ID names. */
@@ -1304,6 +1362,8 @@ export const onAsbplayerMediaLoaded = (cb: (r: FileLoadResult) => void) =>
 	listenTo('asbplayer-media-loaded', cb);
 /** A source was matched after it loaded. */
 export const onMediaMatched = (cb: (m: MediaMatch) => void) => listenTo('media-matched', cb);
+/** Files loaded before matching existed were matched at startup. */
+export const onPastMediaMatched = (cb: () => void) => listenTo('past-media-matched', cb);
 
 /** asbplayer target awareness — a bound media id is mined/seeked directly;
  * without one, commands fall through to asbplayer's active tab. */

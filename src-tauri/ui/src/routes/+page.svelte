@@ -36,7 +36,7 @@
 		localVideo,
 		pairVideo,
 		switchSubtitleTrack,
-		openRecentFilesModal,
+		openBrowseModal,
 		mediaMatch
 	} from '$lib/stores';
 	import BatchRecovery from '$lib/components/BatchRecovery.svelte';
@@ -45,6 +45,7 @@
 	import TableControls from '$lib/components/TableControls.svelte';
 	import IgnoreListModal from '$lib/components/IgnoreListModal.svelte';
 	import WebsocketSettingsModal from '$lib/components/WebsocketSettingsModal.svelte';
+	import MatchingSettingsModal from '$lib/components/MatchingSettingsModal.svelte';
 	import AppearanceModal from '$lib/components/AppearanceModal.svelte';
 	import AboutModal from '$lib/components/AboutModal.svelte';
 	import AnkiSettingsModal from '$lib/components/AnkiSettingsModal.svelte';
@@ -57,7 +58,7 @@
 	import FrequencyAnalyzerModal from '$lib/components/FrequencyAnalyzerModal.svelte';
 	import AsbplayerModal from '$lib/components/AsbplayerModal.svelte';
 	import TextFiltersModal from '$lib/components/TextFiltersModal.svelte';
-	import RecentFilesModal from '$lib/components/RecentFilesModal.svelte';
+	import BrowseFilesModal from '$lib/components/BrowseFilesModal.svelte';
 	import EpubChapterPickerModal from '$lib/components/EpubChapterPickerModal.svelte';
 	import KnowledgeSummary from '$lib/components/KnowledgeSummary.svelte';
 	import AutoModeModal from '$lib/components/AutoModeModal.svelte';
@@ -65,12 +66,16 @@
 	import MineAbility from '$lib/components/MineAbility.svelte';
 	import QueueStepper from '$lib/components/QueueStepper.svelte';
 	import RecentCard from '$lib/components/RecentCard.svelte';
+	import ContinueCard from '$lib/components/ContinueCard.svelte';
 	import MediaMatchChip from '$lib/components/MediaMatchChip.svelte';
+	import { mediaTitle } from '$lib/media';
 	import { filename, inMode, modeLabel, recentKey } from '$lib/recents';
 
 	onMount(hydrate);
 
-	const modeRecents = $derived($recentFiles.filter((entry) => inMode(entry, $miningMode)));
+	const modeRecents = $derived(
+		$recentFiles.filter((entry) => inMode(entry, $miningMode)).slice(0, 8)
+	);
 
 	const followOn = $derived(
 		($settings?.asbplayer_follow_new_media ?? false) ||
@@ -85,6 +90,7 @@
 	const timed = $derived(
 		$fileResult?.source_file.file_type === 'SRT' || $fileResult?.source_file.file_type === 'SSA'
 	);
+	const matched = $derived($mediaMatch?.matched_by === 'suggested' ? null : $mediaMatch);
 	const toolsError = $derived(
 		typeof $languageToolsStatus === 'object' ? $languageToolsStatus.error : null
 	);
@@ -120,9 +126,17 @@
 						<QueueStepper />
 						<h2
 							class="title"
-							title={`${$fileResult.source_file.title}\n${filename($fileResult.source_file.original_file)}`}
+							lang={matched ? 'ja' : undefined}
+							title={[
+								matched?.work.title,
+								matched?.episode_title,
+								$fileResult.source_file.title,
+								filename($fileResult.source_file.original_file)
+							]
+								.filter(Boolean)
+								.join('\n')}
 						>
-							{$fileResult.source_file.title}
+							{matched ? mediaTitle(matched) : $fileResult.source_file.title}
 						</h2>
 						{#if $fileResult.source_file.epub_label}
 							<span class="selection-label" title={$fileResult.source_file.epub_label}
@@ -303,11 +317,12 @@
 
 				{#if $recentFiles.length > 0}
 					<section class="recents">
+						{#if $miningMode === 'local'}<ContinueCard />{/if}
 						<div class="recents-head">
 							<h2 class="recents-title">
-								Recent in {modeLabel($miningMode)} ({modeRecents.length})
+								Recent in {modeLabel($miningMode)}
 							</h2>
-							<button class="recents-all" onclick={openRecentFilesModal}>All recent files ›</button>
+							<button class="recents-all" onclick={openBrowseModal}>Browse all files ›</button>
 						</div>
 						{#if modeRecents.length === 0}
 							<p class="recents-empty">Nothing opened in {modeLabel($miningMode)} yet.</p>
@@ -332,6 +347,7 @@
 	<IgnoreListModal />
 	<AsbplayerModal />
 	<WebsocketSettingsModal />
+	<MatchingSettingsModal />
 	<AutoModeModal />
 	<AppearanceModal />
 	<AboutModal />
@@ -340,7 +356,7 @@
 	<FrequencyWeightsModal />
 	<PosFiltersModal />
 	<TextFiltersModal />
-	<RecentFilesModal />
+	<BrowseFilesModal />
 	<EpubChapterPickerModal />
 	<FrequencyAnalyzerModal />
 

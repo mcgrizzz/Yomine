@@ -34,6 +34,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::lifecycle::load_language_tools,
             media_match::get_media_match,
+            media_match::get_media_matches,
+            media_match::get_season_episodes,
+            media_match::find_episodes,
+            media_match::get_mined_episodes,
+            media_match::has_builtin_tmdb_key,
             media_match::search_media,
             media_match::set_media_match,
             media_match::clear_media_match,
@@ -149,6 +154,7 @@ pub fn run() {
 
             // Ambient Anki/knowledge polling (player connectivity is handled above).
             background::spawn(app.handle().clone());
+            media_match::spawn_past(app.handle().clone());
             Ok(())
         })
         .run(tauri::generate_context!())

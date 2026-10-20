@@ -44,6 +44,33 @@ pub struct Episode {
     pub number: u32,
     #[serde(default)]
     pub name: String,
+    /// `YYYY-MM-DD`; TMDB lists episodes before they air, some without a date.
+    #[serde(default)]
+    pub air_date: Option<String>,
+}
+
+/// One of a show's episode groups: another split of its episodes, which contributors add.
+#[derive(Debug, Deserialize)]
+pub struct EpisodeGroup {
+    pub id: String,
+    pub name: String,
+    #[serde(rename = "type")]
+    pub kind: u32,
+}
+
+/// A group's part, like `Season 2`, with its episodes' TMDB season and number, in order.
+#[derive(Debug, Deserialize)]
+pub struct GroupPart {
+    pub name: String,
+    pub order: u32,
+    pub episodes: Vec<GroupEpisode>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GroupEpisode {
+    pub season_number: u32,
+    pub episode_number: u32,
+    pub order: u32,
 }
 
 pub struct Tmdb {
@@ -151,6 +178,24 @@ impl Tmdb {
             .collect();
         seasons.sort();
         Ok(seasons)
+    }
+
+    pub async fn episode_groups(&self, show: i64) -> Result<Vec<EpisodeGroup>, YomineError> {
+        #[derive(Deserialize)]
+        struct Groups {
+            results: Vec<EpisodeGroup>,
+        }
+        let path = format!("/tv/{show}/episode_groups");
+        Ok(self.get::<Groups>(&path, &[]).await?.map_or_else(Vec::new, |g| g.results))
+    }
+
+    pub async fn episode_group(&self, id: &str) -> Result<Vec<GroupPart>, YomineError> {
+        #[derive(Deserialize)]
+        struct Group {
+            groups: Vec<GroupPart>,
+        }
+        let path = format!("/tv/episode_group/{id}");
+        Ok(self.get::<Group>(&path, &[]).await?.map_or_else(Vec::new, |g| g.groups))
     }
 
     pub async fn season(&self, show: i64, season: u32) -> Result<Vec<Episode>, YomineError> {

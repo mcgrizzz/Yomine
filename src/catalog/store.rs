@@ -1,5 +1,5 @@
-//! TMDB's answers kept on disk and shared by every profile, so a show is searched once, and
-//! the user's corrections to them.
+//! TMDB's answers kept on disk and shared by every profile, so a show is searched once, what
+//! the files found beside opened episodes are, and the user's corrections.
 
 use std::sync::Mutex;
 
@@ -12,6 +12,8 @@ use rusqlite::{
 use super::{
     tmdb::Episode,
     Kind,
+    Layout,
+    Match,
     Work,
 };
 use crate::{
@@ -29,11 +31,13 @@ const NOT_FOUND_KEPT_MS: i64 = 7 * DAY_MS;
 const SEASON_STALE_MS: i64 = DAY_MS;
 
 /// Only a cache: a different `VERSION` drops these tables rather than migrating them.
-const VERSION: i64 = 1;
+const VERSION: i64 = 3;
 const CACHE_SCHEMA: &str = "
 DROP TABLE IF EXISTS titles;
 DROP TABLE IF EXISTS seasons;
 DROP TABLE IF EXISTS shows;
+DROP TABLE IF EXISTS layouts;
+DROP TABLE IF EXISTS found_files;
 -- A searched title, keyed by kind, normalized title and year.
 CREATE TABLE titles (
     key TEXT PRIMARY KEY,
@@ -58,6 +62,26 @@ CREATE TABLE shows (
     -- JSON: [[season, episode_count]].
     seasons TEXT NOT NULL,
     fetched_at INTEGER NOT NULL
+);
+CREATE TABLE layouts (
+    show_id INTEGER PRIMARY KEY,
+    -- JSON `Layout`; NULL when TMDB's own seasons stand.
+    layout TEXT,
+    fetched_at INTEGER NOT NULL
+);
+-- A file is looked at again when its size or modified time changes.
+CREATE TABLE found_files (
+    path TEXT PRIMARY KEY,
+    size INTEGER NOT NULL,
+    modified INTEGER,
+    -- The title key its match came from, so a correction to that title drops it.
+    key TEXT NOT NULL,
+    -- JSON `Match`; NULL when TMDB had nothing for it.
+    found TEXT,
+    -- Set once it's seen to have Japanese or untagged subtitles.
+    subtitles INTEGER NOT NULL DEFAULT 0,
+    -- Set once ffmpeg has found no such track in it.
+    probed INTEGER NOT NULL DEFAULT 0
 );
 ";
 /// The user's answers, kept across cache versions until the user changes them.
@@ -236,6 +260,43 @@ pub fn set_seasons(show: i64, seasons: &[(u32, u32)]) -> Result<(), YomineError>
     })
 }
 
+pub struct CachedLayout {
+    pub layout: Option<Layout>,
+    pub stale: bool,
+}
+
+pub fn layout(show: i64) -> Result<Option<CachedLayout>, YomineError> {
+    let row = with(|conn| {
+        conn.query_row(
+            "SELECT layout, fetched_at FROM layouts WHERE show_id = ?1",
+            params![show],
+            |r| Ok((r.get::<_, Option<String>>(0)?, r.get::<_, i64>(1)?)),
+        )
+        .optional()
+    })?;
+    let Some((layout, fetched_at)) = row else { return Ok(None) };
+    let age = now() - fetched_at;
+    if age > KEPT_MS {
+        return Ok(None);
+    }
+    Ok(Some(CachedLayout {
+        layout: layout.as_deref().map(serde_json::from_str).transpose()?,
+        // An airing season's episodes are added to the group as they're announced.
+        stale: age > SEASON_STALE_MS,
+    }))
+}
+
+pub fn set_layout(show: i64, layout: Option<&Layout>) -> Result<(), YomineError> {
+    let layout = layout.map(serde_json::to_string).transpose()?;
+    with(|conn| {
+        conn.execute(
+            "INSERT OR REPLACE INTO layouts (show_id, layout, fetched_at) VALUES (?1, ?2, ?3)",
+            params![show, layout, now()],
+        )
+        .map(|_| ())
+    })
+}
+
 /// The user's answer for a title: `Some(None)` when they said it isn't a show or film.
 pub fn correction(key: &str) -> Result<Option<Option<Work>>, YomineError> {
     with(|conn| {
@@ -268,6 +329,7 @@ pub fn set_correction(key: &str, kind: Kind, work: Option<&Work>) -> Result<(), 
         if current.flatten() != work.map(|w| w.tmdb_id) {
             conn.execute("DELETE FROM season_corrections WHERE key = ?1", params![key])?;
         }
+        conn.execute("DELETE FROM found_files WHERE key = ?1", params![key])?;
         conn.execute(
             "INSERT OR REPLACE INTO corrections (key, kind, tmdb_id, title, original_title, at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
@@ -304,12 +366,78 @@ pub fn set_season_correction(
     offset: i64,
 ) -> Result<(), YomineError> {
     with(|conn| {
+        conn.execute("DELETE FROM found_files WHERE key = ?1", params![key])?;
         conn.execute(
             "INSERT OR REPLACE INTO season_corrections (key, season, tmdb_season, episode_offset)
              VALUES (?1, ?2, ?3, ?4)",
             params![key, season, tmdb_season, offset],
         )
         .map(|_| ())
+    })
+}
+
+/// A file as it was when it was last looked at.
+#[derive(Clone, Copy, PartialEq)]
+pub struct FileStamp {
+    pub size: u64,
+    /// Milliseconds since the Unix epoch.
+    pub modified: Option<i64>,
+}
+
+pub struct FoundFile {
+    /// `None` when TMDB had nothing for it.
+    pub found: Option<Match>,
+    pub subtitles: bool,
+    /// ffmpeg found no Japanese or untagged text track in it.
+    pub probed: bool,
+}
+
+/// What the file was found to be, unless it has changed since.
+pub fn found_file(path: &str, stamp: FileStamp) -> Result<Option<FoundFile>, YomineError> {
+    let row = with(|conn| {
+        conn.query_row(
+            "SELECT found, subtitles, probed FROM found_files
+             WHERE path = ?1 AND size = ?2 AND modified IS ?3",
+            params![path, stamp.size as i64, stamp.modified],
+            |r| Ok((r.get::<_, Option<String>>(0)?, r.get::<_, bool>(1)?, r.get::<_, bool>(2)?)),
+        )
+        .optional()
+    })?;
+    let Some((found, subtitles, probed)) = row else { return Ok(None) };
+    Ok(Some(FoundFile {
+        found: found.as_deref().map(serde_json::from_str).transpose()?,
+        subtitles,
+        probed,
+    }))
+}
+
+pub fn set_found_file(
+    path: &str,
+    stamp: FileStamp,
+    key: &str,
+    found: Option<&Match>,
+) -> Result<(), YomineError> {
+    let found = found.map(serde_json::to_string).transpose()?;
+    with(|conn| {
+        conn.execute(
+            "INSERT OR REPLACE INTO found_files (path, size, modified, key, found)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![path, stamp.size as i64, stamp.modified, key, found],
+        )
+        .map(|_| ())
+    })
+}
+
+pub fn set_found_subtitles(path: &str) -> Result<(), YomineError> {
+    with(|conn| {
+        conn.execute("UPDATE found_files SET subtitles = 1 WHERE path = ?1", params![path])
+            .map(|_| ())
+    })
+}
+
+pub fn set_found_probed(path: &str) -> Result<(), YomineError> {
+    with(|conn| {
+        conn.execute("UPDATE found_files SET probed = 1 WHERE path = ?1", params![path]).map(|_| ())
     })
 }
 

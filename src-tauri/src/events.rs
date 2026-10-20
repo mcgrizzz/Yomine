@@ -19,6 +19,7 @@ pub mod names {
     pub const ASBPLAYER_MEDIA_LOADED: &str = "asbplayer-media-loaded";
     pub const ASBPLAYER_CONTEXT: &str = "asbplayer-context";
     pub const MEDIA_MATCHED: &str = "media-matched";
+    pub const PAST_MEDIA_MATCHED: &str = "past-media-matched";
     pub const ANALYSIS_COMPLETE: &str = "analysis-complete";
     pub const ANALYSIS_CANCELLED: &str = "analysis-cancelled";
     pub const EXPORT_COMPLETE: &str = "export-complete";

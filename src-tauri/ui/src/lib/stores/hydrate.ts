@@ -26,7 +26,8 @@ export async function hydrate(): Promise<void> {
 
 	const settingsPull = ipc.getSettings();
 	void ipc.getDefaultSettings().then((d) => defaultSettings.set(d));
-	const recentsPull = ipc.getRecentFiles().then((r) => recentFiles.set(r));
+	// Not awaited: checking that each recent file still exists can be slow on a network share.
+	void ipc.getRecentFiles().then((r) => recentFiles.set(r));
 
 	// Events are wired before any await so early emits aren't missed. player/
 	// anki/knowledge emit only on *change*: if one fires during the pulls below,
@@ -68,7 +69,9 @@ export async function hydrate(): Promise<void> {
 	ipc.onAsbplayerContext((c) => asbContext.set(c));
 	ipc.onMediaMatched((m) => {
 		if (get(fileResult)?.batch_source.fingerprint === m.fingerprint) mediaMatch.set(m);
+		if (m.matched_by !== 'suggested') void ipc.getRecentFiles().then((r) => recentFiles.set(r));
 	});
+	ipc.onPastMediaMatched(() => void ipc.getRecentFiles().then((r) => recentFiles.set(r)));
 	// A match made before the file reached the page is read back here.
 	let matchedFor: string | null = null;
 	fileResult.subscribe((r) => {
@@ -127,7 +130,6 @@ export async function hydrate(): Promise<void> {
 	const [catalog, currentFile, player, anki, summary] = await batch;
 	posCatalog.set(catalog);
 	if (!fileEventSeen) fileResult.set(currentFile);
-	await recentsPull;
 	if (!playerEventSeen) playerStatus.set(player);
 	if (!ankiEventSeen) ankiStatus.set(anki);
 	if (summary && !knowledgeEventSeen) knowledge.set(summary);

@@ -104,15 +104,46 @@ pub fn opened_path(conn: &Connection, fingerprint: &str) -> rusqlite::Result<Opt
     .optional()
 }
 
-/// Sources matched by their name, with the path each was last opened from.
-pub fn matched_by_name(conn: &Connection) -> rusqlite::Result<Vec<(String, String)>> {
+/// Subtitle sources matched this way, or unmatched for `None`, with the path each was last
+/// opened from.
+pub fn matched_by(
+    conn: &Connection,
+    by: Option<MatchedBy>,
+) -> rusqlite::Result<Vec<(String, String)>> {
     conn.prepare(
         "SELECT s.fingerprint,
                 (SELECT o.path FROM opens o WHERE o.source_id = s.id
                  ORDER BY o.opened_at DESC LIMIT 1) AS path
-         FROM sources s WHERE s.matched_by = ?1 AND path IS NOT NULL",
+         FROM sources s
+         WHERE s.matched_by IS ?1 AND s.kind = 'subtitles' AND path IS NOT NULL",
     )?
-    .query_map(params![MatchedBy::Name.as_str()], |r| Ok((r.get(0)?, r.get(1)?)))?
+    .query_map(params![by.map(MatchedBy::as_str)], |r| Ok((r.get(0)?, r.get(1)?)))?
+    .collect()
+}
+
+/// The TMDB IDs of the shows sources are matched to.
+pub fn shows(conn: &Connection) -> rusqlite::Result<Vec<i64>> {
+    conn.prepare("SELECT DISTINCT tmdb_id FROM works WHERE kind = 'tv' AND tmdb_id IS NOT NULL")?
+        .query_map([], |r| r.get(0))?
+        .collect()
+}
+
+/// The episodes, as `(show, season, episode)` in TMDB's numbering, that the collection has
+/// notes from that Yomine hasn't seen deleted. Notes from before collections were recorded
+/// count for every collection.
+pub fn mined_episodes(
+    conn: &Connection,
+    collection: &str,
+) -> rusqlite::Result<Vec<(i64, Option<u32>, u32)>> {
+    conn.prepare(
+        "SELECT DISTINCT w.tmdb_id, e.season, e.number FROM notes n
+         JOIN sources s ON s.id = n.source_id
+         JOIN works w ON w.id = s.work_id
+         JOIN episodes e ON e.id = s.episode_id
+         WHERE n.deleted_at IS NULL AND (n.collection = ?1 OR n.collection IS NULL)
+           AND w.kind = 'tv' AND w.tmdb_id IS NOT NULL AND e.number IS NOT NULL",
+    )?
+    .query_map(params![collection], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
     .collect()
 }
 
@@ -180,33 +211,44 @@ pub fn source_match(
     fingerprint: &str,
 ) -> rusqlite::Result<Option<(Match, MatchedBy)>> {
     conn.query_row(
-        "SELECT w.kind, w.tmdb_id, w.title, w.original_title, e.season, e.number, e.title,
-                s.matched_by
-         FROM sources s
-         JOIN works w ON w.id = s.work_id
-         LEFT JOIN episodes e ON e.id = s.episode_id
-         WHERE s.fingerprint = ?1 AND w.tmdb_id IS NOT NULL",
+        &format!(
+            "SELECT {MATCH_COLUMNS}, s.matched_by
+             FROM sources s {MATCH_JOINS}
+             WHERE s.fingerprint = ?1 AND w.tmdb_id IS NOT NULL"
+        ),
         params![fingerprint],
         |r| {
-            let kind = Kind::from_key(&r.get::<_, String>(0)?);
             let by = r.get::<_, Option<String>>(7)?.as_deref().and_then(MatchedBy::from_key);
-            let (Some(kind), Some(by)) = (kind, by) else { return Ok(None) };
-            let found = Match {
-                work: Work {
-                    kind,
-                    tmdb_id: r.get(1)?,
-                    title: r.get(2)?,
-                    original_title: r.get::<_, Option<String>>(3)?.unwrap_or_default(),
-                },
-                season: r.get(4)?,
-                episode: r.get(5)?,
-                episode_title: r.get(6)?,
-            };
-            Ok(Some((found, by)))
+            Ok(read_match(r, 0)?.zip(by))
         },
     )
     .optional()
     .map(Option::flatten)
+}
+
+/// The columns [`read_match`] reads, from a source `s` joined with [`MATCH_JOINS`].
+pub(super) const MATCH_COLUMNS: &str =
+    "w.kind, w.tmdb_id, w.title, w.original_title, e.season, e.number, e.title";
+pub(super) const MATCH_JOINS: &str =
+    "LEFT JOIN works w ON w.id = s.work_id AND w.tmdb_id IS NOT NULL
+     LEFT JOIN episodes e ON e.id = s.episode_id";
+
+/// The match in [`MATCH_COLUMNS`], starting at column `at`; `None` for an unmatched source.
+pub(super) fn read_match(r: &rusqlite::Row, at: usize) -> rusqlite::Result<Option<Match>> {
+    let Some(kind) = r.get::<_, Option<String>>(at)?.as_deref().and_then(Kind::from_key) else {
+        return Ok(None);
+    };
+    Ok(Some(Match {
+        work: Work {
+            kind,
+            tmdb_id: r.get(at + 1)?,
+            title: r.get(at + 2)?,
+            original_title: r.get::<_, Option<String>>(at + 3)?.unwrap_or_default(),
+        },
+        season: r.get(at + 4)?,
+        episode: r.get(at + 5)?,
+        episode_title: r.get(at + 6)?,
+    }))
 }
 
 pub fn set_signature(
@@ -274,7 +316,7 @@ mod tests {
 
         unlink(&conn, "a", false).unwrap();
         assert_eq!(source_match(&conn, "a").unwrap(), Some((frieren(3), MatchedBy::User)));
-        assert!(matched_by_name(&conn).unwrap().is_empty());
+        assert!(matched_by(&conn, Some(MatchedBy::Name)).unwrap().is_empty());
 
         link(&conn, "b", &frieren(3), MatchedBy::Name).unwrap();
         let episodes: i64 =

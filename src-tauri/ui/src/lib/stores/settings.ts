@@ -96,6 +96,8 @@ export const setAutoMine = (prefs: ipc.AutoMine) =>
 		}
 	});
 
+export const setTmdbApiKey = (key: string) => patchSettings({ tmdb_api_key: key.trim() });
+
 export const setAsbplayerPollSecs = (secs: number) =>
 	patchSettings({ asbplayer_poll_secs: Math.max(1, Math.round(secs) || 1) });
 

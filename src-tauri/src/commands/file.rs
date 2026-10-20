@@ -17,6 +17,7 @@ use tauri::{
 };
 use tauri_plugin_dialog::DialogExt;
 use yomine::{
+    catalog,
     core::{
         filename_parser::{
             self,
@@ -915,18 +916,23 @@ pub fn pair_video(
     Ok(load_result(&guard.file))
 }
 
-/// Recent files for the landing state, most recent first: each path's latest load,
+/// Recent files, most recent first: each path's latest load,
 /// for paths that still exist.
 #[tauri::command]
-pub fn get_recent_files() -> Vec<RecentFileEntry> {
-    db::with(|conn| db::sources::recent(conn, 50))
-        .unwrap_or_else(|e| {
-            eprintln!("{e}");
-            Vec::new()
-        })
-        .into_iter()
-        .filter(RecentFileEntry::file_exists)
-        .collect()
+pub async fn get_recent_files() -> Vec<RecentFileEntry> {
+    // Checking a path on a network share can take a while, and would hold up the window.
+    let recent = tauri::async_runtime::spawn_blocking(|| {
+        db::with(|conn| db::sources::recent(conn, 500))
+            .unwrap_or_else(|e| {
+                eprintln!("{e}");
+                Vec::new()
+            })
+            .into_iter()
+            .filter(RecentFileEntry::file_exists)
+            .map(|entry| RecentFileEntry { media: entry.media.map(catalog::displayed), ..entry })
+            .collect()
+    });
+    recent.await.unwrap_or_default()
 }
 
 /// Write cues to `<app data>/asbplayer_subtitles/<sanitized title>.srt`

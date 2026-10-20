@@ -16,13 +16,14 @@
 		openAndProcessFile,
 		openFolder,
 		openRecentFile,
-		openRecentFilesModal,
+		openBrowseModal,
 		recentFiles,
 		openAnkiModal,
 		openLocalMediaModal,
 		openIgnoreModal,
 		openTextFiltersModal,
 		openWebsocketModal,
+		openMatchingModal,
 		openAppearanceModal,
 		openAsbplayerModal,
 		openFrequencyModal,
@@ -50,6 +51,7 @@
 	} from '$lib/stores';
 	import { openThemesWindow } from '$lib/ipc';
 	import { filename, modeLabel, recentKey } from '$lib/recents';
+	import { mediaTitle } from '$lib/media';
 
 	type MenuName = 'file' | 'mining' | 'appearance' | 'settings' | 'asb' | 'mpv';
 	let openMenu = $state<MenuName | null>(null);
@@ -231,13 +233,15 @@
 									title={entry.file_path}
 									disabled={toolsError}
 									onclick={() => run(() => openRecentFile(entry))}
-									>{entry.title.trim() || filename(entry.file_path)}{#if entry.mode}<span
+									>{entry.media
+										? mediaTitle(entry.media)
+										: entry.title.trim() || filename(entry.file_path)}{#if entry.mode}<span
 											class="submenu-mode">{modeLabel(entry.mode)}</span
 										>{/if}</button
 								>
 							{/each}
 							<div class="menu-sep"></div>
-							<button onclick={() => run(openRecentFilesModal)}>All Recent Files</button>
+							<button onclick={() => run(openBrowseModal)}>Browse Files…</button>
 						</div>
 					{/if}
 				</div>
@@ -290,6 +294,7 @@
 				<button onclick={() => run(openAnkiModal)}>Anki</button>
 				<button onclick={() => run(openLocalMediaModal)}>Local Media</button>
 				<button onclick={() => run(openWebsocketModal)}>WebSocket Server</button>
+				<button onclick={() => run(openMatchingModal)}>Show Matching</button>
 				<button onclick={() => run(openProfilesModal)}>Profiles</button>
 				<div class="menu-sep"></div>
 				<button onclick={() => run(openSetupModal)}>Setup Checklist</button>

@@ -4,7 +4,13 @@ pub mod signature;
 pub mod store;
 pub mod tmdb;
 
-use std::sync::LazyLock;
+use std::{
+    collections::{
+        hash_map::Entry,
+        HashMap,
+    },
+    sync::LazyLock,
+};
 
 use regex::Regex;
 use serde::{
@@ -14,6 +20,7 @@ use serde::{
 use tmdb::{
     Candidate,
     Episode,
+    GroupPart,
     Tmdb,
 };
 use unicode_normalization::UnicodeNormalization;
@@ -140,6 +147,52 @@ impl Reference {
     }
 }
 
+/// A show's seasons as one of its episode groups splits them, for a show TMDB lists as fewer
+/// seasons than it aired in: Frieren's second season is its season 1 from episode 29. Matches
+/// keep TMDB's numbering and are shown in this one.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Layout {
+    /// Each season's number and its episodes' TMDB season and number, in order.
+    seasons: Vec<(u32, Vec<(u32, u32)>)>,
+}
+
+impl Layout {
+    /// The `Season N` parts of an episode group, without its specials.
+    fn from_parts(parts: Vec<GroupPart>) -> Option<Self> {
+        static SEASON: LazyLock<Regex> =
+            LazyLock::new(|| Regex::new(r"(?i)^season\s*(\d+)$").unwrap());
+        let mut seasons: Vec<(u32, Vec<(u32, u32)>)> = parts
+            .into_iter()
+            .filter_map(|mut part| {
+                let number = SEASON.captures(part.name.trim())?[1].parse().ok()?;
+                part.episodes.sort_by_key(|e| e.order);
+                let episodes = part.episodes.iter().map(|e| (e.season_number, e.episode_number));
+                (number > 0).then(|| (number, episodes.collect()))
+            })
+            .collect();
+        seasons.sort_by_key(|(number, _)| *number);
+        (!seasons.is_empty()).then_some(Layout { seasons })
+    }
+
+    /// TMDB's season and number for an episode of this layout. Without a season, or past
+    /// the season's end, the number counts on through the seasons, as some releases number.
+    pub fn to_tmdb(&self, season: Option<u32>, number: u32) -> Option<(u32, u32)> {
+        let index = usize::try_from(number).ok()?.checked_sub(1)?;
+        let counted = self.seasons.iter().flat_map(|(_, episodes)| episodes).nth(index).copied();
+        let Some(season) = season else { return counted };
+        let (_, episodes) = self.seasons.iter().find(|(n, _)| *n == season)?;
+        episodes.get(index).copied().or(counted.filter(|e| episodes.contains(e)))
+    }
+
+    /// This layout's season and number for TMDB's.
+    pub fn from_tmdb(&self, season: u32, number: u32) -> Option<(u32, u32)> {
+        self.seasons.iter().find_map(|(n, episodes)| {
+            let at = episodes.iter().position(|e| *e == (season, number))?;
+            Some((*n, at as u32 + 1))
+        })
+    }
+}
+
 pub struct Resolved {
     pub found: Match,
     /// The title matched one of the work's titles exactly and, for a show, TMDB has the
@@ -233,14 +286,25 @@ pub async fn lookup(tmdb: &Tmdb, reference: &Reference) -> Result<Option<Match>,
     if work.kind == Kind::Movie {
         return Ok(Some(Match { work, season: None, episode: None, episode_title: None }));
     }
-    let episode = match (reference.season, reference.episode) {
+    let (season, number) = match (reference.season, reference.episode) {
+        (Some(season), Some(number)) => {
+            let found = match layout(tmdb, work.tmdb_id).await? {
+                Some(layout) if season > 0 => layout.to_tmdb(Some(season), number),
+                _ => None,
+            };
+            let (season, number) = found.unwrap_or((season, number));
+            (Some(season), Some(number))
+        }
+        numbers => numbers,
+    };
+    let episode = match (season, number) {
         (Some(season), Some(number)) => episode_in(tmdb, work.tmdb_id, season, number).await?,
         _ => None,
     };
     Ok(Some(Match {
         work,
-        season: reference.season,
-        episode: reference.episode,
+        season,
+        episode: number,
         episode_title: episode.map(|e| e.name).filter(|n| !n.is_empty()),
     }))
 }
@@ -283,6 +347,12 @@ async fn find_episode(
     season: Option<u32>,
     number: u32,
 ) -> Result<Option<(u32, Episode)>, YomineError> {
+    if season != Some(0) {
+        if let Some(layout) = layout(tmdb, show).await? {
+            let Some((season, number)) = layout.to_tmdb(season, number) else { return Ok(None) };
+            return Ok(episode_in(tmdb, show, season, number).await?.map(|e| (season, e)));
+        }
+    }
     let first = season.unwrap_or(1);
     if let Some(episode) = episode_in(tmdb, show, first, number).await? {
         return Ok(Some((first, episode)));
@@ -290,16 +360,8 @@ async fn find_episode(
     if season.is_some() {
         return Ok(None);
     }
-    let seasons = match store::seasons(show)? {
-        Some(seasons) => seasons,
-        None => {
-            let seasons = tmdb.seasons(show).await?;
-            store::set_seasons(show, &seasons)?;
-            seasons
-        }
-    };
     let mut before = 0;
-    for (season, count) in seasons {
+    for (season, count) in regular_seasons(tmdb, show).await? {
         if number <= before + count {
             // Some long shows keep counting across seasons, as One Piece does on TMDB.
             let episode = match episode_in(tmdb, show, season, number).await? {
@@ -311,6 +373,97 @@ async fn find_episode(
         before += count;
     }
     Ok(None)
+}
+
+async fn regular_seasons(tmdb: &Tmdb, show: i64) -> Result<Vec<(u32, u32)>, YomineError> {
+    if let Some(seasons) = store::seasons(show)? {
+        return Ok(seasons);
+    }
+    let seasons = tmdb.seasons(show).await?;
+    store::set_seasons(show, &seasons)?;
+    Ok(seasons)
+}
+
+/// The show's layout, where it has an episode group splitting it into more seasons than
+/// TMDB lists.
+pub async fn layout(tmdb: &Tmdb, show: i64) -> Result<Option<Layout>, YomineError> {
+    /// TMDB's Production type, which a show's real seasons are usually grouped under.
+    const PRODUCTION: u32 = 6;
+    if let Some(cached) = store::layout(show)?.filter(|c| !c.stale) {
+        return Ok(cached.layout);
+    }
+    let regular = regular_seasons(tmdb, show).await?.len();
+    let mut groups = tmdb.episode_groups(show).await?;
+    groups.retain(|g| g.name.to_lowercase().contains("season"));
+    groups.sort_by_key(|g| g.kind != PRODUCTION);
+    let mut found = None;
+    for group in groups.iter().take(2) {
+        let layout = Layout::from_parts(tmdb.episode_group(&group.id).await?);
+        if let Some(layout) = layout.filter(|l| l.seasons.len() > regular) {
+            found = Some(layout);
+            break;
+        }
+    }
+    store::set_layout(show, found.as_ref())?;
+    Ok(found)
+}
+
+/// The match numbered by the show's layout when one is cached, for showing it.
+pub fn displayed(mut found: Match) -> Match {
+    let (Kind::Tv, Some(season), Some(number)) = (found.work.kind, found.season, found.episode)
+    else {
+        return found;
+    };
+    let (season, number) = displayed_episode(found.work.tmdb_id, season, number);
+    found.season = Some(season);
+    found.episode = Some(number);
+    found
+}
+
+/// A TMDB season and episode as [`displayed`] shows them.
+pub fn displayed_episode(show: i64, season: u32, number: u32) -> (u32, u32) {
+    let layout = store::layout(show).ok().flatten().and_then(|c| c.layout);
+    layout.and_then(|l| l.from_tmdb(season, number)).unwrap_or((season, number))
+}
+
+/// The episodes of a season, in the show's layout where it has one, that have aired.
+pub async fn aired_episodes(
+    tmdb: &Tmdb,
+    show: i64,
+    season: u32,
+) -> Result<Vec<Episode>, YomineError> {
+    let _one_at_a_time = RESOLVING.lock().await;
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let aired = |e: &Episode| e.air_date.as_deref().is_some_and(|d| d <= today.as_str());
+    let layout = if season > 0 { layout(tmdb, show).await? } else { None };
+    let Some(layout) = layout else {
+        return Ok(season_list(tmdb, show, season).await?.into_iter().filter(aired).collect());
+    };
+    let Some((_, numbers)) = layout.seasons.iter().find(|(n, _)| *n == season) else {
+        return Ok(Vec::new());
+    };
+    let mut lists = HashMap::new();
+    let mut episodes = Vec::new();
+    for (at, &(tmdb_season, number)) in numbers.iter().enumerate() {
+        if let Entry::Vacant(list) = lists.entry(tmdb_season) {
+            list.insert(season_list(tmdb, show, tmdb_season).await?);
+        }
+        let found = lists[&tmdb_season].iter().find(|e| e.number == number);
+        if let Some(episode) = found.filter(|e| aired(e)) {
+            episodes.push(Episode { number: at as u32 + 1, ..episode.clone() });
+        }
+    }
+    Ok(episodes)
+}
+
+/// TMDB's episodes of a season, fetched again once a day for a season that may be airing.
+async fn season_list(tmdb: &Tmdb, show: i64, season: u32) -> Result<Vec<Episode>, YomineError> {
+    if let Some(cached) = store::season(show, season)?.filter(|c| !c.stale) {
+        return Ok(cached.episodes);
+    }
+    let episodes = tmdb.season(show, season).await?;
+    store::set_season(show, season, &episodes)?;
+    Ok(episodes)
 }
 
 async fn episode_in(
@@ -373,6 +526,36 @@ mod tests {
             Some(reference(Kind::Tv, 209867, None, None))
         );
         assert_eq!(Reference::parse("Frieren", Kind::Tv), None);
+    }
+
+    #[test]
+    fn a_layout_numbers_episodes_by_the_groups_seasons() {
+        let part = |name: &str, episodes: &[(u32, u32)]| GroupPart {
+            name: name.into(),
+            order: 0,
+            episodes: episodes
+                .iter()
+                .enumerate()
+                .map(|(order, &(season_number, episode_number))| tmdb::GroupEpisode {
+                    season_number,
+                    episode_number,
+                    order: order as u32,
+                })
+                .collect(),
+        };
+        // Frieren on TMDB: one season of 38, grouped as 28 and 10 (shortened here).
+        let layout = Layout::from_parts(vec![
+            part("Specials", &[(0, 1)]),
+            part("Season 2", &[(1, 4), (1, 5)]),
+            part("Season 1", &[(1, 1), (1, 2), (1, 3)]),
+        ])
+        .unwrap();
+        assert_eq!(layout.to_tmdb(Some(2), 1), Some((1, 4)));
+        assert_eq!(layout.to_tmdb(None, 4), Some((1, 4)));
+        assert_eq!(layout.to_tmdb(Some(2), 4), Some((1, 4)));
+        assert_eq!(layout.to_tmdb(Some(1), 4), None);
+        assert_eq!(layout.from_tmdb(1, 5), Some((2, 2)));
+        assert_eq!(layout.from_tmdb(0, 1), None);
     }
 
     #[test]

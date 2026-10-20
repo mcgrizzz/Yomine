@@ -1,5 +1,6 @@
 import { derived, get, writable } from 'svelte/store';
 import * as ipc from '$lib/ipc';
+import type { Openable } from '$lib/shows';
 import { lastError, overlay, showNotice } from './ui';
 import { ensureToolsReady, languageToolsStatus } from './status';
 import { refreshMinedState } from './mining';
@@ -225,6 +226,32 @@ export async function openRecentFile(entry: ipc.RecentFileEntry): Promise<void> 
 		if (get(miningMode) !== entry.mode && !(await switchMode(entry.mode, false))) return;
 	}
 	return loadAndStore(entry.file_path);
+}
+
+/** Opens a file in Local mode: a video as its folder's queue, at that video. */
+export async function openFound(path: string): Promise<void> {
+	const { miningMode } = await import('./settings');
+	if (get(miningMode) !== 'local' && !(await switchMode('local', false))) return;
+	if (!isVideoPath(path)) return loadAndStore(path);
+	const folder = path.slice(0, Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')));
+	let videos: ipc.QueuedVideo[];
+	try {
+		videos = await ipc.listVideos([folder]);
+	} catch {
+		return loadAndStore(path);
+	}
+	const index = videos.findIndex((v) => v.path === path);
+	if (index < 0 || videos.length === 1) return loadAndStore(path);
+	return playQueue(videos, index, true);
+}
+
+/** Opens a Shows view episode, preferring a video so it plays as its folder's queue: the
+ * one opened before, else the one found for it, else the subtitle file opened before. */
+export async function openEpisode(episode: Openable): Promise<void> {
+	const entry = episode.files?.[0];
+	if (entry && isVideoPath(entry.file_path)) return openFound(entry.file_path);
+	if (episode.found?.subtitles) return openFound(episode.found.path);
+	if (entry) return openRecentFile(entry);
 }
 
 export async function reloadCurrentFile(): Promise<void> {

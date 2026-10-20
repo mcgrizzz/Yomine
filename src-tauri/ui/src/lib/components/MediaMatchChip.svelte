@@ -1,12 +1,14 @@
 <script lang="ts">
 	import {
 		clearMediaMatch,
+		getRecentFiles,
 		searchMedia,
 		setMediaMatch,
 		type MediaCandidate,
 		type MediaMatch
 	} from '$lib/ipc';
-	import { mediaMatch, openExternal } from '$lib/stores';
+	import { mediaTitle } from '$lib/media';
+	import { mediaMatch, openExternal, recentFiles } from '$lib/stores';
 
 	type Kind = 'tv' | 'movie';
 	interface Picked {
@@ -77,7 +79,7 @@
 	function startSearch() {
 		searching = true;
 		kind = picked?.kind ?? 'tv';
-		query = fileTitle.replace(/ - (S\d+E\d+|Episode \d+)$/, '');
+		query = fileTitle.replace(/ - (S\d+E\d+|Episode [\d.]+)$/, '');
 		results = [];
 		search();
 	}
@@ -128,6 +130,7 @@
 			});
 			mediaMatch.set(saved);
 			open = false;
+			recentFiles.set(await getRecentFiles());
 		} catch (e) {
 			error = String(e);
 		} finally {
@@ -141,6 +144,7 @@
 			await clearMediaMatch(fingerprint);
 			mediaMatch.set(null);
 			open = false;
+			recentFiles.set(await getRecentFiles());
 		} catch (e) {
 			error = String(e);
 		} finally {
@@ -168,17 +172,19 @@
 />
 
 <span class="anchor" bind:this={root}>
-	{#if match}
+	{#if match?.matched_by === 'suggested'}
+		<button
+			class="tab-chip suggested"
+			title={`${MATCHED_BY.suggested}: ${match.work.title}. Click to confirm or change it.`}
+			aria-expanded={open}
+			onclick={toggle}>{mediaTitle(match)}?</button
+		>
+	{:else if match}
 		<button
 			class="tab-chip match"
-			class:suggested={match.matched_by === 'suggested'}
-			title={`${match.work.title}${match.episode_title ? ` — ${match.episode_title}` : ''}`}
+			title={`${MATCHED_BY[match.matched_by]}. Click to change it.`}
 			aria-expanded={open}
-			onclick={toggle}
-			>{match.work.original_title || match.work.title}{match.season !== null &&
-			match.episode !== null
-				? ` · S${match.season}E${match.episode}`
-				: ''}{match.matched_by === 'suggested' ? '?' : ''}</button
+			onclick={toggle}>✓ Matched</button
 		>
 	{:else}
 		<button
@@ -301,12 +307,13 @@
 		border-color: currentColor;
 	}
 	.tab-chip.match {
-		color: var(--text);
-		background: var(--bg-raised);
+		color: var(--text-muted);
+		background: transparent;
 	}
 	.tab-chip.suggested {
 		border-style: dashed;
-		color: var(--text-muted);
+		color: var(--text);
+		background: var(--bg-raised);
 	}
 	.tab-chip.unmatched {
 		color: var(--text-muted);
