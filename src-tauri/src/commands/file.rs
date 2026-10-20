@@ -182,15 +182,11 @@ pub async fn list_videos(paths: Vec<PathBuf>) -> Vec<QueuedVideoDto> {
         .iter()
         .map(|path| {
             let path = path.display().to_string();
-            match filename_parser::parse_filename(&path) {
-                MediaType::TvShow { title, season, episode: Some(e), .. } => QueuedVideoDto {
-                    path,
-                    show: Some(title),
-                    episode: Some(match season {
-                        Some(s) => format!("S{s:02}E{e:02}"),
-                        None => format!("Episode {e}"),
-                    }),
-                },
+            let media = filename_parser::parse_filename(&path);
+            match (&media, media.episode_label()) {
+                (MediaType::TvShow { title, .. }, Some(episode)) => {
+                    QueuedVideoDto { path, show: Some(title.clone()), episode: Some(episode) }
+                }
                 _ => QueuedVideoDto { path, show: None, episode: None },
             }
         })
@@ -504,6 +500,25 @@ pub(crate) fn subtitle_stem(name: &str) -> &str {
         .unwrap_or(name.trim())
 }
 
+/// asbplayer names a streaming site's subtitles `<page title> - <file or track name>`. The
+/// page title is dropped when the rest names an episode or film on its own
+/// (`File 31625 - MegaPlay - [SubsPlease] Mushoku Tensei - 02`), and kept when the rest is
+/// only a track label (`<episode title> - Watch on Crunchyroll - 日本語`).
+fn without_page_title<'a>(stem: &'a str, page_title: &str) -> &'a str {
+    let page_title = page_title.trim();
+    let Some(rest) = stem
+        .strip_prefix(page_title)
+        .and_then(|rest| rest.strip_prefix(" - "))
+        .filter(|_| !page_title.is_empty())
+    else {
+        return stem;
+    };
+    match filename_parser::parse_filename(&format!("{rest}.srt")) {
+        filename_parser::MediaType::Generic { .. } => stem,
+        _ => rest,
+    }
+}
+
 /// The shared asbplayer-load path — the command above (picker, with progress)
 /// and the follow-mode background loop (no progress channel) both use it.
 pub(crate) async fn load_asbplayer_into_state(
@@ -562,9 +577,12 @@ pub(crate) async fn load_asbplayer_into_state(
     let title = if title.trim().is_empty() { "asbplayer video".to_string() } else { title };
     let (stem, display_title, creator) = match &file_name {
         Some(name) => {
-            let stem = subtitle_stem(name).to_string();
+            let full = subtitle_stem(name);
+            let stem = without_page_title(full, &title).to_string();
             let media_info = filename_parser::parse_filename(&format!("{stem}.srt"));
-            let metadata = media_info.get_metadata_string();
+            // The page title can name the site (`Watch on Crunchyroll`).
+            let metadata =
+                filename_parser::parse_filename(&format!("{full}.srt")).get_metadata_string();
             (
                 stem,
                 media_info.display_title(),
@@ -923,8 +941,18 @@ fn save_subtitles_srt(
         eprintln!("[asbplayer] Failed to create subtitle dir: {e}");
         return None;
     }
-    let stem: String =
-        title.chars().map(|c| if r#"\/:*?"<>|"#.contains(c) { '_' } else { c }).take(80).collect();
+    // Windows forbids these in file names; their full-width forms read the same once titles
+    // are normalized for matching. The cap keeps the whole path under Windows' 260.
+    let stem: String = title
+        .chars()
+        .map(|c| match c {
+            '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => {
+                char::from_u32(c as u32 + 0xFEE0).unwrap_or('_')
+            }
+            c => c,
+        })
+        .take(150)
+        .collect();
     let stem = stem.trim();
     let path = dir.join(format!("{}.srt", if stem.is_empty() { "asbplayer video" } else { stem }));
     match std::fs::write(&path, yomine::websocket::subtitles_to_srt(subtitles)) {
@@ -938,7 +966,24 @@ fn save_subtitles_srt(
 
 #[cfg(test)]
 mod tests {
-    use super::subtitle_stem;
+    use super::{
+        subtitle_stem,
+        without_page_title,
+    };
+
+    #[test]
+    fn a_streaming_page_title_is_dropped_before_a_release_name() {
+        assert_eq!(
+            without_page_title(
+                "File 31625 - MegaPlay - [SubsPlease] Mushoku Tensei - 02v2 (1080p) [7A771BA7].ja",
+                "File 31625 - MegaPlay"
+            ),
+            "[SubsPlease] Mushoku Tensei - 02v2 (1080p) [7A771BA7].ja"
+        );
+        let crunchyroll = "Demon Slayer: Kimetsu no Yaiba The Hashira Unite - Watch on Crunchyroll";
+        let track = format!("{crunchyroll} - 日本語");
+        assert_eq!(without_page_title(&track, crunchyroll), track);
+    }
 
     #[test]
     fn a_resaved_copy_keeps_the_original_stem() {

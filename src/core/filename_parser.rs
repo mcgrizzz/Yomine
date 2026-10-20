@@ -14,6 +14,8 @@ pub enum MediaType {
         title: String,
         season: Option<u32>,
         episode: Option<u32>,
+        /// An episode between two numbered ones (`11.5`), which TMDB doesn't number.
+        fractional_episode: Option<String>,
         source: Option<String>, // e.g., "Netflix", "Crunchyroll"
     },
     Movie {
@@ -60,6 +62,9 @@ pub fn parse_filename(path: &str) -> MediaType {
             title: title.unwrap_or_else(|| clean(&stem)),
             season,
             episode: episode.and_then(|e| e.parse().ok()),
+            fractional_episode: episode
+                .filter(|e| e.contains('.') && e.parse::<f32>().is_ok())
+                .map(str::to_string),
             source,
         }
     } else if year.is_some() {
@@ -124,16 +129,28 @@ fn parse_source(text: &str) -> Option<String> {
 impl MediaType {
     pub fn display_title(&self) -> String {
         match self {
-            MediaType::TvShow { title, season, episode, .. } => match (season, episode) {
-                (Some(s), Some(e)) => format!("{} - S{:02}E{:02}", title, s, e),
-                (None, Some(e)) => format!("{} - Episode {}", title, e),
-                _ => title.clone(),
+            MediaType::TvShow { title, .. } => match self.episode_label() {
+                Some(episode) => format!("{title} - {episode}"),
+                None => title.clone(),
             },
             MediaType::Movie { title, year, .. } => match year {
                 Some(y) => format!("{} ({})", title, y),
                 None => title.clone(),
             },
             MediaType::Generic { title, .. } => title.clone(),
+        }
+    }
+
+    /// `S01E02`, `Episode 2` or `Episode 11.5`.
+    pub fn episode_label(&self) -> Option<String> {
+        let MediaType::TvShow { season, episode, fractional_episode, .. } = self else {
+            return None;
+        };
+        match (season, episode, fractional_episode) {
+            (Some(s), Some(e), _) => Some(format!("S{s:02}E{e:02}")),
+            (None, Some(e), _) => Some(format!("Episode {e}")),
+            (_, None, Some(e)) => Some(format!("Episode {e}")),
+            _ => None,
         }
     }
 
@@ -164,6 +181,7 @@ mod tests {
             title: title.into(),
             season,
             episode,
+            fractional_episode: None,
             source: None,
         };
         let cases = [
@@ -179,6 +197,16 @@ mod tests {
             (
                 "Frieren.Beyond.Journeys.End.S01E01.1080p.WEBRip.x265.DDP.2.0-ZeroBuild.jpn.forced.srt",
                 show("Frieren Beyond Journeys End", Some(1), Some(1)),
+            ),
+            (
+                "[SubsPlease] Mushoku Tensei - 11.5 (1080p).srt",
+                MediaType::TvShow {
+                    title: "Mushoku Tensei".into(),
+                    season: None,
+                    episode: None,
+                    fractional_episode: Some("11.5".into()),
+                    source: None,
+                },
             ),
             (
                 "【東京→北京】JAL国際線ビジネスクラスに初搭乗 - 日本語 (自動生成).srt",
@@ -200,6 +228,7 @@ mod tests {
             title: "Attack On Titan".to_string(),
             season: Some(1),
             episode: Some(5),
+            fractional_episode: None,
             source: None,
         };
         assert_eq!(tv_show.display_title(), "Attack On Titan - S01E05");
