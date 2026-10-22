@@ -5,6 +5,7 @@
 	import { settingsDraft } from '$lib/settingsDraft.svelte';
 	import Modal from './Modal.svelte';
 	import SettingsFooter from './SettingsFooter.svelte';
+	import SettingsSection from './SettingsSection.svelte';
 	import type { SegmentKnowledge, SettingsData } from '$lib/ipc';
 	import {
 		defaultSettings,
@@ -89,16 +90,14 @@
 	oninteract={form.disarm}
 >
 	<div class="body">
-		<section aria-labelledby="appearance-theme">
-			<h4 id="appearance-theme">Theme</h4>
+		<SettingsSection title="Theme">
 			<div class="theme-row">
 				<button type="button" onclick={openThemes}>Themes…</button>
 				<span class="hint">Pick, create and edit themes in their own window, beside the app.</span>
 			</div>
-		</section>
+		</SettingsSection>
 
-		<section aria-labelledby="appearance-interface">
-			<h4 id="appearance-interface">Interface</h4>
+		<SettingsSection title="Interface">
 			<div class="group">
 				<label for="ui-scale">UI scale</label>
 				<div class="scale-row">
@@ -154,10 +153,9 @@
 				</div>
 				<p class="hint">Relative to UI scale; applies to Shift+Hover definitions.</p>
 			</div>
-		</section>
+		</SettingsSection>
 
-		<section aria-labelledby="appearance-marking">
-			<h4 id="appearance-marking">Sentence marking</h4>
+		<SettingsSection title="Sentence marking">
 			<div class="group">
 				<label for="sentence-coloring">Marking style</label>
 				<select id="sentence-coloring" bind:value={draft.coloring}>
@@ -179,7 +177,7 @@
 					</fieldset>
 				{/if}
 			</div>
-		</section>
+		</SettingsSection>
 	</div>
 
 	{#snippet footer()}
@@ -201,15 +199,6 @@
 		display: grid;
 		gap: 1.25rem;
 		padding: 0 1rem;
-	}
-	section {
-		display: grid;
-		gap: 0.75rem;
-	}
-	h4 {
-		margin: 0;
-		font-size: 0.85rem;
-		font-weight: 600;
 	}
 	.theme-row {
 		display: flex;

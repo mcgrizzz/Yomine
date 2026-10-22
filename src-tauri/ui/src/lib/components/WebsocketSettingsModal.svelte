@@ -4,6 +4,7 @@
 	import { settingsDraft } from '$lib/settingsDraft.svelte';
 	import Modal from './Modal.svelte';
 	import SettingsFooter from './SettingsFooter.svelte';
+	import SettingsSection from './SettingsSection.svelte';
 	import {
 		defaultSettings,
 		playerStatus,
@@ -74,8 +75,7 @@
 	oninteract={form.disarm}
 >
 	<div class="body">
-		<section aria-labelledby="ws-connection">
-			<h4 id="ws-connection">Server connection</h4>
+		<SettingsSection title="Server connection">
 			<p class="server" role="status">
 				<span class="dot" style:color={server.color} aria-hidden="true">●</span>
 				{server.label}{serverDetail}
@@ -107,10 +107,9 @@
 					{/if}
 				</div>
 			</div>
-		</section>
+		</SettingsSection>
 
-		<section aria-labelledby="ws-follow">
-			<h4 id="ws-follow">asbplayer follow mode</h4>
+		<SettingsSection title="asbplayer follow mode">
 			<div class="fields">
 				<label for="asb-poll">Polling interval</label>
 				<span class="with-unit">
@@ -136,7 +135,7 @@
 					</p>
 				</div>
 			</div>
-		</section>
+		</SettingsSection>
 	</div>
 
 	{#snippet footer()}
@@ -159,15 +158,6 @@
 		display: grid;
 		gap: 1.25rem;
 		padding: 0 1rem;
-	}
-	section {
-		display: grid;
-		gap: 0.5rem;
-	}
-	h4 {
-		margin: 0 0 0.2rem;
-		font-size: 0.85rem;
-		font-weight: 600;
 	}
 	p {
 		margin: 0;

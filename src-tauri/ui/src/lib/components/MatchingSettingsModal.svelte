@@ -3,6 +3,7 @@
 	import { settingsDraft } from '$lib/settingsDraft.svelte';
 	import Modal from './Modal.svelte';
 	import SettingsFooter from './SettingsFooter.svelte';
+	import SettingsSection from './SettingsSection.svelte';
 	import { hasBuiltinTmdbKey } from '$lib/ipc';
 	import {
 		defaultSettings,
@@ -49,8 +50,7 @@
 	oninteract={form.disarm}
 >
 	<div class="body">
-		<section aria-labelledby="matching-auto">
-			<h4 id="matching-auto">Automatic matching</h4>
+		<SettingsSection title="Automatic matching">
 			<label class="check">
 				<input type="checkbox" bind:checked={draft.matching} aria-describedby="matching-sent" />
 				Automatically match shows and films
@@ -65,10 +65,9 @@
 				episodes found in the same folders. Searching for a match yourself sends what you type, even
 				with this off.
 			</p>
-		</section>
+		</SettingsSection>
 
-		<section aria-labelledby="matching-access">
-			<h4 id="matching-access">TMDB access</h4>
+		<SettingsSection title="TMDB access">
 			<p class="hint">
 				{#if $settings?.tmdb_api_key}
 					Using your own API key.
@@ -105,7 +104,7 @@
 					</div>
 				</div>
 			</details>
-		</section>
+		</SettingsSection>
 	</div>
 
 	{#snippet footer()}
@@ -128,16 +127,6 @@
 		gap: 1.25rem;
 		padding: 0 1rem;
 	}
-	section {
-		display: grid;
-		justify-items: start;
-		gap: 0.4rem;
-	}
-	h4 {
-		margin: 0 0 0.2rem;
-		font-size: 0.85rem;
-		font-weight: 600;
-	}
 	p {
 		margin: 0;
 	}
@@ -147,12 +136,10 @@
 		color: var(--text-muted);
 	}
 	.check {
+		justify-self: start;
 		display: flex;
 		align-items: center;
 		gap: 0.4rem;
-	}
-	details {
-		justify-self: stretch;
 	}
 	summary {
 		cursor: pointer;

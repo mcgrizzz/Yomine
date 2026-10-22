@@ -1,7 +1,7 @@
 <script lang="ts">
 	// Menu grouping deviates from egui: Mining = what you tweak while working;
 	// Settings opens the settings window; Help = the setup checklist and About.
-	import { tick } from 'svelte';
+	import { tick, type Snippet } from 'svelte';
 	import { relaunch } from '@tauri-apps/plugin-process';
 	import {
 		openExternal,
@@ -247,6 +247,91 @@
 	onkeydown={(e) => e.key === 'Escape' && (openMenu = null)}
 />
 
+{#snippet dropdown(name: MenuName, label: string, items: Snippet, marked = false)}
+	<div class="menu" class:open={openMenu === name}>
+		<button
+			class="menu-trigger"
+			aria-expanded={openMenu === name}
+			onclick={(e) => toggleMenu(name, e)}
+			onkeydown={(e) => openWithArrow(name, e)}>{label}</button
+		>
+		{#if openMenu === name}
+			<!-- svelte-ignore a11y_no_static_element_interactions -- keys move between its items. -->
+			<div class="menu-panel" class:marked onkeydown={menuKeys}>{@render items()}</div>
+		{/if}
+	</div>
+{/snippet}
+
+{#snippet fileItems()}
+	<button onclick={() => run(openAndProcessFile)} disabled={toolsError}>Open File…</button>
+	<button onclick={() => run(openFolder)} disabled={toolsError}>Open Folder…</button>
+	<!-- svelte-ignore a11y_no_static_element_interactions -- hover-expand is a
+	     mouse affordance; the row button below also toggles on click. -->
+	<div
+		class="submenu-wrap"
+		onmouseenter={() => (recentsOpen = true)}
+		onmouseleave={() => (recentsOpen = false)}
+	>
+		<button
+			class="submenu-row"
+			disabled={$recentFiles.length === 0}
+			onclick={(e) => {
+				e.stopPropagation();
+				recentsOpen = !recentsOpen;
+			}}
+		>
+			Open Recent <span class="submenu-arrow">▸</span>
+		</button>
+		{#if recentsOpen && $recentFiles.length > 0}
+			<!-- svelte-ignore a11y_no_static_element_interactions -- keys move between its items. -->
+			<div class="menu-panel submenu" onkeydown={menuKeys}>
+				{#each $recentFiles.slice(0, 10) as entry (recentKey(entry))}
+					<button
+						class="submenu-item"
+						title={entry.file_path}
+						disabled={toolsError}
+						onclick={() => run(() => openRecentFile(entry))}
+						>{entry.media
+							? mediaTitle(entry.media)
+							: entry.title.trim() || filename(entry.file_path)}{#if entry.mode}<span
+								class="submenu-mode">{modeLabel(entry.mode)}</span
+							>{/if}</button
+					>
+				{/each}
+				<div class="menu-sep"></div>
+				<button onclick={() => run(openBrowseModal)}>Browse Files…</button>
+			</div>
+		{/if}
+	</div>
+	<button
+		onclick={() => run(openAsbplayerModal)}
+		disabled={toolsError || $playerStatus.ws_clients === 0}
+		title={$playerStatus.ws_clients === 0 ? 'asbplayer is not connected' : undefined}
+		>Load from asbplayer…</button
+	>
+	<div class="menu-sep"></div>
+	<button onclick={() => run(openDataFolder)}>Open Data Folder</button>
+{/snippet}
+
+{#snippet miningItems()}
+	<button onclick={() => run(openFrequencyModal)}>Frequency Dictionaries…</button>
+	<button onclick={() => run(openIgnoreModal)} disabled={!toolsReady}>Ignore List…</button>
+	<button onclick={() => run(openPosModal)}>Part of Speech Filters…</button>
+	<button onclick={() => run(openTextFiltersModal)}>Text Filters…</button>
+	<div class="menu-sep"></div>
+	<button onclick={() => run(openAutoModal)}
+		><span class="mark" aria-hidden="true">✦</span>Auto Mode…</button
+	>
+	<button onclick={() => run(openBatchHistory)} disabled={!$lastBatch}>Batches…</button>
+	<div class="menu-sep"></div>
+	<button onclick={() => run(openAnalyzerModal)} disabled={!toolsReady}>Frequency Analyzer…</button>
+{/snippet}
+
+{#snippet helpItems()}
+	<button onclick={() => run(openSetupModal)}>Setup Checklist…</button>
+	<button onclick={() => run(openAboutModal)}>About Yomine…</button>
+{/snippet}
+
 {#snippet dot(kind: StatusKind)}
 	<span class="dot" style:color={STATUS[kind].color} aria-hidden="true">{STATUS[kind].glyph}</span>
 {/snippet}
@@ -295,123 +380,14 @@
 
 	<span class="sep"></span>
 
-	<div class="menu" class:open={openMenu === 'file'}>
-		<button
-			class="menu-trigger"
-			aria-expanded={openMenu === 'file'}
-			onclick={(e) => toggleMenu('file', e)}
-			onkeydown={(e) => openWithArrow('file', e)}>File</button
-		>
-		{#if openMenu === 'file'}
-			<!-- svelte-ignore a11y_no_static_element_interactions -- keys move between its items. -->
-			<div class="menu-panel" onkeydown={menuKeys}>
-				<button onclick={() => run(openAndProcessFile)} disabled={toolsError}>Open File…</button>
-				<button onclick={() => run(openFolder)} disabled={toolsError}>Open Folder…</button>
-				<!-- svelte-ignore a11y_no_static_element_interactions -- hover-expand is a
-				     mouse affordance; the row button below also toggles on click. -->
-				<div
-					class="submenu-wrap"
-					onmouseenter={() => (recentsOpen = true)}
-					onmouseleave={() => (recentsOpen = false)}
-				>
-					<button
-						class="submenu-row"
-						disabled={$recentFiles.length === 0}
-						onclick={(e) => {
-							e.stopPropagation();
-							recentsOpen = !recentsOpen;
-						}}
-					>
-						Open Recent <span class="submenu-arrow">▸</span>
-					</button>
-					{#if recentsOpen && $recentFiles.length > 0}
-						<!-- svelte-ignore a11y_no_static_element_interactions -- keys move between its items. -->
-						<div class="menu-panel submenu" onkeydown={menuKeys}>
-							{#each $recentFiles.slice(0, 10) as entry (recentKey(entry))}
-								<button
-									class="submenu-item"
-									title={entry.file_path}
-									disabled={toolsError}
-									onclick={() => run(() => openRecentFile(entry))}
-									>{entry.media
-										? mediaTitle(entry.media)
-										: entry.title.trim() || filename(entry.file_path)}{#if entry.mode}<span
-											class="submenu-mode">{modeLabel(entry.mode)}</span
-										>{/if}</button
-								>
-							{/each}
-							<div class="menu-sep"></div>
-							<button onclick={() => run(openBrowseModal)}>Browse Files…</button>
-						</div>
-					{/if}
-				</div>
-				<button
-					onclick={() => run(openAsbplayerModal)}
-					disabled={toolsError || $playerStatus.ws_clients === 0}
-					title={$playerStatus.ws_clients === 0 ? 'asbplayer is not connected' : undefined}
-					>Load from asbplayer…</button
-				>
-				<div class="menu-sep"></div>
-				<button onclick={() => run(openDataFolder)}>Open Data Folder</button>
-			</div>
-		{/if}
-	</div>
+	{@render dropdown('file', 'File', fileItems)}
 
 	<!-- Mining data + tools: what you tweak while working through a file. -->
-	<div class="menu" class:open={openMenu === 'mining'}>
-		<button
-			class="menu-trigger"
-			aria-expanded={openMenu === 'mining'}
-			onclick={(e) => toggleMenu('mining', e)}
-			onkeydown={(e) => openWithArrow('mining', e)}>Mining</button
-		>
-		{#if openMenu === 'mining'}
-			<!-- svelte-ignore a11y_no_static_element_interactions -- keys move between its items. -->
-			<div class="menu-panel marked" onkeydown={menuKeys}>
-				<button onclick={() => run(openFrequencyModal)}
-					><span class="mark"></span>Frequency Dictionaries…</button
-				>
-				<button onclick={() => run(openIgnoreModal)} disabled={!toolsReady}
-					><span class="mark"></span>Ignore List…</button
-				>
-				<button onclick={() => run(openPosModal)}
-					><span class="mark"></span>Part of Speech Filters…</button
-				>
-				<button onclick={() => run(openTextFiltersModal)}
-					><span class="mark"></span>Text Filters…</button
-				>
-				<div class="menu-sep"></div>
-				<button onclick={() => run(openAutoModal)}
-					><span class="mark" aria-hidden="true">✦</span>Auto Mode…</button
-				>
-				<button onclick={() => run(openBatchHistory)} disabled={!$lastBatch}
-					><span class="mark"></span>Batches…</button
-				>
-				<div class="menu-sep"></div>
-				<button onclick={() => run(openAnalyzerModal)} disabled={!toolsReady}
-					><span class="mark"></span>Frequency Analyzer…</button
-				>
-			</div>
-		{/if}
-	</div>
+	{@render dropdown('mining', 'Mining', miningItems, true)}
 
 	<button class="menu-trigger" onclick={() => openSettings()}>Settings</button>
 
-	<div class="menu" class:open={openMenu === 'help'}>
-		<button
-			class="menu-trigger"
-			aria-expanded={openMenu === 'help'}
-			onclick={(e) => toggleMenu('help', e)}
-			onkeydown={(e) => openWithArrow('help', e)}>Help</button
-		>
-		{#if openMenu === 'help'}
-			<!-- svelte-ignore a11y_no_static_element_interactions -- keys move between its items. -->
-			<div class="menu-panel" onkeydown={menuKeys}>
-				<button onclick={() => run(openSetupModal)}>Setup Checklist…</button>
-				<button onclick={() => run(openAboutModal)}>About Yomine…</button>
-			</div>
-		{/if}
-	</div>
+	{@render dropdown('help', 'Help', helpItems)}
 
 	<!-- Reapply ignorelist + Anki filters (egui's 🔄); only meaningful with
 	     a file loaded. Keyboard: F5 / Ctrl+R (wired app-wide in +page). -->
@@ -449,15 +425,13 @@
 							: 'Yomine restarts to switch profiles; the loaded file and any queued mining are lost.'}
 						onclick={(e) => pickProfile(e, profile)}
 					>
-						<span class="mark" aria-hidden="true">{profile.active ? '✓' : ''}</span>
+						{#if profile.active}<span class="mark" aria-hidden="true">✓</span>{/if}
 						<span class="profile-label">{profile.display_name}</span>
 						{#if switchArmed === profile.slug}<span class="hint">Click to restart</span>{/if}
 					</button>
 				{/each}
 				<div class="menu-sep"></div>
-				<button onclick={() => run(openProfilesModal)}
-					><span class="mark"></span>Manage Profiles…</button
-				>
+				<button onclick={() => run(openProfilesModal)}>Manage Profiles…</button>
 			</div>
 		{/if}
 	</div>
@@ -715,10 +689,12 @@
 	}
 	/* A column for check marks and state glyphs, so labels line up beside them. */
 	.marked button {
-		padding-left: 0.3rem;
+		position: relative;
+		padding-left: 1.5rem;
 	}
 	.mark {
-		flex: none;
+		position: absolute;
+		left: 0.3rem;
 		width: 1.2rem;
 		text-align: center;
 		font-size: 0.8rem;
