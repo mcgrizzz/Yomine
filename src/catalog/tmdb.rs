@@ -26,16 +26,98 @@ pub fn api_key(user: Option<&str>) -> Option<String> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(from = "RawCandidate")]
 pub struct Candidate {
     pub id: i64,
-    #[serde(default, alias = "name")]
     pub title: String,
-    #[serde(default, alias = "original_name")]
     pub original_title: String,
-    #[serde(default)]
     pub original_language: String,
-    #[serde(default, alias = "first_air_date")]
     pub release_date: String,
+    /// What tells a show's anime from its live-action drama, which share a title.
+    pub genres: Vec<String>,
+}
+
+impl Candidate {
+    pub fn animated(&self) -> bool {
+        self.genres.iter().any(|g| g == "Animation")
+    }
+}
+
+#[derive(Deserialize)]
+struct RawCandidate {
+    id: i64,
+    #[serde(default, alias = "name")]
+    title: String,
+    #[serde(default, alias = "original_name")]
+    original_title: String,
+    #[serde(default)]
+    original_language: String,
+    #[serde(default, alias = "first_air_date")]
+    release_date: String,
+    /// A search result's genres.
+    #[serde(default)]
+    genre_ids: Vec<i64>,
+    /// An entry's details' genres.
+    #[serde(default)]
+    genres: Vec<Genre>,
+}
+
+#[derive(Deserialize)]
+struct Genre {
+    name: String,
+}
+
+impl From<RawCandidate> for Candidate {
+    fn from(raw: RawCandidate) -> Self {
+        let genres = if raw.genres.is_empty() {
+            raw.genre_ids.into_iter().filter_map(genre_name).map(str::to_string).collect()
+        } else {
+            raw.genres.into_iter().map(|g| g.name).collect()
+        };
+        Candidate {
+            id: raw.id,
+            title: raw.title,
+            original_title: raw.original_title,
+            original_language: raw.original_language,
+            release_date: raw.release_date,
+            genres,
+        }
+    }
+}
+
+/// The names of TMDB's film and TV genres (`/genre/movie/list`, `/genre/tv/list`), which
+/// search results give only as IDs.
+fn genre_name(id: i64) -> Option<&'static str> {
+    Some(match id {
+        12 => "Adventure",
+        14 => "Fantasy",
+        16 => "Animation",
+        18 => "Drama",
+        27 => "Horror",
+        28 => "Action",
+        35 => "Comedy",
+        36 => "History",
+        37 => "Western",
+        53 => "Thriller",
+        80 => "Crime",
+        99 => "Documentary",
+        878 => "Science Fiction",
+        9648 => "Mystery",
+        10402 => "Music",
+        10749 => "Romance",
+        10751 => "Family",
+        10752 => "War",
+        10759 => "Action & Adventure",
+        10762 => "Kids",
+        10763 => "News",
+        10764 => "Reality",
+        10765 => "Sci-Fi & Fantasy",
+        10766 => "Soap",
+        10767 => "Talk",
+        10768 => "War & Politics",
+        10770 => "TV Movie",
+        _ => return None,
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

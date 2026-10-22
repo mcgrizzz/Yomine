@@ -309,11 +309,58 @@ pub async fn lookup(tmdb: &Tmdb, reference: &Reference) -> Result<Option<Match>,
     }))
 }
 
+/// A title's trailing qualifier split off, as in `Wakakozake (Drama)`: the bare title, and
+/// whether the qualifier asks for an animated entry or a live-action one.
+pub fn qualified(title: &str) -> (&str, Option<bool>) {
+    let trimmed = title.trim_end();
+    let Some(open) = trimmed.strip_suffix([')', '）']).and_then(|t| t.rfind(['(', '（'])) else {
+        return (title, None);
+    };
+    let bare = trimmed[..open].trim_end();
+    if bare.is_empty() {
+        return (title, None);
+    }
+    let qualifier = trimmed[open..].to_lowercase();
+    let names = |words: &[&str]| words.iter().any(|w| qualifier.contains(w));
+    let animated = if names(&["drama", "dorama", "live action", "live-action", "ドラマ", "実写"])
+    {
+        Some(false)
+    } else if names(&["anime", "animated", "animation", "アニメ"]) {
+        Some(true)
+    } else {
+        None
+    };
+    (bare, animated)
+}
+
+/// Searches TMDB for the title, and for it without a trailing qualifier when TMDB has
+/// nothing for the whole. A qualifier naming drama or anime puts those entries first.
+pub async fn search_titled(
+    tmdb: &Tmdb,
+    kind: Kind,
+    title: &str,
+    year: Option<u32>,
+) -> Result<Vec<Candidate>, YomineError> {
+    let (bare, animated) = qualified(title);
+    let mut found = tmdb.search(kind, title, year).await?;
+    if found.is_empty() && bare != title {
+        found = tmdb.search(kind, bare, year).await?;
+    }
+    if let Some(animated) = animated {
+        found.sort_by_key(|c| c.animated() != animated);
+    }
+    Ok(found)
+}
+
 /// The search's best result and whether one of its titles is the query's.
 async fn search(tmdb: &Tmdb, query: &Query) -> Result<Option<(Work, bool)>, YomineError> {
-    let candidates = tmdb.search(query.kind, &query.title, query.year).await?;
+    let candidates = search_titled(tmdb, query.kind, &query.title, query.year).await?;
     let Some(best) = pick(&candidates) else { return Ok(None) };
-    let wanted = normalize_title(&query.title);
+    let (bare, animated) = qualified(&query.title);
+    if animated.is_some_and(|a| best.animated() != a) {
+        return Ok(Some((work_of(query.kind, best), false)));
+    }
+    let wanted = normalize_title(if animated.is_some() { bare } else { &query.title });
     let mut exact =
         [&best.title, &best.original_title].iter().any(|t| normalize_title(t) == wanted);
     // Romaji titles from release names are usually among the alternative titles.
@@ -324,13 +371,16 @@ async fn search(tmdb: &Tmdb, query: &Query) -> Result<Option<(Work, bool)>, Yomi
             .iter()
             .any(|t| normalize_title(t) == wanted);
     }
-    let work = Work {
-        kind: query.kind,
-        tmdb_id: best.id,
-        title: best.title.clone(),
-        original_title: best.original_title.clone(),
-    };
-    Ok(Some((work, exact)))
+    Ok(Some((work_of(query.kind, best), exact)))
+}
+
+fn work_of(kind: Kind, candidate: &Candidate) -> Work {
+    Work {
+        kind,
+        tmdb_id: candidate.id,
+        title: candidate.title.clone(),
+        original_title: candidate.original_title.clone(),
+    }
 }
 
 /// The first Japanese-language result, otherwise the first: `silent` is the 2022 drama rather
@@ -556,6 +606,30 @@ mod tests {
         assert_eq!(layout.to_tmdb(Some(1), 4), None);
         assert_eq!(layout.from_tmdb(1, 5), Some((2, 2)));
         assert_eq!(layout.from_tmdb(0, 1), None);
+    }
+
+    #[test]
+    fn a_qualifier_asks_for_anime_or_live_action() {
+        assert_eq!(qualified("Wakakozake (Drama)"), ("Wakakozake", Some(false)));
+        assert_eq!(qualified("ワカコ酒（アニメ）"), ("ワカコ酒", Some(true)));
+        assert_eq!(qualified("Mushishi (Live Action)"), ("Mushishi", Some(false)));
+        assert_eq!(qualified("Hunter x Hunter (2011)"), ("Hunter x Hunter", None));
+        assert_eq!(qualified("Wakakozake"), ("Wakakozake", None));
+        assert_eq!(qualified("(Drama)"), ("(Drama)", None));
+    }
+
+    #[test]
+    fn search_results_and_details_name_their_genres() {
+        let searched: tmdb::Candidate =
+            serde_json::from_str(r#"{"id":1,"name":"ワカコ酒","genre_ids":[16,35,999]}"#).unwrap();
+        assert_eq!(searched.genres, ["Animation", "Comedy"]);
+        assert!(searched.animated());
+        let details: tmdb::Candidate = serde_json::from_str(
+            r#"{"id":2,"name":"ワカコ酒","genres":[{"id":18,"name":"Drama"}]}"#,
+        )
+        .unwrap();
+        assert_eq!(details.genres, ["Drama"]);
+        assert!(!details.animated());
     }
 
     #[test]

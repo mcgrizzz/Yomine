@@ -976,6 +976,7 @@ export interface MediaCandidate {
 	original_language: string;
 	/** `YYYY-MM-DD`, or empty when TMDB has no date. */
 	release_date: string;
+	genres: string[];
 }
 
 /** A TMDB entry the user named (`catalog::Reference`). */
@@ -1074,6 +1075,13 @@ export function rematchWork(
 	to: MediaReference | null
 ): Promise<void> {
 	return invoke('rematch_work', { kind, tmdbId, to });
+}
+
+export function getMediaDetails(
+	kind: 'tv' | 'movie',
+	tmdbId: number
+): Promise<MediaCandidate | null> {
+	return invoke('get_media_details', { kind, tmdbId });
 }
 
 /** Why the source has no match, when it was loaded this session. */

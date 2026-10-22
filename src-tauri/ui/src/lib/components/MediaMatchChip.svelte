@@ -2,6 +2,7 @@
 	import { get } from 'svelte/store';
 	import {
 		clearMediaMatch,
+		getMediaDetails,
 		getMediaMatch,
 		getRecentFiles,
 		getUnmatchedReason,
@@ -21,6 +22,8 @@
 		id: number;
 		title: string;
 		original_title: string;
+		/** Genres and year, once known. */
+		about: string;
 	}
 
 	let {
@@ -55,6 +58,8 @@
 	let loading = $state(false);
 	let busy = $state(false);
 	let error = $state<string | null>(null);
+	/** The genres and year of the entry matched now. */
+	let current = $state('');
 	let searchTimer: ReturnType<typeof setTimeout> | undefined;
 	let latestSearch = 0;
 
@@ -79,8 +84,20 @@
 			kind: match.work.kind,
 			id: match.work.tmdb_id,
 			title: match.work.title,
-			original_title: match.work.original_title
+			original_title: match.work.original_title,
+			about: ''
 		};
+		current = '';
+		const now = work ?? match?.work;
+		if (now) {
+			void getMediaDetails(now.kind, now.tmdb_id)
+				.then((details) => {
+					if (!details || (work ?? match?.work)?.tmdb_id !== details.id) return;
+					current = about(details);
+					if (picked?.id === details.id && picked.kind === now.kind) picked.about = current;
+				})
+				.catch(() => {});
+		}
 		season = match?.season ?? null;
 		episode = match?.episode ?? null;
 		error = null;
@@ -124,7 +141,8 @@
 			kind,
 			id: result.id,
 			title: result.title,
-			original_title: result.original_title
+			original_title: result.original_title,
+			about: about(result)
 		};
 		searching = false;
 	}
@@ -191,7 +209,8 @@
 		node.select();
 	}
 
-	const year = (c: MediaCandidate) => c.release_date.slice(0, 4);
+	const about = (c: MediaCandidate) =>
+		[c.genres.slice(0, 2).join(', '), c.release_date.slice(0, 4)].filter(Boolean).join(' · ');
 </script>
 
 <svelte:window
@@ -240,7 +259,9 @@
 		<div class="panel" role="dialog" aria-label="Match to a show or film">
 			{#if work}
 				<p class="muted">
-					Moves every file matched to {work.original_title || work.title}.
+					Moves every file matched to {work.original_title || work.title}{current
+						? ` (${current})`
+						: ''}.
 				</p>
 			{:else if !match && $matchProblem}
 				<p class="muted">{$matchProblem}</p>
@@ -279,7 +300,7 @@
 									{#if result.original_title !== result.title}
 										<span class="muted">{result.title}</span>
 									{/if}
-									<span class="muted year">{year(result)}</span>
+									<span class="muted year">{about(result)}</span>
 								</button>
 							</li>
 						{/each}
@@ -300,6 +321,7 @@
 							{#if picked.original_title && picked.original_title !== picked.title}
 								{picked.title} ·
 							{/if}
+							{#if picked.about}{picked.about} ·{/if}
 							<button class="link" onclick={() => picked && openExternal(tmdbUrl(picked))}
 								>TMDB ↗</button
 							>
@@ -475,7 +497,9 @@
 		background: var(--bg-raised);
 	}
 	.year {
+		flex-shrink: 0;
 		margin-left: auto;
+		white-space: nowrap;
 	}
 	.link {
 		padding: 0;

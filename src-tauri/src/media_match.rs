@@ -192,7 +192,8 @@ pub async fn search_media(app: AppHandle, text: String, kind: Kind) -> Result<Me
     }
     // A bare number may also be a title, like 86.
     if !text.contains("themoviedb.org") {
-        for candidate in tmdb.search(kind, &text, None).await.map_err(|e| e.to_string())? {
+        let found = catalog::search_titled(&tmdb, kind, &text, None).await;
+        for candidate in found.map_err(|e| e.to_string())? {
             if search.results.iter().all(|c| c.id != candidate.id) {
                 search.results.push(candidate);
             }
@@ -237,6 +238,16 @@ pub async fn clear_media_match(app: AppHandle, fingerprint: String) -> Result<()
         }
     }
     Ok(())
+}
+
+/// The entry's TMDB details, for the match panel.
+#[tauri::command]
+pub async fn get_media_details(
+    app: AppHandle,
+    kind: Kind,
+    tmdb_id: i64,
+) -> Result<Option<Candidate>, String> {
+    tmdb_client(&app)?.details(kind, tmdb_id).await.map_err(|e| e.to_string())
 }
 
 /// Moves every source matched to the show or film onto the entry the user named, or with

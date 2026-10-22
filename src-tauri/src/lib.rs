@@ -43,6 +43,7 @@ pub fn run() {
             media_match::set_media_match,
             media_match::clear_media_match,
             media_match::rematch_work,
+            media_match::get_media_details,
             media_match::get_unmatched_reason,
             commands::lifecycle::get_pos_catalog,
             commands::lifecycle::get_settings,
