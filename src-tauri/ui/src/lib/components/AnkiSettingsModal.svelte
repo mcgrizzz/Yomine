@@ -68,6 +68,8 @@
 	let modelSearch = $state('');
 	let modelIndex = $state(0);
 	let removed = $state<{ name: string; mapping: ipc.FieldMapping } | null>(null);
+	/** Note types just added, whose fields are being detected. */
+	let detecting = $state<Set<string>>(new Set());
 	let saving = $state(false);
 	let saveError = $state<string | null>(null);
 	// The headers show the saved connections, and Test the entered values. Opening the dialog
@@ -158,6 +160,7 @@
 		else if (catalogPhase === 'loading') catalogPhase = 'idle';
 		if (editingModel && !draft.anki_model_mappings[editingModel]) editingModel = null;
 		autoFilled = new Set();
+		detecting = new Set();
 		adding = false;
 		modelSearch = '';
 		modelIndex = 0;
@@ -184,6 +187,7 @@
 		form.value = copyDraft($defaultSettings);
 		editingModel = null;
 		autoFilled = new Set();
+		detecting = new Set();
 		adding = false;
 		modelSearch = '';
 		modelIndex = 0;
@@ -250,6 +254,7 @@
 			catalogConnection = JSON.stringify(connection);
 			catalogPhase = 'ready';
 			if (editingModel) void loadSample(editingModel);
+			void loadSamples();
 		} catch (error) {
 			if (generation !== ankiGeneration) return;
 			catalogPhase = 'failed';
@@ -319,6 +324,41 @@
 		} catch (error) {
 			if (generation === ankiGeneration) sampleErrors[name] = String(error);
 		}
+	}
+
+	/** Fetches the configured note types' samples, leaving their mappings as saved. */
+	async function loadSamples() {
+		const generation = ankiGeneration;
+		for (const name of Object.keys(draft.anki_model_mappings)) {
+			const model = models.find((m) => m.name === name);
+			if (!model || samples[name]) continue;
+			try {
+				const result = await ipc.getAnkiSampleNote(
+					name,
+					model.fields,
+					{ ...draft.anki_connection },
+					draft.yomitan_url.trim()
+				);
+				if (generation !== ankiGeneration) return;
+				samples[name] = result;
+			} catch {
+				// Editing the mapping loads it again, and shows the error.
+			}
+		}
+	}
+
+	/** Whether the mapping uses the detected note type's fields, as detected. */
+	function asDetected(mapping: ipc.FieldMapping, sample: ipc.SampleNote | undefined) {
+		if (!sample?.detected || sample.fields_differ) return false;
+		return (
+			mapping.term_field === (sample.guessed_term ?? '') &&
+			mapping.reading_field === (sample.guessed_reading ?? '') &&
+			(mapping.sentence_field ?? null) === sample.guessed_sentence &&
+			(mapping.sentence_audio_field ?? null) === sample.guessed_sentence_audio &&
+			(mapping.picture_field ?? null) === sample.guessed_picture &&
+			// Unset, mining uses the known note type's source field.
+			(mapping.source_field ?? sample.guessed_source ?? '') === (sample.guessed_source ?? '')
+		);
 	}
 
 	function applyGuess(name: string, mapping: ipc.FieldMapping, guess: ipc.SampleNote) {
@@ -423,9 +463,15 @@
 		modelSearch = '';
 		modelIndex = 0;
 		adding = false;
-		editingModel = name;
-		void loadSample(name, true);
-		await showEditor(name);
+		detecting = new Set(detecting).add(name);
+		await tick();
+		document.getElementById(`anki-edit-${name}`)?.focus();
+		await loadSample(name, true);
+		if (!detecting.has(name)) return;
+		detecting.delete(name);
+		detecting = new Set(detecting);
+		const mapping = draft.anki_model_mappings[name];
+		if (mapping && !editingModel && !asDetected(mapping, samples[name])) await editMapping(name);
 	}
 
 	function emptyMapping(): ipc.FieldMapping {
@@ -914,8 +960,15 @@
 						</details>{/if}
 					{#if Object.keys(draft.anki_model_mappings).length}<div class="list">
 							{#each Object.keys(draft.anki_model_mappings) as name (name)}
+								{@const sample = samples[name]}
 								<div class="mapping-row">
 									<strong>{name}</strong>
+									{#if sample && asDetected(draft.anki_model_mappings[name], sample)}<span
+											class="auto ok"
+											title={`Detected as ${sample.detected}. Yomine chose its fields.`}
+											>✓ Auto-configured</span
+										>{:else if detecting.has(name)}<span class="auto hint">Detecting fields…</span
+										>{/if}
 									<button
 										id={`anki-edit-${name}`}
 										type="button"
@@ -1111,6 +1164,10 @@
 		min-width: 0;
 		overflow-wrap: anywhere;
 		color: var(--info);
+	}
+	.auto {
+		margin-left: auto;
+		font-size: 0.78rem;
 	}
 	.add-model {
 		margin-top: 0.3rem;
