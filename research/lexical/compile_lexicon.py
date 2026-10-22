@@ -25,6 +25,8 @@ CONTENT_POS = re.compile(r"(n|n-.*|v.*|adj-i|adj-ix|adj-na|adj-no)")
 WORD_TYPES = [("v", r"v[1245knrz].*|vs-[ics]"), ("i", r"adj-ix?"), ("a", r"adj-na"),
               ("n", r"n|n-.*"), ("o", r"pn"), ("d", r"adv.*"), ("c", r"conj"), ("j", r"int"),
               ("p", r"adj-pn")]
+# Rarely used, search-only and outdated kanji forms.
+RARE_KANJI = {"rK", "sK", "oK"}
 
 
 def has_kanji(text):
@@ -47,7 +49,8 @@ def compile_rows(db):
     """`p\\tform`: a JMdict expression, adverb, conjunction or particle, valued by how many
     senses its entries give it (one byte, capped at 255), then its type code.
     `w\\tspelling`: a JMdict spelling with kanji, of any part of speech (二日酔い), and the
-    kana reading of a content word JMdict says is usually written in kana (もったいない). Other
+    kana reading of a content word JMdict says is usually written in kana (もったいない) or
+    spells only with rare kanji (こたび, 此度), unless it is an expression. Other
     kana-only forms are left out: a run of kana tokens spells some JMdict reading too often
     (いいか). Valued by its type code.
     A form's type code is `word_type` of each entry's first sense that applies to it, the best
@@ -63,8 +66,9 @@ def compile_rows(db):
     words = set()
     nai_adjectives = set()
     first_sense = {}
-    for entry, reading, spelling, pos, misc in db.execute(
-            "SELECT entry_id,reading,spelling,pos,misc FROM pairs ORDER BY rowid"):
+    rare_kanji_only = {}
+    for entry, reading, spelling, pos, misc, spelling_info in db.execute(
+            "SELECT entry_id,reading,spelling,pos,misc,spelling_info FROM pairs ORDER BY rowid"):
         reading = normalize_long_vowel(reading)
         # Unfolded, so に+カット can't pass for にかっと.
         pair = (entry, reading, normalize_long_vowel(unicodedata.normalize("NFKC", spelling)))
@@ -76,8 +80,12 @@ def compile_rows(db):
             first_sense.setdefault((form, entry, how), word_type(json.loads(pos)))
         if has_kanji(pair[2]):
             words.add(pair[2])
-        if usually_kana and any(CONTENT_POS.fullmatch(p) for p in json.loads(pos)) and len(reading) >= 3:
+        content = any(CONTENT_POS.fullmatch(p) for p in json.loads(pos))
+        if usually_kana and content and len(reading) >= 3:
             words.add(reading)
+        if content and "exp" not in json.loads(pos) and has_kanji(pair[2]) and len(reading) >= 3:
+            rare = bool(set(json.loads(spelling_info)) & RARE_KANJI)
+            rare_kanji_only[(entry, reading)] = rare_kanji_only.get((entry, reading), True) and rare
         if set(json.loads(pos)) & PHRASE_POS:
             phrase_pairs.add(pair)
         if "adj-i" in json.loads(pos) and reading.endswith("ない"):
@@ -85,6 +93,7 @@ def compile_rows(db):
         spelling = normalize(spelling)
         if has_kanji(spelling):
             readings[(spelling, entry)].add(reading)
+    words.update(reading for (_, reading), rare in rare_kanji_only.items() if rare)
     entry_senses = collections.defaultdict(int)
     for pair in phrase_pairs:
         entry, reading, spelling = pair

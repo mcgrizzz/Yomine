@@ -10,10 +10,11 @@ class LexiconTests(unittest.TestCase):
     def setUp(self):
         self.db = sqlite3.connect(":memory:")
         self.addCleanup(self.db.close)
-        self.db.execute("CREATE TABLE pairs(entry_id,reading,spelling,pos,misc)")
+        self.db.execute("CREATE TABLE pairs(entry_id,reading,spelling,pos,misc,spelling_info)")
 
-    def pair(self, entry, reading, spelling, pos='["n"]', misc="[]"):
-        self.db.execute("INSERT INTO pairs VALUES(?,?,?,?,?)", (entry, reading, spelling, pos, misc))
+    def pair(self, entry, reading, spelling, pos='["n"]', misc="[]", spelling_info="[]"):
+        self.db.execute("INSERT INTO pairs VALUES(?,?,?,?,?,?)",
+                        (entry, reading, spelling, pos, misc, spelling_info))
 
     def rows(self):
         return dict(compile_rows(self.db))
@@ -78,6 +79,16 @@ class LexiconTests(unittest.TestCase):
         for form in ["もったいない", "おすすめ"]:
             self.assertIn(("w\t" + form).encode(), rows)
         for form in ["こういう", "なんだって", "しょくにん"]:
+            self.assertNotIn(("w\t" + form).encode(), rows)
+
+    def test_kana_words_spelled_only_with_rare_kanji_are_words(self):
+        self.pair(1, "こたび", "此度", '["n","adv"]', spelling_info='["rK"]')
+        self.pair(2, "このたび", "此度", '["n","adv"]', spelling_info='["rK"]')
+        self.pair(2, "このたび", "この度", '["n","adv"]')
+        self.pair(3, "でもない", "でも無い", '["exp","adj-i"]', spelling_info='["rK"]')
+        rows = self.rows()
+        self.assertIn("w\tこたび".encode(), rows)
+        for form in ["このたび", "でもない"]:
             self.assertNotIn(("w\t" + form).encode(), rows)
 
     def test_output_is_sorted_and_deterministic(self):

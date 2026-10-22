@@ -128,13 +128,14 @@ pub(super) fn judge(ctx: &Context, start: usize, end: usize) -> Result<Phrase, R
     // around a particle (しょうがない).
     let listed_phrase = jmdict_lexicon::is_phrase(&phrase.surface_form)
         || jmdict_lexicon::is_phrase(&phrase.lemma_form);
-    let word = !listed_phrase
-        && (jmdict_lexicon::is_word(&phrase.surface_form)
-            || jmdict_lexicon::is_word(&phrase.lemma_form));
+    let jmdict_word = jmdict_lexicon::is_word(&phrase.surface_form)
+        || jmdict_lexicon::is_word(&phrase.lemma_form);
+    let word = !listed_phrase && jmdict_word;
     let listed = listed_phrase || word;
 
     // With a demonstrative or particle in them (あの人, 森の奥), three characters are two words.
-    let short_word = word && all_content_words && first.part_of_speech != POS::Determiner;
+    // The lexicon also lists adverbs as phrases (こたび).
+    let short_word = jmdict_word && all_content_words && first.part_of_speech != POS::Determiner;
     // In kana, three characters spell some JMdict expression too often (それに, これは).
     let short_phrase = listed_phrase && phrase.surface_form.chars().any(is_kanji_char);
     let min_chars = if word && phrase.lemma_form.chars().all(is_kanji_char) {

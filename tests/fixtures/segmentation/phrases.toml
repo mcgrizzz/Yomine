@@ -7,6 +7,7 @@
 
 frequencies = [
 	{ term = "聖杖", reading = "せいじょう", rank = 117103 },
+	{ term = "こたび", reading = "こたび", rank = 46000, kana = true },
 	{ term = "そうです", reading = "そうです", rank = 1000, kana = true },
 	{ term = "に連れて", reading = "につれて", rank = 43358 },
 	{ term = "からといって", reading = "からといって", rank = 2500, kana = true },
@@ -213,6 +214,13 @@ name = "a two-kanji JMdict word split by UniDic is one term"
 text = "聖杖の証じゃ 無理だよね？"
 terms = [{ surface = "聖杖" }]
 absent = ["聖"]
+
+# UniDic splits こたび into こた + び; JMdict writes it only with the rare kanji 此度.
+[[case]]
+name = "a kana word JMdict spells only with rare kanji is one term"
+text = "こたびは よくぞ魔王を打ち倒した"
+terms = [{ surface = "こたび" }]
+absent = ["こた", "び"]
 
 # The そう of appearance (できそう) belongs to the verb; JMdict's そうです is the adverb そう.
 [[case]]
