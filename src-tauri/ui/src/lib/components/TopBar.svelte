@@ -735,9 +735,10 @@
 		font-size: 0.75rem;
 		color: var(--accent);
 	}
+	/* Baseline, so the small label and the name sit on one line of text. */
 	.profile-trigger {
 		display: inline-flex;
-		align-items: center;
+		align-items: baseline;
 		gap: 0.3rem;
 		max-width: 14rem;
 		margin-right: 0.4rem;
