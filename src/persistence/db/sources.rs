@@ -54,6 +54,17 @@ pub fn video(conn: &Connection, fingerprint: &str) -> rusqlite::Result<Option<St
     Ok(path.filter(|p| std::path::Path::new(p).is_file()))
 }
 
+/// The source last opened from `path`.
+pub fn opened_from(conn: &Connection, path: &str) -> rusqlite::Result<Option<String>> {
+    conn.query_row(
+        "SELECT s.fingerprint FROM opens o JOIN sources s ON s.id = o.source_id
+         WHERE o.path = ?1 ORDER BY o.opened_at DESC LIMIT 1",
+        params![path],
+        |r| r.get(0),
+    )
+    .optional()
+}
+
 pub fn set_video(conn: &Connection, fingerprint: &str, path: Option<&str>) -> rusqlite::Result<()> {
     let id = id(conn, fingerprint)?;
     conn.execute("UPDATE sources SET video = ?2 WHERE id = ?1", params![id, path]).map(|_| ())

@@ -1,4 +1,5 @@
-//! Notes Yomine created in Anki.
+//! Notes Yomine created in Anki, and notes it found already mined from a source it opened
+//! (no term or batch).
 
 use rusqlite::{
     params,
@@ -61,6 +62,13 @@ pub fn live_sentences(conn: &Connection, collection: &str) -> rusqlite::Result<V
     .collect()
 }
 
+/// Every note Yomine has recorded, deleted or not.
+pub fn ids(conn: &Connection) -> rusqlite::Result<Vec<u64>> {
+    conn.prepare("SELECT note_id FROM notes")?
+        .query_map([], |r| r.get::<_, i64>(0).map(|id| id as u64))?
+        .collect()
+}
+
 /// Those of `note_ids` Yomine has recorded, deleted or not.
 pub fn recorded(conn: &Connection, note_ids: &[u64]) -> rusqlite::Result<Vec<u64>> {
     let mut statement = conn.prepare("SELECT 1 FROM notes WHERE note_id = ?1")?;
@@ -71,6 +79,25 @@ pub fn recorded(conn: &Connection, note_ids: &[u64]) -> rusqlite::Result<Vec<u64
         }
     }
     Ok(found)
+}
+
+/// How many of the collection's live notes were found already mined from `source`, which
+/// have no term or batch, and the newest one's id.
+pub fn found_mined(
+    conn: &Connection,
+    collection: &str,
+    source: i64,
+) -> rusqlite::Result<Option<(usize, u64)>> {
+    conn.query_row(
+        "SELECT count(*), max(note_id) FROM notes
+         WHERE source_id = ?2 AND term IS NULL AND batch_id IS NULL AND deleted_at IS NULL
+           AND collection = ?1",
+        params![collection, source],
+        |r| {
+            let (count, last): (i64, Option<i64>) = (r.get(0)?, r.get(1)?);
+            Ok(last.map(|last| (count as usize, last as u64)))
+        },
+    )
 }
 
 /// Those of `note_ids` Yomine has seen deleted.

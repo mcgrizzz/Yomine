@@ -93,6 +93,7 @@ pub(crate) fn load_result(file: &FileData) -> Option<FileLoadResult> {
         local_video: file.local_video.as_ref().map(|p| p.display().to_string()),
         subtitle_tracks: file.subtitle_tracks.clone(),
         subtitle_track: file.subtitle_track.clone(),
+        mined_before: None,
     })
 }
 
@@ -385,6 +386,11 @@ async fn load_file(
         video.as_ref().map_or(source_file.original_file.clone(), |v| v.path.display().to_string());
     let paired =
         record_open(&app, &source_file, &sentences, filter_result.terms.len(), &opened, mode);
+    let lines: Vec<&str> = sentences.iter().map(|s| s.text.as_str()).collect();
+    let mined_before = yomine::anki::mined::mined_before(
+        &crate::batches::BatchSource::new(&source_file, &sentences).fingerprint,
+        &lines,
+    );
     let local_video = match &video {
         Some(video) => Some(video.path.clone()),
         None => paired
@@ -421,7 +427,8 @@ async fn load_file(
         subtitle_tracks,
         subtitle_track,
     };
-    let payload = load_result(&guard.file).expect("file just stored has a source_file");
+    let mut payload = load_result(&guard.file).expect("file just stored has a source_file");
+    payload.mined_before = mined_before;
     drop(guard);
 
     // The table shows the cached Anki snapshot immediately; if Anki is live,

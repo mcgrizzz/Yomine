@@ -223,6 +223,9 @@ pub struct FileLoadResult {
     pub local_video: Option<String>,
     pub subtitle_tracks: Vec<yomine::media::subtitles::SubtitleChoice>,
     pub subtitle_track: Option<String>,
+    /// Notes found already mined from the file outside Yomine.
+    #[serde(default)]
+    pub mined_before: Option<yomine::anki::mined::MinedBefore>,
 }
 
 /// Persisted `IgnoreFile` fields plus the display-only `exists` + `term_count`.

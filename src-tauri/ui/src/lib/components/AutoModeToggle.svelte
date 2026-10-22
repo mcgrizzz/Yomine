@@ -5,11 +5,14 @@
 		autoAvailable,
 		autoCountdown,
 		autoLedger,
+		answerMinedBefore,
+		autoMinedBefore,
 		autoMode,
 		autoReview,
 		autoSkipped,
 		checkingPicks,
 		fileResult,
+		minedBeforeSummary,
 		miningMode,
 		playerBusy,
 		processAnyway,
@@ -54,6 +57,12 @@
 			$autoSkipped !== null &&
 			$autoSkipped === $fileResult?.batch_source.fingerprint
 	);
+	const minedBefore = $derived(
+		$autoMode !== 'off' && $autoCountdown === null && $autoMinedBefore !== null
+			? $autoMinedBefore === $fileResult?.batch_source.fingerprint && $fileResult.mined_before
+			: null
+	);
+	let always = $state(false);
 	const waitingPicks = $derived($autoReview?.keys.filter((k) => $selectedTerms.has(k)).length ?? 0);
 
 	function choose(mode: AutoMode) {
@@ -161,6 +170,29 @@
 					<span class="count-text">
 						<strong>Mining this video</strong>
 						<span>Pick Off or Review to stop</span>
+					</span>
+				</div>
+			{:else if minedBefore}
+				<div class="card" role="status">
+					<span class="count-text">
+						<strong
+							>Already mined this file, {$autoMode === 'review' ? 'review' : 'mine'} again anyway?</strong
+						>
+						<span>{minedBeforeSummary(minedBefore)}</span>
+						<label class="always"
+							><input type="checkbox" bind:checked={always} /> For the rest of this session</label
+						>
+						<span class="actions">
+							<button
+								class="link"
+								disabled={$playerBusy}
+								onclick={() => void answerMinedBefore(true, always)}
+								>{$autoMode === 'review' ? 'Review anyway' : 'Mine anyway'}</button
+							>
+							<button class="link" onclick={() => void answerMinedBefore(false, always)}
+								>Skip</button
+							>
+						</span>
 					</span>
 				</div>
 			{:else if skipped}
@@ -438,6 +470,12 @@
 	.link:disabled {
 		opacity: 0.5;
 		cursor: default;
+	}
+	.always {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		margin-top: 0.2rem;
 	}
 	.count-text strong {
 		color: var(--text);

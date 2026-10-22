@@ -43,6 +43,13 @@ export const autoCountdown = writable<number | null>(null);
 /** Fingerprint of the loaded video auto mode skipped as already mined. */
 export const autoSkipped = writable<string | null>(null);
 
+/** Fingerprint of the loaded video auto mode held back as mined before outside Yomine. */
+export const autoMinedBefore = writable<string | null>(null);
+
+/** What auto mode does with videos mined before outside Yomine, for the rest of the
+ * session. */
+const minedBeforeChoice = writable<'ask' | 'mine' | 'skip'>('ask');
+
 /** Picks waiting for review, selected in the table until mined or skipped. */
 export interface AutoReview {
 	fingerprint: string;
@@ -69,6 +76,17 @@ function cancelAutoCountdown(): void {
 	autoCountdown.set(null);
 }
 
+/** Holds back a video mined before outside Yomine, unless the session's answer is to mine
+ * them; one it skips moves the queue on. */
+function heldMinedBefore(file: ipc.FileLoadResult): boolean {
+	const choice = get(minedBeforeChoice);
+	if (!file.mined_before || choice === 'mine') return false;
+	const { fingerprint } = file.batch_source;
+	autoMinedBefore.set(fingerprint);
+	if (choice === 'skip') void advanceQueue(fingerprint, true);
+	return true;
+}
+
 async function countDownCurrent(): Promise<void> {
 	const file = get(fileResult);
 	if (!file?.sentences.some((s) => s.timestamp)) return;
@@ -84,6 +102,7 @@ async function countDownCurrent(): Promise<void> {
 		return;
 	}
 	if (get(autoMode) !== 'mine' || get(fileResult)?.batch_source.fingerprint !== fingerprint) return;
+	if (heldMinedBefore(file)) return;
 	cancelAutoCountdown();
 	let secs = 3;
 	autoCountdown.set(secs);
@@ -104,6 +123,7 @@ export async function setAutoMode(mode: AutoMode): Promise<void> {
 	if (mode === previous) return;
 	autoMode.set(mode);
 	autoSkipped.set(null);
+	autoMinedBefore.set(null);
 	cancelAutoCountdown();
 	review.set(null);
 	reviewDialogOpen.set(false);
@@ -133,6 +153,16 @@ export function onLocalVideo(): void {
 /** Runs the video again although it was already processed ("Mine anyway"). */
 export function processAnyway(): Promise<void> {
 	return get(autoMode) === 'review' ? reviewVideo(true) : autoMine(true);
+}
+
+/** Mines (or reviews) the video held back as mined before, or skips to the queue's next;
+ * `always` does the same with the rest of the session's. */
+export function answerMinedBefore(mine: boolean, always: boolean): Promise<void> {
+	const fingerprint = get(autoMinedBefore);
+	autoMinedBefore.set(null);
+	if (always) minedBeforeChoice.set(mine ? 'mine' : 'skip');
+	if (mine) return processAnyway();
+	return fingerprint ? advanceQueue(fingerprint) : Promise.resolve();
 }
 
 function pick(file: ipc.FileLoadResult, prefs: ipc.AutoMine) {
@@ -295,8 +325,8 @@ export function skipReview(): void {
 	if (pending) void advanceQueue(pending.fingerprint);
 }
 
-/** The loaded video, if `mode` is on, nothing is mining, and it wasn't processed (unless
- * `force`d). */
+/** The loaded video, if `mode` is on, nothing is mining, and it wasn't processed or mined
+ * before outside Yomine (unless `force`d). */
 async function claimVideo(mode: AutoMode, force: boolean): Promise<ipc.FileLoadResult | null> {
 	const loaded = get(fileResult);
 	if (get(autoMode) !== mode || !loaded) return null;
@@ -306,12 +336,14 @@ async function claimVideo(mode: AutoMode, force: boolean): Promise<ipc.FileLoadR
 	}
 	const { fingerprint } = loaded.batch_source;
 	autoSkipped.set(null);
-	if (!force && (await ipc.isMediaProcessed(fingerprint))) {
+	autoMinedBefore.set(null);
+	if (force) return loaded;
+	if (await ipc.isMediaProcessed(fingerprint)) {
 		autoSkipped.set(fingerprint);
 		void advanceQueue(fingerprint, true);
 		return null;
 	}
-	return loaded;
+	return heldMinedBefore(loaded) ? null : loaded;
 }
 
 async function recordProcessed(fingerprint: string, title: string, batch: ipc.BatchRecord | null) {

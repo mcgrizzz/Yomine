@@ -93,9 +93,17 @@ export function openedEpisodes(entries: RecentFileEntry[]): [string, number][] {
 	);
 }
 
-/** The show's episodes with mined notes, as `season:episode`. */
-export const minedIn = (mined: MinedEpisode[], show: number): Set<string> =>
-	new Set(mined.filter((m) => m.show === show).map((m) => `${m.season}:${m.episode}`));
+/** The show's episodes with mined notes, or `found` ones mined before outside Yomine, as
+ * `season:episode`. */
+export const minedIn = (
+	mined: MinedEpisode[],
+	show: number,
+	found: FoundEpisode[] = []
+): Set<string> =>
+	new Set([
+		...mined.filter((m) => m.show === show).map((m) => `${m.season}:${m.episode}`),
+		...found.filter((f) => f.mined_before).map((f) => `${f.season}:${f.episode}`)
+	]);
 
 /** The entries the Shows view can reopen. asbplayer's are left out until their video's URL
  * is kept, since the subtitle file alone doesn't play anything. */
@@ -112,13 +120,16 @@ export interface Openable {
 	found?: FoundEpisode;
 }
 
-/** The first episode with no mined notes that was opened before or found with subtitles,
- * specials coming last. */
-export function firstUnmined(
-	show: Show,
-	found: FoundEpisode[],
-	mined: Set<string>
-): Openable | null {
+interface EpisodeNumber {
+	season: number | null;
+	number: number;
+}
+
+const byEpisode = (a: EpisodeNumber, b: EpisodeNumber): number =>
+	seasonOrder(a.season) - seasonOrder(b.season) || a.number - b.number;
+
+/** The episodes opened before or found with subtitles, in order, specials coming last. */
+function openableEpisodes(show: Show, found: FoundEpisode[]): Openable[] {
 	const episodes = new Map<string, Openable>();
 	for (const season of show.seasons) {
 		for (const [number, opened] of season.episodes) {
@@ -134,11 +145,35 @@ export function firstUnmined(
 		if (episode) episode.found ??= file;
 		else episodes.set(key, { season: file.season, number: file.episode, found: file });
 	}
-	return (
-		[...episodes]
-			.filter(([key]) => !mined.has(key))
-			.map(([, episode]) => episode)
-			.sort((a, b) => seasonOrder(a.season) - seasonOrder(b.season) || a.number - b.number)[0] ??
-		null
-	);
+	return [...episodes.values()].sort(byEpisode);
+}
+
+/** The first episode with no mined notes that was opened before or found with subtitles. */
+export function firstUnmined(
+	show: Show,
+	found: FoundEpisode[],
+	mined: Set<string>
+): Openable | null {
+	return openableEpisodes(show, found).find((e) => !mined.has(`${e.season}:${e.number}`)) ?? null;
+}
+
+/** The first episode with no mined notes after the last one mined, else the first one. */
+export function nextUnmined(
+	show: Show,
+	found: FoundEpisode[],
+	mined: Set<string>
+): Openable | null {
+	const last = [...mined]
+		.map((key): EpisodeNumber => {
+			const [season, number] = key.split(':');
+			return { season: season === 'null' ? null : Number(season), number: Number(number) };
+		})
+		.sort(byEpisode)
+		.pop();
+	const after =
+		last &&
+		openableEpisodes(show, found).find(
+			(e) => byEpisode(e, last) > 0 && !mined.has(`${e.season}:${e.number}`)
+		);
+	return after || firstUnmined(show, found, mined);
 }
