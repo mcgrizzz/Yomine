@@ -118,18 +118,17 @@
 		season === null ? `E${number}` : `S${season}E${number}`;
 
 	function status(cell: Cell): string {
-		const name = cell.found && filename(cell.found.path);
 		switch (cell.state) {
 			case 'opened':
 				return `Opened ${formatOpened((cell.files as RecentFileEntry[])[0].last_opened)}`;
 			case 'found':
-				return `Found: ${name}`;
+				return 'Not opened yet';
 			case 'checking':
 				return 'Checking…';
 			case 'asbplayer':
 				return `Opened in asbplayer ${formatOpened((cell.opened as RecentFileEntry[])[0].last_opened)}`;
 			case 'unavailable':
-				return cell.found ? `Found, no Japanese subtitles: ${name}` : 'Not found';
+				return cell.found ? 'No Japanese subtitles' : 'Not found';
 		}
 	}
 
