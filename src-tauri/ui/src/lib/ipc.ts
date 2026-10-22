@@ -19,6 +19,7 @@ export interface AutoSkip {
 	spelling_in_anki: boolean;
 	speaker_name: boolean;
 	grammar: boolean;
+	kanji_fragment: boolean;
 }
 
 export interface Term {

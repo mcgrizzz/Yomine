@@ -59,3 +59,10 @@ terms = [{ surface = "んな", lemma = "んな" }]
 name = "かい before が is 甲斐, not か + い"
 text = "待ったかいがありました"
 absent = ["い"]
+
+# UniDic splits どうしたんだい as し + たんだい (短大); the 1-best path joining a kana noun to a
+# verb stem is a misparse (Apothecary Diaries S01E05).
+[[case]]
+name = "a kana noun after a verb stem takes another path"
+text = "今日は どうしたんだい？"
+absent = ["たんだい"]

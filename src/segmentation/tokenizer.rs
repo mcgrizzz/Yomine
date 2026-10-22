@@ -159,8 +159,8 @@ fn analyze_sentence(worker: &mut Worker, text: &str, manager: &FrequencyManager)
         .token_iter()
         .map(|t| UnidicToken::from_parts(t.surface(), t.feature(), t.range_byte()))
         .collect();
-    if final_particle_mid_clause(&tokens) {
-        worker.tokenize_nbest(FINAL_PARTICLE_PATHS);
+    if misparsed(&tokens) {
+        worker.tokenize_nbest(MISPARSE_PATHS);
         let better = (1..worker.num_nbest_paths())
             .filter_map(|p| {
                 let path = worker.nbest_token_iter(p)?;
@@ -169,7 +169,7 @@ fn analyze_sentence(worker: &mut Worker, text: &str, manager: &FrequencyManager)
                         .collect::<Vec<_>>(),
                 )
             })
-            .find(|path| !final_particle_mid_clause(path));
+            .find(|path| !misparsed(path));
         if let Some(better) = better {
             tokens = better;
         }
@@ -219,7 +219,12 @@ fn read_one_day(tokens: &mut [UnidicToken]) {
     }
 }
 
-const FINAL_PARTICLE_PATHS: usize = 5;
+const MISPARSE_PATHS: usize = 5;
+
+/// Token runs the 1-best path gets wrong often enough that another path is worth taking.
+fn misparsed(tokens: &[UnidicToken]) -> bool {
+    final_particle_mid_clause(tokens) || noun_after_verb_stem(tokens)
+}
 
 /// A sentence-final particle ends its clause, so one followed by が, を or も is a misparse
 /// (か + い for 甲斐 in 待ったかいがあった). A quote can end in one (行くかと思った).
@@ -228,6 +233,18 @@ fn final_particle_mid_clause(tokens: &[UnidicToken]) -> bool {
         w[0].pos2 == UnidicTag::Shuujoshi
             && w[1].pos1 == UnidicTag::Joshi
             && matches!(w[1].surface.as_str(), "が" | "を" | "も")
+    })
+}
+
+/// A verb stem joins a following noun only inside a compound, which UniDic keeps as one token,
+/// so a kana noun right after one took the verb's ending (し + たんだい for した + んだい).
+fn noun_after_verb_stem(tokens: &[UnidicToken]) -> bool {
+    tokens.windows(2).any(|w| {
+        matches!(w[0].pos1, UnidicTag::Doushi | UnidicTag::Jodoushi)
+            && w[0].conjugation_form == UnidicTag::Renyoukei
+            && w[1].pos1 == UnidicTag::Meishi
+            && w[1].pos2 == UnidicTag::Futsuumeishi
+            && w[1].surface.as_str().is_kana()
     })
 }
 
@@ -538,13 +555,23 @@ fn extract(
         let mut term_spans: Vec<(usize, usize)> = Vec::with_capacity(words.len());
         let mut sentence_terms: Vec<Term> = Vec::with_capacity(words.len());
         let mut facts = Vec::with_capacity(words.len());
+        let mut after_stem = false;
         for word in words {
             let span = word.byte_span();
             facts.push(phrases::WordFacts::of(&word));
+            // A bound verb right after a verb stem adds grammar to it (覚えきれる, 食べすぎる).
+            let bound_to_stem = after_stem
+                && word.tokens.first().is_some_and(|t| {
+                    t.pos1 == UnidicTag::Doushi && t.pos2 == UnidicTag::Hijiritsukanou
+                });
+            after_stem = word.tokens.last().is_some_and(|t| {
+                t.pos1 == UnidicTag::Doushi && t.conjugation_form == UnidicTag::Renyoukei
+            });
             // The highlight span ends at start + surface_form.len(), so the
             // reference must point at the main word, not the segment.
             let ref_start = word.mining_span().0;
             let mut term: Term = word.into();
+            term.auto_skip.grammar = bound_to_stem;
             let freq_map: HashMap<String, u32> = frequency_manager.build_freq_map(
                 &term.lemma_form,
                 &term.lemma_reading,
@@ -671,8 +698,33 @@ fn extract(
     }
 
     speaker_labels::mark_speaker_names(&mut terms, sentences, &speaker_names);
+    mark_kanji_fragments(&mut terms, sentences);
 
     terms
+}
+
+/// A single kanji written against another kanji wherever it occurs is part of a name or of a
+/// compound no dictionary lists (氏 of 壬氏, 梅 of 梅梅, 商 of 交易商).
+fn mark_kanji_fragments(terms: &mut [Term], sentences: &[Sentence]) {
+    for term in terms {
+        let mut chars = term.surface_form.chars();
+        let (Some(kanji), None) = (chars.next(), chars.next()) else {
+            continue;
+        };
+        if !is_kanji_char(kanji) {
+            continue;
+        }
+        term.auto_skip.kanji_fragment = !term.sentence_references.is_empty()
+            && term.sentence_references.iter().all(|&(ord, start)| {
+                let text = &sentences[ord].text;
+                text[start..].starts_with(kanji)
+                    && (text[..start].chars().next_back().is_some_and(is_kanji_char)
+                        || text[start + kanji.len_utf8()..]
+                            .chars()
+                            .next()
+                            .is_some_and(is_kanji_char))
+            });
+    }
 }
 
 pub fn extract_words_for_frequency(
@@ -988,4 +1040,38 @@ pub fn init_vibrato(
     let dict = load_dictionary(dict_type, progress_callback)?;
     let tokenizer = vibrato::Tokenizer::new(dict);
     Ok(tokenizer)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn auto_mode_skips_kanji_fragments_and_bound_verbs() {
+        let Some(tokenizer) = crate::segmentation::lexeme_resolver::test_tokenizer() else {
+            return;
+        };
+        let manager = FrequencyManager::from_dictionaries(vec![]);
+        let mut sentences: Vec<Sentence> =
+            ["梅梅姐ちゃんの感情", "白い蕾に吸わせたんです", "果たして 覚えきれるかどうか"]
+                .iter()
+                .enumerate()
+                .map(|(id, text)| Sentence {
+                    id,
+                    source_id: 0,
+                    text: text.to_string(),
+                    segments: vec![],
+                    timestamp: None,
+                    comprehension: 0.0,
+                })
+                .collect();
+        let terms = extract_words(tokenizer.new_worker(), &mut sentences, &manager);
+        let skip = |surface: &str| {
+            terms.iter().find(|t| t.surface_form == surface).map(|t| t.auto_skip.clone())
+        };
+        assert_eq!(skip("梅").map(|s| s.kanji_fragment), Some(true));
+        assert_eq!(skip("蕾").map(|s| s.kanji_fragment), Some(false));
+        assert_eq!(skip("きれる").map(|s| s.grammar), Some(true));
+        assert_eq!(skip("覚え").map(|s| s.grammar), Some(false));
+    }
 }
