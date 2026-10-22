@@ -649,8 +649,8 @@
 			</p>{/if}
 		{#if autoFilled.has(name)}<p class="hint">
 				{sample?.fields_differ
-					? `Field mappings detected automatically, but some of ${sample.detected}'s usual fields are missing. Check them below.`
-					: 'Field mappings detected automatically.'}
+					? `Fields detected automatically, but some of ${sample.detected}'s usual fields are missing. Check them below.`
+					: 'Fields detected automatically.'}
 			</p>{/if}
 		<section aria-labelledby="anki-read-heading">
 			<h4 id="anki-read-heading">Read from Anki</h4>
@@ -728,7 +728,7 @@
 			>{:else if sample?.sample_note === null}<p class="hint">No sample note available yet.</p>{/if}
 		<div class="mapping-actions">
 			<button type="button" class="reset danger" onclick={() => removeMapping(name)}
-				>Remove mapping</button
+				>Remove note type</button
 			><span class="hint">Anki notes are kept.</span>
 		</div>
 	</div>
@@ -766,7 +766,7 @@
 
 <Modal
 	open={$ankiModalOpen}
-	title={editingModel ? `${editingModel} - Field Mapping` : 'Anki Settings'}
+	title={editingModel ? `${editingModel} - Note Type` : 'Anki Settings'}
 	width="min(760px, 94%)"
 	onback={editingModel ? closeEditor : undefined}
 	onclose={() => {
@@ -973,7 +973,7 @@
 										id={`anki-edit-${name}`}
 										type="button"
 										class="quiet"
-										aria-label={`Edit ${name} mapping`}
+										aria-label={`Edit ${name}`}
 										onclick={() => editMapping(name)}>Edit ›</button
 									>
 								</div>
@@ -1036,7 +1036,7 @@
 								</p>{/if}
 						</div>{/if}
 					{#if removed}<div class="removed">
-							<span class="hint">Removed {removed.name} mapping.</span><button
+							<span class="hint">Removed {removed.name}.</span><button
 								type="button"
 								class="reset"
 								onclick={() => {
@@ -1080,14 +1080,14 @@
 			oncancel={revert}
 			restore={editingModel
 				? {
-						label: 'Reset Mapping',
+						label: 'Reset Note Type',
 						title: `Set ${editingModel}'s fields to the ones Yomine detects. Other note types and settings are kept.`,
 						run: () => editingModel && resetMapping(editingModel)
 					}
 				: {
 						label: 'Reset Anki Settings',
 						title:
-							'Restore connection settings, the Yomitan URL, all note type mappings, and the comprehension interval to defaults.',
+							'Restore connection settings, the Yomitan URL, all note types, and the comprehension interval to defaults.',
 						run: restoreDefault
 					}}
 		/>
