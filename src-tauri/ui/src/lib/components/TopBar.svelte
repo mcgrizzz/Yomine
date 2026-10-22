@@ -1,6 +1,8 @@
 <script lang="ts">
 	// Menu grouping deviates from egui: Mining = what you tweak while working;
-	// Settings = configuration + the setup checklist.
+	// Settings opens the settings window; Help = the setup checklist and About.
+	import { tick } from 'svelte';
+	import { relaunch } from '@tauri-apps/plugin-process';
 	import {
 		openExternal,
 		settings,
@@ -18,18 +20,16 @@
 		openRecentFile,
 		openBrowseModal,
 		recentFiles,
-		openAnkiModal,
-		openLocalMediaModal,
+		openSettings,
 		openIgnoreModal,
 		openTextFiltersModal,
-		openWebsocketModal,
-		openMatchingModal,
-		openAppearanceModal,
 		openAsbplayerModal,
 		openFrequencyModal,
 		openPosModal,
 		openSetupModal,
 		openProfilesModal,
+		profilesModalOpen,
+		lastError,
 		openAutoModal,
 		openAnalyzerModal,
 		openAboutModal,
@@ -49,16 +49,43 @@
 		localVideo,
 		currentQueue
 	} from '$lib/stores';
-	import { openThemesWindow } from '$lib/ipc';
+	import { listProfiles, switchProfile, type Profile } from '$lib/ipc';
 	import { filename, modeLabel, recentKey } from '$lib/recents';
 	import { mediaTitle } from '$lib/media';
 
-	type MenuName = 'file' | 'mining' | 'appearance' | 'settings' | 'asb' | 'mpv';
+	type MenuName = 'file' | 'mining' | 'help' | 'profile' | 'asb' | 'mpv';
 	let openMenu = $state<MenuName | null>(null);
 	let recentsOpen = $state(false);
 	$effect(() => {
 		if (openMenu !== 'file') recentsOpen = false;
 	});
+
+	let profiles = $state<Profile[]>([]);
+	const activeProfile = $derived(profiles.find((p) => p.active)?.display_name ?? '');
+	/** The profile a second click switches to, after a restart. */
+	let switchArmed = $state<string | null>(null);
+	let switching = $state(false);
+	$effect(() => {
+		if (openMenu !== 'profile') switchArmed = null;
+	});
+	// Reloads once Manage Profiles closes, where profiles are added and renamed.
+	$effect(() => {
+		if (!$profilesModalOpen) void listProfiles().then((list) => (profiles = list.profiles));
+	});
+
+	async function pickProfile(event: MouseEvent, profile: Profile) {
+		if (profile.active) return void (openMenu = null);
+		event.stopPropagation();
+		if (switchArmed !== profile.slug) return void (switchArmed = profile.slug);
+		switching = true;
+		try {
+			if ((await switchProfile(profile.slug)).requires_relaunch) await relaunch();
+		} catch (err) {
+			lastError.set({ title: 'Profiles', message: String(err), detail: null });
+		} finally {
+			switching = false;
+		}
+	}
 
 	const toolsReady = $derived($languageToolsStatus === 'ready');
 	const toolsError = $derived(typeof $languageToolsStatus === 'object');
@@ -69,6 +96,72 @@
 		// Stop the window handler (which closes menus) from firing on this same click.
 		event.stopPropagation();
 		openMenu = openMenu === menu ? null : menu;
+		// A click from Enter or Space has no mouse detail; the keyboard moves into the menu.
+		if (openMenu && event.detail === 0) void focusFirst(event.currentTarget as HTMLElement);
+	}
+
+	async function focusFirst(trigger: HTMLElement) {
+		await tick();
+		const panel = trigger.closest('.menu')?.querySelector<HTMLElement>(':scope > .menu-panel');
+		if (panel) items(panel)[0]?.focus();
+	}
+
+	function openWithArrow(menu: MenuName, event: KeyboardEvent) {
+		if (event.key !== 'ArrowDown') return;
+		event.preventDefault();
+		openMenu = menu;
+		void focusFirst(event.currentTarget as HTMLElement);
+	}
+
+	function items(panel: HTMLElement) {
+		return [...panel.querySelectorAll<HTMLElement>('button, input')].filter(
+			(el) => !(el as HTMLButtonElement).disabled && el.closest('.menu-panel') === panel
+		);
+	}
+
+	/** Arrow keys, Home and End move through the menu's items; Escape returns to its button. */
+	async function menuKeys(event: KeyboardEvent) {
+		const panel = event.currentTarget as HTMLElement;
+		const submenu = panel.classList.contains('submenu');
+		const list = items(panel);
+		const at = list.indexOf(document.activeElement as HTMLElement);
+		const move = (to: number) => list[(to + list.length) % list.length]?.focus();
+		const target = event.target as HTMLElement;
+		if (submenu) event.stopPropagation();
+		switch (event.key) {
+			case 'ArrowDown':
+				move(at + 1);
+				break;
+			case 'ArrowUp':
+				move(at < 0 ? -1 : at - 1);
+				break;
+			case 'Home':
+				move(0);
+				break;
+			case 'End':
+				move(-1);
+				break;
+			case 'ArrowRight':
+				if (!target.classList.contains('submenu-row')) return;
+				recentsOpen = true;
+				await tick();
+				if (target.nextElementSibling instanceof HTMLElement)
+					items(target.nextElementSibling)[0]?.focus();
+				break;
+			case 'ArrowLeft':
+			case 'Escape':
+				if (submenu) {
+					recentsOpen = false;
+					(panel.previousElementSibling as HTMLElement | null)?.focus();
+				} else if (event.key === 'Escape') {
+					openMenu = null;
+					panel.closest('.menu')?.querySelector<HTMLElement>(':scope > button')?.focus();
+				} else return;
+				break;
+			default:
+				return;
+		}
+		event.preventDefault();
 	}
 
 	function run(action: () => void) {
@@ -203,9 +296,15 @@
 	<span class="sep"></span>
 
 	<div class="menu" class:open={openMenu === 'file'}>
-		<button class="menu-trigger" onclick={(e) => toggleMenu('file', e)}>File</button>
+		<button
+			class="menu-trigger"
+			aria-expanded={openMenu === 'file'}
+			onclick={(e) => toggleMenu('file', e)}
+			onkeydown={(e) => openWithArrow('file', e)}>File</button
+		>
 		{#if openMenu === 'file'}
-			<div class="menu-panel">
+			<!-- svelte-ignore a11y_no_static_element_interactions -- keys move between its items. -->
+			<div class="menu-panel" onkeydown={menuKeys}>
 				<button onclick={() => run(openAndProcessFile)} disabled={toolsError}>Open File…</button>
 				<button onclick={() => run(openFolder)} disabled={toolsError}>Open Folder…</button>
 				<!-- svelte-ignore a11y_no_static_element_interactions -- hover-expand is a
@@ -226,7 +325,8 @@
 						Open Recent <span class="submenu-arrow">▸</span>
 					</button>
 					{#if recentsOpen && $recentFiles.length > 0}
-						<div class="menu-panel submenu">
+						<!-- svelte-ignore a11y_no_static_element_interactions -- keys move between its items. -->
+						<div class="menu-panel submenu" onkeydown={menuKeys}>
 							{#each $recentFiles.slice(0, 10) as entry (recentKey(entry))}
 								<button
 									class="submenu-item"
@@ -259,47 +359,56 @@
 
 	<!-- Mining data + tools: what you tweak while working through a file. -->
 	<div class="menu" class:open={openMenu === 'mining'}>
-		<button class="menu-trigger" onclick={(e) => toggleMenu('mining', e)}>Mining</button>
+		<button
+			class="menu-trigger"
+			aria-expanded={openMenu === 'mining'}
+			onclick={(e) => toggleMenu('mining', e)}
+			onkeydown={(e) => openWithArrow('mining', e)}>Mining</button
+		>
 		{#if openMenu === 'mining'}
-			<div class="menu-panel">
-				<button onclick={() => run(openIgnoreModal)} disabled={!toolsReady}>Ignore List</button>
-				<button onclick={() => run(openPosModal)}>Part of Speech Filters</button>
-				<button onclick={() => run(openTextFiltersModal)}>Text Filters</button>
-				<button onclick={() => run(openFrequencyModal)}>Frequency Dictionaries</button>
-				<button onclick={() => run(openAutoModal)}>✦ Auto Mode</button>
+			<!-- svelte-ignore a11y_no_static_element_interactions -- keys move between its items. -->
+			<div class="menu-panel marked" onkeydown={menuKeys}>
+				<button onclick={() => run(openFrequencyModal)}
+					><span class="mark"></span>Frequency Dictionaries…</button
+				>
+				<button onclick={() => run(openIgnoreModal)} disabled={!toolsReady}
+					><span class="mark"></span>Ignore List…</button
+				>
+				<button onclick={() => run(openPosModal)}
+					><span class="mark"></span>Part of Speech Filters…</button
+				>
+				<button onclick={() => run(openTextFiltersModal)}
+					><span class="mark"></span>Text Filters…</button
+				>
 				<div class="menu-sep"></div>
-				<button onclick={() => run(openBatchHistory)} disabled={!$lastBatch}>Batches</button>
+				<button onclick={() => run(openAutoModal)}
+					><span class="mark" aria-hidden="true">✦</span>Auto Mode…</button
+				>
+				<button onclick={() => run(openBatchHistory)} disabled={!$lastBatch}
+					><span class="mark"></span>Batches…</button
+				>
+				<div class="menu-sep"></div>
 				<button onclick={() => run(openAnalyzerModal)} disabled={!toolsReady}
-					>Frequency Analyzer</button
+					><span class="mark"></span>Frequency Analyzer…</button
 				>
 			</div>
 		{/if}
 	</div>
 
-	<div class="menu" class:open={openMenu === 'appearance'}>
-		<button class="menu-trigger" onclick={(e) => toggleMenu('appearance', e)}>Appearance</button>
-		{#if openMenu === 'appearance'}
-			<div class="menu-panel">
-				<button onclick={() => run(() => void openThemesWindow())}>Themes</button>
-				<button onclick={() => run(openAppearanceModal)}>Appearance Settings</button>
-			</div>
-		{/if}
-	</div>
+	<button class="menu-trigger" onclick={() => openSettings()}>Settings</button>
 
-	<!-- True configuration: integrations, plus the onboarding checklist. -->
-	<div class="menu" class:open={openMenu === 'settings'}>
-		<button class="menu-trigger" onclick={(e) => toggleMenu('settings', e)}>Settings</button>
-		{#if openMenu === 'settings'}
-			<div class="menu-panel">
-				<button onclick={() => run(openAnkiModal)}>Anki</button>
-				<button onclick={() => run(openLocalMediaModal)}>Local Media</button>
-				<button onclick={() => run(openWebsocketModal)}>WebSocket Server</button>
-				<button onclick={() => run(openMatchingModal)}>Show Matching</button>
-				<button onclick={() => run(openProfilesModal)}>Profiles</button>
-				<div class="menu-sep"></div>
-				<button onclick={() => run(openSetupModal)}>Setup Checklist</button>
-				<div class="menu-sep"></div>
-				<button onclick={() => run(openAboutModal)}>About Yomine</button>
+	<div class="menu" class:open={openMenu === 'help'}>
+		<button
+			class="menu-trigger"
+			aria-expanded={openMenu === 'help'}
+			onclick={(e) => toggleMenu('help', e)}
+			onkeydown={(e) => openWithArrow('help', e)}>Help</button
+		>
+		{#if openMenu === 'help'}
+			<!-- svelte-ignore a11y_no_static_element_interactions -- keys move between its items. -->
+			<div class="menu-panel" onkeydown={menuKeys}>
+				<button onclick={() => run(openSetupModal)}>Setup Checklist…</button>
+				<button onclick={() => run(openAboutModal)}>About Yomine…</button>
 			</div>
 		{/if}
 	</div>
@@ -316,6 +425,42 @@
 	{/if}
 
 	<span class="spacer"></span>
+
+	<div class="menu" class:open={openMenu === 'profile'}>
+		<button
+			class="status-trigger profile-trigger"
+			title={`Profile: ${activeProfile}. Switch or manage profiles.`}
+			aria-expanded={openMenu === 'profile'}
+			onclick={(e) => toggleMenu('profile', e)}
+			onkeydown={(e) => openWithArrow('profile', e)}
+		>
+			<small>Profile</small>
+			<span class="profile-name">{activeProfile}</span>
+			<span class="caret" aria-hidden="true">▾</span>
+		</button>
+		{#if openMenu === 'profile'}
+			<!-- svelte-ignore a11y_no_static_element_interactions -- keys move between its items. -->
+			<div class="menu-panel marked right" onkeydown={menuKeys}>
+				{#each profiles as profile (profile.slug)}
+					<button
+						disabled={switching}
+						title={profile.active
+							? 'The active profile'
+							: 'Yomine restarts to switch profiles; the loaded file and any queued mining are lost.'}
+						onclick={(e) => pickProfile(e, profile)}
+					>
+						<span class="mark" aria-hidden="true">{profile.active ? '✓' : ''}</span>
+						<span class="profile-label">{profile.display_name}</span>
+						{#if switchArmed === profile.slug}<span class="hint">Click to restart</span>{/if}
+					</button>
+				{/each}
+				<div class="menu-sep"></div>
+				<button onclick={() => run(openProfilesModal)}
+					><span class="mark"></span>Manage Profiles…</button
+				>
+			</div>
+		{/if}
+	</div>
 
 	{#if $updateInfo}
 		{@const u = $updateInfo}
@@ -352,7 +497,9 @@
 					class="indicator status-trigger"
 					class:active-mode={$playerStatus.mode === 'asbplayer' && $playerStatus.ws_clients > 0}
 					title={asbplayer.tip}
+					aria-expanded={openMenu === 'asb'}
 					onclick={(e) => toggleMenu('asb', e)}
+					onkeydown={(e) => openWithArrow('asb', e)}
 				>
 					<small>asbplayer</small>
 					{@render dot(asbplayer.kind)}
@@ -365,7 +512,7 @@
 						role="menu"
 						tabindex="-1"
 						onclick={(e) => e.stopPropagation()}
-						onkeydown={(e) => e.key === 'Escape' && (openMenu = null)}
+						onkeydown={menuKeys}
 					>
 						{#if $playerStatus.ws_clients > 0 && asbPolled}
 							<span class="menu-note">
@@ -507,49 +654,107 @@
 		position: relative;
 	}
 	.menu-trigger {
-		padding: 0.25rem 0.55rem;
+		padding: 0.2rem 0.55rem;
 		background: transparent;
 		border: none;
-		border-radius: var(--radius);
+		border-radius: var(--radius-sm);
 	}
-	.menu-trigger:hover,
-	.menu.open .menu-trigger {
+	.menu-trigger:hover {
 		background: var(--bg-raised);
+	}
+	.menu.open .menu-trigger,
+	.menu.open .status-trigger {
+		background: var(--bg-hover);
 	}
 	.menu-panel {
 		position: absolute;
 		top: 100%;
 		left: 0;
 		z-index: var(--z-menu);
-		margin-top: 0.2rem;
-		min-width: 220px;
+		margin-top: 0.15rem;
+		min-width: 10rem;
 		display: flex;
 		flex-direction: column;
-		padding: 0.25rem;
+		padding: 0.25rem 0.2rem;
 		background: var(--bg-raised);
 		border: 1px solid var(--border);
-		border-radius: var(--radius);
+		border-radius: var(--radius-sm);
 		box-shadow: var(--shadow-overlay);
 	}
 	.menu-panel button {
+		display: flex;
+		align-items: center;
+		padding: 0.25rem 0.6rem;
 		text-align: left;
-		padding: 0.4rem 0.6rem;
 		background: transparent;
 		border: none;
-		border-radius: var(--radius);
+		border-radius: 2px;
 		white-space: nowrap;
 	}
 	.menu-panel button:hover:not(:disabled) {
 		background: var(--bg-hover);
 	}
+	.menu-panel button:active:not(:disabled) {
+		background: color-mix(in srgb, var(--accent) 14%, var(--bg-hover));
+	}
+	.menu-panel button:focus-visible {
+		background: var(--bg-hover);
+		outline: 1px solid var(--accent);
+		outline-offset: -1px;
+	}
 	.menu-panel button:disabled {
 		color: var(--text-muted);
+		opacity: 1;
 		cursor: default;
 	}
 	.menu-sep {
+		flex: none;
 		height: 1px;
-		margin: 0.25rem 0.4rem;
-		background: var(--border);
+		margin: 0.3rem 0.4rem;
+		background: color-mix(in srgb, var(--border) 75%, transparent);
+	}
+	/* A column for check marks and state glyphs, so labels line up beside them. */
+	.marked button {
+		padding-left: 0.3rem;
+	}
+	.mark {
+		flex: none;
+		width: 1.2rem;
+		text-align: center;
+		font-size: 0.8rem;
+		color: var(--accent);
+	}
+	.profile-label {
+		max-width: 18rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.hint {
+		margin-left: auto;
+		padding-left: 1rem;
+		font-size: 0.75rem;
+		color: var(--accent);
+	}
+	.profile-trigger {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		max-width: 14rem;
+		margin-right: 0.4rem;
+	}
+	.profile-trigger small {
+		font-size: 0.7rem;
+		color: var(--text-muted);
+	}
+	.profile-name {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.caret {
+		font-size: 0.65rem;
+		color: var(--text-muted);
 	}
 	.submenu-wrap {
 		position: relative;
@@ -575,6 +780,7 @@
 		overflow-y: auto;
 	}
 	.menu-panel.submenu .submenu-item {
+		display: block;
 		max-width: 320px;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -640,17 +846,16 @@
 		padding: 0.15rem 0.35rem;
 		background: transparent;
 		border: none;
-		border-radius: var(--radius);
+		border-radius: var(--radius-sm);
 		color: inherit;
 		font: inherit;
 		cursor: pointer;
 	}
-	.status-trigger:hover,
-	.menu.open .status-trigger {
+	.status-trigger:hover {
 		background: var(--bg-raised);
 	}
 	.menu-note {
-		padding: 0.4rem 0.6rem;
+		padding: 0.25rem 0.6rem;
 		font-size: 0.8rem;
 		color: var(--text-muted);
 		max-width: 320px;
@@ -684,11 +889,10 @@
 		display: flex;
 		align-items: center;
 		gap: 0.4rem;
-		padding: 0.4rem 0.6rem;
-		font-size: 0.85rem;
+		padding: 0.25rem 0.6rem;
 		white-space: nowrap;
 		cursor: pointer;
-		border-radius: var(--radius);
+		border-radius: 2px;
 	}
 	.menu-check:hover {
 		background: var(--bg-hover);

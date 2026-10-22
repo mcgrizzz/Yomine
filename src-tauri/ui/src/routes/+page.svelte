@@ -49,6 +49,7 @@
 	import AppearanceModal from '$lib/components/AppearanceModal.svelte';
 	import AboutModal from '$lib/components/AboutModal.svelte';
 	import AnkiSettingsModal from '$lib/components/AnkiSettingsModal.svelte';
+	import SettingsWindow from '$lib/components/SettingsWindow.svelte';
 	import LocalMediaModal from '$lib/components/LocalMediaModal.svelte';
 	import FrequencyWeightsModal from '$lib/components/FrequencyWeightsModal.svelte';
 	import PosFiltersModal from '$lib/components/PosFiltersModal.svelte';
@@ -346,13 +347,15 @@
 	<ProfilesModal />
 	<IgnoreListModal />
 	<AsbplayerModal />
-	<WebsocketSettingsModal />
-	<MatchingSettingsModal />
 	<AutoModeModal />
-	<AppearanceModal />
 	<AboutModal />
-	<AnkiSettingsModal />
-	<LocalMediaModal />
+	<SettingsWindow>
+		<AppearanceModal />
+		<AnkiSettingsModal />
+		<LocalMediaModal />
+		<WebsocketSettingsModal />
+		<MatchingSettingsModal />
+	</SettingsWindow>
 	<FrequencyWeightsModal />
 	<PosFiltersModal />
 	<TextFiltersModal />

@@ -75,7 +75,7 @@
 	{#if !connected}
 		<p class="hint">
 			asbplayer is not connected. Open asbplayer and connect it to
-			<code>ws://127.0.0.1</code> (Settings → WebSocket Server), then refresh.
+			<code>ws://127.0.0.1</code> (Settings → WebSocket server), then refresh.
 		</p>
 	{:else if loading}
 		<p class="hint">Asking asbplayer for its media…</p>

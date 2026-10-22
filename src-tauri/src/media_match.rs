@@ -484,14 +484,14 @@ pub fn has_builtin_tmdb_key() -> bool {
 fn tmdb_client(app: &AppHandle) -> Result<Tmdb, String> {
     let user_key = app.state::<Mutex<AppState>>().lock().unwrap().settings.tmdb_api_key.clone();
     tmdb::api_key(Some(&user_key)).map(Tmdb::new).ok_or_else(|| {
-        "This build has no TMDB key; add your own in Settings → Show Matching".to_string()
+        "This build has no TMDB key; add your own in Settings → Show matching".to_string()
     })
 }
 
 /// The client for matching files on their own, which sends their names to TMDB.
 fn matching_client(app: &AppHandle) -> Result<Tmdb, String> {
     if !app.state::<Mutex<AppState>>().lock().unwrap().settings.tmdb_matching {
-        return Err("Matching by file name is off in Settings → Show Matching.".to_string());
+        return Err("Matching by file name is off in Settings → Show matching.".to_string());
     }
     tmdb_client(app)
 }
@@ -500,7 +500,7 @@ fn matching_client(app: &AppHandle) -> Result<Tmdb, String> {
 fn request_problem(e: &YomineError) -> String {
     match e {
         YomineError::Reqwest(e) if e.status().is_some_and(|s| s.as_u16() == 401) => {
-            "TMDB refused the API key. Check it in Settings → Show Matching.".to_string()
+            "TMDB refused the API key. Check it in Settings → Show matching.".to_string()
         }
         YomineError::Reqwest(e) if e.is_connect() || e.is_timeout() => {
             "Couldn't reach TMDB. Opening the file again tries again.".to_string()

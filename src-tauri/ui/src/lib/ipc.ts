@@ -1391,6 +1391,7 @@ export const onAsbplayerMediaLoaded = (cb: (r: FileLoadResult) => void) =>
 	listenTo('asbplayer-media-loaded', cb);
 /** A source was matched after it loaded. */
 export const onMediaMatched = (cb: (m: MediaMatch) => void) => listenTo('media-matched', cb);
+export const onThemesClosed = (cb: () => void) => listenTo('themes-closed', cb);
 export const onMediaUnmatched = (cb: (u: { fingerprint: string; reason: string }) => void) =>
 	listenTo('media-unmatched', cb);
 /** Files loaded before matching existed were matched at startup. */

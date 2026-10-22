@@ -766,8 +766,9 @@
 
 <Modal
 	open={$ankiModalOpen}
-	title={editingModel ? `${editingModel} - Note Type` : 'Anki Settings'}
+	title={editingModel ? `${editingModel} - Note Type` : 'Anki'}
 	width="min(760px, 94%)"
+	page
 	onback={editingModel ? closeEditor : undefined}
 	onclose={() => {
 		if (adding) void toggleAdding();

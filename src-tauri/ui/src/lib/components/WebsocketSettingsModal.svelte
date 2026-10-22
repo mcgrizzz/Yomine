@@ -50,8 +50,9 @@
 
 <Modal
 	open={$websocketModalOpen}
-	title="WebSocket Server Settings"
+	title="WebSocket server"
 	width="min(420px, 92%)"
+	page
 	onclose={form.request}
 	oninteract={form.disarm}
 >

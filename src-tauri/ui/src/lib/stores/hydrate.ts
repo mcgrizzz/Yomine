@@ -12,7 +12,7 @@ import { refreshIgnoredLemmas } from './ignore';
 import { refreshRecommendedDicts } from './dictionaries';
 import { applyMinedState, refreshMinedState, yomitanReachable } from './mining';
 import { selectedTerms } from './selection';
-import { reviewDialogOpen } from './modals';
+import { reviewDialogOpen, settingsHidden } from './modals';
 import { autoMode, dropDeselectedReview, onNewVideo } from './auto';
 import { loadLastBatch } from './batches';
 import { refreshSetupStatus } from './setup';
@@ -74,6 +74,7 @@ export async function hydrate(): Promise<void> {
 		}
 		if (m.matched_by !== 'suggested') void ipc.getRecentFiles().then((r) => recentFiles.set(r));
 	});
+	ipc.onThemesClosed(() => settingsHidden.set(false));
 	ipc.onMediaUnmatched((u) => {
 		if (get(fileResult)?.batch_source.fingerprint === u.fingerprint) matchProblem.set(u.reason);
 	});

@@ -297,7 +297,7 @@ pub async fn open_video(
         } else {
             let configured = Some(ffmpeg_path.trim()).filter(|p| !p.is_empty());
             let ffmpeg = ffmpeg::find(configured.map(std::path::Path::new)).ok_or(
-                "Opening a video needs ffmpeg. Download it in Settings → Local Media.".to_string(),
+                "Opening a video needs ffmpeg. Download it in Settings → Local media.".to_string(),
             )?;
             let info = ffmpeg.probe(&found).map_err(|e| e.to_string())?;
             let mut all = beside;

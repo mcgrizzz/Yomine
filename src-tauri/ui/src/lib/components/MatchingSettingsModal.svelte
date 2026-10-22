@@ -24,8 +24,9 @@
 
 <Modal
 	open={$matchingModalOpen}
-	title="Show Matching"
+	title="Show matching"
 	width="min(460px, 92%)"
+	page
 	onclose={form.request}
 	oninteract={form.disarm}
 >

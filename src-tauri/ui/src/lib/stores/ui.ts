@@ -31,3 +31,6 @@ export async function openExternal(url: string): Promise<void> {
 		lastError.set({ title: 'Failed to open link', message: url, detail: String(err) });
 	}
 }
+
+/** A UI scale shown before it's saved, while Appearance previews it. */
+export const zoomPreview = writable<number | null>(null);

@@ -1,11 +1,18 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { setSettingsClose } from '$lib/stores/modals';
 
 	interface Props {
 		title: string;
 		width: string;
 		/** Percent, not vh: vh ignores the root `zoom` the Appearance scale applies. */
 		maxHeight?: string;
+		/** A fixed height, so the dialog keeps its size as its content changes. */
+		height?: string;
+		/** Shows it as a page of the Settings window instead of a dialog of its own. */
+		page?: boolean;
+		/** Hides it while keeping its content, scroll position and edits. */
+		hidden?: boolean;
 		onclose: () => void;
 		open?: boolean;
 		/** Content owns its own bottom edge — for a footer with its own padding and border. */
@@ -24,6 +31,9 @@
 		title,
 		width,
 		maxHeight = '85%',
+		height,
+		page = false,
+		hidden = false,
 		onclose,
 		open = true,
 		flush = false,
@@ -42,7 +52,11 @@
 	let dialog = $state<HTMLDivElement | null>(null);
 
 	$effect(() => {
-		if (!open || !dialog) return;
+		if (page && open) return setSettingsClose(onclose);
+	});
+
+	$effect(() => {
+		if (!open || !dialog || hidden) return;
 		const invoker = document.activeElement;
 		dialog.focus();
 		return () => {
@@ -88,8 +102,32 @@
 	}
 </script>
 
-<!-- Backs up the backdrop's keydown for the frame before the focus effect runs. -->
-<svelte:window onkeydown={(e) => open && e.key === 'Escape' && onclose()} />
+<!-- Backs up the backdrop's keydown for the frame before the focus effect runs. A page leaves
+     Escape to the window around it. -->
+<svelte:window onkeydown={(e) => open && !page && !hidden && e.key === 'Escape' && onclose()} />
+
+{#snippet heading(closable: boolean)}
+	<header>
+		{#if onback}
+			<button class="back" onclick={onback}><span aria-hidden="true">←</span> Back</button>
+		{/if}
+		<h2 id={headingId} {title}>{title}</h2>
+		{#if actions}
+			<div class="head-actions">{@render actions()}</div>
+		{/if}
+		{#if closable}
+			<!-- Without stopPropagation the backdrop's oninteract disarms the guard this just armed. -->
+			<button
+				class="close"
+				aria-label="Close"
+				onclick={(e) => {
+					e.stopPropagation();
+					onclose();
+				}}>✕</button
+			>
+		{/if}
+	</header>
+{/snippet}
 
 {#snippet dialogBox()}
 	<div
@@ -100,38 +138,39 @@
 		aria-labelledby={headingId}
 		tabindex="-1"
 		bind:this={dialog}
-		style="width: {width}; max-height: {maxHeight}"
+		style:width
+		style:max-height={maxHeight}
+		style:height
 	>
-		<header>
-			{#if onback}
-				<button class="back" onclick={onback}><span aria-hidden="true">←</span> Back</button>
-			{/if}
-			<h2 id={headingId} {title}>{title}</h2>
-			{#if actions}
-				<div class="head-actions">{@render actions()}</div>
-			{/if}
-			<!-- Without stopPropagation the backdrop's oninteract disarms the guard this just armed. -->
-			<button
-				class="close"
-				aria-label="Close"
-				onclick={(e) => {
-					e.stopPropagation();
-					onclose();
-				}}>✕</button
-			>
-		</header>
+		{@render heading(true)}
 		<div class="content">{@render children()}</div>
 		{@render footer?.()}
 	</div>
 {/snippet}
 
 {#if open}
-	{#if dismissible}
-		<div class="backdrop" role="button" tabindex="-1" {onmousedown} {onclick} {onkeydown}>
+	{#if page}
+		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -- a
+		     click only disarms the unsaved-changes warning, which keys don't arm. -->
+		<section class="page" class:flush aria-labelledby={headingId} onclick={() => oninteract?.()}>
+			{@render heading(false)}
+			<div class="content">{@render children()}</div>
+			{@render footer?.()}
+		</section>
+	{:else if dismissible}
+		<div
+			class="backdrop"
+			class:hidden
+			role="button"
+			tabindex="-1"
+			{onmousedown}
+			{onclick}
+			{onkeydown}
+		>
 			{@render dialogBox()}
 		</div>
 	{:else}
-		<div class="backdrop">{@render dialogBox()}</div>
+		<div class="backdrop" class:hidden>{@render dialogBox()}</div>
 	{/if}
 {/if}
 
@@ -145,6 +184,10 @@
 		background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
 		z-index: var(--z-modal);
 	}
+	/* Not display: none, which would drop the content's scroll positions. */
+	.backdrop.hidden {
+		visibility: hidden;
+	}
 	.dialog {
 		display: flex;
 		flex-direction: column;
@@ -155,11 +198,21 @@
 		border-radius: var(--radius);
 		box-shadow: var(--shadow-modal);
 	}
-	.dialog.flush {
+	.page {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		gap: 0.6rem;
+		min-height: 0;
+		padding-bottom: 0.75rem;
+	}
+	.dialog.flush,
+	.page.flush {
 		gap: 0;
 		padding-bottom: 0;
 	}
 	.content {
+		flex: 1 1 auto;
 		display: flex;
 		flex-direction: column;
 		gap: 0.6rem;
@@ -184,6 +237,10 @@
 		white-space: nowrap;
 		font-size: 1.05rem;
 		color: var(--accent);
+	}
+	.page header h2 {
+		font-size: 0.95rem;
+		color: var(--text);
 	}
 	.head-actions {
 		display: flex;

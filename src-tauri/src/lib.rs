@@ -12,7 +12,10 @@ mod state;
 
 use std::sync::Mutex;
 
-use tauri::Manager;
+use tauri::{
+    Emitter,
+    Manager,
+};
 use yomine::core::settings::SettingsData;
 
 use crate::state::AppState;
@@ -135,10 +138,19 @@ pub fn run() {
             commands::knowledge::get_knowledge_summary,
         ])
         .on_window_event(|window, event| {
-            if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
-                if let Some(themes) = window.app_handle().get_webview_window("themes") {
-                    let _ = themes.close();
+            if !matches!(event, tauri::WindowEvent::Destroyed) {
+                return;
+            }
+            match window.label() {
+                "main" => {
+                    if let Some(themes) = window.app_handle().get_webview_window("themes") {
+                        let _ = themes.close();
+                    }
                 }
+                "themes" => {
+                    let _ = window.app_handle().emit_to("main", events::names::THEMES_CLOSED, ());
+                }
+                _ => {}
             }
         })
         .setup(move |app| {

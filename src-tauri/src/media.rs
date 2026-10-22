@@ -342,7 +342,7 @@ fn clip_name(bytes: &[u8], extension: &str) -> String {
 }
 
 const NO_FFMPEG: &str =
-    "ffmpeg wasn't found. Install it, or download it in Settings → Local Media, then retry.";
+    "ffmpeg wasn't found. Install it, or download it in Settings → Local media, then retry.";
 
 async fn validate_local(video: &Path, ffmpeg_path: &str) -> Result<(), Failure> {
     if !video.is_file() {
