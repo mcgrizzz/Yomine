@@ -1,14 +1,19 @@
 <script lang="ts">
+	import { get } from 'svelte/store';
 	import {
 		clearMediaMatch,
+		getMediaMatch,
 		getRecentFiles,
+		getUnmatchedReason,
+		rematchWork,
 		searchMedia,
 		setMediaMatch,
+		type Media,
 		type MediaCandidate,
 		type MediaMatch
 	} from '$lib/ipc';
 	import { mediaTitle } from '$lib/media';
-	import { mediaMatch, openExternal, recentFiles } from '$lib/stores';
+	import { fileResult, matchProblem, mediaMatch, openExternal, recentFiles } from '$lib/stores';
 
 	type Kind = 'tv' | 'movie';
 	interface Picked {
@@ -19,10 +24,17 @@
 	}
 
 	let {
-		fingerprint,
-		match,
-		fileTitle
-	}: { fingerprint: string; match: MediaMatch | null; fileTitle: string } = $props();
+		fingerprint = '',
+		match = null,
+		fileTitle,
+		work = null
+	}: {
+		fingerprint?: string;
+		match?: MediaMatch | null;
+		fileTitle: string;
+		/** A show or film to move every file of, in place of one file's match. */
+		work?: Media['work'] | null;
+	} = $props();
 
 	const MATCHED_BY = {
 		name: 'Matched by its file name',
@@ -73,12 +85,12 @@
 		episode = match?.episode ?? null;
 		error = null;
 		open = true;
-		if (!picked) startSearch();
+		if (!picked || work) startSearch();
 	}
 
 	function startSearch() {
 		searching = true;
-		kind = picked?.kind ?? 'tv';
+		kind = picked?.kind ?? work?.kind ?? 'tv';
 		query = fileTitle.replace(/ - (S\d+E\d+|Episode [\d.]+)$/, '');
 		results = [];
 		search();
@@ -122,6 +134,12 @@
 		const tv = picked.kind === 'tv';
 		busy = true;
 		try {
+			if (work) {
+				const to = { kind: picked.kind, tmdb_id: picked.id, season: null, episode: null };
+				await rematchWork(work.kind, work.tmdb_id, to);
+				await afterRematch();
+				return;
+			}
 			const saved = await setMediaMatch(fingerprint, {
 				kind: picked.kind,
 				tmdb_id: picked.id,
@@ -129,6 +147,7 @@
 				episode: tv ? episode : null
 			});
 			mediaMatch.set(saved);
+			matchProblem.set(null);
 			open = false;
 			recentFiles.set(await getRecentFiles());
 		} catch (e) {
@@ -141,8 +160,14 @@
 	async function notAShow() {
 		busy = true;
 		try {
+			if (work) {
+				await rematchWork(work.kind, work.tmdb_id, null);
+				await afterRematch();
+				return;
+			}
 			await clearMediaMatch(fingerprint);
 			mediaMatch.set(null);
+			matchProblem.set(await getUnmatchedReason(fingerprint));
 			open = false;
 			recentFiles.set(await getRecentFiles());
 		} catch (e) {
@@ -150,6 +175,15 @@
 		} finally {
 			busy = false;
 		}
+	}
+
+	async function afterRematch() {
+		open = false;
+		recentFiles.set(await getRecentFiles());
+		const loaded = get(fileResult)?.batch_source.fingerprint;
+		if (!loaded) return;
+		mediaMatch.set(await getMediaMatch(loaded));
+		matchProblem.set(await getUnmatchedReason(loaded));
 	}
 
 	function focusAndSelect(node: HTMLInputElement) {
@@ -171,8 +205,15 @@
 	}}
 />
 
-<span class="anchor" bind:this={root}>
-	{#if match?.matched_by === 'suggested'}
+<span class="anchor" class:right={!!work} bind:this={root}>
+	{#if work}
+		<button
+			class="link"
+			title="Match every file of this {work.kind === 'tv' ? 'show' : 'film'} to another"
+			aria-expanded={open}
+			onclick={toggle}>Wrong {work.kind === 'tv' ? 'show' : 'film'}?</button
+		>
+	{:else if match?.matched_by === 'suggested'}
 		<button
 			class="tab-chip suggested"
 			title={`${MATCHED_BY.suggested}: ${match.work.title}. Click to confirm or change it.`}
@@ -189,7 +230,7 @@
 	{:else}
 		<button
 			class="tab-chip unmatched"
-			title="Not matched to a show or film"
+			title={$matchProblem ?? 'Not matched to a show or film'}
 			aria-expanded={open}
 			onclick={toggle}>Match…</button
 		>
@@ -197,6 +238,13 @@
 
 	{#if open}
 		<div class="panel" role="dialog" aria-label="Match to a show or film">
+			{#if work}
+				<p class="muted">
+					Moves every file matched to {work.original_title || work.title}.
+				</p>
+			{:else if !match && $matchProblem}
+				<p class="muted">{$matchProblem}</p>
+			{/if}
 			{#if searching}
 				<div class="row">
 					<div class="kinds" role="radiogroup" aria-label="Kind">
@@ -259,7 +307,7 @@
 					</div>
 					<button class="change" onclick={startSearch}>Change</button>
 				</div>
-				{#if picked.kind === 'tv'}
+				{#if picked.kind === 'tv' && !work}
 					<div class="numbers">
 						<label>Season <input type="number" min="0" bind:value={season} /></label>
 						<label>Episode <input type="number" min="1" bind:value={episode} /></label>
@@ -318,6 +366,10 @@
 	.tab-chip.unmatched {
 		color: var(--text-muted);
 		background: transparent;
+	}
+	.right .panel {
+		left: auto;
+		right: 0;
 	}
 	.panel {
 		position: absolute;

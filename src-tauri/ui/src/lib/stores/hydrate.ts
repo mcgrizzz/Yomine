@@ -5,7 +5,7 @@ import { dragHovering, initProgress, lastError, showNotice } from './ui';
 import { ankiStatus, knowledge, languageToolsStatus } from './status';
 import { checkForUpdate } from './update';
 import { asbContext, playerStatus } from './player';
-import { fileResult, mediaMatch, openPaths, recentFiles } from './file';
+import { fileResult, matchProblem, mediaMatch, openPaths, recentFiles } from './file';
 import { jlptEnabled, posCatalog, posEnabled } from './controls';
 import { defaultSettings, settings } from './settings';
 import { refreshIgnoredLemmas } from './ignore';
@@ -68,8 +68,14 @@ export async function hydrate(): Promise<void> {
 	});
 	ipc.onAsbplayerContext((c) => asbContext.set(c));
 	ipc.onMediaMatched((m) => {
-		if (get(fileResult)?.batch_source.fingerprint === m.fingerprint) mediaMatch.set(m);
+		if (get(fileResult)?.batch_source.fingerprint === m.fingerprint) {
+			mediaMatch.set(m);
+			matchProblem.set(null);
+		}
 		if (m.matched_by !== 'suggested') void ipc.getRecentFiles().then((r) => recentFiles.set(r));
+	});
+	ipc.onMediaUnmatched((u) => {
+		if (get(fileResult)?.batch_source.fingerprint === u.fingerprint) matchProblem.set(u.reason);
 	});
 	ipc.onPastMediaMatched(() => void ipc.getRecentFiles().then((r) => recentFiles.set(r)));
 	// A match made before the file reached the page is read back here.
@@ -79,9 +85,13 @@ export async function hydrate(): Promise<void> {
 		if (fingerprint === matchedFor) return;
 		matchedFor = fingerprint;
 		mediaMatch.set(null);
+		matchProblem.set(null);
 		if (!fingerprint) return;
 		void ipc.getMediaMatch(fingerprint).then((m) => {
 			if (m && matchedFor === fingerprint) mediaMatch.set(m);
+		});
+		void ipc.getUnmatchedReason(fingerprint).then((reason) => {
+			if (reason && matchedFor === fingerprint) matchProblem.set(reason);
 		});
 	});
 	ipc.onDictionariesChanged(() => {

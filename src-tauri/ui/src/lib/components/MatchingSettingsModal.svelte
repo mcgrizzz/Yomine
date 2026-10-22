@@ -3,20 +3,21 @@
 	import Modal from './Modal.svelte';
 	import SettingsFooter from './SettingsFooter.svelte';
 	import { hasBuiltinTmdbKey } from '$lib/ipc';
-	import { matchingModalOpen, openExternal, setTmdbApiKey, settings } from '$lib/stores';
+	import { matchingModalOpen, openExternal, saveShowMatching, settings } from '$lib/stores';
 
 	let builtin = $state(true);
 	void hasBuiltinTmdbKey().then((has) => (builtin = has));
 
 	const form = settingsDraft({
 		open: matchingModalOpen,
-		initial: { key: '' },
-		load: () => ($settings ? { key: $settings.tmdb_api_key } : undefined)
+		initial: { key: '', matching: true },
+		load: () =>
+			$settings ? { key: $settings.tmdb_api_key, matching: $settings.tmdb_matching } : undefined
 	});
 	const draft = $derived(form.value);
 
 	async function save() {
-		if (!(await setTmdbApiKey(draft.key))) return;
+		if (!(await saveShowMatching(draft.key, draft.matching))) return;
 		matchingModalOpen.set(false);
 	}
 </script>
@@ -30,13 +31,23 @@
 >
 	<div class="body">
 		<p class="status">
-			{#if $settings?.tmdb_api_key}
+			{#if $settings && !$settings.tmdb_matching}
+				<span class="off">●</span> Matching by file name is off
+			{:else if $settings?.tmdb_api_key}
 				<span class="ok">●</span> Using your TMDB key
 			{:else if builtin}
 				<span class="ok">●</span> Using Yomine's built-in TMDB key
 			{:else}
 				<span class="off">●</span> No TMDB key: files aren't matched
 			{/if}
+		</p>
+		<label class="check">
+			<input type="checkbox" bind:checked={draft.matching} />
+			Match files by name
+		</label>
+		<p class="muted">
+			Yomine sends the names of the files you open to TMDB to find their show or film. Turned off,
+			file names aren't sent, and you can still search for a match yourself.
 		</p>
 		<label for="tmdb-key">Your own key <span class="muted">(optional)</span></label>
 		<input
@@ -68,6 +79,11 @@
 	}
 	p {
 		margin: 0;
+	}
+	.check {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
 	}
 	.muted {
 		font-size: 0.85rem;

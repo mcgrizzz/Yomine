@@ -340,6 +340,8 @@ export interface SettingsData {
 	/** Empty finds ffmpeg on PATH or uses the downloaded copy. */
 	ffmpeg_path: string;
 	tmdb_api_key: string;
+	/** Whether loaded files are matched by name on their own, which sends the names to TMDB. */
+	tmdb_matching: boolean;
 }
 
 export interface TextFilterSetting {
@@ -1064,6 +1066,21 @@ export function clearMediaMatch(fingerprint: string): Promise<void> {
 	return invoke('clear_media_match', { fingerprint });
 }
 
+/** Moves every file matched to the work onto the entry, or with `null` marks them all as not a
+ * show or film. */
+export function rematchWork(
+	kind: 'tv' | 'movie',
+	tmdbId: number,
+	to: MediaReference | null
+): Promise<void> {
+	return invoke('rematch_work', { kind, tmdbId, to });
+}
+
+/** Why the source has no match, when it was loaded this session. */
+export function getUnmatchedReason(fingerprint: string): Promise<string | null> {
+	return invoke('get_unmatched_reason', { fingerprint });
+}
+
 export function mineBatchItem(
 	batchId: string,
 	itemIndex: number,
@@ -1366,6 +1383,8 @@ export const onAsbplayerMediaLoaded = (cb: (r: FileLoadResult) => void) =>
 	listenTo('asbplayer-media-loaded', cb);
 /** A source was matched after it loaded. */
 export const onMediaMatched = (cb: (m: MediaMatch) => void) => listenTo('media-matched', cb);
+export const onMediaUnmatched = (cb: (u: { fingerprint: string; reason: string }) => void) =>
+	listenTo('media-unmatched', cb);
 /** Files loaded before matching existed were matched at startup. */
 export const onPastMediaMatched = (cb: () => void) => listenTo('past-media-matched', cb);
 

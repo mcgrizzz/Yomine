@@ -10,6 +10,8 @@ import { epubChapterModalOpen } from './modals';
 export const fileResult = writable<ipc.FileLoadResult | null>(null);
 /** The loaded file's show or film, once matched. */
 export const mediaMatch = writable<ipc.MediaMatch | null>(null);
+/** Why the loaded file has no match, when matching it failed. */
+export const matchProblem = writable<string | null>(null);
 
 /** Gates the per-sentence comprehension bars — without Anki filtering every
  * sentence reads 0%. */

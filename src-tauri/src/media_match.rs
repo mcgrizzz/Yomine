@@ -37,6 +37,7 @@ use yomine::{
         Query,
         Reference,
     },
+    core::YomineError,
     media::{
         ffmpeg,
         subtitles,
@@ -60,6 +61,27 @@ static SUGGESTIONS: Mutex<Option<HashMap<String, Match>>> = Mutex::new(None);
 
 fn suggestions<T>(f: impl FnOnce(&mut HashMap<String, Match>) -> T) -> T {
     f(SUGGESTIONS.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_default())
+}
+
+/// Why sources loaded this session have no match, for the page to show.
+static UNMATCHED: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
+
+fn unmatched<T>(f: impl FnOnce(&mut HashMap<String, String>) -> T) -> T {
+    f(UNMATCHED.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_default())
+}
+
+const NOT_A_SHOW: &str = "You said this isn't a show or film.";
+
+#[derive(Serialize, Clone)]
+struct Unmatched {
+    fingerprint: String,
+    reason: String,
+}
+
+/// Why the source has no match, when it was loaded this session.
+#[tauri::command]
+pub fn get_unmatched_reason(fingerprint: String) -> Option<String> {
+    unmatched(|u| u.get(&fingerprint).cloned())
 }
 
 #[derive(Serialize, Clone)]
@@ -193,6 +215,7 @@ pub async fn set_media_match(
         .ok_or("TMDB has no entry with that ID")?;
     db::with(|conn| works::link(conn, &fingerprint, &found, MatchedBy::User))?;
     suggestions(|s| s.remove(&fingerprint));
+    unmatched(|u| u.remove(&fingerprint));
     if let Some(query) = query_for(&fingerprint)? {
         catalog::remember(&query, &found).map_err(|e| e.to_string())?;
         relink(&tmdb, &query, &fingerprint).await;
@@ -206,11 +229,63 @@ pub async fn set_media_match(
 pub async fn clear_media_match(app: AppHandle, fingerprint: String) -> Result<(), String> {
     db::with(|conn| works::unlink(conn, &fingerprint, true))?;
     suggestions(|s| s.remove(&fingerprint));
+    unmatched(|u| u.insert(fingerprint.clone(), NOT_A_SHOW.to_string()));
     if let Some(query) = query_for(&fingerprint)? {
         catalog::forget(&query).map_err(|e| e.to_string())?;
         if let Ok(tmdb) = tmdb_client(&app) {
             relink(&tmdb, &query, &fingerprint).await;
         }
+    }
+    Ok(())
+}
+
+/// Moves every source matched to the show or film onto the entry the user named, or with
+/// `None` records that none of them is a show or film. The titles they were matched by
+/// follow, so their other files do too.
+#[tauri::command]
+pub async fn rematch_work(
+    app: AppHandle,
+    kind: Kind,
+    tmdb_id: i64,
+    to: Option<Reference>,
+) -> Result<(), String> {
+    let sources = db::with(|conn| works::sources_of(conn, kind, tmdb_id))?;
+    let Some(to) = to else {
+        for (fingerprint, _) in &sources {
+            db::with(|conn| works::unlink(conn, fingerprint, true))?;
+            if let Some(query) = query_for(fingerprint)? {
+                catalog::forget(&query).map_err(|e| e.to_string())?;
+            }
+            suggestions(|s| s.remove(fingerprint));
+            unmatched(|u| u.insert(fingerprint.clone(), NOT_A_SHOW.to_string()));
+        }
+        return Ok(());
+    };
+    let tmdb = tmdb_client(&app)?;
+    let work = catalog::lookup(&tmdb, &Reference { season: None, episode: None, ..to })
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or("TMDB has no entry with that ID")?
+        .work;
+    let tv = work.kind == Kind::Tv;
+    for (fingerprint, old) in sources {
+        let mut found = None;
+        if let Some(query) = query_for(&fingerprint)?.filter(|q| q.kind == work.kind) {
+            let named =
+                Match { work: work.clone(), season: None, episode: None, episode_title: None };
+            catalog::remember(&query, &named).map_err(|e| e.to_string())?;
+            found =
+                catalog::resolve(&tmdb, &query).await.map_err(|e| e.to_string())?.map(|r| r.found);
+        }
+        // A file whose name can't be looked up as this kind keeps its old numbers.
+        let found = found.unwrap_or_else(|| Match {
+            work: work.clone(),
+            season: old.season.filter(|_| tv),
+            episode: old.episode.filter(|_| tv),
+            episode_title: None,
+        });
+        db::with(|conn| works::link(conn, &fingerprint, &found, MatchedBy::User))?;
+        suggestions(|s| s.remove(&fingerprint));
     }
     Ok(())
 }
@@ -241,7 +316,8 @@ pub async fn find_episodes(
             eprintln!("[catalog] {e}");
         }
     };
-    let Ok(tmdb) = tmdb_client(&app) else { return Ok(()) };
+    // Off, files already matched are still found.
+    let tmdb = matching_client(&app).ok();
     let mut shows: HashMap<PathBuf, HashSet<i64>> = HashMap::new();
     for (path, show) in &opened {
         if let Some(dir) = Path::new(path).parent() {
@@ -286,8 +362,9 @@ pub async fn find_episodes(
                 }
                 None if offline => continue,
                 None => {
+                    let Some(tmdb) = &tmdb else { continue };
                     let Some(query) = Query::from_name(&path) else { continue };
-                    match catalog::resolve(&tmdb, &query).await {
+                    match catalog::resolve(tmdb, &query).await {
                         Ok(resolved) => {
                             let found = resolved.map(|r| r.found);
                             if let Err(e) =
@@ -400,6 +477,27 @@ fn tmdb_client(app: &AppHandle) -> Result<Tmdb, String> {
     })
 }
 
+/// The client for matching files on their own, which sends their names to TMDB.
+fn matching_client(app: &AppHandle) -> Result<Tmdb, String> {
+    if !app.state::<Mutex<AppState>>().lock().unwrap().settings.tmdb_matching {
+        return Err("Matching by file name is off in Settings → Show Matching.".to_string());
+    }
+    tmdb_client(app)
+}
+
+/// What the user can do about a failed TMDB request.
+fn request_problem(e: &YomineError) -> String {
+    match e {
+        YomineError::Reqwest(e) if e.status().is_some_and(|s| s.as_u16() == 401) => {
+            "TMDB refused the API key. Check it in Settings → Show Matching.".to_string()
+        }
+        YomineError::Reqwest(e) if e.is_connect() || e.is_timeout() => {
+            "Couldn't reach TMDB. Opening the file again tries again.".to_string()
+        }
+        e => format!("Matching failed: {e}"),
+    }
+}
+
 /// What the source's name says it is, from the path it was last opened from.
 fn query_for(fingerprint: &str) -> Result<Option<Query>, String> {
     let path = db::with(|conn| works::opened_path(conn, fingerprint))?;
@@ -437,7 +535,7 @@ async fn relink(tmdb: &Tmdb, corrected: &Query, except: &str) {
 /// finds the layout of each matched show without one cached, so its episodes show in it.
 pub fn spawn_past(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
-        let Ok(tmdb) = tmdb_client(&app) else { return };
+        let Ok(tmdb) = matching_client(&app) else { return };
         let unmatched = match db::with(|conn| works::matched_by(conn, None)) {
             Ok(unmatched) => unmatched,
             Err(e) => return eprintln!("[catalog] Couldn't list unmatched sources: {e}"),
@@ -480,37 +578,45 @@ pub fn spawn_past(app: AppHandle) {
 }
 
 /// Matches the source in the background, and emits `media-matched` when it links one or has
-/// a suggestion. `name` is what was opened: the video, or the subtitle file.
+/// a suggestion, or `media-unmatched` with why it can't. `name` is what was opened: the
+/// video, or the subtitle file.
 pub fn spawn(app: AppHandle, fingerprint: String, name: String, lines: Vec<String>) {
     tauri::async_runtime::spawn(async move {
-        let found = match find(&app, &fingerprint, &name, &lines).await {
-            Ok(found) => found,
-            Err(e) => {
-                eprintln!("[catalog] Matching {name} failed: {e}");
-                return;
+        match find(&app, &fingerprint, &name, &lines).await {
+            Ok(Some((found, matched_by))) => {
+                unmatched(|u| u.remove(&fingerprint));
+                let found = catalog::displayed(found);
+                let _ = app
+                    .emit(names::MEDIA_MATCHED, MediaMatchDto { fingerprint, found, matched_by });
             }
-        };
-        if let Some((found, matched_by)) = found {
-            let found = catalog::displayed(found);
-            let _ =
-                app.emit(names::MEDIA_MATCHED, MediaMatchDto { fingerprint, found, matched_by });
+            Ok(None) => {}
+            Err(reason) => {
+                unmatched(|u| u.insert(fingerprint.clone(), reason.clone()));
+                let _ = app.emit(names::MEDIA_UNMATCHED, Unmatched { fingerprint, reason });
+            }
         }
     });
 }
 
-/// A new link for the source, or a suggestion.
+/// A new link for the source, or a suggestion; `None` when it's already matched. The error
+/// says why it can't be matched.
 async fn find(
     app: &AppHandle,
     fingerprint: &str,
     name: &str,
     lines: &[String],
 ) -> Result<Option<(Match, &'static str)>, String> {
-    let decided = db::with(|conn| {
-        Ok(works::user_decided(conn, fingerprint)?
-            || works::source_match(conn, fingerprint)?.is_some())
+    let (linked, decided) = db::with(|conn| {
+        Ok((
+            works::source_match(conn, fingerprint)?.is_some(),
+            works::user_decided(conn, fingerprint)?,
+        ))
     })?;
-    if decided {
+    if linked {
         return Ok(None);
+    }
+    if decided {
+        return Err(NOT_A_SHOW.to_string());
     }
     if let Some(signature) = Signature::of(lines.iter().map(String::as_str)) {
         let same = db::with(|conn| {
@@ -522,9 +628,11 @@ async fn find(
             return Ok(Some((found, MatchedBy::Content.as_str())));
         }
     }
-    let Some(query) = Query::from_name(name) else { return Ok(None) };
-    let Ok(tmdb) = tmdb_client(app) else { return Ok(None) };
-    match catalog::resolve(&tmdb, &query).await.map_err(|e| e.to_string())? {
+    let tmdb = matching_client(app)?;
+    let Some(query) = Query::from_name(name) else {
+        return Err("Its file name doesn't give a show and episode, or a film and year.".into());
+    };
+    match catalog::resolve(&tmdb, &query).await.map_err(|e| request_problem(&e))? {
         Some(resolved) if resolved.confident => {
             db::with(|conn| works::link(conn, fingerprint, &resolved.found, MatchedBy::Name))?;
             Ok(Some((resolved.found, MatchedBy::Name.as_str())))
@@ -533,6 +641,9 @@ async fn find(
             suggestions(|s| s.insert(fingerprint.to_string(), resolved.found.clone()));
             Ok(Some((resolved.found, "suggested")))
         }
-        None => Ok(None),
+        None if matches!(store::correction(&query.key()), Ok(Some(None))) => {
+            Err(format!("You said files named “{}” aren't a show or film.", query.title))
+        }
+        None => Err(format!("TMDB has no show or film named “{}”.", query.title)),
     }
 }

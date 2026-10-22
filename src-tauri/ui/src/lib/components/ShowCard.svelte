@@ -1,4 +1,5 @@
 <script lang="ts">
+	import MediaMatchChip from './MediaMatchChip.svelte';
 	import type { FoundEpisode, RecentFileEntry, TmdbEpisode } from '$lib/ipc';
 	import { fileIcon, filename, formatOpened } from '$lib/recents';
 	import {
@@ -165,6 +166,12 @@
 			<span class="title" lang="ja">{title}</span>
 			{#if english}<span class="english">{english}</span>{/if}
 		</div>
+		<span class="fix">
+			<MediaMatchChip
+				work={show.work}
+				fileTitle={latest.title.trim() || filename(latest.file_path)}
+			/>
+		</span>
 		{#if unmined}
 			{@const target = unmined}
 			<button
@@ -268,6 +275,11 @@
 	.english {
 		font-size: 0.7rem;
 		color: var(--text-muted);
+	}
+	.fix {
+		flex: none;
+		margin-left: auto;
+		font-size: 0.7rem;
 	}
 	.next {
 		flex: none;

@@ -226,6 +226,21 @@ pub fn source_match(
     .map(Option::flatten)
 }
 
+/// The sources matched to the show or film, with their matches.
+pub fn sources_of(
+    conn: &Connection,
+    kind: Kind,
+    tmdb_id: i64,
+) -> rusqlite::Result<Vec<(String, Match)>> {
+    conn.prepare(&format!(
+        "SELECT s.fingerprint, {MATCH_COLUMNS} FROM sources s {MATCH_JOINS}
+         WHERE w.kind = ?1 AND w.tmdb_id = ?2"
+    ))?
+    .query_map(params![kind.as_str(), tmdb_id], |r| Ok((r.get(0)?, read_match(r, 1)?)))?
+    .filter_map(|row| row.map(|(fingerprint, found)| found.map(|f| (fingerprint, f))).transpose())
+    .collect()
+}
+
 /// The columns [`read_match`] reads, from a source `s` joined with [`MATCH_JOINS`].
 pub(super) const MATCH_COLUMNS: &str =
     "w.kind, w.tmdb_id, w.title, w.original_title, e.season, e.number, e.title";
@@ -322,6 +337,28 @@ mod tests {
         let episodes: i64 =
             conn.query_row("SELECT count(*) FROM episodes", [], |r| r.get(0)).unwrap();
         assert_eq!(episodes, 1);
+        drop(conn);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_works_sources_leave_out_other_works_and_unlinked_ones() {
+        let (dir, conn) = scratch("works-sources");
+        let film = Match {
+            work: Work { kind: Kind::Movie, tmdb_id: 209867, ..frieren(1).work },
+            season: None,
+            episode: None,
+            episode_title: None,
+        };
+        link(&conn, "a", &frieren(1), MatchedBy::Name).unwrap();
+        link(&conn, "b", &frieren(2), MatchedBy::User).unwrap();
+        link(&conn, "c", &film, MatchedBy::Name).unwrap();
+        link(&conn, "d", &frieren(3), MatchedBy::Name).unwrap();
+        unlink(&conn, "d", true).unwrap();
+
+        let mut sources = sources_of(&conn, Kind::Tv, 209867).unwrap();
+        sources.sort_by(|a, b| a.0.cmp(&b.0));
+        assert_eq!(sources, vec![("a".into(), frieren(1)), ("b".into(), frieren(2))]);
         drop(conn);
         std::fs::remove_dir_all(dir).unwrap();
     }
