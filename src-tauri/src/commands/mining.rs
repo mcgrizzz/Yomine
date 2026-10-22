@@ -439,6 +439,12 @@ async fn mine(
         ));
     }
 
+    if let Some((field, text)) = source.and_then(|source| {
+        source.source_field(&format.model, &batch.source.fingerprint, item.timestamp.as_ref())
+    }) {
+        fields.insert(field, text);
+    }
+
     let wanted = match (item.mine_media, options.record) {
         (false, _) => Media::both(Part::NotRequested),
         (true, false) => Media::both(Part::Skipped),

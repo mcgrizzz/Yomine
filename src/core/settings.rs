@@ -281,6 +281,12 @@ pub struct SettingsData {
     /// Empty finds ffmpeg on PATH or uses the downloaded copy.
     #[serde(default)]
     pub ffmpeg_path: String,
+    /// Empty uses the key Yomine's builds embed.
+    #[serde(default)]
+    pub tmdb_api_key: String,
+    /// Whether loaded files are matched by name on their own, which sends the names to TMDB.
+    #[serde(default = "default_true")]
+    pub tmdb_matching: bool,
 }
 
 const fn default_font_scale() -> f32 {
@@ -355,6 +361,8 @@ impl Default for SettingsData {
             mining_mode: MiningMode::default(),
             media_format: MediaFormat::default(),
             ffmpeg_path: String::new(),
+            tmdb_api_key: String::new(),
+            tmdb_matching: true,
         }
     }
 }

@@ -10,6 +10,7 @@
 		modeLabel,
 		openHint
 	} from '$lib/recents';
+	import { mediaTitle } from '$lib/media';
 
 	interface Props {
 		entry: RecentFileEntry;
@@ -20,7 +21,11 @@
 
 	let { entry, showBadge, onopen }: Props = $props();
 
-	const title = $derived(entry.title.trim() || filename(entry.file_path));
+	const fileTitle = $derived(entry.title.trim() || filename(entry.file_path));
+	const title = $derived(entry.media ? mediaTitle(entry.media) : fileTitle);
+	const secondary = $derived(
+		[entry.media && fileTitle, entry.subtitle].filter(Boolean).join(' · ') || null
+	);
 	const badge = $derived(showBadge && entry.mode ? modeLabel(entry.mode) : null);
 	const tooltip = $derived(
 		[
@@ -36,8 +41,10 @@
 
 <button class="card" class:badged={badge !== null} title={tooltip} onclick={onopen}>
 	{#if badge}<span class="badge">{badge}</span>{/if}
-	<span class="title">{fileIcon(entry.file_path)} {title}</span>
-	{#if entry.subtitle}<span class="secondary">{entry.subtitle}</span>{/if}
+	<span class="title" lang={entry.media ? 'ja' : undefined}
+		>{fileIcon(entry.file_path)} {title}</span
+	>
+	{#if secondary}<span class="secondary">{secondary}</span>{/if}
 	<span class="meta"
 		><span class="terms">{formatTermCount(entry.term_count)}</span> · {formatOpened(
 			entry.last_opened

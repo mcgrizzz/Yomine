@@ -96,6 +96,9 @@ export const setAutoMine = (prefs: ipc.AutoMine) =>
 		}
 	});
 
+export const saveShowMatching = (key: string, matching: boolean) =>
+	patchSettings({ tmdb_api_key: key.trim(), tmdb_matching: matching });
+
 export const setAsbplayerPollSecs = (secs: number) =>
 	patchSettings({ asbplayer_poll_secs: Math.max(1, Math.round(secs) || 1) });
 

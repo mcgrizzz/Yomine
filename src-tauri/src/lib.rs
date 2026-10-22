@@ -5,13 +5,17 @@ mod commands;
 mod dto;
 mod events;
 mod media;
+mod media_match;
 mod player_task;
 mod recommended;
 mod state;
 
 use std::sync::Mutex;
 
-use tauri::Manager;
+use tauri::{
+    Emitter,
+    Manager,
+};
 use yomine::core::settings::SettingsData;
 
 use crate::state::AppState;
@@ -32,6 +36,18 @@ pub fn run() {
         .manage(Mutex::new(AppState::new(settings)))
         .invoke_handler(tauri::generate_handler![
             commands::lifecycle::load_language_tools,
+            media_match::get_media_match,
+            media_match::get_media_matches,
+            media_match::get_season_episodes,
+            media_match::find_episodes,
+            media_match::get_mined_episodes,
+            media_match::has_builtin_tmdb_key,
+            media_match::search_media,
+            media_match::set_media_match,
+            media_match::clear_media_match,
+            media_match::rematch_work,
+            media_match::get_media_details,
+            media_match::get_unmatched_reason,
             commands::lifecycle::get_pos_catalog,
             commands::lifecycle::get_settings,
             commands::lifecycle::get_default_settings,
@@ -122,10 +138,19 @@ pub fn run() {
             commands::knowledge::get_knowledge_summary,
         ])
         .on_window_event(|window, event| {
-            if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
-                if let Some(themes) = window.app_handle().get_webview_window("themes") {
-                    let _ = themes.close();
+            if !matches!(event, tauri::WindowEvent::Destroyed) {
+                return;
+            }
+            match window.label() {
+                "main" => {
+                    if let Some(themes) = window.app_handle().get_webview_window("themes") {
+                        let _ = themes.close();
+                    }
                 }
+                "themes" => {
+                    let _ = window.app_handle().emit_to("main", events::names::THEMES_CLOSED, ());
+                }
+                _ => {}
             }
         })
         .setup(move |app| {
@@ -144,6 +169,7 @@ pub fn run() {
 
             // Ambient Anki/knowledge polling (player connectivity is handled above).
             background::spawn(app.handle().clone());
+            media_match::spawn_past(app.handle().clone());
             Ok(())
         })
         .run(tauri::generate_context!())

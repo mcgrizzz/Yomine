@@ -1,24 +1,32 @@
 <script lang="ts">
 	import Modal from './Modal.svelte';
 	import BatchSummary from './BatchSummary.svelte';
-	import { listBatches, type BatchRecord } from '$lib/ipc';
-	import { batchStatus } from '$lib/batch';
+	import { getMediaMatches, listBatches, type BatchRecord, type Media } from '$lib/ipc';
+	import { mediaTitle } from '$lib/media';
+	import { batchStatus, undone, unfinished } from '$lib/batch';
 	import { lastBatch } from '$lib/stores/batches';
 	import { batchHistoryOpen } from '$lib/stores/modals';
 
-	type Group = { show: string; batches: BatchRecord[] };
+	type Group = { key: string; show: string; batches: BatchRecord[] };
 
 	// The episode suffix the file-name parser's display_title adds.
-	const EPISODE = / - (S\d+E\d+|Episode \d+)$/;
+	const EPISODE = / - (S\d+E\d+|Episode [\d.]+)$/;
 
 	let batches = $state<BatchRecord[] | null>(null);
+	/** Matched sources' shows and episodes, by fingerprint. */
+	let media = $state<Record<string, Media>>({});
 	let error = $state<string | null>(null);
 	let selected = $state<string | null>(null);
 	/** Groups opened or closed against the default, by their newest batch's id. */
 	let toggled = $state(new Set<string>());
 
 	listBatches().then(
-		(list) => (batches = list),
+		(list) => {
+			batches = list;
+			void getMediaMatches([...new Set(list.map((b) => b.source.fingerprint))]).then(
+				(found) => (media = found)
+			);
+		},
 		(e) => (error = String(e))
 	);
 
@@ -27,11 +35,20 @@
 	const shown = $derived(rows.find((b) => b.id === selected));
 	const groups = $derived.by(() => {
 		const out: Group[] = [];
+		const named = (batch: BatchRecord) => batch.source.title.replace(EPISODE, '');
+		// An unmatched batch joins the show a matched batch of the same name is matched to.
+		const works = new Map<string, Media['work']>();
 		for (const batch of rows) {
-			const show = batch.source.title.replace(EPISODE, '');
+			const matched = media[batch.source.fingerprint];
+			if (matched) works.set(named(batch), matched.work);
+		}
+		for (const batch of rows) {
+			const work = media[batch.source.fingerprint]?.work ?? works.get(named(batch));
+			const show = work ? work.original_title || work.title : named(batch);
+			const key = work ? `${work.kind}:${work.tmdb_id}` : show;
 			const last = out.at(-1);
-			if (last?.show === show) last.batches.push(batch);
-			else out.push({ show, batches: [batch] });
+			if (last?.key === key) last.batches.push(batch);
+			else out.push({ key, show, batches: [batch] });
 		}
 		return out;
 	});
@@ -40,8 +57,16 @@
 	const plural = (n: number, word: string, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
 	const count = (batch: BatchRecord, statuses: string[]) =>
 		batch.items.filter((i) => statuses.includes(i.outcome.status)).length;
-	const episode = (batch: BatchRecord) =>
-		batch.source.title.match(EPISODE)?.[1] ?? batch.source.title;
+	function title(batch: BatchRecord) {
+		const matched = media[batch.source.fingerprint];
+		return matched ? mediaTitle(matched) : batch.source.title;
+	}
+	function episode(batch: BatchRecord) {
+		const matched = media[batch.source.fingerprint];
+		if (matched?.season != null && matched.episode !== null)
+			return `S${matched.season}E${matched.episode}`;
+		return batch.source.title.match(EPISODE)?.[1] ?? batch.source.title;
+	}
 	const sameDay = (a: number, b: number) =>
 		new Date(a).toDateString() === new Date(b).toDateString();
 
@@ -60,12 +85,12 @@
 {#snippet meta(batch: BatchRecord)}
 	{@const status = batchStatus(batch)}
 	{@const notCreated = count(batch, ['failed', 'unattempted'])}
-	{@const undone = count(batch, ['deleted'])}
+	{@const undoneCards = count(batch, ['deleted'])}
 	<span class="meta">
-		<span class:attention={status !== 'Complete'}>{status}</span>
+		<span class:attention={unfinished(status)} class:undone={undone(status)}>{status}</span>
 		· {plural(batch.items.length, 'card')}
 		{#if notCreated}· {notCreated} not created{/if}
-		{#if undone}· {undone} undone{/if}
+		{#if undoneCards && status !== 'Undone'}· {undoneCards} undone{/if}
 		{#if batch.auto}· ✦ Auto{/if}
 		{#if batch.id === $lastBatch?.id}· <span class="latest">Latest</span>{/if}
 	</span>
@@ -88,7 +113,7 @@
 						{@const batch = group.batches[0]}
 						<li>
 							<button class="card" onclick={() => (selected = batch.id)}>
-								<span class="title" title={batch.source.title}>{batch.source.title}</span>
+								<span class="title" title={batch.source.title}>{title(batch)}</span>
 								<span class="when">{new Date(batch.started_at).toLocaleString()}</span>
 								{@render meta(batch)}
 								<span class="chevron" aria-hidden="true">›</span>
@@ -97,7 +122,7 @@
 					{:else}
 						{@const newest = group.batches[0]}
 						{@const open = isOpen(group)}
-						{@const unfinished = group.batches.filter((b) => batchStatus(b) !== 'Complete').length}
+						{@const notComplete = group.batches.filter((b) => unfinished(batchStatus(b))).length}
 						{@const cards = group.batches.reduce((n, b) => n + b.items.length, 0)}
 						<li class="group">
 							<button class="card group-head" aria-expanded={open} onclick={() => toggle(group)}>
@@ -108,8 +133,8 @@
 								<span class="when">{new Date(newest.started_at).toLocaleDateString()}</span>
 								<span class="meta">
 									{plural(group.batches.length, 'batch', 'batches')} · {plural(cards, 'card')}
-									{#if unfinished}·
-										<span class="attention">{unfinished} not complete</span>{/if}
+									{#if notComplete}·
+										<span class="attention">{notComplete} not complete</span>{/if}
 								</span>
 							</button>
 							{#if open}
@@ -248,6 +273,9 @@
 	}
 	.attention {
 		color: var(--warning);
+	}
+	.undone {
+		color: var(--danger);
 	}
 	.latest {
 		color: var(--accent);

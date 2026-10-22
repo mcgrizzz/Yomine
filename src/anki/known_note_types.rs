@@ -12,6 +12,8 @@ pub struct KnownNoteType {
     pub sentence: &'static str,
     pub sentence_audio: &'static str,
     pub picture: &'static str,
+    /// Where the note type keeps what a card was mined from.
+    pub source: Option<&'static str>,
 }
 
 impl KnownNoteType {
@@ -34,6 +36,7 @@ const fn lapis_family(
         sentence: "Sentence",
         sentence_audio: "SentenceAudio",
         picture: "Picture",
+        source: Some("MiscInfo"),
     }
 }
 
@@ -52,6 +55,7 @@ const KNOWN: &[KnownNoteType] = &[
         sentence: "Sentence",
         sentence_audio: "Sentence Audio",
         picture: "Picture",
+        source: None,
     },
     KnownNoteType {
         name: "Senren",
@@ -62,6 +66,7 @@ const KNOWN: &[KnownNoteType] = &[
         sentence: "sentence",
         sentence_audio: "sentenceAudio",
         picture: "picture",
+        source: Some("miscInfo"),
     },
     KnownNoteType {
         name: "Anime Cards",
@@ -72,10 +77,21 @@ const KNOWN: &[KnownNoteType] = &[
         sentence: "Sentence",
         sentence_audio: "SentenceAudio",
         picture: "Picture",
+        source: None,
+    },
+    KnownNoteType {
+        name: "JP Mining Note",
+        name_contains: "jp mining note",
+        signature: &["Key", "PAOverride", "PrimaryDefinition"],
+        term: "Word",
+        reading: "WordReading",
+        sentence: "Sentence",
+        sentence_audio: "SentenceAudio",
+        picture: "Picture",
+        source: None,
     },
 ];
 
-/// By name, otherwise by fields for a copy the user renamed.
 /// By name, otherwise by fields for a copy the user renamed.
 pub fn detect(model_name: &str, fields: &[String]) -> Option<&'static KnownNoteType> {
     let name = model_name.to_lowercase();
@@ -97,6 +113,7 @@ mod tests {
         guess_picture_field,
         guess_sentence_audio_field,
         guess_sentence_field,
+        guess_source_field,
     };
 
     #[derive(serde::Deserialize)]
@@ -137,11 +154,13 @@ mod tests {
                 guess_sentence_field(&HashMap::new(), &f.fields),
                 guess_sentence_audio_field(&f.fields, &no_templates),
                 guess_picture_field(&f.fields, &no_templates),
+                guess_source_field(&f.fields, &no_templates),
             );
             let expected = (
                 Some(known.sentence.to_string()),
                 Some(known.sentence_audio.to_string()),
                 Some(known.picture.to_string()),
+                known.source.map(str::to_string),
             );
             assert_eq!(guesses, expected, "{}", f.source);
         }

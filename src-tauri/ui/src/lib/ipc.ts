@@ -135,6 +135,8 @@ export interface RecentFileEntry {
 	term_count: number | null;
 	/** The mining mode it was loaded in; `null` for a book, which either mode lists. */
 	mode: MiningMode | null;
+	/** The show or film its source is matched to. */
+	media: Media | null;
 }
 
 export interface PosInfo {
@@ -213,6 +215,9 @@ export interface FieldMapping {
 	/** Where local mining writes the sentence audio and screenshot. */
 	sentence_audio_field?: string | null;
 	picture_field?: string | null;
+	/** Where local mining writes what a card was mined from: `null` until it's chosen, which
+	 * uses a known note type's field, and `''` when the user chose none. */
+	source_field?: string | null;
 }
 
 /** A note type with its fields (`core::settings::AnkiModelInfo`). `sample_note`
@@ -231,6 +236,7 @@ export interface SampleNote {
 	guessed_sentence: string | null;
 	guessed_sentence_audio: string | null;
 	guessed_picture: string | null;
+	guessed_source: string | null;
 	/** A known note type ("Lapis") the guesses came from. */
 	detected: string | null;
 	fields_differ: boolean;
@@ -333,6 +339,9 @@ export interface SettingsData {
 	media_format: MediaFormat;
 	/** Empty finds ffmpeg on PATH or uses the downloaded copy. */
 	ffmpeg_path: string;
+	tmdb_api_key: string;
+	/** Whether loaded files are matched by name on their own, which sends the names to TMDB. */
+	tmdb_matching: boolean;
 }
 
 export interface TextFilterSetting {
@@ -943,6 +952,143 @@ export function getMediaPreview(filename: string): Promise<string | null> {
 	return invoke('get_media_preview', { filename });
 }
 
+/** A show or film on TMDB, and the episode (`catalog::Match`). */
+export interface Media {
+	work: { kind: 'tv' | 'movie'; tmdb_id: number; title: string; original_title: string };
+	season: number | null;
+	episode: number | null;
+	episode_title: string | null;
+}
+
+/** A source's show or film. */
+export interface MediaMatch extends Media {
+	fingerprint: string;
+	/** Linked by its file name, another file with the same episode's text, or the user;
+	 * `suggested` is an uncertain match waiting for the user. */
+	matched_by: 'name' | 'content' | 'user' | 'suggested';
+}
+
+/** A TMDB search result (`catalog::tmdb::Candidate`). */
+export interface MediaCandidate {
+	id: number;
+	title: string;
+	original_title: string;
+	original_language: string;
+	/** `YYYY-MM-DD`, or empty when TMDB has no date. */
+	release_date: string;
+	genres: string[];
+}
+
+/** A TMDB entry the user named (`catalog::Reference`). */
+export interface MediaReference {
+	kind: 'tv' | 'movie';
+	tmdb_id: number;
+	season: number | null;
+	episode: number | null;
+}
+
+export function getMediaMatch(fingerprint: string): Promise<MediaMatch | null> {
+	return invoke('get_media_match', { fingerprint });
+}
+
+/** The matched sources among these, by fingerprint. */
+export function getMediaMatches(fingerprints: string[]): Promise<Record<string, Media>> {
+	return invoke('get_media_matches', { fingerprints });
+}
+
+/** A TMDB episode (`catalog::tmdb::Episode`). */
+export interface TmdbEpisode {
+	number: number;
+	name: string;
+}
+
+/** The season's aired episodes, numbered as matches are shown; `null` without a TMDB key. */
+export function getSeasonEpisodes(show: number, season: number): Promise<TmdbEpisode[] | null> {
+	return invoke('get_season_episodes', { show, season });
+}
+
+/** An episode file in the folder of an opened one (`media_match::FoundEpisode`). */
+export interface FoundEpisode extends Media {
+	path: string;
+	/** Whether it has Japanese or untagged subtitles to mine; `null` while that's checked. */
+	subtitles: boolean | null;
+}
+
+/** The episodes in the folders of these opened files, as `[path, show]`, of the shows each
+ * folder's opened files are matched to. What a file is stays known until it changes, and
+ * `rescan` looks at every file again. Each is sent as soon as it's matched, then again once
+ * its subtitles are checked. Nothing found is added to the history. */
+export function findEpisodes(
+	opened: [string, number][],
+	rescan: boolean,
+	onFound: (episode: FoundEpisode) => void
+): Promise<void> {
+	const found = new Channel<FoundEpisode>();
+	found.onmessage = onFound;
+	return invoke('find_episodes', { opened, rescan, found });
+}
+
+/** An episode the active collection has notes from (`media_match::MinedEpisode`). */
+export interface MinedEpisode {
+	show: number;
+	season: number | null;
+	episode: number;
+}
+
+export function getMinedEpisodes(): Promise<MinedEpisode[]> {
+	return invoke('get_mined_episodes');
+}
+
+export interface MediaSearch {
+	/** The searched kind, or the kind a pasted link names. */
+	kind: 'tv' | 'movie';
+	results: MediaCandidate[];
+	/** The season and episode of a pasted episode link. */
+	season: number | null;
+	episode: number | null;
+}
+
+export function hasBuiltinTmdbKey(): Promise<boolean> {
+	return invoke('has_builtin_tmdb_key');
+}
+
+/** Searches TMDB by title, or finds the entry a pasted TMDB link or ID names. */
+export function searchMedia(text: string, kind: 'tv' | 'movie'): Promise<MediaSearch> {
+	return invoke('search_media', { text, kind });
+}
+
+/** Links the source to the entry, and its title's other files with it. */
+export function setMediaMatch(fingerprint: string, reference: MediaReference): Promise<MediaMatch> {
+	return invoke('set_media_match', { fingerprint, reference });
+}
+
+/** Marks the source, and its title's other files, as not a show or film. */
+export function clearMediaMatch(fingerprint: string): Promise<void> {
+	return invoke('clear_media_match', { fingerprint });
+}
+
+/** Moves every file matched to the work onto the entry, or with `null` marks them all as not a
+ * show or film. */
+export function rematchWork(
+	kind: 'tv' | 'movie',
+	tmdbId: number,
+	to: MediaReference | null
+): Promise<void> {
+	return invoke('rematch_work', { kind, tmdbId, to });
+}
+
+export function getMediaDetails(
+	kind: 'tv' | 'movie',
+	tmdbId: number
+): Promise<MediaCandidate | null> {
+	return invoke('get_media_details', { kind, tmdbId });
+}
+
+/** Why the source has no match, when it was loaded this session. */
+export function getUnmatchedReason(fingerprint: string): Promise<string | null> {
+	return invoke('get_unmatched_reason', { fingerprint });
+}
+
 export function mineBatchItem(
 	batchId: string,
 	itemIndex: number,
@@ -1243,6 +1389,13 @@ export const onDictionariesChanged = (cb: () => void) =>
  * freshly loaded file. */
 export const onAsbplayerMediaLoaded = (cb: (r: FileLoadResult) => void) =>
 	listenTo('asbplayer-media-loaded', cb);
+/** A source was matched after it loaded. */
+export const onMediaMatched = (cb: (m: MediaMatch) => void) => listenTo('media-matched', cb);
+export const onThemesClosed = (cb: () => void) => listenTo('themes-closed', cb);
+export const onMediaUnmatched = (cb: (u: { fingerprint: string; reason: string }) => void) =>
+	listenTo('media-unmatched', cb);
+/** Files loaded before matching existed were matched at startup. */
+export const onPastMediaMatched = (cb: () => void) => listenTo('past-media-matched', cb);
 
 /** asbplayer target awareness — a bound media id is mined/seeked directly;
  * without one, commands fall through to asbplayer's active tab. */

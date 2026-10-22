@@ -57,7 +57,7 @@ Supports `.srt`, `.ass`, `.ssa`, `.txt`, and `.epub` files, and videos (`.mkv`, 
 
 1. **[Download Yomine](https://github.com/mcgrizzz/Yomine/releases/latest)** for your platform.
 2. Launch it. Language tools and the default frequency dictionary install automatically.
-3. Follow **Settings → Setup Checklist** to finish setup.
+3. Follow **Help → Setup Checklist** to finish setup.
 4. Drop in a subtitle file or video, or load one from asbplayer.
 
 <details>
@@ -109,7 +109,7 @@ Change it under **Settings → Anki** if needed.
 
 Choose **Local** or **asbplayer** in the top bar for card audio and screenshots.
 
-- **Local:** open videos or a folder. Locate or download ffmpeg under **Settings → Local Media**, where you can also adjust media settings.
+- **Local:** open videos or a folder. Locate or download ffmpeg under **Settings → Local media**, where you can also adjust media settings.
 - **asbplayer:** enable **MISC → WebSocket client** (default port `8766`), then load or follow videos from Yomine's asbplayer menu.
 - **MPV:** choose a video from Yomine's MPV menu and locate the executable if prompted. MPV supports seeking only.
 

@@ -36,7 +36,8 @@
 						...fields,
 						sentence_field: fields.sentence_field ?? null,
 						sentence_audio_field: fields.sentence_audio_field ?? null,
-						picture_field: fields.picture_field ?? null
+						picture_field: fields.picture_field ?? null,
+						source_field: fields.source_field ?? null
 					}
 				])
 			),
@@ -67,6 +68,8 @@
 	let modelSearch = $state('');
 	let modelIndex = $state(0);
 	let removed = $state<{ name: string; mapping: ipc.FieldMapping } | null>(null);
+	/** Note types just added, whose fields are being detected. */
+	let detecting = $state<Set<string>>(new Set());
 	let saving = $state(false);
 	let saveError = $state<string | null>(null);
 	// The headers show the saved connections, and Test the entered values. Opening the dialog
@@ -157,6 +160,7 @@
 		else if (catalogPhase === 'loading') catalogPhase = 'idle';
 		if (editingModel && !draft.anki_model_mappings[editingModel]) editingModel = null;
 		autoFilled = new Set();
+		detecting = new Set();
 		adding = false;
 		modelSearch = '';
 		modelIndex = 0;
@@ -183,6 +187,7 @@
 		form.value = copyDraft($defaultSettings);
 		editingModel = null;
 		autoFilled = new Set();
+		detecting = new Set();
 		adding = false;
 		modelSearch = '';
 		modelIndex = 0;
@@ -249,6 +254,7 @@
 			catalogConnection = JSON.stringify(connection);
 			catalogPhase = 'ready';
 			if (editingModel) void loadSample(editingModel);
+			void loadSamples();
 		} catch (error) {
 			if (generation !== ankiGeneration) return;
 			catalogPhase = 'failed';
@@ -313,9 +319,46 @@
 				mapping.sentence_audio_field = result.guessed_sentence_audio;
 				mapping.picture_field = result.guessed_picture;
 			}
+			// Mappings saved before the source field existed.
+			mapping.source_field ??= result.guessed_source ?? '';
 		} catch (error) {
 			if (generation === ankiGeneration) sampleErrors[name] = String(error);
 		}
+	}
+
+	/** Fetches the configured note types' samples, leaving their mappings as saved. */
+	async function loadSamples() {
+		const generation = ankiGeneration;
+		for (const name of Object.keys(draft.anki_model_mappings)) {
+			const model = models.find((m) => m.name === name);
+			if (!model || samples[name]) continue;
+			try {
+				const result = await ipc.getAnkiSampleNote(
+					name,
+					model.fields,
+					{ ...draft.anki_connection },
+					draft.yomitan_url.trim()
+				);
+				if (generation !== ankiGeneration) return;
+				samples[name] = result;
+			} catch {
+				// Editing the mapping loads it again, and shows the error.
+			}
+		}
+	}
+
+	/** Whether the mapping uses the detected note type's fields, as detected. */
+	function asDetected(mapping: ipc.FieldMapping, sample: ipc.SampleNote | undefined) {
+		if (!sample?.detected || sample.fields_differ) return false;
+		return (
+			mapping.term_field === (sample.guessed_term ?? '') &&
+			mapping.reading_field === (sample.guessed_reading ?? '') &&
+			(mapping.sentence_field ?? null) === sample.guessed_sentence &&
+			(mapping.sentence_audio_field ?? null) === sample.guessed_sentence_audio &&
+			(mapping.picture_field ?? null) === sample.guessed_picture &&
+			// Unset, mining uses the known note type's source field.
+			(mapping.source_field ?? sample.guessed_source ?? '') === (sample.guessed_source ?? '')
+		);
 	}
 
 	function applyGuess(name: string, mapping: ipc.FieldMapping, guess: ipc.SampleNote) {
@@ -324,6 +367,7 @@
 		mapping.sentence_field = guess.guessed_sentence;
 		mapping.sentence_audio_field = guess.guessed_sentence_audio;
 		mapping.picture_field = guess.guessed_picture;
+		mapping.source_field = guess.guessed_source ?? '';
 		if (Object.values(mapping).some(Boolean)) autoFilled = new Set(autoFilled).add(name);
 	}
 
@@ -419,9 +463,15 @@
 		modelSearch = '';
 		modelIndex = 0;
 		adding = false;
-		editingModel = name;
-		void loadSample(name, true);
-		await showEditor(name);
+		detecting = new Set(detecting).add(name);
+		await tick();
+		document.getElementById(`anki-edit-${name}`)?.focus();
+		await loadSample(name, true);
+		if (!detecting.has(name)) return;
+		detecting.delete(name);
+		detecting = new Set(detecting);
+		const mapping = draft.anki_model_mappings[name];
+		if (mapping && !editingModel && !asDetected(mapping, samples[name])) await editMapping(name);
 	}
 
 	function emptyMapping(): ipc.FieldMapping {
@@ -430,7 +480,8 @@
 			reading_field: '',
 			sentence_field: null,
 			sentence_audio_field: null,
-			picture_field: null
+			picture_field: null,
+			source_field: null
 		};
 	}
 
@@ -583,7 +634,7 @@
 )}
 	{@const optional = field !== 'term_field' && field !== 'reading_field'}
 	<select id={`anki-${id}-${name}`} bind:value={mapping[field]}
-		><option value={optional ? null : ''} disabled={!optional}
+		><option value={optional && field !== 'source_field' ? null : ''} disabled={!optional}
 			>{optional ? 'None' : 'Choose a field…'}</option
 		>{#each fieldOptions(name, mapping[field]) as option}<option value={option}>{option}</option
 			>{/each}</select
@@ -598,14 +649,14 @@
 			</p>{/if}
 		{#if autoFilled.has(name)}<p class="hint">
 				{sample?.fields_differ
-					? `Field mappings detected automatically, but some of ${sample.detected}'s usual fields are missing. Check them below.`
-					: 'Field mappings detected automatically.'}
+					? `Fields detected automatically, but some of ${sample.detected}'s usual fields are missing. Check them below.`
+					: 'Fields detected automatically.'}
 			</p>{/if}
 		<section aria-labelledby="anki-read-heading">
 			<h4 id="anki-read-heading">Read from Anki</h4>
 			<p class="hint">Yomine finds the words and sentences you already have in these fields.</p>
 			<div class="mapping-fields">
-				{#each [['term_field', 'Term', 'term'], ['reading_field', 'Reading', 'reading'], ['sentence_field', 'Sentence (optional)', 'sentence']] as [key, label, id]}
+				{#each [['term_field', 'Term', 'term'], ['reading_field', 'Reading', 'reading'], ['sentence_field', 'Sentence', 'sentence']] as [key, label, id]}
 					{@const field = key as keyof ipc.FieldMapping}
 					{@const value = mapping[field]}
 					{@const example = value ? sample?.sample_note?.[value] : undefined}
@@ -622,10 +673,11 @@
 		<section aria-labelledby="anki-media-heading">
 			<h4 id="anki-media-heading">Save local media to Anki</h4>
 			<p class="hint">
-				When you mine from a local video, Yomine saves the sentence audio and screenshot here.
+				When you mine from a local video, Yomine saves the sentence audio, the screenshot, and the
+				episode with a link to it on TMDB here.
 			</p>
 			<div class="media-rows">
-				{#each [['sentence_audio_field', 'Sentence audio', 'sentence-audio'], ['picture_field', 'Picture', 'picture']] as [key, label, id]}
+				{#each [['sentence_audio_field', 'Sentence audio', 'sentence-audio'], ['picture_field', 'Picture', 'picture'], ['source_field', 'Source', 'source']] as [key, label, id]}
 					<label for={`anki-${id}-${name}`}>{label}</label>
 					{@render fieldSelect(name, mapping, key as keyof ipc.FieldMapping, id)}
 				{/each}
@@ -676,7 +728,7 @@
 			>{:else if sample?.sample_note === null}<p class="hint">No sample note available yet.</p>{/if}
 		<div class="mapping-actions">
 			<button type="button" class="reset danger" onclick={() => removeMapping(name)}
-				>Remove mapping</button
+				>Remove note type</button
 			><span class="hint">Anki notes are kept.</span>
 		</div>
 	</div>
@@ -714,8 +766,9 @@
 
 <Modal
 	open={$ankiModalOpen}
-	title={editingModel ? `${editingModel} - Field Mapping` : 'Anki Settings'}
+	title={editingModel ? `${editingModel} - Note Type` : 'Anki'}
 	width="min(760px, 94%)"
+	page
 	onback={editingModel ? closeEditor : undefined}
 	onclose={() => {
 		if (adding) void toggleAdding();
@@ -908,13 +961,20 @@
 						</details>{/if}
 					{#if Object.keys(draft.anki_model_mappings).length}<div class="list">
 							{#each Object.keys(draft.anki_model_mappings) as name (name)}
+								{@const sample = samples[name]}
 								<div class="mapping-row">
 									<strong>{name}</strong>
+									{#if sample && asDetected(draft.anki_model_mappings[name], sample)}<span
+											class="auto ok"
+											title={`Detected as ${sample.detected}. Yomine chose its fields.`}
+											>✓ Auto-configured</span
+										>{:else if detecting.has(name)}<span class="auto hint">Detecting fields…</span
+										>{/if}
 									<button
 										id={`anki-edit-${name}`}
 										type="button"
 										class="quiet"
-										aria-label={`Edit ${name} mapping`}
+										aria-label={`Edit ${name}`}
 										onclick={() => editMapping(name)}>Edit ›</button
 									>
 								</div>
@@ -977,7 +1037,7 @@
 								</p>{/if}
 						</div>{/if}
 					{#if removed}<div class="removed">
-							<span class="hint">Removed {removed.name} mapping.</span><button
+							<span class="hint">Removed {removed.name}.</span><button
 								type="button"
 								class="reset"
 								onclick={() => {
@@ -1021,14 +1081,14 @@
 			oncancel={revert}
 			restore={editingModel
 				? {
-						label: 'Reset Mapping',
+						label: 'Reset Note Type',
 						title: `Set ${editingModel}'s fields to the ones Yomine detects. Other note types and settings are kept.`,
 						run: () => editingModel && resetMapping(editingModel)
 					}
 				: {
 						label: 'Reset Anki Settings',
 						title:
-							'Restore connection settings, the Yomitan URL, all note type mappings, and the comprehension interval to defaults.',
+							'Restore connection settings, the Yomitan URL, all note types, and the comprehension interval to defaults.',
 						run: restoreDefault
 					}}
 		/>
@@ -1105,6 +1165,10 @@
 		min-width: 0;
 		overflow-wrap: anywhere;
 		color: var(--info);
+	}
+	.auto {
+		margin-left: auto;
+		font-size: 0.78rem;
 	}
 	.add-model {
 		margin-top: 0.3rem;

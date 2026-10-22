@@ -5,7 +5,10 @@ use serde::{
     Serialize,
 };
 
-use crate::core::settings::MiningMode;
+use crate::{
+    catalog::Match,
+    core::settings::MiningMode,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecentFileEntry {
@@ -20,6 +23,9 @@ pub struct RecentFileEntry {
     /// The mining mode it was loaded in; `None` for a book, which either mode lists.
     #[serde(default)]
     pub mode: Option<MiningMode>,
+    /// The show or film its source is matched to.
+    #[serde(default)]
+    pub media: Option<Match>,
 }
 
 impl RecentFileEntry {
@@ -41,6 +47,7 @@ impl RecentFileEntry {
             file_size,
             term_count: Some(term_count),
             mode: None,
+            media: None,
         }
     }
 
@@ -101,6 +108,7 @@ impl Default for RecentFileEntry {
             file_size: None,
             term_count: None,
             mode: None,
+            media: None,
         }
     }
 }

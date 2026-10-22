@@ -171,8 +171,9 @@
 
 <Modal
 	open={$localMediaModalOpen}
-	title="Local Media"
+	title="Local media"
 	width="min(600px, 94%)"
+	page
 	onclose={form.request}
 	oninteract={form.disarm}
 >

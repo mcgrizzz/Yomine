@@ -38,5 +38,10 @@
     "name": "Anime Cards",
     "source": "README field table of https://github.com/friedrich-de/Basic-Mining-Deck at 6787f53 (AnkiWeb 151553357); field order unverified",
     "fields": ["Word", "Reading", "Glossary", "Sentence", "Picture", "Audio", "SentenceAudio", "Graph", "Hint"]
+  },
+  {
+    "name": "JP Mining Note",
+    "source": "https://github.com/arbyste/jp-mining-note/releases/download/0.11.0.6/0.11.0.6-jpmn_example_cards.apkg",
+    "fields": ["Key", "Word", "WordReading", "PAOverride", "PAOverrideText", "AJTWordPitch", "PrimaryDefinition", "PrimaryDefinitionPicture", "Sentence", "SentenceReading", "AltDisplay", "AltDisplayPASentenceCard", "AdditionalNotes", "IsSentenceCard", "IsClickCard", "IsHoverCard", "IsTargetedSentenceCard", "PAShowInfo", "PATestOnlyWord", "PADoNotTest", "PASeparateWordCard", "PASeparateSentenceCard", "SeparateClozeDeletionCard", "Hint", "HintNotHidden", "Picture", "WordAudio", "SentenceAudio", "PAGraphs", "PAPositions", "PASilence", "WordReadingHiragana", "FrequenciesStylized", "FrequencySort", "SecondaryDefinition", "ExtraDefinitions", "UtilityDictionaries", "Comment"]
   }
 ]

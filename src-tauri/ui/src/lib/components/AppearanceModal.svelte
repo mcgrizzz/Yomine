@@ -1,11 +1,20 @@
 <script lang="ts">
 	// Staged, but live-previews while adjusting so the user can judge readability;
-	// Discard Changes/✕/backdrop revert the preview to the saved value.
+	// Discard Changes/✕/backdrop revert the preview to the saved value. Themes are picked
+	// in their own window and apply at once, so they stay out of the draft.
 	import { settingsDraft } from '$lib/settingsDraft.svelte';
 	import Modal from './Modal.svelte';
 	import SettingsFooter from './SettingsFooter.svelte';
+	import SettingsSection from './SettingsSection.svelte';
 	import type { SegmentKnowledge, SettingsData } from '$lib/ipc';
-	import { defaultSettings, settings, appearanceModalOpen, saveAppearance } from '$lib/stores';
+	import {
+		defaultSettings,
+		settings,
+		appearanceModalOpen,
+		saveAppearance,
+		openThemes,
+		zoomPreview
+	} from '$lib/stores';
 
 	const MIN_PCT = 75;
 	const MAX_PCT = 150;
@@ -43,21 +52,13 @@
 		load: () => {
 			const s = $settings ?? $defaultSettings;
 			return s ? fields(s) : undefined;
-		},
-		// Closing without saving discards the preview.
-		close: () => {
-			applyZoom(form.saved.pct);
-			appearanceModalOpen.set(false);
 		}
 	});
 	const draft = $derived(form.value);
 
-	// Live preview: mirror what the root layout does with the saved setting.
-	function applyZoom(pct: number) {
-		document.documentElement.style.setProperty('zoom', String(pct / 100));
-	}
+	// Closing without saving drops the preview.
 	$effect(() => {
-		if ($appearanceModalOpen) applyZoom(draft.pct);
+		zoomPreview.set($appearanceModalOpen ? draft.pct / 100 : null);
 	});
 
 	function step(delta: number) {
@@ -84,91 +85,99 @@
 	open={$appearanceModalOpen}
 	title="Appearance"
 	width="min(600px, 94%)"
+	page
 	onclose={form.request}
 	oninteract={form.disarm}
 >
 	<div class="body">
-		<div class="group">
-			<label for="ui-scale">UI scale</label>
-			<div class="scale-row">
-				<button
-					class="step"
-					aria-label="Decrease scale"
-					disabled={draft.pct <= MIN_PCT}
-					onclick={() => step(-STEP)}>−</button
-				>
-				<input
-					id="ui-scale"
-					type="range"
-					min={MIN_PCT}
-					max={MAX_PCT}
-					step={STEP}
-					bind:value={draft.pct}
-				/>
-				<button
-					class="step"
-					aria-label="Increase scale"
-					disabled={draft.pct >= MAX_PCT}
-					onclick={() => step(STEP)}>+</button
-				>
-				<span class="value">{draft.pct}%</span>
+		<SettingsSection title="Theme">
+			<div class="theme-row">
+				<button type="button" onclick={openThemes}>Themes…</button>
+				<span class="hint">Pick, create and edit themes in their own window, beside the app.</span>
 			</div>
-			<p class="hint">Scales the entire interface.</p>
-		</div>
+		</SettingsSection>
 
-		<div class="group">
-			<label for="definition-scale">Definition scale</label>
-			<div class="scale-row">
-				<button
-					class="step"
-					aria-label="Decrease definition scale"
-					disabled={draft.defPct <= DEF_MIN_PCT}
-					onclick={() => stepDef(-STEP)}>−</button
-				>
-				<input
-					id="definition-scale"
-					type="range"
-					min={DEF_MIN_PCT}
-					max={MAX_PCT}
-					step={STEP}
-					bind:value={draft.defPct}
-				/>
-				<button
-					class="step"
-					aria-label="Increase definition scale"
-					disabled={draft.defPct >= MAX_PCT}
-					onclick={() => stepDef(STEP)}>+</button
-				>
-				<span class="value">{draft.defPct}%</span>
+		<SettingsSection title="Interface">
+			<div class="group">
+				<label for="ui-scale">UI scale</label>
+				<div class="scale-row">
+					<button
+						class="step"
+						aria-label="Decrease scale"
+						disabled={draft.pct <= MIN_PCT}
+						onclick={() => step(-STEP)}>−</button
+					>
+					<input
+						id="ui-scale"
+						type="range"
+						min={MIN_PCT}
+						max={MAX_PCT}
+						step={STEP}
+						bind:value={draft.pct}
+					/>
+					<button
+						class="step"
+						aria-label="Increase scale"
+						disabled={draft.pct >= MAX_PCT}
+						onclick={() => step(STEP)}>+</button
+					>
+					<span class="value">{draft.pct}%</span>
+				</div>
+				<p class="hint">Scales the entire interface.</p>
 			</div>
-			<p class="hint">Relative to UI scale; applies to Shift+Hover definitions.</p>
-		</div>
 
-		<div class="group">
-			<label for="sentence-coloring">Sentence marking</label>
-			<select id="sentence-coloring" bind:value={draft.coloring}>
-				<option value="knowledge">Knowledge underlines</option>
-				<option value="none">None</option>
-			</select>
-			{#if draft.coloring === 'knowledge'}
-				<fieldset>
-					<legend>Underline these states:</legend>
-					<div class="underline-toggles">
-						{#each STATES as s (s)}
-							<label class="state-toggle">
-								<input type="checkbox" bind:checked={draft.toggles[s]} />
-								<span style="border-bottom: 2.5px solid {STATE_COLORS[s]}">{STATE_LABELS[s]}</span>
-							</label>
-						{/each}
-					</div>
-				</fieldset>
-			{/if}
-		</div>
+			<div class="group">
+				<label for="definition-scale">Definition scale</label>
+				<div class="scale-row">
+					<button
+						class="step"
+						aria-label="Decrease definition scale"
+						disabled={draft.defPct <= DEF_MIN_PCT}
+						onclick={() => stepDef(-STEP)}>−</button
+					>
+					<input
+						id="definition-scale"
+						type="range"
+						min={DEF_MIN_PCT}
+						max={MAX_PCT}
+						step={STEP}
+						bind:value={draft.defPct}
+					/>
+					<button
+						class="step"
+						aria-label="Increase definition scale"
+						disabled={draft.defPct >= MAX_PCT}
+						onclick={() => stepDef(STEP)}>+</button
+					>
+					<span class="value">{draft.defPct}%</span>
+				</div>
+				<p class="hint">Relative to UI scale; applies to Shift+Hover definitions.</p>
+			</div>
+		</SettingsSection>
 
-		<div class="group">
-			<span class="label">Table columns</span>
-			<p class="hint">Right-click the table header to reorder or hide columns.</p>
-		</div>
+		<SettingsSection title="Sentence marking">
+			<div class="group">
+				<label for="sentence-coloring">Marking style</label>
+				<select id="sentence-coloring" bind:value={draft.coloring}>
+					<option value="knowledge">Knowledge underlines</option>
+					<option value="none">None</option>
+				</select>
+				{#if draft.coloring === 'knowledge'}
+					<fieldset>
+						<legend>Underline these states:</legend>
+						<div class="underline-toggles">
+							{#each STATES as s (s)}
+								<label class="state-toggle">
+									<input type="checkbox" bind:checked={draft.toggles[s]} />
+									<span style="border-bottom: 2.5px solid {STATE_COLORS[s]}">{STATE_LABELS[s]}</span
+									>
+								</label>
+							{/each}
+						</div>
+					</fieldset>
+				{/if}
+			</div>
+		</SettingsSection>
 	</div>
 
 	{#snippet footer()}
@@ -191,13 +200,17 @@
 		gap: 1.25rem;
 		padding: 0 1rem;
 	}
+	.theme-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
 	.group {
 		display: grid;
 		justify-items: start;
 		gap: 0.35rem;
 	}
-	.group > label,
-	.label {
+	.group > label {
 		font-size: 0.85rem;
 	}
 	.scale-row {

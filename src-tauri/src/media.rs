@@ -31,6 +31,11 @@ use yomine::{
         AttachmentKind,
         FieldMapping,
     },
+    catalog::{
+        self,
+        Kind,
+        Match,
+    },
     core::settings::MiningMode,
     media::{
         clip::MediaFormat,
@@ -39,6 +44,10 @@ use yomine::{
             Encoded,
         },
         probe::MediaInfo,
+    },
+    persistence::db::{
+        self,
+        works,
     },
 };
 
@@ -104,6 +113,29 @@ impl MediaSource {
                 mappings: state.settings.anki_model_mappings.clone(),
             }),
         }
+    }
+
+    /// The field `note_type` keeps a card's source in, and what the local video at
+    /// `timestamp` puts there.
+    pub fn source_field(
+        &self,
+        note_type: &str,
+        fingerprint: &str,
+        timestamp: Option<&TimeStampDto>,
+    ) -> Option<(String, String)> {
+        let Self::LocalFile { video, mappings, .. } = self else { return None };
+        let field = match mappings.get(note_type)?.source_field.as_deref() {
+            Some(field) => field.to_string(),
+            None => anki::known_note_types::detect(note_type, &[])?.source?.to_string(),
+        };
+        if field.is_empty() {
+            return None;
+        }
+        let found = db::with(|conn| works::source_match(conn, fingerprint)).ok().flatten();
+        let page = found.as_ref().map(|(m, _)| tmdb_page(m));
+        let shown = found.map(|(m, _)| catalog::displayed(m));
+        let at = timestamp.map(|t| t.start_secs);
+        Some((field, source_text(video, shown.as_ref(), page.as_deref(), at)))
     }
 
     /// Checked before a batch records an item, so it pauses instead of failing each one.
@@ -310,7 +342,7 @@ fn clip_name(bytes: &[u8], extension: &str) -> String {
 }
 
 const NO_FFMPEG: &str =
-    "ffmpeg wasn't found. Install it, or download it in Settings → Local Media, then retry.";
+    "ffmpeg wasn't found. Install it, or download it in Settings → Local media, then retry.";
 
 async fn validate_local(video: &Path, ffmpeg_path: &str) -> Result<(), Failure> {
     if !video.is_file() {
@@ -388,6 +420,57 @@ pub async fn line_media(
     let bytes = std::fs::read(&file.path).map_err(|e| e.to_string())?;
     let data = base64::engine::general_purpose::STANDARD.encode(bytes);
     Ok(Some(data_uri(file.extension, &data)))
+}
+
+/// Like asbplayer's source, the episode and when in it, then its TMDB page and the file.
+fn source_text(
+    video: &Path,
+    shown: Option<&Match>,
+    page: Option<&str>,
+    at_secs: Option<f32>,
+) -> String {
+    let file = escape(&video.file_name().unwrap_or_default().to_string_lossy());
+    let at = at_secs.map_or(String::new(), |secs| format!(" ({})", clock(secs)));
+    let Some(shown) = shown else { return format!("{file}{at}") };
+    let mut name = escape(match shown.work.original_title.as_str() {
+        "" => &shown.work.title,
+        original => original,
+    });
+    match (shown.season, shown.episode) {
+        (Some(season), Some(episode)) => name += &format!(" S{season:02}E{episode:02}"),
+        (None, Some(episode)) => name += &format!(" Episode {episode}"),
+        _ => {}
+    }
+    if let Some(title) = shown.episode_title.as_deref().filter(|t| !t.is_empty()) {
+        name += &format!(" {}", escape(title));
+    }
+    match page {
+        Some(url) => format!("{name}{at}<br><a href=\"{url}\">{url}</a><br>{file}"),
+        None => format!("{name}{at}<br>{file}"),
+    }
+}
+
+/// In TMDB's numbering, which a split season's display doesn't use.
+fn tmdb_page(found: &Match) -> String {
+    let id = found.work.tmdb_id;
+    match (found.work.kind, found.season, found.episode) {
+        (Kind::Movie, ..) => format!("https://www.themoviedb.org/movie/{id}"),
+        (Kind::Tv, Some(season), Some(episode)) => {
+            format!("https://www.themoviedb.org/tv/{id}/season/{season}/episode/{episode}")
+        }
+        (Kind::Tv, ..) => format!("https://www.themoviedb.org/tv/{id}"),
+    }
+}
+
+/// asbplayer's `00h12m33.3s`.
+fn clock(secs: f32) -> String {
+    let tenths = (secs.max(0.0) * 10.0).round() as u64;
+    let (hours, minutes) = (tenths / 36_000, tenths / 600 % 60);
+    format!("{hours:02}h{minutes:02}m{:02}.{}s", tenths / 10 % 60, tenths % 10)
+}
+
+fn escape(text: &str) -> String {
+    text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
 }
 
 fn data_uri(extension: &str, base64: &str) -> String {
@@ -624,5 +707,35 @@ async fn wait_for_seek_confirmation(player: &PlayerHandle, secs: f32) {
             }
         }
         tokio::time::sleep(SEEK_CONFIRM_POLL).await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_source_names_the_episode_its_tmdb_page_and_the_file() {
+        let found = Match {
+            work: catalog::Work {
+                kind: Kind::Tv,
+                tmdb_id: 220542,
+                title: "The Apothecary Diaries".into(),
+                original_title: "薬屋のひとりごと".into(),
+            },
+            season: Some(1),
+            episode: Some(5),
+            episode_title: Some("Covert Operations".into()),
+        };
+        let video = Path::new("Season 1/Apothecary <BD> S01E05.mkv");
+        let page = tmdb_page(&found);
+        assert_eq!(
+            source_text(video, Some(&found), Some(&page), Some(753.34)),
+            "薬屋のひとりごと S01E05 Covert Operations (00h12m33.3s)<br>\
+             <a href=\"https://www.themoviedb.org/tv/220542/season/1/episode/5\">\
+             https://www.themoviedb.org/tv/220542/season/1/episode/5</a><br>\
+             Apothecary &lt;BD&gt; S01E05.mkv"
+        );
+        assert_eq!(source_text(video, None, None, None), "Apothecary &lt;BD&gt; S01E05.mkv");
     }
 }

@@ -6,6 +6,11 @@ use rusqlite::{
     OptionalExtension,
 };
 
+use super::works::{
+    read_match,
+    MATCH_COLUMNS,
+    MATCH_JOINS,
+};
 use crate::core::{
     recent_files::RecentFileEntry,
     settings::MiningMode,
@@ -155,7 +160,7 @@ pub fn recent(conn: &Connection, limit: usize) -> rusqlite::Result<Vec<RecentFil
     // asbplayer_subtitles, and anything else was opened from disk. Loads imported
     // without a source are told apart as books by their extension.
     // SQLite takes the other columns from the row holding max(opened_at).
-    conn.prepare(
+    conn.prepare(&format!(
         "WITH loads AS (
              SELECT o.path, o.title, o.label, o.creator, o.opened_at, o.file_size,
                     o.term_count, o.source_id,
@@ -172,13 +177,15 @@ pub fn recent(conn: &Connection, limit: usize) -> rusqlite::Result<Vec<RecentFil
              SELECT path, title, label, creator, max(opened_at) AS opened_at, file_size,
                     term_count, source_id, mode
              FROM loads GROUP BY path, mode)
-         SELECT path, title, label, creator, opened_at, file_size, term_count, mode
+         SELECT l.path, l.title, l.label, l.creator, l.opened_at, l.file_size, l.term_count,
+                l.mode, {MATCH_COLUMNS}
          FROM latest AS l
-         WHERE source_id IS NULL
-            OR opened_at = (SELECT max(opened_at) FROM latest
-                            WHERE source_id = l.source_id AND mode IS l.mode)
-         ORDER BY opened_at DESC LIMIT ?1",
-    )?
+         LEFT JOIN sources s ON s.id = l.source_id {MATCH_JOINS}
+         WHERE l.source_id IS NULL
+            OR l.opened_at = (SELECT max(opened_at) FROM latest
+                              WHERE source_id = l.source_id AND mode IS l.mode)
+         ORDER BY l.opened_at DESC LIMIT ?1",
+    ))?
     .query_map(params![limit as i64], |r| {
         let mode = match r.get::<_, Option<String>>(7)?.as_deref() {
             Some("local") => Some(MiningMode::Local),
@@ -194,6 +201,7 @@ pub fn recent(conn: &Connection, limit: usize) -> rusqlite::Result<Vec<RecentFil
             file_size: r.get::<_, Option<i64>>(5)?.map(|n| n as u64),
             term_count: r.get::<_, Option<i64>>(6)?.map(|n| n as usize),
             mode,
+            media: read_match(r, 8)?,
         })
     })?
     .collect()

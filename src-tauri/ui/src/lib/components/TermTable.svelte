@@ -591,7 +591,11 @@
 <div class="table" style="grid-template-columns: {gridTemplate}">
 	<!-- svelte-ignore a11y_no_static_element_interactions -- right-click column
 	     editing is a mouse affordance; keyboard browsing is issue #91. -->
-	<div class="row head" oncontextmenu={openHeaderMenu}>
+	<div
+		class="row head"
+		title="Right-click to reorder or hide columns"
+		oncontextmenu={openHeaderMenu}
+	>
 		<span class="sel">
 			{#if canMine && selectableKeys.length > 0}
 				<input

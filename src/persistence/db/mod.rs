@@ -16,8 +16,10 @@ pub mod batches;
 mod import;
 pub mod notes;
 pub mod sources;
+pub mod works;
 
 pub const DB_FILE: &str = "yomine.db";
+const VERSION: i64 = 5;
 
 /// Anki tables hold each Anki profile's collection separately; `collection` is the
 /// profile name. Rows from before profiles were recorded have none (or '' where the
@@ -190,31 +192,55 @@ pub fn open(path: &Path, json_dir: &Path) -> rusqlite::Result<Connection> {
     conn.busy_timeout(std::time::Duration::from_secs(5))?;
     let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
     // A schema change adds a step here for the versions before it; released steps
-    // never change, since installs that ran them won't again.
+    // never change. A step can run again: builds up to 0.8.0 stamp their own version
+    // on a newer file.
     let tx = conn.transaction()?;
     if version < 1 {
         tx.execute_batch(SCHEMA)?;
     }
     if version < 2 {
         // The video paired with a source, which local mining cuts media from.
-        tx.execute_batch("ALTER TABLE sources ADD COLUMN video TEXT;")?;
+        add_column(&tx, "sources", "video", "TEXT")?;
     }
     if version < 3 {
         // The mining mode a load happened in; `sources::recent` infers it for older loads.
-        tx.execute_batch("ALTER TABLE opens ADD COLUMN mode TEXT;")?;
+        add_column(&tx, "opens", "mode", "TEXT")?;
     }
     if version < 4 {
         // Time spent mining across a batch's runs; NULL for batches from before it was kept.
-        tx.execute_batch("ALTER TABLE batches ADD COLUMN run_ms INTEGER;")?;
+        add_column(&tx, "batches", "run_ms", "INTEGER")?;
+    }
+    if version < 5 {
+        // A work's TMDB entry; how a source was matched to its episode ('name', 'content'
+        // or 'user'), and its text's signature for finding the same episode's other files.
+        add_column(&tx, "works", "tmdb_id", "INTEGER")?;
+        add_column(&tx, "works", "original_title", "TEXT")?;
+        add_column(&tx, "sources", "matched_by", "TEXT")?;
+        add_column(&tx, "sources", "signature", "BLOB")?;
+        tx.execute_batch(
+            "CREATE UNIQUE INDEX IF NOT EXISTS works_by_tmdb ON works(kind, tmdb_id);
+             CREATE UNIQUE INDEX IF NOT EXISTS episodes_by_number
+                 ON episodes(work_id, season, number);",
+        )?;
     }
     // The import writes rows in the current schema, so it runs after every step.
     if version < 1 {
         import::import_json(&tx, json_dir)?;
         import::import_anki_caches(&tx, json_dir)?;
     }
-    tx.pragma_update(None, "user_version", 4)?;
+    tx.pragma_update(None, "user_version", version.max(VERSION))?;
     tx.commit()?;
     Ok(conn)
+}
+
+fn add_column(conn: &Connection, table: &str, column: &str, kind: &str) -> rusqlite::Result<()> {
+    let exists = conn
+        .prepare(&format!("SELECT 1 FROM pragma_table_info('{table}') WHERE name = ?1"))?
+        .exists([column])?;
+    if !exists {
+        conn.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN {column} {kind};"))?;
+    }
+    Ok(())
 }
 
 /// A consistent copy of a database another connection may have open.
@@ -257,6 +283,25 @@ pub(crate) mod tests {
         let copied = open(&dir.join("copy.db"), &dir).unwrap();
         assert_eq!(count(&copied, "SELECT count(*) FROM notes"), 1);
         drop((conn, copied));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn reopens_a_file_an_older_build_stamped_with_its_version() {
+        let (dir, conn) = scratch("restamped");
+        conn.pragma_update(None, "user_version", 3).unwrap();
+        drop(conn);
+
+        let conn = open(&dir.join(DB_FILE), &dir).unwrap();
+        let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
+        assert_eq!(version, VERSION);
+        conn.pragma_update(None, "user_version", 9).unwrap();
+        drop(conn);
+
+        let conn = open(&dir.join(DB_FILE), &dir).unwrap();
+        let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
+        assert_eq!(version, 9);
+        drop(conn);
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

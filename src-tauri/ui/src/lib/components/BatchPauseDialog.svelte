@@ -95,7 +95,7 @@
 					onchoose('stop');
 					openAnkiModalAt(unmapped);
 				}}
-				><span class="label">Stop and open Anki Settings</span><span class="detail"
+				><span class="label">Stop and open Anki preferences</span><span class="detail"
 					>Save the fields there, then mine the remaining cards from the batch summary.</span
 				></button
 			>

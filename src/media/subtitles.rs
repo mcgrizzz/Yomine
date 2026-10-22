@@ -3,7 +3,9 @@
 
 use std::{
     cmp::Ordering,
+    collections::HashSet,
     ffi::OsString,
+    fs::Metadata,
     hash::{
         DefaultHasher,
         Hash,
@@ -31,7 +33,13 @@ use super::{
     },
 };
 use crate::{
-    core::YomineError,
+    core::{
+        filename_parser::{
+            parse_filename,
+            MediaType,
+        },
+        YomineError,
+    },
     persistence::get_shared_file_path,
 };
 
@@ -66,7 +74,7 @@ pub fn other_languages(choices: &[SubtitleChoice]) -> Vec<String> {
     names
 }
 
-fn is_video(path: &Path) -> bool {
+pub fn is_video(path: &Path) -> bool {
     extension(path).is_some_and(|e| VIDEO_EXTENSIONS.contains(&e.as_str()))
 }
 
@@ -74,22 +82,61 @@ fn extension(path: &Path) -> Option<String> {
     path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase)
 }
 
+const TAG_FLAGS: &[&str] = &["forced", "sdh", "cc", "hi", "signs", "songs", "full", "default"];
+
+/// ffmpeg's three-letter code for a language as subtitle names write it.
+fn language_code(part: &str) -> Option<&'static str> {
+    Some(match part {
+        "ja" | "jp" | "jpn" | "jap" | "japanese" => "jpn",
+        "en" | "eng" | "english" => "eng",
+        "es" | "spa" => "spa",
+        "fr" | "fre" | "fra" => "fra",
+        "de" | "ger" | "deu" => "deu",
+        "it" | "ita" => "ita",
+        "pt" | "por" => "por",
+        "ru" | "rus" => "rus",
+        "ko" | "kor" => "kor",
+        "zh" | "chi" | "zho" => "zho",
+        _ => return None,
+    })
+}
+
+/// Whether one dotted part of a name is a language tag: `ja`, `ja-JP`, `ja[cc]`, `forced`.
+fn is_language_tag(part: &str) -> bool {
+    let part = part.to_ascii_lowercase();
+    let (part, bracketed) = match part.strip_suffix(']').and_then(|p| p.split_once('[')) {
+        Some((part, flag)) => (part.to_string(), Some(flag.to_string())),
+        None => (part, None),
+    };
+    let mut pieces = part.split(['-', '_']);
+    let first = pieces.next().unwrap_or_default();
+    (language_code(first).is_some() || TAG_FLAGS.contains(&first))
+        && pieces.all(|p| p.len() == 2 || TAG_FLAGS.contains(&p))
+        && bracketed.is_none_or(|f| TAG_FLAGS.contains(&f.as_str()))
+}
+
+/// A subtitle file's stem without its language tag: `ep01` for `ep01.jpn.forced`.
+pub fn strip_language_tag(stem: &str) -> &str {
+    let mut base = stem;
+    while let Some((rest, part)) = base.rsplit_once('.') {
+        if rest.is_empty() || !is_language_tag(part) {
+            break;
+        }
+        base = rest;
+    }
+    base
+}
+
 /// The language tag in `ep01.ja.srt`, normalised to ffmpeg's three-letter codes.
 /// Tags can carry flags too: `jpn.forced`, `ja-JP`, `en.sdh`.
 fn tag_language(tag: &str) -> (Option<String>, Vec<String>) {
-    const FLAGS: &[&str] = &["forced", "sdh", "cc", "hi", "signs", "songs", "full", "default"];
     let mut language = None;
     let mut flags = Vec::new();
     for part in tag.split(['.', '_', '-']).map(str::to_ascii_lowercase).filter(|p| !p.is_empty()) {
-        let code = match part.as_str() {
-            "ja" | "jp" | "jpn" | "jap" | "japanese" => Some("jpn"),
-            "en" | "eng" | "english" => Some("eng"),
-            _ => None,
-        };
-        match code {
+        match language_code(&part) {
             Some(code) if language.is_none() => language = Some(code.to_string()),
             Some(_) => {}
-            None if FLAGS.contains(&part.as_str()) => flags.push(part),
+            None if TAG_FLAGS.contains(&part.as_str()) => flags.push(part),
             // A region after the language, as in ja-JP.
             None if language.is_some() => {}
             None => language = Some(part),
@@ -107,15 +154,9 @@ pub fn sidecars(video: &Path) -> Vec<SubtitleChoice> {
     let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
     let mut found: Vec<SubtitleChoice> = entries
         .filter_map(|entry| entry.ok().map(|e| e.path()))
-        .filter(|path| extension(path).is_some_and(|e| SUBTITLE_EXTENSIONS.contains(&e.as_str())))
         .filter_map(|path| {
             let name = path.file_name()?.to_str()?.to_string();
-            let sub_stem = path.file_stem()?.to_str()?;
-            let tag = if sub_stem == stem {
-                ""
-            } else {
-                sub_stem.strip_prefix(stem)?.strip_prefix('.')?
-            };
+            let tag = sidecar_tag(stem, &path)?;
             let lines = count_cues(&std::fs::read_to_string(&path).unwrap_or_default());
             let (language, flags) = tag_language(tag);
             let kind = extension(&path).unwrap_or_default();
@@ -140,18 +181,87 @@ pub fn sidecars(video: &Path) -> Vec<SubtitleChoice> {
     found
 }
 
-/// The video beside a subtitle file with the same name, ignoring a language tag.
+/// The language tag of a subtitle file named for the video `stem`: `ja` for `ep01.ja.srt`,
+/// empty for `ep01.srt`.
+fn sidecar_tag<'a>(stem: &str, path: &'a Path) -> Option<&'a str> {
+    if !extension(path).is_some_and(|e| SUBTITLE_EXTENSIONS.contains(&e.as_str())) {
+        return None;
+    }
+    let sub_stem = path.file_stem()?.to_str()?;
+    // Subtitles from another release can differ from the video's name in case alone, which
+    // Windows treats as the same name.
+    if !sub_stem.get(..stem.len())?.eq_ignore_ascii_case(stem) {
+        return None;
+    }
+    let tag = &sub_stem[stem.len()..];
+    if tag.is_empty() {
+        Some(tag)
+    } else {
+        tag.strip_prefix('.')
+    }
+}
+
+/// The video beside a subtitle file whose name it starts with, the longest where several do.
 pub fn sibling_video(subtitle: &Path) -> Option<PathBuf> {
-    let dir = subtitle.parent()?;
-    let stem = subtitle.file_stem()?.to_str()?;
-    let base = stem.rsplit_once('.').map_or(stem, |(base, _)| base);
-    std::fs::read_dir(dir)
+    std::fs::read_dir(subtitle.parent()?)
         .ok()?
         .filter_map(|entry| entry.ok().map(|e| e.path()))
         .filter(|path| is_video(path))
-        .find(|path| {
-            path.file_stem().and_then(|s| s.to_str()).is_some_and(|s| s == stem || s == base)
+        .filter_map(|path| {
+            let stem = path.file_stem()?.to_str()?;
+            sidecar_tag(stem, subtitle).map(|_| (stem.len(), path.clone()))
         })
+        .max_by_key(|(len, _)| *len)
+        .map(|(_, path)| path)
+}
+
+/// A folder's videos, and its Japanese or untagged subtitle files that no video there pairs
+/// with: what opening one of its episodes would load.
+pub fn episodes_in(dir: &Path) -> Vec<(PathBuf, Metadata)> {
+    let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
+    // A directory listing on Windows carries each file's metadata, so this asks for nothing
+    // more of a network share.
+    let files: Vec<(PathBuf, Metadata)> = entries
+        .filter_map(Result::ok)
+        .filter_map(|e| e.metadata().ok().filter(Metadata::is_file).map(|meta| (e.path(), meta)))
+        .collect();
+    let videos: Vec<&str> = files
+        .iter()
+        .map(|(path, _)| path)
+        .filter(|path| is_video(path))
+        .filter_map(|path| path.file_stem()?.to_str())
+        .collect();
+    let unpaired_japanese = |path: &Path| {
+        if !extension(path).is_some_and(|e| SUBTITLE_EXTENSIONS.contains(&e.as_str())) {
+            return false;
+        }
+        let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else { return false };
+        let (language, _) = tag_language(&stem[strip_language_tag(stem).len()..]);
+        !videos.iter().any(|video| sidecar_tag(video, path).is_some())
+            && (language.is_none() || is_japanese(language.as_deref()))
+    };
+    files.iter().filter(|(path, _)| is_video(path) || unpaired_japanese(path)).cloned().collect()
+}
+
+/// Whether a Japanese or untagged subtitle file sits beside the video.
+pub fn has_minable_beside(video: &Path) -> bool {
+    let (Some(dir), Some(stem)) = (video.parent(), video.file_stem().and_then(|s| s.to_str()))
+    else {
+        return false;
+    };
+    let Ok(entries) = std::fs::read_dir(dir) else { return false };
+    entries.filter_map(|entry| entry.ok().map(|e| e.path())).any(|path| {
+        sidecar_tag(stem, &path).is_some_and(|tag| {
+            let (language, _) = tag_language(tag);
+            language.is_none() || is_japanese(language.as_deref())
+        })
+    })
+}
+
+/// Whether the video holds a Japanese or untagged text track.
+pub fn has_minable_track(video: &Path, ffmpeg: &Ffmpeg) -> Result<bool, YomineError> {
+    let tracks = embedded(video, &ffmpeg.probe(video)?)?;
+    Ok(tracks.iter().any(|t| is_candidate(t) && t.path.is_some()))
 }
 
 /// The videos among `paths`, each folder standing for the videos at its top level, in
@@ -167,7 +277,26 @@ pub fn videos_in(paths: &[PathBuf]) -> Vec<PathBuf> {
         .collect();
     videos.sort_by(|a, b| natural_cmp(&a.to_string_lossy(), &b.to_string_lossy()));
     videos.dedup();
+    for folder in videos.chunk_by_mut(|a, b| a.parent() == b.parent()) {
+        order_by_episode(folder);
+    }
     videos
+}
+
+/// Orders a folder's videos by episode when each is a different one, so a season stays in
+/// order when its files are named in different patterns. A folder of several shows repeats
+/// episode numbers, and keeps name order.
+fn order_by_episode(videos: &mut [PathBuf]) {
+    let episode = |video: &PathBuf| match parse_filename(&video.to_string_lossy()) {
+        MediaType::TvShow { season, episode: Some(episode), .. } => Some((season, episode)),
+        _ => None,
+    };
+    let episodes: Vec<_> = videos.iter().map(episode).collect();
+    let distinct: HashSet<_> = episodes.iter().collect();
+    if distinct.contains(&None) || distinct.len() < episodes.len() {
+        return;
+    }
+    videos.sort_by_cached_key(episode);
 }
 
 fn natural_cmp(a: &str, b: &str) -> Ordering {
@@ -394,7 +523,25 @@ mod tests {
             ]
         );
         assert_eq!(sibling_video(&dir.join("ep01.ja.ass")), Some(dir.join("ep01.mkv")));
+        assert_eq!(sibling_video(&dir.join("ep01.jpn.forced.srt")), Some(dir.join("ep01.mkv")));
         assert_eq!(sibling_video(&dir.join("ep02.srt")), None);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn subtitles_pair_with_a_video_named_in_other_case() {
+        let dir = std::env::temp_dir().join(format!("yomine-case-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        for name in
+            ["Show.S01e04.Bluray.mp4", "Show.S01E04.BluRay.jpn.srt", "Show.S01E04.BluRay.jpn.0.srt"]
+        {
+            std::fs::write(dir.join(name), "").unwrap();
+        }
+        let video = dir.join("Show.S01e04.Bluray.mp4");
+        assert_eq!(sidecars(&video).len(), 2);
+        assert_eq!(sibling_video(&dir.join("Show.S01E04.BluRay.jpn.0.srt")), Some(video.clone()));
+        let episodes: Vec<_> = episodes_in(&dir).into_iter().map(|(path, _)| path).collect();
+        assert_eq!(episodes, [video]);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
@@ -411,5 +558,32 @@ mod tests {
             .collect();
         assert_eq!(names, ["Ep01.mp4", "ep2.mkv", "ep10.mkv"]);
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_folder_named_in_two_patterns_plays_in_episode_order() {
+        let paths = |names: &[&str]| -> Vec<PathBuf> {
+            names.iter().map(|name| PathBuf::from("Show/Season 1").join(name)).collect()
+        };
+        let mut videos = paths(&[
+            "S01E13-Serving in the Outer Court [AC984351].mkv",
+            "S01E14-The New Pure Consort [70BCC87C].mkv",
+            "The.Apothecary.Diaries.S01e01.Maomao.1080P.Bluray.Remux.Avc.Flac.2.0-Crucible.mp4",
+            "The.Apothecary.Diaries.S01E12.The.Eunuch.and.the.Courtesan.1080p.BluRay.mkv",
+        ]);
+        order_by_episode(&mut videos);
+        assert_eq!(
+            videos,
+            paths(&[
+                "The.Apothecary.Diaries.S01e01.Maomao.1080P.Bluray.Remux.Avc.Flac.2.0-Crucible.mp4",
+                "The.Apothecary.Diaries.S01E12.The.Eunuch.and.the.Courtesan.1080p.BluRay.mkv",
+                "S01E13-Serving in the Outer Court [AC984351].mkv",
+                "S01E14-The New Pure Consort [70BCC87C].mkv",
+            ])
+        );
+
+        let mut shows = paths(&["A - 02.mkv", "B - 01.mkv", "B - 02.mkv"]);
+        order_by_episode(&mut shows);
+        assert_eq!(shows, paths(&["A - 02.mkv", "B - 01.mkv", "B - 02.mkv"]));
     }
 }

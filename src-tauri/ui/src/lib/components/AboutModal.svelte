@@ -112,6 +112,13 @@
 				<a href="https://creativecommons.org/licenses/by-sa/4.0/" onclick={openLink}>CC BY-SA 4.0</a
 				>.
 			</p>
+			<p class="tmdb">
+				<a href="https://www.themoviedb.org/" onclick={openLink}
+					><img src="/tmdb.svg" alt="TMDB" /></a
+				>
+				Show and film details come from TMDB. Yomine uses the TMDB API but is not endorsed or certified
+				by TMDB.
+			</p>
 		</footer>
 	</div>
 </Modal>
@@ -217,5 +224,10 @@
 	}
 	.credits a:hover {
 		color: var(--text);
+	}
+	.tmdb img {
+		height: 0.7rem;
+		margin-right: 0.3rem;
+		vertical-align: baseline;
 	}
 </style>
