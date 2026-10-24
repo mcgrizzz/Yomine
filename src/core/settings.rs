@@ -315,6 +315,17 @@ pub struct SettingsData {
     /// Whether loaded files are matched by name on their own, which sends the names to TMDB.
     #[serde(default = "default_true")]
     pub tmdb_matching: bool,
+    #[serde(default)]
+    pub term_options: TermOptions,
+}
+
+/// Mining options that change which terms the engine produces; the defaults are its own
+/// choices.
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct TermOptions {
+    /// A noun + する is the verb (勉強する), not the noun (勉強).
+    pub suru_as_verb: bool,
 }
 
 const fn default_font_scale() -> f32 {
@@ -391,6 +402,7 @@ impl Default for SettingsData {
             ffmpeg_path: String::new(),
             tmdb_api_key: String::new(),
             tmdb_matching: true,
+            term_options: TermOptions::default(),
         }
     }
 }

@@ -37,6 +37,7 @@ use crate::{
         },
         Sentence,
         Term,
+        TermOptions,
         YomineError,
     },
     dictionary::{
@@ -167,7 +168,12 @@ pub(super) fn resolve_citation(word: &mut Word, manager: &FrequencyManager) {
     }
 }
 
-fn analyze_sentence(worker: &mut Worker, text: &str, manager: &FrequencyManager) -> Vec<Word> {
+fn analyze_sentence(
+    worker: &mut Worker,
+    text: &str,
+    manager: &FrequencyManager,
+    options: &TermOptions,
+) -> Vec<Word> {
     worker.reset_sentence(text);
     worker.tokenize();
     let mut tokens: Vec<UnidicToken> = worker
@@ -201,6 +207,9 @@ fn analyze_sentence(worker: &mut Worker, text: &str, manager: &FrequencyManager)
     );
     keep_listed_words(&mut words, manager);
     keep_listed_suru_verbs(&mut words);
+    if options.suru_as_verb {
+        mine_suru_verbs(&mut words);
+    }
     tag_katakana_interjections(worker, &mut words);
     read_contracted_prohibitive(&mut words);
     tag_split_syllables(&mut words);
@@ -364,6 +373,13 @@ fn keep_listed_suru_verbs(words: &mut [Word]) {
             word.main_word = None;
             word.part_of_speech = POS::Verb;
         }
+    }
+}
+
+/// The verb (勉強する) instead of its noun (勉強) as the term of a noun + する.
+fn mine_suru_verbs(words: &mut [Word]) {
+    for word in words.iter_mut().filter(|w| w.part_of_speech == POS::SuruVerb) {
+        word.main_word = None;
     }
 }
 
@@ -735,7 +751,16 @@ pub fn extract_words(
     sentences: &mut [Sentence],
     frequency_manager: &FrequencyManager,
 ) -> Vec<Term> {
-    extract(worker, sentences, frequency_manager, None)
+    extract_words_with(worker, sentences, frequency_manager, &TermOptions::default())
+}
+
+pub fn extract_words_with(
+    worker: Worker,
+    sentences: &mut [Sentence],
+    frequency_manager: &FrequencyManager,
+    options: &TermOptions,
+) -> Vec<Term> {
+    extract(worker, sentences, frequency_manager, options, None)
 }
 
 /// Every phrase candidate that a frequency list ranks, as (sentence index, its words,
@@ -754,7 +779,7 @@ pub fn explain_phrases(
         };
         verdicts.push((ord, text, verdict));
     };
-    extract(worker, sentences, frequency_manager, Some(&mut record));
+    extract(worker, sentences, frequency_manager, &TermOptions::default(), Some(&mut record));
     verdicts
 }
 
@@ -764,6 +789,7 @@ fn extract(
     mut worker: Worker,
     sentences: &mut [Sentence],
     frequency_manager: &FrequencyManager,
+    options: &TermOptions,
     mut trace: Option<PhraseTrace>,
 ) -> Vec<Term> {
     let mut terms = Vec::<Term>::new();
@@ -772,7 +798,7 @@ fn extract(
     let mut grammar_counts = HashMap::<(String, String), (usize, usize)>::new();
 
     for (ord, sentence) in sentences.iter_mut().enumerate() {
-        let words = analyze_sentence(&mut worker, &sentence.text, frequency_manager);
+        let words = analyze_sentence(&mut worker, &sentence.text, frequency_manager, options);
 
         let mut term_spans: Vec<(usize, usize)> = Vec::with_capacity(words.len());
         let mut sentence_terms: Vec<Term> = Vec::with_capacity(words.len());
@@ -1002,7 +1028,13 @@ pub fn extract_words_for_frequency(
         .map_init(
             || tokenizer.new_worker(),
             |worker, sentence| {
-                let words = analyze_sentence(worker, &sentence.text, frequency_manager);
+                // Corpus statistics stay independent of a user's mining options.
+                let words = analyze_sentence(
+                    worker,
+                    &sentence.text,
+                    frequency_manager,
+                    &TermOptions::default(),
+                );
 
                 let mut sentence_terms: Vec<Term> = words
                     .into_iter()

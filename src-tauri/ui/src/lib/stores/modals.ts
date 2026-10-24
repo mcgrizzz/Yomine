@@ -21,14 +21,17 @@ export const epubChapterModalOpen = writable(false);
 export const profilesModalOpen = writable(false);
 export const autoModalOpen = writable(false);
 export const matchingModalOpen = writable(false);
+export const miningModalOpen = writable(false);
 
 /** The pages of the Settings window, each a settings dialog shown in it. */
-export type SettingsPage = 'appearance' | 'anki' | 'local-media' | 'websocket' | 'matching';
+export type SettingsPage =
+	'appearance' | 'anki' | 'local-media' | 'websocket' | 'mining' | 'matching';
 const PAGE_OPEN: Record<SettingsPage, Writable<boolean>> = {
 	appearance: appearanceModalOpen,
 	anki: ankiModalOpen,
 	'local-media': localMediaModalOpen,
 	websocket: websocketModalOpen,
+	mining: miningModalOpen,
 	matching: matchingModalOpen
 };
 const PAGES = Object.keys(PAGE_OPEN) as SettingsPage[];

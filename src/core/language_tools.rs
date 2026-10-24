@@ -6,7 +6,10 @@ use std::sync::{
 use vibrato::Tokenizer;
 
 use crate::{
-    core::IgnoreList,
+    core::{
+        IgnoreList,
+        TermOptions,
+    },
     dictionary::frequency_manager::FrequencyManager,
     jlpt::JlptDatabase,
 };
@@ -23,6 +26,7 @@ pub struct LanguageTools {
     pub ignore_list: Arc<Mutex<IgnoreList>>,
     pub jlpt: Arc<JlptDatabase>,
     pub known_interval: u32,
+    pub term_options: TermOptions,
 }
 
 impl std::fmt::Debug for LanguageTools {

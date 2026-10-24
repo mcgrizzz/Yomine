@@ -357,6 +357,13 @@ export interface SettingsData {
 	tmdb_api_key: string;
 	/** Whether loaded files are matched by name on their own, which sends the names to TMDB. */
 	tmdb_matching: boolean;
+	term_options: TermOptions;
+}
+
+/** Mining options that change which terms the engine produces (`TermOptions` in core/settings.rs). */
+export interface TermOptions {
+	/** A noun + する is the verb (勉強する), not the noun (勉強). */
+	suru_as_verb: boolean;
 }
 
 export interface TextFilterSetting {

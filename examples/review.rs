@@ -16,12 +16,16 @@
 //!   cargo run --example review -- --all --file book.epub       # a book, split as the app splits it
 //!   cargo run --example review -- --all --file subs.srt --settings settings.json
 //!                                    # rank with that settings file's dictionary weights
+//!                                    # and mining options
 
 use rand::seq::SliceRandom;
 use yomine::{
-    core::models::{
-        Sentence,
-        SourceFile,
+    core::{
+        models::{
+            Sentence,
+            SourceFile,
+        },
+        TermOptions,
     },
     dictionary::{
         frequency_manager::{
@@ -34,7 +38,7 @@ use yomine::{
     parser::read_epub,
     segmentation::tokenizer::{
         explain_phrases,
-        extract_words,
+        extract_words_with,
         init_vibrato,
     },
 };
@@ -57,8 +61,10 @@ fn main() {
     }
 
     let manager = process_frequency_dictionaries(None).expect("frequency dictionaries");
+    let mut options = TermOptions::default();
     if let Some(path) = args.iter().position(|a| a == "--settings").and_then(|i| args.get(i + 1)) {
         apply_weights(&manager, path);
+        options = term_options(path);
     }
     if manager.get_enabled_dictionaries().is_empty() {
         eprintln!("!!! no frequency dictionaries installed — deinflection/rescue/phrases inactive");
@@ -74,7 +80,7 @@ fn main() {
             timestamp: None,
             comprehension: 0.0,
         }];
-        let terms = extract_words(tokenizer.new_worker(), &mut sentences, &manager);
+        let terms = extract_words_with(tokenizer.new_worker(), &mut sentences, &manager, &options);
 
         println!("\n{:>3}. {}", n + 1, text);
         let furigana: String = sentences[0]
@@ -116,6 +122,14 @@ fn main() {
         }
     }
     println!();
+}
+
+/// The mining options from an app settings file.
+fn term_options(path: &str) -> TermOptions {
+    let settings: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).expect("read --settings"))
+            .expect("parse --settings");
+    serde_json::from_value(settings["term_options"].clone()).unwrap_or_default()
 }
 
 /// Weights and enabled flags from an app settings file, for the dictionaries installed here.

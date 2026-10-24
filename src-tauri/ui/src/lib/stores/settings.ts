@@ -97,6 +97,9 @@ export const setAutoMine = (prefs: ipc.AutoMine) =>
 		}
 	});
 
+export const setTermOptions = (options: ipc.TermOptions) =>
+	patchSettings({ term_options: { ...options } });
+
 export const saveShowMatching = (key: string, matching: boolean) =>
 	patchSettings({ tmdb_api_key: key.trim(), tmdb_matching: matching });
 

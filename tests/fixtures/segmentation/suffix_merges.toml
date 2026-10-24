@@ -57,6 +57,18 @@ text = "私は君を説得するだけの言葉を持ち合わせていない"
 terms = [{ surface = "説得する", lemma = "説得", reading = "せっとく", pos = "SuruVerb" }]
 
 [[case]]
+name = "with the verb option, 説得する is the term"
+text = "私は君を説得するだけの言葉を持ち合わせていない"
+terms = [{ surface = "説得する", lemma = "説得する", reading = "せっとくする", pos = "SuruVerb" }]
+options = { suru_as_verb = true }
+
+[[case]]
+name = "with the verb option, a conjugated 勉強した is the term 勉強する"
+text = "昨日は遅くまで勉強した"
+terms = [{ surface = "勉強した", lemma = "勉強する", reading = "べんきょうする", pos = "SuruVerb" }]
+options = { suru_as_verb = true }
+
+[[case]]
 name = "自動化して is the suru verb of 自動化, which JMdict lists, not 自動 + 化する"
 text = "自動化して効率を上げる"
 terms = [{ surface = "自動化して", lemma = "自動化", reading = "じどうか", pos = "SuruVerb" }]

@@ -27,5 +27,6 @@ pub use settings::{
     AnkiModelInfo,
     FrequencyDictionarySetting,
     SettingsData,
+    TermOptions,
     WebSocketSettings,
 };

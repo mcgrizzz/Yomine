@@ -46,6 +46,7 @@
 				{@render item(page, label)}
 			{/each}
 			<span class="gap"></span>
+			{@render item('mining', 'Mining')}
 			{@render item('matching', 'Show matching')}
 		</nav>
 		<div class="pages">{@render children()}</div>
