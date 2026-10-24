@@ -8,7 +8,12 @@
 
 	const form = settingsDraft<TermOptions>({
 		open: miningModalOpen,
-		initial: { suru_as_verb: false, keep_affixed_nouns: false },
+		initial: {
+			suru_as_verb: false,
+			keep_affixed_nouns: false,
+			verb_phrases: true,
+			other_phrases: true
+		},
 		load: () => ($settings ? { ...$settings.term_options } : undefined)
 	});
 	const draft = $derived(form.value);
@@ -64,6 +69,24 @@
 			<p class="hint">
 				Words the dictionary lists stay whole either way (子供たち), and names always drop their
 				honorific (白羽さん → 白羽).
+			</p>
+		</SettingsSection>
+
+		<SettingsSection title="Expressions">
+			<div class="choices">
+				<label class="check">
+					<input type="checkbox" bind:checked={draft.verb_phrases} />
+					Verb and adjective phrases <span class="example">気が引ける, ほうがいい</span>
+				</label>
+				<label class="check">
+					<input type="checkbox" bind:checked={draft.other_phrases} />
+					Other phrases <span class="example">これから, 目の前</span>
+				</label>
+			</div>
+			<p class="hint">
+				Only expressions the dictionary lists are built. When one is off, its words stay separate
+				terms (気, 引ける). Words the tokenizer splits are joined either way when the dictionary
+				lists them (二日酔い, 何気に).
 			</p>
 		</SettingsSection>
 	</div>

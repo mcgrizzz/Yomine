@@ -63,7 +63,7 @@ class LexiconTests(unittest.TestCase):
         self.assertEqual(rows["w\tお迎え".encode()][:1], b"n")
         self.assertEqual(rows["w\t大丈夫".encode()][:1], b"a")
         self.assertEqual(rows["w\tはいはい".encode()], b"j")
-        self.assertEqual(rows["p\tどうだい".encode()][1:], b"e")
+        self.assertEqual(rows["p\tどうだい".encode()][1:], b"x")
 
     def test_readings_of_one_entry_share_it_and_separate_entries_do_not(self):
         for reading in ["あした", "あす"]:

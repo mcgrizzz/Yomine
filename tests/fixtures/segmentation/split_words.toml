@@ -34,6 +34,13 @@ terms = [{ surface = "二日酔い", lemma = "二日酔い", reading = "ふつ�
 absent = ["酔い"]
 
 [[case]]
+name = "without any phrases, 二日酔い still joins: it's a word"
+text = "ハイターが二日酔いで役に立たなかった"
+terms = [{ surface = "二日酔い", lemma = "二日酔い", reading = "ふつかよい" }]
+absent = ["酔い"]
+options = { verb_phrases = false, other_phrases = false }
+
+[[case]]
 name = "用心深い is one word, not 用心 + 深い"
 text = "同時に聡明で 用心深い"
 terms = [{ surface = "用心深い", lemma = "用心深い", reading = "ようじんぶかい" }]

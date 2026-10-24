@@ -18,6 +18,7 @@ use crate::{
     core::{
         utils::is_kanji_char,
         Term,
+        TermOptions,
     },
     dictionary::{
         frequency_manager::FrequencyManager,
@@ -52,6 +53,8 @@ pub enum Rejected {
     /// Opens with the そう of appearance (できそうです), which belongs to the word before it;
     /// JMdict's そうです and そうですね are the adverb そう.
     AppearanceSou,
+    /// JMdict lists it as a kind of expression the user's mining options leave out.
+    Expression,
 }
 
 pub(super) struct Phrase {
@@ -65,6 +68,7 @@ pub(super) struct Context<'a> {
     pub terms: &'a [Term],
     pub facts: &'a [WordFacts],
     pub manager: &'a FrequencyManager,
+    pub options: &'a TermOptions,
 }
 
 /// What phrase promotion needs to know about a word, from its UniDic tokens.
@@ -185,6 +189,14 @@ pub(super) fn judge(ctx: &Context, start: usize, end: usize) -> Result<Phrase, R
 
     let jmdict_type = jmdict_lexicon::word_type(&phrase.lemma_form)
         .or_else(|| jmdict_lexicon::word_type(&phrase.surface_form));
+    if jmdict_type == Some(POS::Expression) {
+        let verb_phrase = jmdict_lexicon::is_verb_expression(&phrase.lemma_form)
+            || jmdict_lexicon::is_verb_expression(&phrase.surface_form);
+        let wanted = if verb_phrase { ctx.options.verb_phrases } else { ctx.options.other_phrases };
+        if !wanted {
+            return Err(Rejected::Expression);
+        }
+    }
     phrase.part_of_speech =
         phrase_type(all_nouns, word, last, &ctx.facts[end].ending_type, jmdict_type);
     // JMdict's verbs, adjectives and adverbs among them are vocabulary (ありえない, わけない).

@@ -321,13 +321,29 @@ pub struct SettingsData {
 
 /// Mining options that change which terms the engine produces; the defaults are its own
 /// choices.
-#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct TermOptions {
     /// A noun + する is the verb (勉強する), not the noun (勉強).
     pub suru_as_verb: bool,
     /// A noun keeps a prefix or suffix JMdict doesn't list it with (騎士達, not 騎士).
     pub keep_affixed_nouns: bool,
+    /// Build expressions that conjugate like a verb or adjective (気が引ける, ほうがいい).
+    pub verb_phrases: bool,
+    /// Build other expressions (これから, 目の前). Words JMdict lists that UniDic splits
+    /// (二日酔い, 何気に) are built either way.
+    pub other_phrases: bool,
+}
+
+impl Default for TermOptions {
+    fn default() -> Self {
+        Self {
+            suru_as_verb: false,
+            keep_affixed_nouns: false,
+            verb_phrases: true,
+            other_phrases: true,
+        }
+    }
 }
 
 const fn default_font_scale() -> f32 {

@@ -366,6 +366,10 @@ export interface TermOptions {
 	suru_as_verb: boolean;
 	/** A noun keeps a prefix or suffix JMdict doesn't list it with (騎士達, not 騎士). */
 	keep_affixed_nouns: boolean;
+	/** Build expressions that conjugate like a verb or adjective (気が引ける, ほうがいい). */
+	verb_phrases: boolean;
+	/** Build other expressions (これから, 目の前). */
+	other_phrases: boolean;
 }
 
 export interface TextFilterSetting {

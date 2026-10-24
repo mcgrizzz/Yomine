@@ -36,14 +36,16 @@ def has_kanji(text):
 
 
 def word_type(pos):
-    """An expression stays one (ことになる is exp and v5r); otherwise the best type the tags give."""
+    """An expression stays one: `e` when it conjugates like a verb or adjective (ことになる is
+    exp and v5r), `x` otherwise (これから). Other forms take the best type the tags give."""
     if "exp" in pos:
-        return "e"
+        conjugates = any(re.fullmatch(tags, p) for code, tags in WORD_TYPES[:2] for p in pos)
+        return "e" if conjugates else "x"
     return next((code for code, tags in WORD_TYPES if any(re.fullmatch(tags, p) for p in pos)), None)
 
 
 def best_type(codes):
-    order = [code for code, _ in WORD_TYPES] + ["e"]
+    order = [code for code, _ in WORD_TYPES] + ["e", "x"]
     return min((c for c in codes if c), key=order.index, default=None)
 
 

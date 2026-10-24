@@ -47,12 +47,7 @@ pub(crate) fn readings(form: &str) -> Vec<&'static str> {
 /// The type JMdict's first sense gives `form` (本当に an adverb, お迎え a noun), when the
 /// lexicon lists it as a word or phrase.
 pub(crate) fn word_type(form: &str) -> Option<POS> {
-    let form = ascii_width(form);
-    let form = form.normalize_long_vowel();
-    let code = lookup(format!("w\t{form}"))
-        .and_then(|value| value.first())
-        .or_else(|| lookup(format!("p\t{form}")).and_then(|value| value.get(1)))?;
-    Some(match code {
+    Some(match type_code(form)? {
         b'v' => POS::Verb,
         b'i' => POS::Adjective,
         b'a' => POS::AdjectivalNoun,
@@ -62,9 +57,24 @@ pub(crate) fn word_type(form: &str) -> Option<POS> {
         b'c' => POS::Conjunction,
         b'j' => POS::Interjection,
         b'p' => POS::Determiner,
-        b'e' => POS::Expression,
+        b'e' | b'x' => POS::Expression,
         _ => return None,
     })
+}
+
+/// JMdict lists `form` as an expression that conjugates like a verb or adjective (気が引ける,
+/// ほうがいい), rather than one used as a fixed phrase (これから, 目の前).
+pub(crate) fn is_verb_expression(form: &str) -> bool {
+    type_code(form) == Some(b'e')
+}
+
+fn type_code(form: &str) -> Option<u8> {
+    let form = ascii_width(form);
+    let form = form.normalize_long_vowel();
+    lookup(format!("w\t{form}"))
+        .and_then(|value| value.first())
+        .or_else(|| lookup(format!("p\t{form}")).and_then(|value| value.get(1)))
+        .copied()
 }
 
 /// The lexicon keys spellings in NFKC, which writes full-width letters and digits as ASCII
@@ -147,9 +157,12 @@ mod tests {
             ("お迎え", POS::Noun),
             ("大丈夫", POS::AdjectivalNoun),
             ("ことになる", POS::Expression),
+            ("これから", POS::Expression),
         ] {
             assert_eq!(word_type(form), Some(pos), "{form}");
         }
+        assert!(is_verb_expression("気が引ける") && is_verb_expression("ほうがいい"));
+        assert!(!is_verb_expression("これから") && !is_verb_expression("目の前"));
         assert_eq!(word_type("あなたに"), None);
     }
 

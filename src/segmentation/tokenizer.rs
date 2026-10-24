@@ -901,8 +901,12 @@ fn extract(
         let mut suppressed: Vec<bool> = (0..base_len)
             .map(|i| labelled[i] || cut_off(i) || sentence_terms[i].surface_form.trim().is_empty())
             .collect();
-        let ctx =
-            phrases::Context { terms: &sentence_terms, facts: &facts, manager: frequency_manager };
+        let ctx = phrases::Context {
+            terms: &sentence_terms,
+            facts: &facts,
+            manager: frequency_manager,
+            options,
+        };
         let mut promoted = Vec::new();
         // A phrase that hides its words also hides phrases inside it (にかけて in 気にかける).
         let mut hidden_through = None;
