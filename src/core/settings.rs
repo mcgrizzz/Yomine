@@ -333,6 +333,12 @@ pub struct TermOptions {
     /// Build other expressions (これから, 目の前). Words JMdict lists that UniDic splits
     /// (二日酔い, 何気に) are built either way.
     pub other_phrases: bool,
+    /// A potential verb JMdict lists is its own term (読める, not 読む).
+    pub potential_forms: bool,
+    /// A causative verb JMdict lists is its own term (驚かせる, not 驚く).
+    pub causative_forms: bool,
+    /// A passive verb JMdict lists is its own term (思われる, not 思う).
+    pub passive_forms: bool,
 }
 
 impl Default for TermOptions {
@@ -342,6 +348,9 @@ impl Default for TermOptions {
             keep_affixed_nouns: false,
             verb_phrases: true,
             other_phrases: true,
+            potential_forms: false,
+            causative_forms: false,
+            passive_forms: false,
         }
     }
 }

@@ -370,6 +370,12 @@ export interface TermOptions {
 	verb_phrases: boolean;
 	/** Build other expressions (これから, 目の前). */
 	other_phrases: boolean;
+	/** A potential verb JMdict lists is its own term (読める, not 読む). */
+	potential_forms: boolean;
+	/** A causative verb JMdict lists is its own term (驚かせる, not 驚く). */
+	causative_forms: boolean;
+	/** A passive verb JMdict lists is its own term (思われる, not 思う). */
+	passive_forms: boolean;
 }
 
 export interface TextFilterSetting {

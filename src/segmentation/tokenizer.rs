@@ -211,6 +211,7 @@ fn analyze_sentence(
     if options.suru_as_verb {
         mine_suru_verbs(&mut words);
     }
+    mine_derived_forms(&mut words, options);
     tag_katakana_interjections(worker, &mut words);
     read_contracted_prohibitive(&mut words);
     tag_split_syllables(&mut words);
@@ -381,6 +382,63 @@ fn keep_listed_suru_verbs(words: &mut [Word]) {
 fn mine_suru_verbs(words: &mut [Word]) {
     for word in words.iter_mut().filter(|w| w.part_of_speech == POS::SuruVerb) {
         word.main_word = None;
+    }
+}
+
+enum Derivation {
+    Potential,
+    Causative,
+    Passive,
+    /// An ichidan verb's られる (食べられる) is either.
+    PotentialOrPassive,
+}
+
+/// The derivation a verb's ending shows, taking it as one step from another verb.
+fn derivation(form: &str) -> Option<Derivation> {
+    let before = |suffix: &str| form.strip_suffix(suffix).and_then(|stem| stem.chars().last());
+    let a_row = |c: char| "あかがさざただなはばぱまやらわ".contains(c);
+    let e_row = |c: char| "えけげせぜてでねへべぺめれ".contains(c);
+    if form.ends_with("させる") || before("せる").is_some_and(a_row) {
+        Some(Derivation::Causative)
+    } else if form.ends_with("られる") {
+        Some(Derivation::PotentialOrPassive)
+    } else if before("れる").is_some_and(a_row) {
+        Some(Derivation::Passive)
+    } else if before("る").is_some_and(e_row) {
+        Some(Derivation::Potential)
+    } else {
+        None
+    }
+}
+
+/// The verb one derivation step from the base verb, when JMdict lists it as a verb of its own
+/// and the user mines that kind: 読めて as 読める, not 読む; 書けて stays 書く, since JMdict
+/// doesn't list 書ける.
+fn mine_derived_forms(words: &mut [Word], options: &TermOptions) {
+    let wanted = |derivation| match derivation {
+        Derivation::Potential => options.potential_forms,
+        Derivation::Causative => options.causative_forms,
+        Derivation::Passive => options.passive_forms,
+        Derivation::PotentialOrPassive => options.potential_forms || options.passive_forms,
+    };
+    if !(options.potential_forms || options.causative_forms || options.passive_forms) {
+        return;
+    }
+    for word in words.iter_mut().filter(|w| w.part_of_speech == POS::Verb && w.main_word.is_none())
+    {
+        let base = word.citation.as_ref().map_or(&word.lemma_form, |c| &c.form).clone();
+        let derived = pairwise_deinflection(&word.surface_form, &word.surface_hatsuon)
+            .into_iter()
+            .find(|(form, reading)| {
+                *form != base
+                    && derivation(form).is_some_and(wanted)
+                    && jmdict_lexicon::word_type(form) == Some(POS::Verb)
+                    && pairwise_deinflection(form, reading).iter().any(|(f, _)| *f == base)
+            });
+        if let Some((form, reading)) = derived {
+            word.citation =
+                Some(Citation { form, reading, provenance: CitationProvenance::DerivedForm });
+        }
     }
 }
 

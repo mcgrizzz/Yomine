@@ -12,11 +12,29 @@
 			suru_as_verb: false,
 			keep_affixed_nouns: false,
 			verb_phrases: true,
-			other_phrases: true
+			other_phrases: true,
+			potential_forms: false,
+			causative_forms: false,
+			passive_forms: false
 		},
 		load: () => ($settings ? { ...$settings.term_options } : undefined)
 	});
 	const draft = $derived(form.value);
+
+	const DERIVED: {
+		key: 'potential_forms' | 'causative_forms' | 'passive_forms';
+		label: string;
+		example: string;
+	}[] = [
+		{ key: 'potential_forms', label: 'Potential', example: '読めて → 読める' },
+		{ key: 'causative_forms', label: 'Causative', example: '驚かせて → 驚かせる' },
+		{ key: 'passive_forms', label: 'Passive', example: '思われて → 思われる' }
+	];
+	const derivedOn = $derived(DERIVED.filter((d) => draft[d.key]).length);
+
+	function setAllDerived(on: boolean) {
+		for (const d of DERIVED) draft[d.key] = on;
+	}
 
 	async function save() {
 		if (await setTermOptions(draft)) miningModalOpen.set(false);
@@ -89,6 +107,31 @@
 				lists them (二日酔い, 何気に).
 			</p>
 		</SettingsSection>
+
+		<SettingsSection title="Derived verbs">
+			<div class="choices">
+				<label class="check">
+					<input
+						type="checkbox"
+						checked={derivedOn === DERIVED.length}
+						indeterminate={derivedOn > 0 && derivedOn < DERIVED.length}
+						onchange={(e) => setAllDerived(e.currentTarget.checked)}
+					/>
+					All three
+				</label>
+				{#each DERIVED as d (d.key)}
+					<label class="check nested">
+						<input type="checkbox" bind:checked={draft[d.key]} />
+						{d.label} <span class="example">{d.example}</span>
+					</label>
+				{/each}
+			</div>
+			<p class="hint">
+				Off, a derived verb is its base verb's term (読めて → 読む). On, it's a term of its own when
+				the dictionary lists it, one step from the base verb, and your 読む card no longer covers
+				it.
+			</p>
+		</SettingsSection>
 	</div>
 
 	{#snippet footer()}
@@ -128,6 +171,9 @@
 		display: flex;
 		align-items: center;
 		gap: 0.4rem;
+	}
+	.nested {
+		padding-left: 1.4rem;
 	}
 	.example {
 		font-size: 0.85rem;

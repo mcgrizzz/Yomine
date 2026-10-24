@@ -5,6 +5,10 @@
 
 frequencies = [
 	{ term = "行く", reading = "いく", rank = 100 },
+	{ term = "読む", reading = "よむ", rank = 350 },
+	{ term = "書く", reading = "かく", rank = 330 },
+	{ term = "驚く", reading = "おどろく", rank = 2600 },
+	{ term = "思う", reading = "おもう", rank = 60 },
 	{ term = "会う", reading = "あう", rank = 200 },
 	{ term = "食べる", reading = "たべる", rank = 300 },
 	{ term = "溺れる", reading = "おぼれる", rank = 4700 },
@@ -145,3 +149,33 @@ terms = [
 name = "a plain imperative ending in い keeps its verb"
 text = "こっちへ来い！"
 terms = [{ surface = "来い", lemma = "来る", reading = "くる", pos = "Verb" }]
+
+[[case]]
+name = "with potential forms, 読めて is the listed potential 読める"
+text = "この字なら読めて当然だ"
+terms = [{ surface = "読めて", lemma = "読める", reading = "よめる" }]
+options = { potential_forms = true }
+
+[[case]]
+name = "with potential forms, 書けて stays 書く: JMdict doesn't list 書ける"
+text = "上手に書けてよかった"
+terms = [{ surface = "書けて", lemma = "書く" }]
+options = { potential_forms = true }
+
+[[case]]
+name = "with only causative forms, 読めて stays 読む"
+text = "この字なら読めて当然だ"
+terms = [{ surface = "読めて", lemma = "読む" }]
+options = { causative_forms = true }
+
+[[case]]
+name = "with causative forms, 驚かせて is the listed causative 驚かせる"
+text = "みんなを驚かせてしまった"
+terms = [{ surface = "驚かせて", lemma = "驚かせる", reading = "おどろかせる" }]
+options = { causative_forms = true }
+
+[[case]]
+name = "with passive forms, 思われて is the listed passive 思われる"
+text = "変だと思われてしまう"
+terms = [{ surface = "思われて", lemma = "思われる", reading = "おもわれる" }]
+options = { passive_forms = true }
