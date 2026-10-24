@@ -4,7 +4,10 @@ use super::{
     kana_preference::SortedIndex,
 };
 use crate::{
-    core::utils::NormalizeLongVowel,
+    core::{
+        models::LoanSource,
+        utils::NormalizeLongVowel,
+    },
     segmentation::word::POS,
 };
 
@@ -73,6 +76,18 @@ fn ascii_width(form: &str) -> String {
             _ => c,
         })
         .collect()
+}
+
+/// Where the loanword `form` comes from. JMdict tags only sources other than English, so an
+/// untagged form is English.
+pub(crate) fn loan_source(form: &str) -> LoanSource {
+    match lookup(format!("l\t{}", fold_katakana(form).normalize_long_vowel()))
+        .and_then(|v| v.first())
+    {
+        Some(b'o') => LoanSource::Other,
+        Some(b'w') => LoanSource::MadeInJapan,
+        _ => LoanSource::English,
+    }
 }
 
 /// JMdict lists `reading` as an i-adjective ending in ない (つまらない, くだらない).
@@ -144,6 +159,14 @@ mod tests {
         assert_eq!(readings("通り")[0], "とおり");
         assert!(readings("明日").starts_with(&["あした", "あす"]));
         assert!(readings("もったいない").is_empty());
+    }
+
+    #[test]
+    fn loanwords_carry_their_source() {
+        assert_eq!(loan_source("アルバイト"), LoanSource::Other);
+        assert_eq!(loan_source("パン"), LoanSource::Other);
+        assert_eq!(loan_source("サラリーマン"), LoanSource::MadeInJapan);
+        assert_eq!(loan_source("ゲーム"), LoanSource::English);
     }
 
     #[test]

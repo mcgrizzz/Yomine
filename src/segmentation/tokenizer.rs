@@ -799,11 +799,18 @@ fn extract(
                 word.tokens.as_slice(),
                 [t] if matches!(t.pos1, UnidicTag::Settouji | UnidicTag::Setsubiji)
             );
+            // Words UniDic doesn't know never count: most are onomatopoeia, native words
+            // written in katakana (ゴッツイ) or names.
+            let loanword =
+                word.surface_form.as_str().is_katakana() && word.tokens.iter().all(|t| t.foreign);
             // The highlight span ends at start + surface_form.len(), so the
             // reference must point at the main word, not the segment.
             let ref_start = word.mining_span().0;
             let mut term: Term = word.into();
             term.auto_skip.grammar = bound_to_stem || subsidiary_after_te || lone_affix;
+            if loanword {
+                term.auto_skip.set_loan_source(jmdict_lexicon::loan_source(&term.surface_form));
+            }
             let freq_map: HashMap<String, u32> = frequency_manager.build_freq_map(
                 &term.lemma_form,
                 &term.lemma_reading,
@@ -1403,6 +1410,7 @@ pub fn init_vibrato(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::models::LoanSource;
 
     #[test]
     fn auto_mode_skips_kanji_fragments_and_bound_verbs() {
@@ -1444,5 +1452,34 @@ mod tests {
         assert_eq!(skip("ください").map(|s| s.grammar), Some(false));
         assert_eq!(skip("いる").map(|s| s.grammar), Some(true));
         assert_eq!(skip("くれない").map(|s| s.grammar), Some(true));
+    }
+
+    #[test]
+    fn katakana_loanwords_carry_their_source() {
+        let Some(tokenizer) = crate::segmentation::lexeme_resolver::test_tokenizer() else {
+            return;
+        };
+        let manager = FrequencyManager::from_dictionaries(vec![]);
+        let mut sentences = vec![Sentence {
+            id: 0,
+            source_id: 0,
+            text: "ゲームとアルバイトとサラリーマンとダメなゴッツイ奴".into(),
+            segments: vec![],
+            timestamp: None,
+            comprehension: 0.0,
+        }];
+        let terms = extract_words(tokenizer.new_worker(), &mut sentences, &manager);
+        let source = |surface: &str| {
+            terms
+                .iter()
+                .find(|t| t.surface_form.starts_with(surface))
+                .map(|t| t.auto_skip.loan_source())
+        };
+        assert_eq!(source("ゲーム"), Some(Some(LoanSource::English)));
+        assert_eq!(source("アルバイト"), Some(Some(LoanSource::Other)));
+        assert_eq!(source("サラリーマン"), Some(Some(LoanSource::MadeInJapan)));
+        // Native in katakana, and a word UniDic doesn't know.
+        assert_eq!(source("ダメ"), Some(None));
+        assert_eq!(source("ゴッツイ"), Some(None));
     }
 }

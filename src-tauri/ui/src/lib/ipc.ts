@@ -20,6 +20,9 @@ export interface AutoSkip {
 	speaker_name: boolean;
 	grammar: boolean;
 	kanji_fragment: boolean;
+	english_loanword: boolean;
+	made_in_japan_loanword: boolean;
+	other_loanword: boolean;
 }
 
 export interface Term {

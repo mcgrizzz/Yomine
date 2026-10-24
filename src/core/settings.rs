@@ -155,11 +155,21 @@ pub struct SkipReasons {
     pub speaker_name: bool,
     pub grammar: bool,
     pub kanji_fragment: bool,
+    pub english_loanword: bool,
+    pub made_in_japan_loanword: bool,
+    pub other_loanword: bool,
 }
 
 impl Default for SkipReasons {
     fn default() -> Self {
-        Self { speaker_name: true, grammar: true, kanji_fragment: true }
+        Self {
+            speaker_name: true,
+            grammar: true,
+            kanji_fragment: true,
+            english_loanword: false,
+            made_in_japan_loanword: false,
+            other_loanword: false,
+        }
     }
 }
 
@@ -494,5 +504,6 @@ mod tests {
         assert!(
             restored.skip.grammar && restored.skip.kanji_fragment && restored.skip.speaker_name
         );
+        assert!(!restored.skip.english_loanword);
     }
 }

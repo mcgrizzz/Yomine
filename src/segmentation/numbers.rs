@@ -53,6 +53,7 @@ fn flush_run(run: &mut Vec<UnidicToken>, out: &mut Vec<UnidicToken>) {
             out.push(UnidicToken {
                 lexeme: String::new(),
                 lexeme_reading: String::new(),
+                foreign: false,
                 surface: surface.clone(),
                 pos1: UnidicTag::Meishi,
                 pos2: UnidicTag::Suushi,

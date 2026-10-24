@@ -190,6 +190,13 @@ pub(super) fn judge(ctx: &Context, start: usize, end: usize) -> Result<Phrase, R
     // JMdict's verbs, adjectives and adverbs among them are vocabulary (ありえない, わけない).
     phrase.auto_skip.grammar = ctx.facts[start..=end].iter().all(|f| f.grammatical)
         && !matches!(phrase.part_of_speech, POS::Verb | POS::Adjective | POS::Adverb);
+    // A phrase of loanwords is as unlike English as its least English part.
+    let parts: Option<Vec<_>> = subrange.iter().map(|t| t.auto_skip.loan_source()).collect();
+    if let Some(source) = parts.and_then(|parts| parts.into_iter().max()) {
+        phrase
+            .auto_skip
+            .set_loan_source(source.max(jmdict_lexicon::loan_source(&phrase.surface_form)));
+    }
     phrase.frequencies =
         ctx.manager.build_freq_map(&phrase.lemma_form, &phrase.lemma_reading, phrase.is_kana);
     let hides_parts =

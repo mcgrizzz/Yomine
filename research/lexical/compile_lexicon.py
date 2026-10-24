@@ -61,7 +61,10 @@ def compile_rows(db):
     `a\\treading`: a JMdict i-adjective ending in ない, which UniDic reads as a verb and ない
     (つまらない as つまる).
     `e\\tspelling\\treading`: entries listing the spelling under that reading, kept only
-    for spellings an entry reads more than one way (明日 as あした and あす)."""
+    for spellings an entry reads more than one way (明日 as あした and あす).
+    `l\\treading`: the reading of a loanword JMdict doesn't take from English, valued `o` for
+    another language (アルバイト) or `w` for made-in-Japan English (サラリーマン); `o` wins
+    when entries disagree. JMdict leaves English sources untagged."""
     # A pair has one row per sense that applies to it.
     pair_senses = collections.Counter()
     phrase_pairs = set()
@@ -101,6 +104,16 @@ def compile_rows(db):
         if has_kanji(spelling):
             readings[(spelling, entry)].add(reading)
     words.update(reading for (_, reading), rare in rare_kanji_only.items() if rare)
+    loan_class = {}
+    for entry, lang, wasei in db.execute("SELECT entry_id,lang,wasei FROM loan_sources"):
+        code = "w" if wasei else None if lang == "eng" else "o"
+        if code and loan_class.get(entry) != "o":
+            loan_class[entry] = code
+    loans = {}
+    for entry, reading in db.execute("SELECT DISTINCT entry_id,reading FROM pairs"):
+        reading = normalize_long_vowel(reading)
+        if entry in loan_class and loans.get(reading) != "o":
+            loans[reading] = loan_class[entry]
     entry_senses = collections.defaultdict(int)
     for pair in phrase_pairs:
         entry, reading, spelling = pair
@@ -126,6 +139,7 @@ def compile_rows(db):
               type_code(form) + "".join("\t" + r for r in word_readings[form]).encode())
              for form in words]
     rows += [(("a\t" + reading).encode(), b"") for reading in nai_adjectives]
+    rows += [(("l\t" + reading).encode(), code.encode()) for reading, code in loans.items()]
     rows += [(f"e\t{spelling}\t{reading}".encode(), b"".join(struct.pack("<I", e) for e in sorted(ids)))
              for (spelling, reading), ids in entries.items()]
     return sorted(rows)

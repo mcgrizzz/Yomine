@@ -23,6 +23,11 @@
 		{ key: 'kanji_fragment', label: 'Kanji fragments', example: '氏 of 壬氏' },
 		{ key: 'speaker_name', label: 'Speaker names', example: '善 of 善逸 in （善逸）' }
 	];
+	const LOANWORD_REASONS: typeof SKIP_REASONS = [
+		{ key: 'english_loanword', label: 'From English', example: 'ゲーム, テーブル' },
+		{ key: 'made_in_japan_loanword', label: 'Made-in-Japan English', example: 'サラリーマン' },
+		{ key: 'other_loanword', label: 'From other languages', example: 'アルバイト, パン' }
+	];
 
 	const copy = (a: AutoMine): AutoMine => ({
 		stop: a.stop,
@@ -46,7 +51,14 @@
 			max_cards: null,
 			pos_points: {},
 			jlpt_points: {},
-			skip: { grammar: true, kanji_fragment: true, speaker_name: true }
+			skip: {
+				grammar: true,
+				kanji_fragment: true,
+				speaker_name: true,
+				english_loanword: false,
+				made_in_japan_loanword: false,
+				other_loanword: false
+			}
 		},
 		load: () => {
 			const saved = $settings?.auto_mine ?? $defaultSettings?.auto_mine;
@@ -278,6 +290,16 @@
 			</div>
 			<div class="skips">
 				{#each SKIP_REASONS as reason (reason.key)}
+					<label class="skip">
+						<input type="checkbox" bind:checked={draft.skip[reason.key]} />
+						{reason.label}
+						<span class="hint">{reason.example}</span>
+					</label>
+				{/each}
+			</div>
+			<div class="group-head">Katakana loanwords</div>
+			<div class="skips">
+				{#each LOANWORD_REASONS as reason (reason.key)}
 					<label class="skip">
 						<input type="checkbox" bind:checked={draft.skip[reason.key]} />
 						{reason.label}
