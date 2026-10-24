@@ -8,7 +8,7 @@
 
 	const form = settingsDraft<TermOptions>({
 		open: miningModalOpen,
-		initial: { suru_as_verb: false },
+		initial: { suru_as_verb: false, keep_affixed_nouns: false },
 		load: () => ($settings ? { ...$settings.term_options } : undefined)
 	});
 	const draft = $derived(form.value);
@@ -48,6 +48,23 @@
 				</label>
 			</div>
 			<p class="hint">Either way, an Anki card for 勉強 covers 勉強する, and the reverse.</p>
+		</SettingsSection>
+
+		<SettingsSection title="Nouns with a prefix or suffix">
+			<div class="choices" role="radiogroup" aria-label="Nouns with a prefix or suffix">
+				<label class="check">
+					<input type="radio" value={false} bind:group={draft.keep_affixed_nouns} />
+					The noun <span class="example">騎士達 → 騎士, 全マップ → マップ</span>
+				</label>
+				<label class="check">
+					<input type="radio" value={true} bind:group={draft.keep_affixed_nouns} />
+					The whole word <span class="example">騎士達, 全マップ</span>
+				</label>
+			</div>
+			<p class="hint">
+				Words the dictionary lists stay whole either way (子供たち), and names always drop their
+				honorific (白羽さん → 白羽).
+			</p>
 		</SettingsSection>
 	</div>
 

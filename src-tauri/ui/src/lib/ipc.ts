@@ -364,6 +364,8 @@ export interface SettingsData {
 export interface TermOptions {
 	/** A noun + する is the verb (勉強する), not the noun (勉強). */
 	suru_as_verb: boolean;
+	/** A noun keeps a prefix or suffix JMdict doesn't list it with (騎士達, not 騎士). */
+	keep_affixed_nouns: boolean;
 }
 
 export interface TextFilterSetting {

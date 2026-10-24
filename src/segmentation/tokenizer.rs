@@ -204,6 +204,7 @@ fn analyze_sentence(
     let mut words = split_unlisted_affixes(
         split_unvalidated_compounds(rescue_words(worker, text, words, manager), manager),
         manager,
+        options,
     );
     keep_listed_words(&mut words, manager);
     keep_listed_suru_verbs(&mut words);
@@ -1273,8 +1274,13 @@ fn split_unvalidated_compounds(
 /// A noun with a prefix or suffix JMdict doesn't list as one word (者たち, 全マップ,
 /// 寝室らしき) is the noun plus its affixes, so the card is the noun. Counters stay on their
 /// numbers (五枚). The lexicon lists few kana spellings, so a kana word a frequency list ranks
-/// stays whole (わたしたち).
-fn split_unlisted_affixes(words: Vec<Word>, manager: &FrequencyManager) -> Vec<Word> {
+/// stays whole (わたしたち). With `keep_affixed_nouns`, only a name loses its honorific
+/// (白羽さん → 白羽).
+fn split_unlisted_affixes(
+    words: Vec<Word>,
+    manager: &FrequencyManager,
+    options: &TermOptions,
+) -> Vec<Word> {
     let mut out = Vec::with_capacity(words.len());
     for word in words {
         let tokens = &word.tokens;
@@ -1291,9 +1297,11 @@ fn split_unlisted_affixes(words: Vec<Word>, manager: &FrequencyManager) -> Vec<W
             (t.pos1 == UnidicTag::Meishi && t.pos2 != UnidicTag::Suushi)
                 || t.pos1 == UnidicTag::Daimeshi
         };
+        let name = core.iter().all(|t| t.pos2 == UnidicTag::Koyuumeishi);
         if prefixes + suffixes == 0
             || core.is_empty()
             || !core.iter().all(nominal)
+            || (options.keep_affixed_nouns && !name)
             || word.main_word.is_some()
             || jmdict_lexicon::is_word(&word.surface_form)
             || jmdict_lexicon::is_word(&word.lemma_form)

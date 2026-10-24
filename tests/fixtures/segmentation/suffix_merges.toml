@@ -111,6 +111,19 @@ terms = [{ surface = "者", lemma = "者" }]
 absent = ["者たち"]
 
 [[case]]
+name = "with keep_affixed_nouns, 者たち stays whole"
+text = "あの者たちを捕らえよ"
+terms = [{ surface = "者たち" }]
+options = { keep_affixed_nouns = true }
+
+[[case]]
+name = "with keep_affixed_nouns, a name still drops its honorific"
+text = "白羽さんが来た"
+terms = [{ surface = "白羽" }]
+absent = ["白羽さん"]
+options = { keep_affixed_nouns = true }
+
+[[case]]
 name = "全マップ is the prefix plus マップ"
 text = "全マップ探査の魔法を使った"
 terms = [{ surface = "マップ", lemma = "マップ" }]
