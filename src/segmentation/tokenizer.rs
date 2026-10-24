@@ -1065,18 +1065,40 @@ pub(super) fn phrase_endpoint_ok(term: &Term) -> bool {
 }
 
 /// Split rule-merged proper+common compounds back apart (夏子おばさん →
-/// 夏子 + おばさん) unless a frequency dictionary corroborates the merged pair.
+/// 夏子 + おばさん) unless JMdict lists the compound or a frequency dictionary corroborates
+/// the merged pair. A listed compound takes a JMdict reading when UniDic's pieces don't give
+/// one (甘納豆 as あまなっとう, not かんなっとう).
 fn split_unvalidated_compounds(
     words: Vec<Word>,
     frequency_manager: &FrequencyManager,
 ) -> Vec<Word> {
-    if frequency_manager.get_enabled_dictionaries().is_empty() {
-        return words;
-    }
     let mut out: Vec<Word> = Vec::with_capacity(words.len());
-    for word in words {
-        if word.part_of_speech != POS::CompoundNoun
-            || word.tokens.len() < 2
+    for mut word in words {
+        if word.part_of_speech != POS::CompoundNoun || word.tokens.len() < 2 {
+            out.push(word);
+            continue;
+        }
+        let listed = jmdict_lexicon::readings(&word.surface_form);
+        if !listed.is_empty() {
+            let plain = |reading: &str| fold_katakana(reading).normalize_long_vowel().into_owned();
+            let reading =
+                if listed.iter().any(|reading| plain(reading) == plain(&word.surface_hatsuon)) {
+                    // Each piece in its own script, as JMdict writes them (マルクスけいざいがく).
+                    word.tokens
+                        .iter()
+                        .map(|token| normalize_reading(&token.surface, &token.surface_hatsuon))
+                        .collect()
+                } else {
+                    let readings = listed.iter().map(|reading| reading.to_string()).collect();
+                    best_ranked(frequency_manager, &word.surface_form, readings)
+                        .map_or_else(|| listed[0].to_string(), |(_, reading)| reading)
+                };
+            word.lemma_hatsuon = reading.clone();
+            word.surface_hatsuon = reading;
+            out.push(word);
+            continue;
+        }
+        if frequency_manager.get_enabled_dictionaries().is_empty()
             || frequency_manager
                 .get_harmonic_frequency_for_pair(&word.surface_form, &word.surface_hatsuon)
                 .is_some()
