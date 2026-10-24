@@ -625,7 +625,7 @@ pub async fn get_media_preview(filename: String) -> Result<Option<String>, Strin
     Ok(data.map(|d| format!("data:{mime};base64,{d}")))
 }
 
-/// Open Anki's browser on recent adds with the mined note's card selected.
+/// Open Anki's browser on the mined note with its card selected.
 #[tauri::command]
 pub async fn open_in_anki(note_id: u64) -> Result<(), String> {
     anki::current().open_note(note_id).await.map_err(gui_error)

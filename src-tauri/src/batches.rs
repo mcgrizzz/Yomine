@@ -438,6 +438,12 @@ pub async fn get_last_batch() -> Result<Option<BatchRecord>, String> {
     .flatten()
     .map(BatchRecord::from_stored)
     .transpose()
+    .map(|batch| {
+        batch.map(|mut batch| {
+            mark_gone(std::slice::from_mut(&mut batch));
+            batch
+        })
+    })
 }
 
 /// The open Anki profile's batches, newest first.
@@ -452,7 +458,34 @@ pub async fn list_batches() -> Result<Vec<BatchRecord>, String> {
     })?
     .into_iter()
     .map(BatchRecord::from_stored)
-    .collect()
+    .collect::<Result<Vec<_>, _>>()
+    .map(|mut batches| {
+        mark_gone(&mut batches);
+        batches
+    })
+}
+
+/// Shows the notes Yomine has seen deleted, in Anki as well as by Undo, as undone.
+fn mark_gone(batches: &mut [BatchRecord]) {
+    let created: Vec<u64> = batches
+        .iter()
+        .flat_map(|b| &b.items)
+        .filter_map(|i| match i.outcome {
+            Outcome::Created { note_id, .. } => Some(note_id),
+            _ => None,
+        })
+        .collect();
+    let gone = db::with(|conn| db::notes::deleted(conn, &created)).unwrap_or_else(|e| {
+        eprintln!("{e}");
+        Vec::new()
+    });
+    for item in batches.iter_mut().flat_map(|b| &mut b.items) {
+        if let Outcome::Created { note_id, .. } = item.outcome {
+            if gone.contains(&note_id) {
+                item.outcome = Outcome::Deleted { note_id };
+            }
+        }
+    }
 }
 
 #[tauri::command]

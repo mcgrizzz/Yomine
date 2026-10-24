@@ -274,6 +274,30 @@ impl AnkiState {
         self.cards_by_term.get(&term).into_iter().flatten().map(|&i| &self.vocab[i])
     }
 
+    /// A noun and its する verb are one entry, whichever one the card holds: a 勉強する card
+    /// covers 勉強した, and a 旅 card covers 旅する.
+    fn classify_suru_pair(&self, term: &Term) -> Option<MatchResult<'_>> {
+        use crate::segmentation::word::POS;
+        let (form, reading, pos) = match term.part_of_speech {
+            POS::SuruVerb => (
+                format!("{}する", term.lemma_form),
+                format!("{}する", term.lemma_reading),
+                POS::Verb,
+            ),
+            POS::Verb => (
+                term.lemma_form.strip_suffix("する")?.to_string(),
+                term.lemma_reading.strip_suffix("する")?.to_string(),
+                POS::Noun,
+            ),
+            _ => return None,
+        };
+        if !form.chars().any(is_kanji_char) || reading.is_empty() {
+            return None;
+        }
+        let paired = self.classify(&form, &reading, &form, &reading, &pos, false, None);
+        matches!(paired, MatchResult::Known { .. }).then_some(paired)
+    }
+
     fn classify_term(&self, term: &Term) -> MatchResult<'_> {
         let result = self.classify(
             &term.surface_form,
@@ -284,6 +308,11 @@ impl AnkiState {
             term.lexical_family.is_some(),
             term.lexeme.as_deref(),
         );
+        if matches!(result, MatchResult::Unmatched) {
+            if let Some(paired) = self.classify_suru_pair(term) {
+                return paired;
+            }
+        }
         if !matches!(result, MatchResult::Unmatched)
             || term.part_of_speech != crate::segmentation::word::POS::Noun
         {
@@ -607,6 +636,26 @@ mod classification_tests {
         assert_eq!(lemmas(&result.ignore_filtered), ["魚"]);
     }
     #[test]
+    fn a_noun_and_its_suru_verb_cover_each_other() {
+        let manager = Arc::new(FrequencyManager::from_dictionaries(Vec::new()));
+        let suru_verb = |lemma: &str, reading: &str, pos: POS| Term {
+            surface_form: format!("{lemma}した"),
+            part_of_speech: pos,
+            ..term(lemma, reading)
+        };
+        let verb_card = state(manager.clone(), &[("勉強する", "べんきょうする")]);
+        let (_, known) =
+            verb_card.filter_existing_terms(vec![suru_verb("勉強", "べんきょう", POS::SuruVerb)]);
+        assert_eq!(known.len(), 1, "a 勉強する card covers the noun 勉強 from 勉強した");
+        let noun_card = state(manager, &[("旅", "たび")]);
+        let (_, known) =
+            noun_card.filter_existing_terms(vec![suru_verb("旅する", "たびする", POS::Verb)]);
+        assert_eq!(known.len(), 1, "a 旅 card covers the verb 旅する");
+        let (unknown, _) =
+            noun_card.filter_existing_terms(vec![suru_verb("旅行する", "りょこうする", POS::Verb)]);
+        assert_eq!(unknown.len(), 1, "a 旅 card does not cover 旅行する");
+    }
+    #[test]
     fn card_changes_clear_labels_and_stats_agree() {
         let manager = Arc::new(FrequencyManager::from_dictionaries(vec![dictionary(
             "test",
@@ -861,12 +910,12 @@ mod classification_tests {
         for (text, surface, cards, expected) in [
             (
                 "水浴びをのぞいていた",
-                "のぞい",
+                "のぞいて",
                 &[("除く", "のぞく"), ("覗く", "のぞく")],
                 Some("覗く"),
             ),
             ("考えていきたい", "いきたい", &[("逝く", "いく"), ("行く", "いく")], Some("行く")),
-            ("大恥をかいてしまう", "かい", &[("核", "かく"), ("書く", "かく")], None),
+            ("大恥をかいてしまう", "かいて", &[("核", "かく"), ("書く", "かく")], None),
             ("勝てるわけじゃない", "勝てる", &[("勝つ", "かつ"), ("活", "かつ")], Some("勝つ")),
         ] {
             let mut sentences = vec![Sentence {

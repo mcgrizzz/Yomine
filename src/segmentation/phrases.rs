@@ -29,6 +29,8 @@ const MIN_CHARS: usize = 4;
 /// Kanji noun compounds (複合体), JMdict words UniDic splits (居+場所) and JMdict phrases with
 /// a kanji (何度も) can be this short.
 const MIN_CHARS_WORD: usize = 3;
+/// A JMdict word all in kanji (聖杖, split 聖 + 杖) can be this short.
+const MIN_CHARS_KANJI_WORD: usize = 2;
 
 /// Why a run of words isn't promoted.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -47,6 +49,9 @@ pub enum Rejected {
     /// JMdict doesn't list it: frequency lists carry n-grams of words that only happen to sit
     /// together (どうする, 探し続ける, 戦闘経験).
     Unlisted,
+    /// Opens with the そう of appearance (できそうです), which belongs to the word before it;
+    /// JMdict's そうです and そうですね are the adverb そう.
+    AppearanceSou,
 }
 
 pub(super) struct Phrase {
@@ -72,6 +77,7 @@ pub(super) struct WordFacts {
     te_form: bool,
     /// A subsidiary verb or adjective (いく in 連れていく).
     subsidiary: bool,
+    appearance_sou: bool,
 }
 
 impl WordFacts {
@@ -85,6 +91,7 @@ impl WordFacts {
                 t.pos2 == UnidicTag::Setsuzokujoshi && matches!(t.surface.as_str(), "て" | "で")
             }),
             subsidiary: grammar::is_subsidiary(word),
+            appearance_sou: word.tokens.first().is_some_and(|t| t.lexeme == "そう-様態"),
         }
     }
 }
@@ -104,6 +111,9 @@ pub(super) fn judge(ctx: &Context, start: usize, end: usize) -> Result<Phrase, R
     if (!phrase_endpoint_ok(first) || !phrase_endpoint_ok(last)) && !listed_particle_phrase() {
         return Err(Rejected::Endpoint);
     }
+    if ctx.facts[start].appearance_sou {
+        return Err(Rejected::AppearanceSou);
+    }
     let (mut phrase, frequency) = phrase_candidate(subrange, ctx.manager, PhraseMode::Production);
     if frequency.is_none() {
         return Err(Rejected::Unranked);
@@ -118,17 +128,23 @@ pub(super) fn judge(ctx: &Context, start: usize, end: usize) -> Result<Phrase, R
     // around a particle (しょうがない).
     let listed_phrase = jmdict_lexicon::is_phrase(&phrase.surface_form)
         || jmdict_lexicon::is_phrase(&phrase.lemma_form);
-    let word = !listed_phrase
-        && (jmdict_lexicon::is_word(&phrase.surface_form)
-            || jmdict_lexicon::is_word(&phrase.lemma_form));
+    let jmdict_word = jmdict_lexicon::is_word(&phrase.surface_form)
+        || jmdict_lexicon::is_word(&phrase.lemma_form);
+    let word = !listed_phrase && jmdict_word;
     let listed = listed_phrase || word;
 
     // With a demonstrative or particle in them (あの人, 森の奥), three characters are two words.
-    let short_word = word && all_content_words && first.part_of_speech != POS::Determiner;
+    // The lexicon also lists adverbs as phrases (こたび).
+    let short_word = jmdict_word && all_content_words && first.part_of_speech != POS::Determiner;
     // In kana, three characters spell some JMdict expression too often (それに, これは).
     let short_phrase = listed_phrase && phrase.surface_form.chars().any(is_kanji_char);
-    let min_chars =
-        if kanji_noun_compound || short_word || short_phrase { MIN_CHARS_WORD } else { MIN_CHARS };
+    let min_chars = if word && phrase.lemma_form.chars().all(is_kanji_char) {
+        MIN_CHARS_KANJI_WORD
+    } else if kanji_noun_compound || short_word || short_phrase {
+        MIN_CHARS_WORD
+    } else {
+        MIN_CHARS
+    };
     if phrase.lemma_form.chars().count() < min_chars {
         return Err(Rejected::TooShort);
     }
@@ -167,8 +183,9 @@ pub(super) fn judge(ctx: &Context, start: usize, end: usize) -> Result<Phrase, R
         .or_else(|| jmdict_lexicon::word_type(&phrase.surface_form));
     phrase.part_of_speech =
         phrase_type(all_nouns, word, last, &ctx.facts[end].ending_type, jmdict_type);
-    let grammatical: Vec<bool> = ctx.facts[start..=end].iter().map(|f| f.grammatical).collect();
-    phrase.auto_skip.ambiguous_grammar = grammar::is_ambiguous(&grammatical, &phrase);
+    // JMdict's verbs, adjectives and adverbs among them are vocabulary (ありえない, わけない).
+    phrase.auto_skip.grammar = ctx.facts[start..=end].iter().all(|f| f.grammatical)
+        && !matches!(phrase.part_of_speech, POS::Verb | POS::Adjective | POS::Adverb);
     phrase.frequencies =
         ctx.manager.build_freq_map(&phrase.lemma_form, &phrase.lemma_reading, phrase.is_kana);
     let hides_parts =

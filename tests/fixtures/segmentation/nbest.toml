@@ -62,9 +62,9 @@ text = "犬なの？"
 terms = [{ surface = "犬", reading = "いぬ" }]
 
 [[case]]
-name = "値する keeps its reading"
+name = "値する is the verb JMdict lists, not the noun 値"
 text = "万死に値する"
-terms = [{ surface = "値する", reading = "あたい" }]
+terms = [{ surface = "値する", lemma = "値する", reading = "あたいする", pos = "Verb" }]
 
 [[case]]
 name = "imperative 待て deinflects to 待つ"

@@ -9,6 +9,12 @@ frequencies = [
 	{ term = "高い", reading = "たかい", rank = 300 },
 	{ term = "何気", reading = "なにげ", rank = 9000 },
 	{ term = "説得", reading = "せっとく", rank = 2000 },
+	{ term = "自動化", reading = "じどうか", rank = 42422 },
+	{ term = "化する", reading = "かする", rank = 1726 },
+	{ term = "忘れ物", reading = "わすれもの", rank = 5606 },
+	{ term = "忘れる", reading = "わすれる", rank = 226 },
+	{ term = "物", reading = "もの", rank = 100 },
+	{ term = "物する", reading = "ものする", rank = 29821 },
 	{ term = "安心", reading = "あんしん", rank = 1100 },
 	{ term = "おぼろげ", reading = "おぼろげ", rank = 12000, kana = true },
 	{ term = "楽しげ", reading = "たのしげ", rank = 15000 },
@@ -46,6 +52,18 @@ terms = [{ surface = "何気", lemma = "何気", reading = "なにげ" }]
 name = "説得する keeps 説得 as the mineable term"
 text = "私は君を説得するだけの言葉を持ち合わせていない"
 terms = [{ surface = "説得する", lemma = "説得", reading = "せっとく", pos = "SuruVerb" }]
+
+[[case]]
+name = "自動化して is the suru verb of 自動化, which JMdict lists, not 自動 + 化する"
+text = "自動化して効率を上げる"
+terms = [{ surface = "自動化して", lemma = "自動化", reading = "じどうか", pos = "SuruVerb" }]
+absent = ["化する"]
+
+[[case]]
+name = "忘れ物した is 忘れ物, not 忘れ + the verb 物する JMdict lists"
+text = "父さんが忘れ物したから、門まで届けに行くの"
+terms = [{ surface = "忘れ物した", lemma = "忘れ物" }]
+absent = ["物する"]
 
 [[case]]
 name = "安心しました is the suru verb 安心, though UniDic also tags 安心 as a na-adjective"

@@ -18,7 +18,8 @@ export type JlptLevel = 'N5' | 'N4' | 'N3' | 'N2' | 'N1';
 export interface AutoSkip {
 	spelling_in_anki: boolean;
 	speaker_name: boolean;
-	ambiguous_grammar: boolean;
+	grammar: boolean;
+	kanji_fragment: boolean;
 }
 
 export interface Term {
@@ -109,6 +110,15 @@ export interface FileLoadResult {
 	/** When opened as a video: the subtitles it could load, and the id of the loaded one. */
 	subtitle_tracks: SubtitleChoice[];
 	subtitle_track: string | null;
+	/** Notes found already mined from the file outside Yomine. */
+	mined_before: MinedBefore | null;
+}
+
+/** Anki notes holding the file's lines that Yomine had no record of (`anki::mined`). */
+export interface MinedBefore {
+	notes: number;
+	/** The newest note's id, its creation time in ms. */
+	last_note: number;
 }
 
 /** A subtitle file beside a video, or a track embedded in it (`media::subtitles`). */
@@ -1012,6 +1022,8 @@ export interface FoundEpisode extends Media {
 	path: string;
 	/** Whether it has Japanese or untagged subtitles to mine; `null` while that's checked. */
 	subtitles: boolean | null;
+	/** Whether its subtitles show it was mined before outside Yomine. */
+	mined_before: boolean;
 }
 
 /** The episodes in the folders of these opened files, as `[path, show]`, of the shows each

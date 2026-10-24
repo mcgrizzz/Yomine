@@ -1,10 +1,12 @@
 <script lang="ts">
 	import AutoLedger from './AutoLedger.svelte';
+	import MinedBeforeDialog from './MinedBeforeDialog.svelte';
 	import AutoWaiting from './AutoWaiting.svelte';
 	import {
 		autoAvailable,
 		autoCountdown,
 		autoLedger,
+		autoMinedBefore,
 		autoMode,
 		autoReview,
 		autoSkipped,
@@ -53,6 +55,11 @@
 			$autoCountdown === null &&
 			$autoSkipped !== null &&
 			$autoSkipped === $fileResult?.batch_source.fingerprint
+	);
+	const minedBefore = $derived(
+		$autoMode !== 'off' && $autoCountdown === null && $autoMinedBefore !== null
+			? $autoMinedBefore === $fileResult?.batch_source.fingerprint && $fileResult.mined_before
+			: null
 	);
 	const waitingPicks = $derived($autoReview?.keys.filter((k) => $selectedTerms.has(k)).length ?? 0);
 
@@ -179,6 +186,10 @@
 		</div>
 	{/if}
 </div>
+
+{#if minedBefore}
+	<MinedBeforeDialog found={minedBefore} />
+{/if}
 
 <style>
 	.row {

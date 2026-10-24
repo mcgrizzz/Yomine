@@ -123,3 +123,8 @@ name = "なきゃ contraction deinflects to the dictionary form"
 text = "覚えなきゃいけないことはたくさんあるからね"
 terms = [{ surface = "覚えなきゃ", lemma = "覚える", reading = "おぼえる", pos = "Verb" }]
 absent = ["覚え"]
+
+[[case]]
+name = "くだらなくて is the adjective くだらない, though UniDic reads it as くだる + ない"
+text = "くだらなくて笑った"
+terms = [{ surface = "くだらなくて", lemma = "くだらない", pos = "Adjective" }]
