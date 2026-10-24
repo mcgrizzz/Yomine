@@ -13,14 +13,25 @@
 //!   cargo run --example review -- 30 --file path/to/subs.srt   # sample a file
 //!   cargo run --example review -- --all --file subs.srt        # every line, in order
 //!   cargo run --example review -- --all --file subs.srt --why  # and each phrase's verdict
+//!   cargo run --example review -- --all --file book.epub       # a book, split as the app splits it
+//!   cargo run --example review -- --all --file subs.srt --settings settings.json
+//!                                    # rank with that settings file's dictionary weights
 
 use rand::seq::SliceRandom;
 use yomine::{
-    core::models::Sentence,
+    core::models::{
+        Sentence,
+        SourceFile,
+    },
     dictionary::{
-        frequency_manager::process_frequency_dictionaries,
+        frequency_manager::{
+            process_frequency_dictionaries,
+            DictionaryState,
+            FrequencyManager,
+        },
         token_dictionary::DictType,
     },
+    parser::read_epub,
     segmentation::tokenizer::{
         explain_phrases,
         extract_words,
@@ -46,6 +57,9 @@ fn main() {
     }
 
     let manager = process_frequency_dictionaries(None).expect("frequency dictionaries");
+    if let Some(path) = args.iter().position(|a| a == "--settings").and_then(|i| args.get(i + 1)) {
+        apply_weights(&manager, path);
+    }
     if manager.get_enabled_dictionaries().is_empty() {
         eprintln!("!!! no frequency dictionaries installed — deinflection/rescue/phrases inactive");
     }
@@ -102,6 +116,25 @@ fn main() {
         }
     }
     println!();
+}
+
+/// Weights and enabled flags from an app settings file, for the dictionaries installed here.
+fn apply_weights(manager: &FrequencyManager, path: &str) {
+    let settings: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).expect("read --settings"))
+            .expect("parse --settings");
+    let states = settings["frequency_weights"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .filter(|(name, _)| manager.get_dictionary_state(name).is_some())
+        .map(|(name, state)| {
+            let weight = state["weight"].as_f64().unwrap_or(1.0) as f32;
+            let enabled = state["enabled"].as_bool().unwrap_or(true);
+            (name.clone(), DictionaryState { weight, enabled })
+        })
+        .collect();
+    manager.set_dictionary_states(&states).expect("apply --settings weights");
 }
 
 fn fetch_tatoeba(count: usize) -> Vec<String> {
@@ -162,7 +195,13 @@ fn save_to_corpus(fetched: Vec<String>) -> Vec<String> {
 }
 
 fn sample_file(path: &str, count: usize, all: bool) -> Vec<String> {
-    let content = std::fs::read_to_string(path).expect("read --file");
+    let content = if path.ends_with(".epub") {
+        let book = SourceFile { original_file: path.to_string(), ..Default::default() };
+        let sentences = read_epub(&book).expect("read --file");
+        sentences.into_iter().map(|s| s.text).collect::<Vec<_>>().join("\n")
+    } else {
+        std::fs::read_to_string(path).expect("read --file")
+    };
     let mut lines: Vec<String> = content
         .lines()
         .map(|l| l.trim())
