@@ -183,8 +183,10 @@ fn analyze_sentence(worker: &mut Worker, text: &str, manager: &FrequencyManager)
     let mut words = parse_into_words(tokens).unwrap_or_default();
     unvoice_initial_sounds(&mut words);
     let words = reparse_katakana_speech(worker, words, manager);
-    let mut words =
-        split_unvalidated_compounds(rescue_words(worker, text, words, manager), manager);
+    let mut words = split_unlisted_affixes(
+        split_unvalidated_compounds(rescue_words(worker, text, words, manager), manager),
+        manager,
+    );
     keep_listed_words(&mut words, manager);
     keep_listed_suru_verbs(&mut words);
     tag_katakana_interjections(worker, &mut words);
@@ -708,11 +710,16 @@ fn extract(
             after_stem = word.tokens.last().is_some_and(|t| {
                 t.pos1 == UnidicTag::Doushi && t.conjugation_form == UnidicTag::Renyoukei
             });
+            // A prefix or suffix alone only adds to the word beside it (たち, さん, 全).
+            let lone_affix = matches!(
+                word.tokens.as_slice(),
+                [t] if matches!(t.pos1, UnidicTag::Settouji | UnidicTag::Setsubiji)
+            );
             // The highlight span ends at start + surface_form.len(), so the
             // reference must point at the main word, not the segment.
             let ref_start = word.mining_span().0;
             let mut term: Term = word.into();
-            term.auto_skip.grammar = bound_to_stem;
+            term.auto_skip.grammar = bound_to_stem || lone_affix;
             let freq_map: HashMap<String, u32> = frequency_manager.build_freq_map(
                 &term.lemma_form,
                 &term.lemma_reading,
@@ -1124,6 +1131,78 @@ fn split_unvalidated_compounds(
         out.extend(rest_words);
     }
     out
+}
+
+/// A noun with a prefix or suffix JMdict doesn't list as one word (者たち, 全マップ,
+/// 寝室らしき) is the noun plus its affixes, so the card is the noun. Counters stay on their
+/// numbers (五枚). The lexicon lists few kana spellings, so a kana word a frequency list ranks
+/// stays whole (わたしたち).
+fn split_unlisted_affixes(words: Vec<Word>, manager: &FrequencyManager) -> Vec<Word> {
+    let mut out = Vec::with_capacity(words.len());
+    for word in words {
+        let tokens = &word.tokens;
+        // UniDic cuts unknown katakana names at a katakana affix (フラン + メ).
+        let affix = |t: &UnidicToken, tag| t.pos1 == tag && !t.surface.as_str().is_katakana();
+        let prefixes = tokens.iter().take_while(|t| affix(t, UnidicTag::Settouji)).count();
+        let suffixes = tokens[prefixes..]
+            .iter()
+            .rev()
+            .take_while(|t| affix(t, UnidicTag::Setsubiji) && t.pos3 != UnidicTag::Josuushi)
+            .count();
+        let core = &tokens[prefixes..tokens.len() - suffixes];
+        let nominal = |t: &UnidicToken| {
+            (t.pos1 == UnidicTag::Meishi && t.pos2 != UnidicTag::Suushi)
+                || t.pos1 == UnidicTag::Daimeshi
+        };
+        if prefixes + suffixes == 0
+            || core.is_empty()
+            || !core.iter().all(nominal)
+            || word.main_word.is_some()
+            || jmdict_lexicon::is_word(&word.surface_form)
+            || jmdict_lexicon::is_word(&word.lemma_form)
+            || (word.surface_form.as_str().is_kana()
+                && manager
+                    .get_harmonic_frequency_for_pair(&word.surface_form, &word.surface_hatsuon)
+                    .is_some())
+        {
+            out.push(word);
+            continue;
+        }
+        let parts = [&tokens[..prefixes], core, &tokens[tokens.len() - suffixes..]];
+        let split: Result<Vec<Vec<Word>>, _> = parts
+            .iter()
+            .filter(|part| !part.is_empty())
+            .map(|part| parse_into_words(part.to_vec()))
+            .collect();
+        match split {
+            Ok(mut parts) => {
+                if let Some(noun) = parts[1].first_mut().filter(|_| prefixes > 0) {
+                    drop_prefix_voicing(noun);
+                }
+                out.extend(parts.into_iter().flatten());
+            }
+            Err(_) => out.push(word),
+        }
+    }
+    out
+}
+
+/// A noun cut from its prefix loses the voicing the prefix gave it (大ガエル → カエル, whose
+/// lexeme reading has the plain sound). A kana spelling shows the voicing, so the card's
+/// spelling loses it too; the surface stays as written.
+fn drop_prefix_voicing(word: &mut Word) {
+    let Some(first) = word.tokens.first_mut() else {
+        return;
+    };
+    let voiced = first.lemma_hatsuon.chars().next().and_then(plain_sound);
+    if voiced.is_none() || voiced != first.lexeme_reading.chars().next() {
+        return;
+    }
+    unvoice_first(&mut first.surface_hatsuon);
+    unvoice_first(&mut first.lemma_hatsuon);
+    unvoice_first(&mut word.surface_hatsuon);
+    unvoice_first(&mut word.lemma_hatsuon);
+    unvoice_first(&mut word.lemma_form);
 }
 
 /// Dakuten/handakuten variants of a leading kana — the sequential-voicing
