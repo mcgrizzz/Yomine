@@ -149,6 +149,12 @@ export function goToQueued(index: number): Promise<void> {
 
 export const closeQueue = (): void => videoQueue.set(null);
 
+/** Whether `advanceQueue` would move on from the loaded video. */
+export function queueMovesOn(skipped = false): boolean {
+	const queue = get(currentQueue);
+	return !!queue && !(skipped && queue.manual) && queue.index + 1 < queue.videos.length;
+}
+
 /** Moves on once auto mode is done with the video `fingerprint`. A processed video it
  * `skipped` is kept when the user moved to it. */
 export async function advanceQueue(fingerprint: string, skipped = false): Promise<void> {

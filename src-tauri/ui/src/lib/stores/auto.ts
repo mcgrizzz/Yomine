@@ -4,7 +4,7 @@ import { autoPick, DEFAULT_HORIZON, type AutoPick, type NextInLine } from '$lib/
 import { applyControls, termKey } from '$lib/table';
 import { autoLedger, mineQueue } from './batches';
 import { freqFilter, jlptEnabled, posEnabled } from './controls';
-import { advanceQueue, fileResult, localVideo } from './file';
+import { advanceQueue, fileResult, localVideo, queueMovesOn } from './file';
 import { showPossibleKnownMatches } from './knowledgeView';
 import {
 	defaultEntry,
@@ -77,13 +77,17 @@ function cancelAutoCountdown(): void {
 }
 
 /** Holds back a video mined before outside Yomine, unless the session's answer is to mine
- * them; one it skips moves the queue on. */
+ * them. One the session skips moves the queue on, and the user is asked about the rest. */
 function heldMinedBefore(file: ipc.FileLoadResult): boolean {
 	const choice = get(minedBeforeChoice);
 	if (!file.mined_before || choice === 'mine') return false;
 	const { fingerprint } = file.batch_source;
-	autoMinedBefore.set(fingerprint);
-	if (choice === 'skip') void advanceQueue(fingerprint, true);
+	if (choice === 'skip' && queueMovesOn(true)) {
+		showNotice(`Skipped ${file.source_file.title}: mined before`);
+		void advanceQueue(fingerprint, true);
+	} else {
+		autoMinedBefore.set(fingerprint);
+	}
 	return true;
 }
 

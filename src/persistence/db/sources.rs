@@ -74,15 +74,24 @@ pub fn set_title(conn: &Connection, id: i64, title: &str) -> rusqlite::Result<()
     conn.execute("UPDATE sources SET title = ?2 WHERE id = ?1", params![id, title]).map(|_| ())
 }
 
-/// Whether auto mode mined the source into this Anki profile.
+/// Whether auto mode mined the source into this Anki profile, and the notes it mined
+/// aren't all deleted, by Undo or in Anki.
 pub fn is_auto_processed(
     conn: &Connection,
     fingerprint: &str,
     collection: &str,
 ) -> rusqlite::Result<bool> {
     conn.query_row(
-        "SELECT EXISTS (SELECT 1 FROM auto_processed a JOIN sources s ON s.id = a.source_id
-                        WHERE s.fingerprint = ?1 AND a.collection IN (?2, ''))",
+        "SELECT EXISTS (
+             SELECT 1 FROM auto_processed a JOIN sources s ON s.id = a.source_id
+             WHERE s.fingerprint = ?1 AND a.collection IN (?2, '')
+               AND NOT (
+                   EXISTS (SELECT 1 FROM notes n WHERE n.source_id = s.id
+                             AND n.batch_id IS NOT NULL
+                             AND (n.collection = ?2 OR n.collection IS NULL))
+                   AND NOT EXISTS (SELECT 1 FROM notes n WHERE n.source_id = s.id
+                             AND n.batch_id IS NOT NULL AND n.deleted_at IS NULL
+                             AND (n.collection = ?2 OR n.collection IS NULL))))",
         params![fingerprint, collection],
         |r| r.get(0),
     )
@@ -305,6 +314,40 @@ mod tests {
                 ("C:/data/asbplayer_subtitles/ep2.srt".into(), Some(MiningMode::Asbplayer)),
             ]
         );
+        drop(conn);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_source_is_no_longer_processed_once_its_mined_notes_are_all_deleted() {
+        let (dir, conn) = scratch("processed");
+        set_auto_processed(&conn, "ep1", "main", Some(1)).unwrap();
+        set_auto_processed(&conn, "empty", "main", Some(1)).unwrap();
+        let source = id(&conn, "ep1").unwrap();
+        conn.execute(
+            "INSERT INTO batches (id, source_id, path, started_at, auto) VALUES ('b', ?1, 'ep1', 0, 1)",
+            params![source],
+        )
+        .unwrap();
+        for note_id in [1u64, 2] {
+            let note = super::super::notes::NewNote {
+                note_id,
+                sentence: "猫だ",
+                term: Some("猫"),
+                source: Some(source),
+                batch_id: Some("b"),
+                collection: Some("main"),
+                deleted_at: None,
+            };
+            super::super::notes::insert(&conn, &note).unwrap();
+        }
+
+        super::super::notes::mark_deleted(&conn, &[1], 5).unwrap();
+        assert!(is_auto_processed(&conn, "ep1", "main").unwrap());
+        super::super::notes::mark_deleted(&conn, &[2], 5).unwrap();
+        assert!(!is_auto_processed(&conn, "ep1", "main").unwrap());
+        // Auto mode found nothing to mine in it, so no notes say otherwise.
+        assert!(is_auto_processed(&conn, "empty", "main").unwrap());
         drop(conn);
         std::fs::remove_dir_all(dir).unwrap();
     }

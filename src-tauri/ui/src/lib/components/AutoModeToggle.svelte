@@ -1,18 +1,17 @@
 <script lang="ts">
 	import AutoLedger from './AutoLedger.svelte';
+	import MinedBeforeDialog from './MinedBeforeDialog.svelte';
 	import AutoWaiting from './AutoWaiting.svelte';
 	import {
 		autoAvailable,
 		autoCountdown,
 		autoLedger,
-		answerMinedBefore,
 		autoMinedBefore,
 		autoMode,
 		autoReview,
 		autoSkipped,
 		checkingPicks,
 		fileResult,
-		minedBeforeSummary,
 		miningMode,
 		playerBusy,
 		processAnyway,
@@ -62,7 +61,6 @@
 			? $autoMinedBefore === $fileResult?.batch_source.fingerprint && $fileResult.mined_before
 			: null
 	);
-	let always = $state(false);
 	const waitingPicks = $derived($autoReview?.keys.filter((k) => $selectedTerms.has(k)).length ?? 0);
 
 	function choose(mode: AutoMode) {
@@ -172,29 +170,6 @@
 						<span>Pick Off or Review to stop</span>
 					</span>
 				</div>
-			{:else if minedBefore}
-				<div class="card" role="status">
-					<span class="count-text">
-						<strong
-							>Already mined this file, {$autoMode === 'review' ? 'review' : 'mine'} again anyway?</strong
-						>
-						<span>{minedBeforeSummary(minedBefore)}</span>
-						<label class="always"
-							><input type="checkbox" bind:checked={always} /> For the rest of this session</label
-						>
-						<span class="actions">
-							<button
-								class="link"
-								disabled={$playerBusy}
-								onclick={() => void answerMinedBefore(true, always)}
-								>{$autoMode === 'review' ? 'Review anyway' : 'Mine anyway'}</button
-							>
-							<button class="link" onclick={() => void answerMinedBefore(false, always)}
-								>Skip</button
-							>
-						</span>
-					</span>
-				</div>
 			{:else if skipped}
 				<div class="card" role="status">
 					<span class="count-text">
@@ -211,6 +186,10 @@
 		</div>
 	{/if}
 </div>
+
+{#if minedBefore}
+	<MinedBeforeDialog found={minedBefore} />
+{/if}
 
 <style>
 	.row {
@@ -470,12 +449,6 @@
 	.link:disabled {
 		opacity: 0.5;
 		cursor: default;
-	}
-	.always {
-		display: flex;
-		align-items: center;
-		gap: 0.35rem;
-		margin-top: 0.2rem;
 	}
 	.count-text strong {
 		color: var(--text);
