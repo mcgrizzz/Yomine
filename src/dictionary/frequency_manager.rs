@@ -233,7 +233,11 @@ impl FrequencyManager {
         let mut sum_of_weights = 0.0;
         let mut sum_of_weighted_reciprocals = 0.0;
 
-        for (name, &freq) in freq_map {
+        // A float sum depends on its order, and HashMap order changes between runs, which
+        // could round the same ranks to different results.
+        let mut entries: Vec<_> = freq_map.iter().collect();
+        entries.sort_unstable_by(|a, b| a.0.cmp(b.0));
+        for (name, &freq) in entries {
             if let Some(state) = states.get(name) {
                 if state.enabled && freq > 0 && state.weight > 0.0 {
                     sum_of_weights += state.weight;
@@ -317,7 +321,7 @@ impl FrequencyManager {
         readings.all(|r| r == first).then(|| first.to_string())
     }
 
-    //Used for deinflection sorting, not affected by weighting or toggling dictionaries.
+    //Used for deinflection sorting: weights don't apply, but only enabled dictionaries count.
     //Katakana spellings of hiragana-keyed entries fall back to the folded form
     //(ケガ人 → けが人).
     pub fn get_harmonic_frequency_for_pair(&self, word: &str, reading: &str) -> Option<u32> {

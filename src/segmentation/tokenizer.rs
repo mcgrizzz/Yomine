@@ -87,13 +87,17 @@ pub(super) fn resolve_citation(word: &mut Word, manager: &FrequencyManager) {
     });
     let lemma_deinflected = deinflections.contains(&lemma);
     // UniDic files a potential form under the verb it comes from: なれる (and なれん) under
-    // 成る, read ナル.
+    // 成る, read ナル. A compound's voiced first sound (づける for つける) isn't one.
+    let plain = |reading: &str| {
+        let mut reading = fold_katakana(reading);
+        unvoice_first(&mut reading);
+        reading
+    };
     let potential_of = word
         .tokens
         .first()
         .filter(|t| {
-            t.pos1 == UnidicTag::Doushi
-                && fold_katakana(&t.lexeme_reading) != fold_katakana(&t.lemma_hatsuon)
+            t.pos1 == UnidicTag::Doushi && plain(&t.lexeme_reading) != plain(&t.lemma_hatsuon)
         })
         .and_then(|t| {
             pairwise_deinflection(&lemma.0, &lemma.1).into_iter().find(|(form, reading)| {
@@ -175,14 +179,95 @@ fn analyze_sentence(worker: &mut Worker, text: &str, manager: &FrequencyManager)
         }
     }
     read_one_day(&mut tokens);
-    let words = parse_into_words(tokens).unwrap_or_default();
+    join_listed_sahen_compounds(&mut tokens);
+    let mut words = parse_into_words(tokens).unwrap_or_default();
+    unvoice_initial_sounds(&mut words);
     let words = reparse_katakana_speech(worker, words, manager);
     let mut words =
         split_unvalidated_compounds(rescue_words(worker, text, words, manager), manager);
     keep_listed_words(&mut words, manager);
+    keep_listed_suru_verbs(&mut words);
     tag_katakana_interjections(worker, &mut words);
     read_contracted_prohibitive(&mut words);
+    tag_split_syllables(&mut words);
     words
+}
+
+/// Voicing comes from the part before it (中央 + どおり, 思い + どおり), so a word after
+/// anything but a noun, affix or verb stem has its plain first sound; UniDic sometimes keeps
+/// the voiced reading it uses inside compounds (掛ける as がける after として). The lexeme's
+/// reading has the plain sound.
+fn unvoice_initial_sounds(words: &mut [Word]) {
+    for i in 0..words.len() {
+        let after_compound_part = i > 0
+            && words[i - 1].tokens.last().is_some_and(|t| {
+                matches!(t.pos1, UnidicTag::Meishi | UnidicTag::Settouji | UnidicTag::Setsubiji)
+                    || (t.pos1 == UnidicTag::Doushi && t.conjugation_form == UnidicTag::Renyoukei)
+            });
+        let word = &mut words[i];
+        let Some(first) = word.tokens.first_mut() else {
+            continue;
+        };
+        // Kana spells a voiced sound out (どころ, ぐらい); only a kanji can hide one.
+        let written_in_kanji = first.surface.chars().next().is_some_and(is_kanji_char)
+            && matches!(first.pos1, UnidicTag::Meishi | UnidicTag::Doushi | UnidicTag::Keiyoushi);
+        if after_compound_part || !written_in_kanji {
+            continue;
+        }
+        let voiced = first.lemma_hatsuon.chars().next().and_then(plain_sound);
+        if voiced.is_none() || voiced != first.lexeme_reading.chars().next() {
+            continue;
+        }
+        let start = first.start_byte;
+        unvoice_first(&mut first.surface_hatsuon);
+        unvoice_first(&mut first.lemma_hatsuon);
+        unvoice_first(&mut word.surface_hatsuon);
+        unvoice_first(&mut word.lemma_hatsuon);
+        if let Some(main) = word.main_word.as_mut().filter(|m| m.start_byte == start) {
+            unvoice_first(&mut main.surface_hatsuon);
+            unvoice_first(&mut main.lemma_hatsuon);
+        }
+    }
+}
+
+/// The plain sound of a voiced kana in either script (が → か, ぱ → は).
+fn plain_sound(kana: char) -> Option<char> {
+    const VOICED: &str = "ガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポ";
+    let katakana = match kana {
+        'ぁ'..='ゖ' => char::from_u32(kana as u32 + 0x60)?,
+        _ => kana,
+    };
+    let offset = match VOICED.find(katakana)? / 'ガ'.len_utf8() {
+        index if index >= 20 => 2,
+        _ => 1,
+    };
+    char::from_u32(kana as u32 - offset)
+}
+
+fn unvoice_first(reading: &mut String) {
+    let mut chars = reading.chars();
+    if let Some(plain) = chars.next().and_then(plain_sound) {
+        *reading = std::iter::once(plain).chain(chars).collect();
+    }
+}
+
+/// No word starts with a small kana or ー; UniDic leaves such a run when it splits a
+/// syllable it can't read (しなけれ + ゃいけないんですから).
+fn tag_split_syllables(words: &mut [Word]) {
+    const SPLIT_STARTS: &[char] = &[
+        'ゃ', 'ゅ', 'ょ', 'ぁ', 'ぃ', 'ぅ', 'ぇ', 'ぉ', 'ゎ', 'ャ', 'ュ', 'ョ', 'ァ', 'ィ', 'ゥ',
+        'ェ', 'ォ', 'ー',
+    ];
+    for word in words {
+        if word.surface_form.starts_with(SPLIT_STARTS)
+            && matches!(
+                word.part_of_speech,
+                POS::Noun | POS::Verb | POS::Adjective | POS::AdjectivalNoun | POS::Adverb
+            )
+        {
+            word.part_of_speech = POS::Unknown;
+        }
+    }
 }
 
 /// UniDic reads んな as そんな wherever it appears, but right after a verb it is るな with る
@@ -215,6 +300,54 @@ fn read_one_day(tokens: &mut [UnidicToken]) {
         if token.surface == "一日" && token.surface_hatsuon == "ツイタチ" && !after_month {
             token.surface_hatsuon = "イチニチ".into();
             token.lemma_hatsuon = "イチニチ".into();
+        }
+    }
+}
+
+/// UniDic splits off a suru-able suffix (自動 + 化) even where JMdict lists the compound
+/// (自動化); joined, a following する makes a suru verb of the compound instead of 化する.
+fn join_listed_sahen_compounds(tokens: &mut Vec<UnidicToken>) {
+    let mut i = 1;
+    while i + 1 < tokens.len() {
+        let (noun, suffix) = (&tokens[i - 1], &tokens[i]);
+        let joined = format!("{}{}", noun.surface, suffix.surface);
+        if noun.pos1 == UnidicTag::Meishi
+            && suffix.pos1 == UnidicTag::Setsubiji
+            && suffix.pos3 == UnidicTag::Sahenkanou
+            && tokens[i + 1].conjugation_type == UnidicTag::Sagyouhenkaku
+            && jmdict_lexicon::is_word(&joined)
+        {
+            let suffix = tokens.remove(i);
+            let noun = &mut tokens[i - 1];
+            noun.surface = joined;
+            noun.pos3 = UnidicTag::Sahenkanou;
+            noun.surface_hatsuon.push_str(&suffix.surface_hatsuon);
+            noun.lemma_form.push_str(&suffix.lemma_form);
+            noun.lemma_hatsuon.push_str(&suffix.lemma_hatsuon);
+            noun.lexeme.push_str(&suffix.lexeme);
+            noun.lexeme_reading.push_str(&suffix.lexeme_reading);
+            noun.end_byte = suffix.end_byte;
+        }
+        i += 1;
+    }
+}
+
+/// A noun + する that JMdict lists as a verb of its own (値する, "to deserve") means more than
+/// the noun, so the verb is the word. A noun right after a verb stem ends a compound (忘れ物
+/// in 忘れ物した), not 物する.
+fn keep_listed_suru_verbs(words: &mut [Word]) {
+    for i in 0..words.len() {
+        let after_verb_stem = i > 0
+            && words[i - 1].tokens.last().is_some_and(|t| {
+                t.pos1 == UnidicTag::Doushi && t.conjugation_form == UnidicTag::Renyoukei
+            });
+        let word = &mut words[i];
+        if word.part_of_speech == POS::SuruVerb
+            && !after_verb_stem
+            && jmdict_lexicon::word_type(&word.lemma_form) == Some(POS::Verb)
+        {
+            word.main_word = None;
+            word.part_of_speech = POS::Verb;
         }
     }
 }
@@ -418,6 +551,17 @@ impl PhraseMode {
     }
 }
 
+fn best_ranked(
+    manager: &FrequencyManager,
+    form: &str,
+    readings: Vec<String>,
+) -> Option<(u32, String)> {
+    readings
+        .into_iter()
+        .filter_map(|reading| Some((phrase_frequency(manager, form, &reading)?, reading)))
+        .min_by_key(|(rank, _)| *rank)
+}
+
 fn phrase_frequency(manager: &FrequencyManager, form: &str, reading: &str) -> Option<u32> {
     manager.get_harmonic_frequency_for_pair(
         &form.normalize_long_vowel(),
@@ -453,14 +597,13 @@ pub(super) fn phrase_candidate(
         }
     }
     let mut frequency = None;
-    for reading in readings {
-        if let Some(rank) = phrase_frequency(manager, &phrase.surface_form, &reading) {
-            phrase.surface_reading = reading.clone();
-            phrase.lemma_reading = reading.clone();
-            phrase.full_segment_reading = reading;
-            frequency = Some(rank);
-            break;
-        }
+    // JMdict can list a compound under both readings (いつもどおり and いつもとおり); the
+    // commoner one is meant.
+    if let Some((rank, reading)) = best_ranked(manager, &phrase.surface_form, readings) {
+        phrase.surface_reading = reading.clone();
+        phrase.lemma_reading = reading.clone();
+        phrase.full_segment_reading = reading;
+        frequency = Some(rank);
     }
     // UniDic can read a component differently inside a compound (表 as ひょう, but
     // 表沙汰 is おもてざた; 何 as なに, but 何でもない is なんでもない), so a spelling every
@@ -494,17 +637,15 @@ pub(super) fn phrase_candidate(
         }
     }
     // The full surface remains the highlight; only the citation takes the lemma.
-    if frequency.is_none() {
-        if let Some(citation) = citation_form_subrange(subrange) {
-            let form: String = citation.iter().map(|t| t.full_segment.as_str()).collect();
-            for reading in mode.readings(&citation) {
-                if let Some(rank) = phrase_frequency(manager, &form, &reading) {
-                    phrase.lemma_form = form.clone();
-                    phrase.lemma_reading = reading;
-                    frequency = Some(rank);
-                    break;
-                }
-            }
+    for citation in citation_form_subranges(subrange) {
+        if frequency.is_some() {
+            break;
+        }
+        let form: String = citation.iter().map(|t| t.full_segment.as_str()).collect();
+        if let Some((rank, reading)) = best_ranked(manager, &form, mode.readings(&citation)) {
+            phrase.lemma_form = form;
+            phrase.lemma_reading = reading;
+            frequency = Some(rank);
         }
     }
     (phrase, frequency)
@@ -992,20 +1133,38 @@ fn rendaku_variants(c: char) -> &'static [char] {
 }
 
 /// Swaps the trailing conjugated word's lemma into the span — dictionaries key by citation form, never 中途半端な.
-fn citation_form_subrange(subrange: &[Term]) -> Option<Vec<Term>> {
-    let last = subrange.last()?;
+/// Its lemma comes first, then the forms derived from that lemma it could also be: a phrase
+/// can use a potential or causative verb (引ける in 気が引ける, 輝かせる in 目を輝かせる).
+fn citation_form_subranges(subrange: &[Term]) -> Vec<Vec<Term>> {
+    let Some(last) = subrange.last() else {
+        return Vec::new();
+    };
     let conjugable = matches!(
         last.part_of_speech,
         POS::Verb | POS::SuruVerb | POS::Adjective | POS::AdjectivalNoun
     );
     if !conjugable || last.lemma_form.is_empty() || last.lemma_form == last.full_segment {
-        return None;
+        return Vec::new();
     }
-    let mut terms = subrange.to_vec();
-    let last = terms.last_mut().expect("non-empty subrange");
-    last.full_segment = last.lemma_form.clone();
-    last.full_segment_reading = last.lemma_reading.clone();
-    Some(terms)
+    let mut forms = vec![(last.lemma_form.clone(), last.lemma_reading.clone())];
+    for pair in pairwise_deinflection(&last.full_segment, &last.full_segment_reading) {
+        let derived = pairwise_deinflection(&pair.0, &pair.1)
+            .iter()
+            .any(|(form, _)| *form == last.lemma_form);
+        if derived && !forms.contains(&pair) {
+            forms.push(pair);
+        }
+    }
+    forms
+        .into_iter()
+        .map(|(form, reading)| {
+            let mut terms = subrange.to_vec();
+            let last = terms.last_mut().expect("non-empty subrange");
+            last.full_segment = form;
+            last.full_segment_reading = reading;
+            terms
+        })
+        .collect()
 }
 
 /// Candidate readings for a compound: the plain component concat first, then —

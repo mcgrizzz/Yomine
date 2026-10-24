@@ -6,6 +6,11 @@
 # that matched.
 
 frequencies = [
+	{ term = "いつも通り", reading = "いつもとおり", rank = 3976 },
+	{ term = "いつも通り", reading = "いつもどおり", rank = 3704 },
+	{ term = "気が引ける", reading = "きがひける", rank = 8844 },
+	{ term = "引く", reading = "ひく", rank = 698 },
+	{ term = "気", reading = "き", rank = 231 },
 	{ term = "聖杖", reading = "せいじょう", rank = 117103 },
 	{ term = "こたび", reading = "こたび", rank = 46000, kana = true },
 	{ term = "そうです", reading = "そうです", rank = 1000, kana = true },
@@ -227,3 +232,13 @@ absent = ["こた", "び"]
 name = "そうです after a verb stem is not the interjection"
 text = "長生きできそうです"
 absent = ["そうです"]
+
+[[case]]
+name = "気が引けて is 気が引ける, though 引けて deinflects to the commoner 引く"
+text = "見て見ぬ振りするのも気が引けて"
+terms = [{ surface = "気が引けて", lemma = "気が引ける" }]
+
+[[case]]
+name = "いつも通り takes the commoner of the readings JMdict lists, いつもどおり"
+text = "私はいつも通り８時に店に着いた"
+terms = [{ surface = "いつも通り", reading = "いつもどおり" }]
