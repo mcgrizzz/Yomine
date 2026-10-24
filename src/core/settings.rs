@@ -144,6 +144,23 @@ pub struct AutoMine {
     pub max_cards: Option<u32>,
     pub pos_points: BTreeMap<String, i32>,
     pub jlpt_points: BTreeMap<String, i32>,
+    pub skip: SkipReasons,
+}
+
+/// Which of a term's `AutoSkip` reasons make auto mode pass over it. A spelling already in
+/// Anki always does: Anki refuses the note.
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct SkipReasons {
+    pub speaker_name: bool,
+    pub grammar: bool,
+    pub kanji_fragment: bool,
+}
+
+impl Default for SkipReasons {
+    fn default() -> Self {
+        Self { speaker_name: true, grammar: true, kanji_fragment: true }
+    }
 }
 
 impl Default for AutoMine {
@@ -171,6 +188,7 @@ impl Default for AutoMine {
                 ("Pronoun", -10),
             ]),
             jlpt_points: points(&[("N5", 15), ("N4", 20), ("N3", 20), ("N2", 20), ("N1", 20)]),
+            skip: SkipReasons::default(),
         }
     }
 }
@@ -466,5 +484,15 @@ mod tests {
         let restored: SettingsData =
             serde_json::from_value(serde_json::to_value(restored).unwrap()).unwrap();
         assert!(!restored.show_possible_known_matches);
+    }
+
+    #[test]
+    fn auto_mine_saved_before_skip_reasons_keeps_skipping() {
+        let mut value = serde_json::to_value(AutoMine::default()).unwrap();
+        value.as_object_mut().unwrap().remove("skip");
+        let restored: AutoMine = serde_json::from_value(value).unwrap();
+        assert!(
+            restored.skip.grammar && restored.skip.kanji_fragment && restored.skip.speaker_name
+        );
     }
 }

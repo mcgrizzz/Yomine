@@ -295,6 +295,8 @@ export interface AutoMine {
 	max_cards: number | null;
 	pos_points: Record<string, number>;
 	jlpt_points: Record<string, number>;
+	/** Which `auto_skip` reasons make auto mode pass over a term; `spelling_in_anki` always does. */
+	skip: Record<Exclude<keyof AutoSkip, 'spelling_in_anki'>, boolean>;
 }
 
 export interface SettingsData {

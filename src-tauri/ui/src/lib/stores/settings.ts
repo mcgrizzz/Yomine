@@ -92,7 +92,8 @@ export const setAutoMine = (prefs: ipc.AutoMine) =>
 			min_score: Math.round(prefs.min_score) || 0,
 			max_cards: prefs.max_cards === null ? null : Math.max(1, Math.round(prefs.max_cards) || 1),
 			pos_points: { ...prefs.pos_points },
-			jlpt_points: { ...prefs.jlpt_points }
+			jlpt_points: { ...prefs.jlpt_points },
+			skip: { ...prefs.skip }
 		}
 	});
 
