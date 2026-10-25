@@ -33,6 +33,6 @@ A user setting that changes which terms the engine produces, or which terms auto
 _Avoid_: advanced setting, toggle
 
 **Skip reason**:
-Why auto mode passes over a term: grammar, kanji fragment, speaker name, or a spelling already
-in Anki.
+Why auto mode passes over a term: grammar, kanji fragment, speaker name, a loanword by source,
+or a spelling already in Anki.
 _Avoid_: filter (the term table's filters are separate)
