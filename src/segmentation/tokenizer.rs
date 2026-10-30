@@ -189,6 +189,7 @@ fn analyze_sentence(worker: &mut Worker, text: &str, manager: &FrequencyManager)
             tokens = better;
         }
     }
+    read_verbs_as_commoner(worker, &mut tokens, manager);
     read_one_day(&mut tokens);
     join_listed_sahen_compounds(&mut tokens);
     let mut words = parse_into_words(tokens).unwrap_or_default();
@@ -366,6 +367,70 @@ fn keep_listed_suru_verbs(words: &mut [Word]) {
 }
 
 const MISPARSE_PATHS: usize = 5;
+
+/// How much more UniDic's model may charge for a parse and still have frequency overrule it:
+/// 勝って costs 572 more as 勝つ than as 勝る in 全部をベットしてでも勝ってやる, while 通って
+/// costs 1867 more as 通る than as the right 通う in 毎日通ってくださっていた.
+const NEAR_TIE_COST: i32 = 1500;
+
+/// A verb UniDic reads as a rarer word written the same way when a parse it nearly prefers
+/// reads it as the commoner one (勝って as 勝る, not 勝つ).
+fn read_verbs_as_commoner(
+    worker: &mut Worker,
+    tokens: &mut [UnidicToken],
+    manager: &FrequencyManager,
+) {
+    let kanji_verb =
+        |t: &UnidicToken| t.pos1 == UnidicTag::Doushi && t.surface.chars().any(is_kanji_char);
+    if !tokens.iter().any(kanji_verb) {
+        return;
+    }
+    // Either spelling: dictionaries rank おっしゃる in kana, which makes 仰る look rare.
+    let rank = |t: &UnidicToken| {
+        let reading = fold_katakana(&t.lemma_hatsuon);
+        [t.lemma_form.as_str(), reading.as_str()]
+            .iter()
+            .filter_map(|form| manager.get_harmonic_frequency_for_pair(form, &reading))
+            .min()
+            .unwrap_or(u32::MAX)
+    };
+    worker.tokenize_nbest(MISPARSE_PATHS);
+    let Some(best) = worker.path_cost(0) else {
+        return;
+    };
+    // Verb tokens of the near-tied paths, with UniDic's conjugation form as written: the stored
+    // one leaves most forms unmapped, and 浮かべ is both 浮かべる's stem and 浮かぶ's conditional.
+    let readings: Vec<(UnidicToken, String)> = (0..worker.num_nbest_paths())
+        .filter(|&p| worker.path_cost(p).is_some_and(|cost| cost - best <= NEAR_TIE_COST))
+        .filter_map(|p| worker.nbest_token_iter(p))
+        .flatten()
+        .filter_map(|t| {
+            let form = t.feature().split(',').nth(5)?.to_string();
+            Some((UnidicToken::from_parts(t.surface(), t.feature(), t.range_byte()), form))
+        })
+        .filter(|(t, _)| kanji_verb(t))
+        .collect();
+    let same_span =
+        |a: &UnidicToken, b: &UnidicToken| (a.start_byte, a.end_byte) == (b.start_byte, b.end_byte);
+    for token in tokens.iter_mut().filter(|t| kanji_verb(t)) {
+        let Some((_, form)) =
+            readings.iter().find(|(t, _)| same_span(t, token) && t.lemma_form == token.lemma_form)
+        else {
+            continue;
+        };
+        let commoner = readings
+            .iter()
+            .filter(|(alt, alt_form)| {
+                same_span(alt, token) && alt_form == form && alt.lemma_form != token.lemma_form
+            })
+            .map(|(alt, _)| alt)
+            .min_by_key(|alt| rank(alt))
+            .filter(|alt| rank(alt) < rank(token));
+        if let Some(commoner) = commoner {
+            *token = commoner.clone();
+        }
+    }
+}
 
 /// Token runs the 1-best path gets wrong often enough that another path is worth taking.
 fn misparsed(tokens: &[UnidicToken]) -> bool {

@@ -4,6 +4,9 @@
 frequencies = [
 	{ term = "犬", reading = "けん", rank = 1000 },
 	{ term = "行く", reading = "いく", rank = 200 },
+	{ term = "通る", reading = "とおる", rank = 400 },
+	{ term = "通う", reading = "かよう", rank = 900 },
+	{ term = "行う", reading = "おこなう", rank = 600 },
 ]
 
 [[case]]
@@ -15,3 +18,13 @@ terms = [{ surface = "犬", reading = "けん" }]
 name = "proper noun without frequency data is untouched"
 text = "夏子が行った"
 terms = [{ surface = "夏子", pos = "ProperNoun" }, { surface = "行った", lemma = "行く" }]
+
+[[case]]
+name = "a verb reading UniDic clearly prefers stays, though another is commoner"
+text = "毎日通ってくださっていた"
+terms = [{ surface = "通って", lemma = "通う", reading = "かよう" }]
+
+[[case]]
+name = "行う stays 行う after an object"
+text = "調査を行った"
+terms = [{ surface = "行った", lemma = "行う", reading = "おこなう" }]
