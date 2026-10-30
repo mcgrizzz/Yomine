@@ -153,8 +153,10 @@ pub struct AutoSkip {
     pub spelling_in_anki: bool,
     /// Every occurrence sits inside a name the file's speaker labels use (善 of 善逸).
     pub speaker_name: bool,
-    /// A phrase of grammatical words only (ことになる, ありそう), or a bound verb after a verb
-    /// stem (きれる of 覚えきれる): grammar rather than vocabulary.
+    /// A phrase of grammatical words only (ことになる, ありそう), a bound verb after a verb
+    /// stem (きれる of 覚えきれる), a subsidiary verb after a て-form (下さい of 横になって下さい),
+    /// or a lone prefix or suffix (たち, さん), in most of its occurrences: grammar rather than
+    /// vocabulary.
     pub grammar: bool,
     /// A single kanji that only appears inside a longer kanji run (氏 of 壬氏).
     pub kanji_fragment: bool,

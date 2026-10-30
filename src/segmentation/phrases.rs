@@ -74,9 +74,11 @@ pub(super) struct WordFacts {
     grammatical: bool,
     rule_citation: bool,
     /// Ends in the conjunctive て/で (連れて).
-    te_form: bool,
+    pub(super) te_form: bool,
     /// A subsidiary verb or adjective (いく in 連れていく).
-    subsidiary: bool,
+    pub(super) subsidiary: bool,
+    /// は or も, which can come between a て-form and its subsidiary verb (教えてはくれない).
+    pub(super) te_link: bool,
     appearance_sou: bool,
 }
 
@@ -91,6 +93,8 @@ impl WordFacts {
                 t.pos2 == UnidicTag::Setsuzokujoshi && matches!(t.surface.as_str(), "て" | "で")
             }),
             subsidiary: grammar::is_subsidiary(word),
+            te_link: matches!(word.tokens.as_slice(), [t] if t.pos2 == UnidicTag::Kakarijoshi
+                && matches!(t.surface.as_str(), "は" | "も")),
             appearance_sou: word.tokens.first().is_some_and(|t| t.lexeme == "そう-様態"),
         }
     }

@@ -691,6 +691,8 @@ fn extract(
 ) -> Vec<Term> {
     let mut terms = Vec::<Term>::new();
     let mut speaker_names = HashSet::new();
+    // Per term: occurrences tagged grammar, and all occurrences.
+    let mut grammar_counts = HashMap::<(String, String), (usize, usize)>::new();
 
     for (ord, sentence) in sentences.iter_mut().enumerate() {
         let words = analyze_sentence(&mut worker, &sentence.text, frequency_manager);
@@ -710,6 +712,11 @@ fn extract(
             after_stem = word.tokens.last().is_some_and(|t| {
                 t.pos1 == UnidicTag::Doushi && t.conjugation_form == UnidicTag::Renyoukei
             });
+            let subsidiary_after_te = match facts.as_slice() {
+                [.., te, link, this] if link.te_link => te.te_form && this.subsidiary,
+                [.., te, this] => te.te_form && this.subsidiary,
+                _ => false,
+            };
             // A prefix or suffix alone only adds to the word beside it (たち, さん, 全).
             let lone_affix = matches!(
                 word.tokens.as_slice(),
@@ -719,7 +726,7 @@ fn extract(
             // reference must point at the main word, not the segment.
             let ref_start = word.mining_span().0;
             let mut term: Term = word.into();
-            term.auto_skip.grammar = bound_to_stem || lone_affix;
+            term.auto_skip.grammar = bound_to_stem || subsidiary_after_te || lone_affix;
             let freq_map: HashMap<String, u32> = frequency_manager.build_freq_map(
                 &term.lemma_form,
                 &term.lemma_reading,
@@ -823,6 +830,13 @@ fn extract(
             keep
         });
 
+        for sentence_term in &sentence_terms {
+            let key = (sentence_term.lemma_form.clone(), sentence_term.lemma_reading.clone());
+            let (grammar, all) = grammar_counts.entry(key).or_default();
+            *grammar += usize::from(sentence_term.auto_skip.grammar);
+            *all += 1;
+        }
+
         for term in terms.iter_mut() {
             for sentence_term in sentence_terms.iter().filter(|st| {
                 st.lemma_form == term.lemma_form && st.lemma_reading == term.lemma_reading
@@ -843,6 +857,13 @@ fn extract(
         });
 
         terms.append(&mut sentence_terms);
+    }
+
+    // Grammar where most occurrences are: 来る after a て-form is still a verb to learn where it
+    // mostly comes on its own, and さん misread as 三 now and then stays an honorific.
+    for term in &mut terms {
+        let (grammar, all) = grammar_counts[&(term.lemma_form.clone(), term.lemma_reading.clone())];
+        term.auto_skip.grammar = grammar * 2 > all;
     }
 
     speaker_labels::mark_speaker_names(&mut terms, sentences, &speaker_names);
@@ -1312,19 +1333,28 @@ mod tests {
             return;
         };
         let manager = FrequencyManager::from_dictionaries(vec![]);
-        let mut sentences: Vec<Sentence> =
-            ["梅梅姐ちゃんの感情", "白い蕾に吸わせたんです", "果たして 覚えきれるかどうか"]
-                .iter()
-                .enumerate()
-                .map(|(id, text)| Sentence {
-                    id,
-                    source_id: 0,
-                    text: text.to_string(),
-                    segments: vec![],
-                    timestamp: None,
-                    comprehension: 0.0,
-                })
-                .collect();
+        let mut sentences: Vec<Sentence> = [
+            "梅梅姐ちゃんの感情",
+            "白い蕾に吸わせたんです",
+            "果たして 覚えきれるかどうか",
+            "横になって下さい",
+            "本をください",
+            "家に誰かいる",
+            "待っている",
+            "見ている",
+            "売ってもくれない",
+        ]
+        .iter()
+        .enumerate()
+        .map(|(id, text)| Sentence {
+            id,
+            source_id: 0,
+            text: text.to_string(),
+            segments: vec![],
+            timestamp: None,
+            comprehension: 0.0,
+        })
+        .collect();
         let terms = extract_words(tokenizer.new_worker(), &mut sentences, &manager);
         let skip = |surface: &str| {
             terms.iter().find(|t| t.surface_form == surface).map(|t| t.auto_skip.clone())
@@ -1333,5 +1363,9 @@ mod tests {
         assert_eq!(skip("蕾").map(|s| s.kanji_fragment), Some(false));
         assert_eq!(skip("きれる").map(|s| s.grammar), Some(true));
         assert_eq!(skip("覚え").map(|s| s.grammar), Some(false));
+        assert_eq!(skip("下さい").map(|s| s.grammar), Some(true));
+        assert_eq!(skip("ください").map(|s| s.grammar), Some(false));
+        assert_eq!(skip("いる").map(|s| s.grammar), Some(true));
+        assert_eq!(skip("くれない").map(|s| s.grammar), Some(true));
     }
 }
