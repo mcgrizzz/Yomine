@@ -656,6 +656,41 @@ mod classification_tests {
         assert_eq!(unknown.len(), 1, "a 旅 card does not cover 旅行する");
     }
     #[test]
+    fn a_base_verb_card_covers_its_potential_only_when_the_term_is_the_base() {
+        let Some(tokenizer) = crate::segmentation::lexeme_resolver::test_tokenizer() else {
+            return;
+        };
+        let manager = Arc::new(FrequencyManager::from_dictionaries(vec![dictionary(
+            "test",
+            &[("読む", "よむ", 350)],
+        )]));
+        let extract = |options: &crate::core::TermOptions| {
+            let mut sentences = vec![Sentence {
+                id: 0,
+                source_id: 0,
+                text: "この字なら読めて当然だ".to_string(),
+                segments: Vec::new(),
+                timestamp: None,
+                comprehension: 0.0,
+            }];
+            crate::segmentation::tokenizer::extract_words_with(
+                tokenizer.new_worker(),
+                &mut sentences,
+                &manager,
+                options,
+            )
+            .into_iter()
+            .filter(|t| t.surface_form == "読めて")
+            .collect::<Vec<_>>()
+        };
+        let anki = state(manager.clone(), &[("読む", "よむ")]);
+        let (_, known) = anki.filter_existing_terms(extract(&Default::default()));
+        assert_eq!(known.len(), 1, "a 読む card covers 読めて mined as 読む");
+        let potential = crate::core::TermOptions { potential_forms: true, ..Default::default() };
+        let (unknown, _) = anki.filter_existing_terms(extract(&potential));
+        assert_eq!(unknown.len(), 1, "a 読む card doesn't cover 読めて mined as 読める");
+    }
+    #[test]
     fn card_changes_clear_labels_and_stats_agree() {
         let manager = Arc::new(FrequencyManager::from_dictionaries(vec![dictionary(
             "test",

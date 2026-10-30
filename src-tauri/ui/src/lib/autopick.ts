@@ -70,7 +70,11 @@ function skipped(t: Term, opts: PickOptions): boolean {
 		// A one-kana "word" is nearly always a misparse fragment (け in ぱんけぇき) or a
 		// mislabeled particle, yet frequency lists rank that kana highly (で at 8).
 		SINGLE_KANA.test(t.lemma_form) ||
-		Object.values(t.auto_skip ?? {}).some(Boolean)
+		// Anki refuses a second note with the same first field.
+		t.auto_skip?.spelling_in_anki ||
+		(Object.keys(opts.prefs.skip) as (keyof AutoMine['skip'])[]).some(
+			(reason) => opts.prefs.skip[reason] && t.auto_skip?.[reason]
+		)
 	);
 }
 

@@ -9,6 +9,7 @@ frequencies = [
 	{ term = "いつも通り", reading = "いつもとおり", rank = 3976 },
 	{ term = "いつも通り", reading = "いつもどおり", rank = 3704 },
 	{ term = "気が引ける", reading = "きがひける", rank = 8844 },
+	{ term = "目の前", reading = "めのまえ", rank = 646 },
 	{ term = "引く", reading = "ひく", rank = 698 },
 	{ term = "気", reading = "き", rank = 231 },
 	{ term = "聖杖", reading = "せいじょう", rank = 117103 },
@@ -237,6 +238,26 @@ absent = ["そうです"]
 name = "気が引けて is 気が引ける, though 引けて deinflects to the commoner 引く"
 text = "見て見ぬ振りするのも気が引けて"
 terms = [{ surface = "気が引けて", lemma = "気が引ける" }]
+
+[[case]]
+name = "without verb phrases, 気が引けて stays 気 + が + 引けて"
+text = "見て見ぬ振りするのも気が引けて"
+terms = [{ surface = "気" }]
+absent = ["気が引けて"]
+options = { verb_phrases = false }
+
+[[case]]
+name = "without verb phrases, 目の前 is still built: it doesn't conjugate"
+text = "目の前に立っていた"
+terms = [{ surface = "目の前" }]
+options = { verb_phrases = false }
+
+[[case]]
+name = "without other phrases, 目の前 stays 目 + の + 前"
+text = "目の前に立っていた"
+terms = [{ surface = "目" }]
+absent = ["目の前"]
+options = { other_phrases = false }
 
 [[case]]
 name = "いつも通り takes the commoner of the readings JMdict lists, いつもどおり"

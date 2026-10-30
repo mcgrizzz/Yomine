@@ -12,6 +12,10 @@ class LexiconTests(unittest.TestCase):
         self.addCleanup(self.db.close)
         self.db.execute("CREATE TABLE pairs(entry_id,reading,spelling,pos,misc,spelling_info,"
                         "reading_info)")
+        self.db.execute("CREATE TABLE loan_sources(entry_id,lang,wasei)")
+
+    def loan(self, entry, lang, wasei=0):
+        self.db.execute("INSERT INTO loan_sources VALUES(?,?,?)", (entry, lang, wasei))
 
     def pair(self, entry, reading, spelling, pos='["n"]', misc="[]", spelling_info="[]",
              reading_info="[]"):
@@ -59,7 +63,7 @@ class LexiconTests(unittest.TestCase):
         self.assertEqual(rows["w\tお迎え".encode()][:1], b"n")
         self.assertEqual(rows["w\t大丈夫".encode()][:1], b"a")
         self.assertEqual(rows["w\tはいはい".encode()], b"j")
-        self.assertEqual(rows["p\tどうだい".encode()][1:], b"e")
+        self.assertEqual(rows["p\tどうだい".encode()][1:], b"x")
 
     def test_readings_of_one_entry_share_it_and_separate_entries_do_not(self):
         for reading in ["あした", "あす"]:
@@ -84,6 +88,20 @@ class LexiconTests(unittest.TestCase):
         self.assertEqual(rows["w\t雰囲気".encode()], "n\tふんいき".encode())
         self.assertEqual(rows["w\t明日".encode()], "n\tあした\tあす".encode())
         self.assertEqual(rows["w\t通り".encode()], "n\tとおり".encode())
+
+    def test_loanwords_not_from_english_are_tagged(self):
+        for entry, reading in [(1, "あるばいと"), (2, "さらりーまん"), (3, "げーむ"), (4, "ぱん"),
+                               (5, "ぱん")]:
+            self.pair(entry, reading, reading)
+        self.loan(1, "ger")
+        self.loan(2, "eng", wasei=1)
+        self.loan(4, "eng")
+        self.loan(5, "por")
+        rows = self.rows()
+        self.assertEqual(rows["l\tあるばいと".encode()], b"o")
+        self.assertEqual(rows["l\tさらりーまん".encode()], b"w")
+        self.assertEqual(rows["l\tぱん".encode()], b"o")
+        self.assertNotIn("l\tげーむ".encode(), rows)
 
     def test_usually_kana_content_words_are_words(self):
         self.pair(1, "もったいない", "勿体無い", '["adj-i"]', '["uk"]')

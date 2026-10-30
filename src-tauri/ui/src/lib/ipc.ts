@@ -20,6 +20,9 @@ export interface AutoSkip {
 	speaker_name: boolean;
 	grammar: boolean;
 	kanji_fragment: boolean;
+	english_loanword: boolean;
+	made_in_japan_loanword: boolean;
+	other_loanword: boolean;
 }
 
 export interface Term {
@@ -295,6 +298,8 @@ export interface AutoMine {
 	max_cards: number | null;
 	pos_points: Record<string, number>;
 	jlpt_points: Record<string, number>;
+	/** Which `auto_skip` reasons make auto mode pass over a term; `spelling_in_anki` always does. */
+	skip: Record<Exclude<keyof AutoSkip, 'spelling_in_anki'>, boolean>;
 }
 
 export interface SettingsData {
@@ -352,6 +357,25 @@ export interface SettingsData {
 	tmdb_api_key: string;
 	/** Whether loaded files are matched by name on their own, which sends the names to TMDB. */
 	tmdb_matching: boolean;
+	term_options: TermOptions;
+}
+
+/** Mining options that change which terms the engine produces (`TermOptions` in core/settings.rs). */
+export interface TermOptions {
+	/** A noun + する is the verb (勉強する), not the noun (勉強). */
+	suru_as_verb: boolean;
+	/** A noun keeps a prefix or suffix JMdict doesn't list it with (騎士達, not 騎士). */
+	keep_affixed_nouns: boolean;
+	/** Build expressions that conjugate like a verb or adjective (気が引ける, ほうがいい). */
+	verb_phrases: boolean;
+	/** Build other expressions (これから, 目の前). */
+	other_phrases: boolean;
+	/** A potential verb JMdict lists is its own term (読める, not 読む). */
+	potential_forms: boolean;
+	/** A causative verb JMdict lists is its own term (驚かせる, not 驚く). */
+	causative_forms: boolean;
+	/** A passive verb JMdict lists is its own term (思われる, not 思う). */
+	passive_forms: boolean;
 }
 
 export interface TextFilterSetting {

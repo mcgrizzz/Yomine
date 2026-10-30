@@ -160,6 +160,37 @@ pub struct AutoSkip {
     pub grammar: bool,
     /// A single kanji that only appears inside a longer kanji run (氏 of 壬氏).
     pub kanji_fragment: bool,
+    /// A katakana loanword from English (ゲーム).
+    pub english_loanword: bool,
+    /// A katakana loanword in made-in-Japan English (サラリーマン).
+    pub made_in_japan_loanword: bool,
+    /// A katakana loanword from another language (アルバイト, パン).
+    pub other_loanword: bool,
+}
+
+/// Where a loanword comes from, ordered by how unlike English it is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum LoanSource {
+    English,
+    MadeInJapan,
+    Other,
+}
+
+impl AutoSkip {
+    pub fn loan_source(&self) -> Option<LoanSource> {
+        match (self.english_loanword, self.made_in_japan_loanword, self.other_loanword) {
+            (_, _, true) => Some(LoanSource::Other),
+            (_, true, _) => Some(LoanSource::MadeInJapan),
+            (true, _, _) => Some(LoanSource::English),
+            _ => None,
+        }
+    }
+
+    pub fn set_loan_source(&mut self, source: LoanSource) {
+        self.english_loanword = source == LoanSource::English;
+        self.made_in_japan_loanword = source == LoanSource::MadeInJapan;
+        self.other_loanword = source == LoanSource::Other;
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

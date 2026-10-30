@@ -126,6 +126,8 @@ pub struct UnidicToken {
     pub lexeme: String,
     /// The lexeme's reading (ナル for なれる, whose lexeme is 成る).
     pub lexeme_reading: String,
+    /// UniDic's word origin (語種) is foreign: ゲーム and ページ, not クマ or ダメ.
+    pub foreign: bool,
 
     /// Byte span in the source sentence; 0..0 for synthetic/test tokens.
     pub start_byte: usize,
@@ -182,6 +184,7 @@ impl From<(String, RawToken)> for UnidicToken {
             lemma_hatsuon: lemma_hatsuon,
             lexeme,
             lexeme_reading,
+            foreign: raw.goshu == "外",
             start_byte: 0,
             end_byte: 0,
         }

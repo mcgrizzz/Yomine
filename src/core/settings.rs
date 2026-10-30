@@ -144,6 +144,33 @@ pub struct AutoMine {
     pub max_cards: Option<u32>,
     pub pos_points: BTreeMap<String, i32>,
     pub jlpt_points: BTreeMap<String, i32>,
+    pub skip: SkipReasons,
+}
+
+/// Which of a term's `AutoSkip` reasons make auto mode pass over it. A spelling already in
+/// Anki always does: Anki refuses the note.
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct SkipReasons {
+    pub speaker_name: bool,
+    pub grammar: bool,
+    pub kanji_fragment: bool,
+    pub english_loanword: bool,
+    pub made_in_japan_loanword: bool,
+    pub other_loanword: bool,
+}
+
+impl Default for SkipReasons {
+    fn default() -> Self {
+        Self {
+            speaker_name: true,
+            grammar: true,
+            kanji_fragment: true,
+            english_loanword: false,
+            made_in_japan_loanword: false,
+            other_loanword: false,
+        }
+    }
 }
 
 impl Default for AutoMine {
@@ -171,6 +198,7 @@ impl Default for AutoMine {
                 ("Pronoun", -10),
             ]),
             jlpt_points: points(&[("N5", 15), ("N4", 20), ("N3", 20), ("N2", 20), ("N1", 20)]),
+            skip: SkipReasons::default(),
         }
     }
 }
@@ -287,6 +315,44 @@ pub struct SettingsData {
     /// Whether loaded files are matched by name on their own, which sends the names to TMDB.
     #[serde(default = "default_true")]
     pub tmdb_matching: bool,
+    #[serde(default)]
+    pub term_options: TermOptions,
+}
+
+/// Mining options that change which terms the engine produces; the defaults are its own
+/// choices.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct TermOptions {
+    /// A noun + する is the verb (勉強する), not the noun (勉強).
+    pub suru_as_verb: bool,
+    /// A noun keeps a prefix or suffix JMdict doesn't list it with (騎士達, not 騎士).
+    pub keep_affixed_nouns: bool,
+    /// Build expressions that conjugate like a verb or adjective (気が引ける, ほうがいい).
+    pub verb_phrases: bool,
+    /// Build other expressions (これから, 目の前). Words JMdict lists that UniDic splits
+    /// (二日酔い, 何気に) are built either way.
+    pub other_phrases: bool,
+    /// A potential verb JMdict lists is its own term (読める, not 読む).
+    pub potential_forms: bool,
+    /// A causative verb JMdict lists is its own term (驚かせる, not 驚く).
+    pub causative_forms: bool,
+    /// A passive verb JMdict lists is its own term (思われる, not 思う).
+    pub passive_forms: bool,
+}
+
+impl Default for TermOptions {
+    fn default() -> Self {
+        Self {
+            suru_as_verb: false,
+            keep_affixed_nouns: false,
+            verb_phrases: true,
+            other_phrases: true,
+            potential_forms: false,
+            causative_forms: false,
+            passive_forms: false,
+        }
+    }
 }
 
 const fn default_font_scale() -> f32 {
@@ -363,6 +429,7 @@ impl Default for SettingsData {
             ffmpeg_path: String::new(),
             tmdb_api_key: String::new(),
             tmdb_matching: true,
+            term_options: TermOptions::default(),
         }
     }
 }
@@ -466,5 +533,16 @@ mod tests {
         let restored: SettingsData =
             serde_json::from_value(serde_json::to_value(restored).unwrap()).unwrap();
         assert!(!restored.show_possible_known_matches);
+    }
+
+    #[test]
+    fn auto_mine_saved_before_skip_reasons_keeps_skipping() {
+        let mut value = serde_json::to_value(AutoMine::default()).unwrap();
+        value.as_object_mut().unwrap().remove("skip");
+        let restored: AutoMine = serde_json::from_value(value).unwrap();
+        assert!(
+            restored.skip.grammar && restored.skip.kanji_fragment && restored.skip.speaker_name
+        );
+        assert!(!restored.skip.english_loanword);
     }
 }

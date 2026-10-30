@@ -46,6 +46,7 @@
 	import IgnoreListModal from '$lib/components/IgnoreListModal.svelte';
 	import WebsocketSettingsModal from '$lib/components/WebsocketSettingsModal.svelte';
 	import MatchingSettingsModal from '$lib/components/MatchingSettingsModal.svelte';
+	import MiningSettingsModal from '$lib/components/MiningSettingsModal.svelte';
 	import AppearanceModal from '$lib/components/AppearanceModal.svelte';
 	import AboutModal from '$lib/components/AboutModal.svelte';
 	import AnkiSettingsModal from '$lib/components/AnkiSettingsModal.svelte';
@@ -354,6 +355,7 @@
 		<AnkiSettingsModal />
 		<LocalMediaModal />
 		<WebsocketSettingsModal />
+		<MiningSettingsModal />
 		<MatchingSettingsModal />
 	</SettingsWindow>
 	<FrequencyWeightsModal />

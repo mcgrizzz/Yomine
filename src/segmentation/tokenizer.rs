@@ -37,6 +37,7 @@ use crate::{
         },
         Sentence,
         Term,
+        TermOptions,
         YomineError,
     },
     dictionary::{
@@ -167,7 +168,12 @@ pub(super) fn resolve_citation(word: &mut Word, manager: &FrequencyManager) {
     }
 }
 
-fn analyze_sentence(worker: &mut Worker, text: &str, manager: &FrequencyManager) -> Vec<Word> {
+fn analyze_sentence(
+    worker: &mut Worker,
+    text: &str,
+    manager: &FrequencyManager,
+    options: &TermOptions,
+) -> Vec<Word> {
     worker.reset_sentence(text);
     worker.tokenize();
     let mut tokens: Vec<UnidicToken> = worker
@@ -198,9 +204,14 @@ fn analyze_sentence(worker: &mut Worker, text: &str, manager: &FrequencyManager)
     let mut words = split_unlisted_affixes(
         split_unvalidated_compounds(rescue_words(worker, text, words, manager), manager),
         manager,
+        options,
     );
     keep_listed_words(&mut words, manager);
     keep_listed_suru_verbs(&mut words);
+    if options.suru_as_verb {
+        mine_suru_verbs(&mut words);
+    }
+    mine_derived_forms(&mut words, options);
     tag_katakana_interjections(worker, &mut words);
     read_contracted_prohibitive(&mut words);
     tag_split_syllables(&mut words);
@@ -363,6 +374,70 @@ fn keep_listed_suru_verbs(words: &mut [Word]) {
         {
             word.main_word = None;
             word.part_of_speech = POS::Verb;
+        }
+    }
+}
+
+/// The verb (勉強する) instead of its noun (勉強) as the term of a noun + する.
+fn mine_suru_verbs(words: &mut [Word]) {
+    for word in words.iter_mut().filter(|w| w.part_of_speech == POS::SuruVerb) {
+        word.main_word = None;
+    }
+}
+
+enum Derivation {
+    Potential,
+    Causative,
+    Passive,
+    /// An ichidan verb's られる (食べられる) is either.
+    PotentialOrPassive,
+}
+
+/// The derivation a verb's ending shows, taking it as one step from another verb.
+fn derivation(form: &str) -> Option<Derivation> {
+    let before = |suffix: &str| form.strip_suffix(suffix).and_then(|stem| stem.chars().last());
+    let a_row = |c: char| "あかがさざただなはばぱまやらわ".contains(c);
+    let e_row = |c: char| "えけげせぜてでねへべぺめれ".contains(c);
+    if form.ends_with("させる") || before("せる").is_some_and(a_row) {
+        Some(Derivation::Causative)
+    } else if form.ends_with("られる") {
+        Some(Derivation::PotentialOrPassive)
+    } else if before("れる").is_some_and(a_row) {
+        Some(Derivation::Passive)
+    } else if before("る").is_some_and(e_row) {
+        Some(Derivation::Potential)
+    } else {
+        None
+    }
+}
+
+/// The verb one derivation step from the base verb, when JMdict lists it as a verb of its own
+/// and the user mines that kind: 読めて as 読める, not 読む; 書けて stays 書く, since JMdict
+/// doesn't list 書ける.
+fn mine_derived_forms(words: &mut [Word], options: &TermOptions) {
+    let wanted = |derivation| match derivation {
+        Derivation::Potential => options.potential_forms,
+        Derivation::Causative => options.causative_forms,
+        Derivation::Passive => options.passive_forms,
+        Derivation::PotentialOrPassive => options.potential_forms || options.passive_forms,
+    };
+    if !(options.potential_forms || options.causative_forms || options.passive_forms) {
+        return;
+    }
+    for word in words.iter_mut().filter(|w| w.part_of_speech == POS::Verb && w.main_word.is_none())
+    {
+        let base = word.citation.as_ref().map_or(&word.lemma_form, |c| &c.form).clone();
+        let derived = pairwise_deinflection(&word.surface_form, &word.surface_hatsuon)
+            .into_iter()
+            .find(|(form, reading)| {
+                *form != base
+                    && derivation(form).is_some_and(wanted)
+                    && jmdict_lexicon::word_type(form) == Some(POS::Verb)
+                    && pairwise_deinflection(form, reading).iter().any(|(f, _)| *f == base)
+            });
+        if let Some((form, reading)) = derived {
+            word.citation =
+                Some(Citation { form, reading, provenance: CitationProvenance::DerivedForm });
         }
     }
 }
@@ -735,7 +810,16 @@ pub fn extract_words(
     sentences: &mut [Sentence],
     frequency_manager: &FrequencyManager,
 ) -> Vec<Term> {
-    extract(worker, sentences, frequency_manager, None)
+    extract_words_with(worker, sentences, frequency_manager, &TermOptions::default())
+}
+
+pub fn extract_words_with(
+    worker: Worker,
+    sentences: &mut [Sentence],
+    frequency_manager: &FrequencyManager,
+    options: &TermOptions,
+) -> Vec<Term> {
+    extract(worker, sentences, frequency_manager, options, None)
 }
 
 /// Every phrase candidate that a frequency list ranks, as (sentence index, its words,
@@ -754,7 +838,7 @@ pub fn explain_phrases(
         };
         verdicts.push((ord, text, verdict));
     };
-    extract(worker, sentences, frequency_manager, Some(&mut record));
+    extract(worker, sentences, frequency_manager, &TermOptions::default(), Some(&mut record));
     verdicts
 }
 
@@ -764,6 +848,7 @@ fn extract(
     mut worker: Worker,
     sentences: &mut [Sentence],
     frequency_manager: &FrequencyManager,
+    options: &TermOptions,
     mut trace: Option<PhraseTrace>,
 ) -> Vec<Term> {
     let mut terms = Vec::<Term>::new();
@@ -772,7 +857,7 @@ fn extract(
     let mut grammar_counts = HashMap::<(String, String), (usize, usize)>::new();
 
     for (ord, sentence) in sentences.iter_mut().enumerate() {
-        let words = analyze_sentence(&mut worker, &sentence.text, frequency_manager);
+        let words = analyze_sentence(&mut worker, &sentence.text, frequency_manager, options);
 
         let mut term_spans: Vec<(usize, usize)> = Vec::with_capacity(words.len());
         let mut sentence_terms: Vec<Term> = Vec::with_capacity(words.len());
@@ -799,11 +884,18 @@ fn extract(
                 word.tokens.as_slice(),
                 [t] if matches!(t.pos1, UnidicTag::Settouji | UnidicTag::Setsubiji)
             );
+            // Words UniDic doesn't know never count: most are onomatopoeia, native words
+            // written in katakana (ゴッツイ) or names.
+            let loanword =
+                word.surface_form.as_str().is_katakana() && word.tokens.iter().all(|t| t.foreign);
             // The highlight span ends at start + surface_form.len(), so the
             // reference must point at the main word, not the segment.
             let ref_start = word.mining_span().0;
             let mut term: Term = word.into();
             term.auto_skip.grammar = bound_to_stem || subsidiary_after_te || lone_affix;
+            if loanword {
+                term.auto_skip.set_loan_source(jmdict_lexicon::loan_source(&term.surface_form));
+            }
             let freq_map: HashMap<String, u32> = frequency_manager.build_freq_map(
                 &term.lemma_form,
                 &term.lemma_reading,
@@ -867,8 +959,12 @@ fn extract(
         let mut suppressed: Vec<bool> = (0..base_len)
             .map(|i| labelled[i] || cut_off(i) || sentence_terms[i].surface_form.trim().is_empty())
             .collect();
-        let ctx =
-            phrases::Context { terms: &sentence_terms, facts: &facts, manager: frequency_manager };
+        let ctx = phrases::Context {
+            terms: &sentence_terms,
+            facts: &facts,
+            manager: frequency_manager,
+            options,
+        };
         let mut promoted = Vec::new();
         // A phrase that hides its words also hides phrases inside it (にかけて in 気にかける).
         let mut hidden_through = None;
@@ -995,7 +1091,13 @@ pub fn extract_words_for_frequency(
         .map_init(
             || tokenizer.new_worker(),
             |worker, sentence| {
-                let words = analyze_sentence(worker, &sentence.text, frequency_manager);
+                // Corpus statistics stay independent of a user's mining options.
+                let words = analyze_sentence(
+                    worker,
+                    &sentence.text,
+                    frequency_manager,
+                    &TermOptions::default(),
+                );
 
                 let mut sentence_terms: Vec<Term> = words
                     .into_iter()
@@ -1234,8 +1336,13 @@ fn split_unvalidated_compounds(
 /// A noun with a prefix or suffix JMdict doesn't list as one word (者たち, 全マップ,
 /// 寝室らしき) is the noun plus its affixes, so the card is the noun. Counters stay on their
 /// numbers (五枚). The lexicon lists few kana spellings, so a kana word a frequency list ranks
-/// stays whole (わたしたち).
-fn split_unlisted_affixes(words: Vec<Word>, manager: &FrequencyManager) -> Vec<Word> {
+/// stays whole (わたしたち). With `keep_affixed_nouns`, only a name loses its honorific
+/// (白羽さん → 白羽).
+fn split_unlisted_affixes(
+    words: Vec<Word>,
+    manager: &FrequencyManager,
+    options: &TermOptions,
+) -> Vec<Word> {
     let mut out = Vec::with_capacity(words.len());
     for word in words {
         let tokens = &word.tokens;
@@ -1252,9 +1359,11 @@ fn split_unlisted_affixes(words: Vec<Word>, manager: &FrequencyManager) -> Vec<W
             (t.pos1 == UnidicTag::Meishi && t.pos2 != UnidicTag::Suushi)
                 || t.pos1 == UnidicTag::Daimeshi
         };
+        let name = core.iter().all(|t| t.pos2 == UnidicTag::Koyuumeishi);
         if prefixes + suffixes == 0
             || core.is_empty()
             || !core.iter().all(nominal)
+            || (options.keep_affixed_nouns && !name)
             || word.main_word.is_some()
             || jmdict_lexicon::is_word(&word.surface_form)
             || jmdict_lexicon::is_word(&word.lemma_form)
@@ -1403,6 +1512,7 @@ pub fn init_vibrato(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::models::LoanSource;
 
     #[test]
     fn auto_mode_skips_kanji_fragments_and_bound_verbs() {
@@ -1444,5 +1554,34 @@ mod tests {
         assert_eq!(skip("ください").map(|s| s.grammar), Some(false));
         assert_eq!(skip("いる").map(|s| s.grammar), Some(true));
         assert_eq!(skip("くれない").map(|s| s.grammar), Some(true));
+    }
+
+    #[test]
+    fn katakana_loanwords_carry_their_source() {
+        let Some(tokenizer) = crate::segmentation::lexeme_resolver::test_tokenizer() else {
+            return;
+        };
+        let manager = FrequencyManager::from_dictionaries(vec![]);
+        let mut sentences = vec![Sentence {
+            id: 0,
+            source_id: 0,
+            text: "ゲームとアルバイトとサラリーマンとダメなゴッツイ奴".into(),
+            segments: vec![],
+            timestamp: None,
+            comprehension: 0.0,
+        }];
+        let terms = extract_words(tokenizer.new_worker(), &mut sentences, &manager);
+        let source = |surface: &str| {
+            terms
+                .iter()
+                .find(|t| t.surface_form.starts_with(surface))
+                .map(|t| t.auto_skip.loan_source())
+        };
+        assert_eq!(source("ゲーム"), Some(Some(LoanSource::English)));
+        assert_eq!(source("アルバイト"), Some(Some(LoanSource::Other)));
+        assert_eq!(source("サラリーマン"), Some(Some(LoanSource::MadeInJapan)));
+        // Native in katakana, and a word UniDic doesn't know.
+        assert_eq!(source("ダメ"), Some(None));
+        assert_eq!(source("ゴッツイ"), Some(None));
     }
 }
