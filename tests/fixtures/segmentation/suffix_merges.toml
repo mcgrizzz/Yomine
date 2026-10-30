@@ -12,6 +12,7 @@ frequencies = [
 	{ term = "わたしたち", reading = "わたしたち", rank = 4853, kana = true },
 	{ term = "説得", reading = "せっとく", rank = 2000 },
 	{ term = "自動化", reading = "じどうか", rank = 42422 },
+	{ term = "最適化", reading = "さいてきか", rank = 30250 },
 	{ term = "化する", reading = "かする", rank = 1726 },
 	{ term = "忘れ物", reading = "わすれもの", rank = 5606 },
 	{ term = "忘れる", reading = "わすれる", rank = 226 },
@@ -59,6 +60,12 @@ terms = [{ surface = "説得する", lemma = "説得", reading = "せっとく",
 name = "自動化して is the suru verb of 自動化, which JMdict lists, not 自動 + 化する"
 text = "自動化して効率を上げる"
 terms = [{ surface = "自動化して", lemma = "自動化", reading = "じどうか", pos = "SuruVerb" }]
+absent = ["化する"]
+
+[[case]]
+name = "最適化されて joins an adjectival noun with 化, as JMdict lists 最適化"
+text = "むしろ最適化されて絶好調だぜ"
+terms = [{ surface = "最適化されて", lemma = "最適化", reading = "さいてきか", pos = "SuruVerb" }]
 absent = ["化する"]
 
 [[case]]

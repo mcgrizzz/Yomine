@@ -318,14 +318,14 @@ fn read_one_day(tokens: &mut [UnidicToken]) {
     }
 }
 
-/// UniDic splits off a suru-able suffix (自動 + 化) even where JMdict lists the compound
-/// (自動化); joined, a following する makes a suru verb of the compound instead of 化する.
+/// UniDic splits off a suru-able suffix (自動 + 化, 最適 + 化) even where JMdict lists the
+/// compound (自動化); joined, a following する makes a suru verb of the compound instead of 化する.
 fn join_listed_sahen_compounds(tokens: &mut Vec<UnidicToken>) {
     let mut i = 1;
     while i + 1 < tokens.len() {
         let (noun, suffix) = (&tokens[i - 1], &tokens[i]);
         let joined = format!("{}{}", noun.surface, suffix.surface);
-        if noun.pos1 == UnidicTag::Meishi
+        if matches!(noun.pos1, UnidicTag::Meishi | UnidicTag::Keijoushi)
             && suffix.pos1 == UnidicTag::Setsubiji
             && suffix.pos3 == UnidicTag::Sahenkanou
             && tokens[i + 1].conjugation_type == UnidicTag::Sagyouhenkaku
@@ -334,6 +334,7 @@ fn join_listed_sahen_compounds(tokens: &mut Vec<UnidicToken>) {
             let suffix = tokens.remove(i);
             let noun = &mut tokens[i - 1];
             noun.surface = joined;
+            noun.pos1 = UnidicTag::Meishi;
             noun.pos3 = UnidicTag::Sahenkanou;
             noun.surface_hatsuon.push_str(&suffix.surface_hatsuon);
             noun.lemma_form.push_str(&suffix.lemma_form);
