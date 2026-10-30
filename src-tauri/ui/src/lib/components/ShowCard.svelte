@@ -143,8 +143,9 @@
 		return [
 			episodeLabel(season, number),
 			name,
-			status(hovered),
-			hovered.mined ? 'Mined' : null,
+			// A found file can be mined from another file of the episode, or outside Yomine.
+			hovered.state === 'found' && hovered.mined ? 'Mined from another file' : status(hovered),
+			hovered.mined && hovered.state !== 'found' ? 'Mined' : null,
 			files && files.length > 1 ? `${files.length} files, opens the latest` : null
 		]
 			.filter(Boolean)

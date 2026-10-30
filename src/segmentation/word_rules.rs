@@ -220,9 +220,9 @@ pub fn create_default_rules() -> Vec<Rule> {
             prev_word: WordMatcher::PosAny(vec![POS::Verb, POS::SuruVerb]),
             action: RuleAction::MergeWithPrevious {
                 attach_prev: true,
-                attach_prev_lemma: true,
+                attach_prev_lemma: false,
                 update_prev_pos: None,
-                main_word_policy: Some(MainWordPolicy::UseFirstToken),
+                main_word_policy: None,
             },
         },
         Rule {
@@ -241,9 +241,9 @@ pub fn create_default_rules() -> Vec<Rule> {
             prev_word: WordMatcher::PosAny(vec![POS::Verb, POS::SuruVerb, POS::Adjective]),
             action: RuleAction::MergeWithPrevious {
                 attach_prev: true,
-                attach_prev_lemma: true,
+                attach_prev_lemma: false,
                 update_prev_pos: None,
-                main_word_policy: Some(MainWordPolicy::UseFirstToken),
+                main_word_policy: None,
             },
         },
         Rule {
@@ -262,7 +262,7 @@ pub fn create_default_rules() -> Vec<Rule> {
             prev_word: WordMatcher::None,
             action: RuleAction::MergeWithPrevious {
                 attach_prev: true,
-                attach_prev_lemma: true,
+                attach_prev_lemma: false,
                 update_prev_pos: None,
                 main_word_policy: None,
             },

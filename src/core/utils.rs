@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    cell::OnceCell,
+    sync::LazyLock,
 };
 
 use jp_deinflector::deinflect;
@@ -14,17 +14,16 @@ pub trait FilterKana {
     fn filter_kana(&self) -> Cow<'_, str>;
 }
 
+static LONG_VOWEL: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"([おこそとのほもよろごぞどぼぽ])お|([えけせてねへめれげぜでべぺ])え").unwrap()
+});
+
 //とおい -> とうい AND  けいたい -> けいたい
 impl NormalizeLongVowel for str {
     fn normalize_long_vowel(&self) -> Cow<'_, str> {
         // Check if the string is hiragana
         if self.is_hiragana() {
-            // Lazily initialize the regex using OnceCell
-            let cell = OnceCell::new();
-            let re: &Regex = cell.get_or_init(|| {
-                Regex::new(r"([おこそとのほもよろごぞどぼぽ])お|([えけせてねへめれげぜでべぺ])え")
-                    .unwrap()
-            });
+            let re = &*LONG_VOWEL;
 
             // Check if any replacement is needed
             if re.is_match(self) {

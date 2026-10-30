@@ -26,6 +26,9 @@ frequencies = [
 	{ term = "なる", reading = "なる", rank = 30, kana = true },
 	{ term = "なれる", reading = "なれる", rank = 1145, kana = true },
 	{ term = "通じる", reading = "つうじる", rank = 2124 },
+	{ term = "下さる", reading = "くださる", rank = 300 },
+	{ term = "なさる", reading = "なさる", rank = 300, kana = true },
+	{ term = "来る", reading = "くる", rank = 50 },
 ]
 
 [[case]]
@@ -123,3 +126,22 @@ name = "なきゃ contraction deinflects to the dictionary form"
 text = "覚えなきゃいけないことはたくさんあるからね"
 terms = [{ surface = "覚えなきゃ", lemma = "覚える", reading = "おぼえる", pos = "Verb" }]
 absent = ["覚え"]
+
+[[case]]
+name = "くだらなくて is the adjective くだらない, though UniDic reads it as くだる + ない"
+text = "くだらなくて笑った"
+terms = [{ surface = "くだらなくて", lemma = "くだらない", pos = "Adjective" }]
+
+[[case]]
+name = "an honorific verb's imperative is its own word"
+text = "その本を下さい。早く寝なさい。いらっしゃいませ。"
+terms = [
+	{ surface = "下さい", lemma = "下さい", reading = "ください", pos = "Verb" },
+	{ surface = "なさい", lemma = "なさい", reading = "なさい", pos = "Verb" },
+	{ surface = "いらっしゃいませ", lemma = "いらっしゃいませ", reading = "いらっしゃいませ", pos = "Verb" },
+]
+
+[[case]]
+name = "a plain imperative ending in い keeps its verb"
+text = "こっちへ来い！"
+terms = [{ surface = "来い", lemma = "来る", reading = "くる", pos = "Verb" }]

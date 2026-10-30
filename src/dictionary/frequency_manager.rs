@@ -152,6 +152,17 @@ impl FrequencyManager {
         self.dictionaries.iter().filter(|(name, _)| !self.generated.contains(*name)).map(|(_, d)| d)
     }
 
+    /// The dictionaries that decide readings, ranks and whether a word is listed.
+    fn enabled_evidence(&self) -> Vec<&FrequencyDictionary> {
+        let mut dictionaries: Vec<_> = self
+            .get_enabled_dictionaries()
+            .into_iter()
+            .filter(|d| !self.generated.contains(&d.title))
+            .collect();
+        dictionaries.sort_unstable_by(|a, b| a.title.cmp(&b.title));
+        dictionaries
+    }
+
     pub fn terms_with_reading_from_all_dictionaries(&self, reading: &str) -> Vec<&str> {
         let normalized = crate::core::utils::normalize_japanese_text(reading);
         let mut terms: Vec<&str> = Vec::new();
@@ -184,14 +195,17 @@ impl FrequencyManager {
         is_kana: bool,
     ) -> HashMap<String, u32> {
         let mut freq_map = self.freq_map_for(lemma_form, lemma_reading, is_kana);
-        if freq_map.is_empty() {
-            let folded = fold_katakana(lemma_form);
-            if folded != lemma_form {
-                freq_map = self.freq_map_for(&folded, lemma_reading, is_kana);
+        let mut harmonic = self.get_weighted_harmonic(&freq_map);
+        let folded = fold_katakana(lemma_form);
+        if harmonic == u32::MAX && folded != lemma_form {
+            let folded_map = self.freq_map_for(&folded, lemma_reading, is_kana);
+            let folded_harmonic = self.get_weighted_harmonic(&folded_map);
+            if folded_harmonic != u32::MAX {
+                (freq_map, harmonic) = (folded_map, folded_harmonic);
             }
         }
 
-        freq_map.insert("HARMONIC".to_string(), self.get_weighted_harmonic(&freq_map));
+        freq_map.insert("HARMONIC".to_string(), harmonic);
         freq_map
     }
 
@@ -233,7 +247,11 @@ impl FrequencyManager {
         let mut sum_of_weights = 0.0;
         let mut sum_of_weighted_reciprocals = 0.0;
 
-        for (name, &freq) in freq_map {
+        // A float sum depends on its order, and HashMap order changes between runs, which
+        // could round the same ranks to different results.
+        let mut entries: Vec<_> = freq_map.iter().collect();
+        entries.sort_unstable_by(|a, b| a.0.cmp(b.0));
+        for (name, &freq) in entries {
             if let Some(state) = states.get(name) {
                 if state.enabled && freq > 0 && state.weight > 0.0 {
                     sum_of_weights += state.weight;
@@ -270,10 +288,9 @@ impl FrequencyManager {
 
     /// Retrieves all frequency data entries for the exact term from enabled dictionaries,
     /// without requiring a reading. For non-kana terms, excludes kana-specific frequencies.
-    // Used for anki term filtering, not affected by weighting or toggling dictionaries.
     pub fn get_frequency_data_by_term(&self, input: &str) -> Vec<&FrequencyData> {
         let mut freqs = Vec::new();
-        for dictionary in self.evidence_dictionaries() {
+        for dictionary in self.enabled_evidence() {
             if let Some(freq_data) = dictionary.get_frequencies_by_key(input) {
                 if !input.is_kana() {
                     //Filter the kana specific frequencies
@@ -309,15 +326,16 @@ impl FrequencyManager {
             .map(|(reading, _)| reading)
     }
 
-    /// The reading every dictionary gives `term`, when they give only one.
+    /// The reading every dictionary gives `term`, when they give only one; some write a
+    /// loanword's reading in hiragana (おふぃすがい for オフィス街).
     pub fn sole_reading(&self, term: &str) -> Option<String> {
         let data = self.get_frequency_data_by_term(term);
         let mut readings = data.iter().filter_map(|d| d.reading());
         let first = readings.next()?;
-        readings.all(|r| r == first).then(|| first.to_string())
+        readings.all(|r| fold_katakana(r) == fold_katakana(first)).then(|| first.to_string())
     }
 
-    //Used for deinflection sorting, not affected by weighting or toggling dictionaries.
+    //Used for deinflection sorting: weights don't apply, but only enabled dictionaries count.
     //Katakana spellings of hiragana-keyed entries fall back to the folded form
     //(ケガ人 → けが人).
     pub fn get_harmonic_frequency_for_pair(&self, word: &str, reading: &str) -> Option<u32> {
@@ -391,11 +409,7 @@ impl FrequencyManager {
             }
         };
 
-        let enabled_dicts: Vec<_> = self
-            .get_enabled_dictionaries()
-            .into_iter()
-            .filter(|d| !self.generated.contains(&d.title))
-            .collect();
+        let enabled_dicts = self.enabled_evidence();
 
         // Collect frequencies for exact word/reading pairs
         let exact_freqs: Vec<u32> =
@@ -720,6 +734,63 @@ mod batch_tests {
         assert_eq!(manager.get_dictionary_state("test").unwrap().weight, 1.0);
         assert!(manager.get_dictionary_state("test").unwrap().enabled);
         assert!(manager.set_dictionary_state("test", f32::NAN, true).is_err());
+    }
+
+    #[test]
+    fn disabled_dictionaries_decide_no_readings() {
+        use crate::dictionary::{
+            JsonFrequency,
+            JsonFrequencyData,
+        };
+        let dictionary = |title: &str, reading: &str| {
+            FrequencyDictionary::new(
+                title.into(),
+                "1".into(),
+                vec![TermMetaBankV3 {
+                    term: "オフィス街".into(),
+                    data_type: "freq".into(),
+                    data: Some(JsonFrequencyData::Nested {
+                        reading: reading.into(),
+                        frequency: JsonFrequency::Number(500),
+                    }),
+                }],
+            )
+        };
+        let manager = FrequencyManager::from_dictionaries(vec![
+            dictionary("A", "オフィスがい"),
+            dictionary("B", "おふぃすがい"),
+            dictionary("C", "おふぃすまち"),
+        ]);
+        manager.set_dictionary_state("C", 1.0, false).unwrap();
+        assert_eq!(manager.sole_reading("オフィス街").as_deref(), Some("オフィスがい"));
+    }
+
+    #[test]
+    fn a_disabled_dictionary_doesnt_stop_the_hiragana_retry() {
+        use crate::dictionary::{
+            JsonFrequency,
+            JsonFrequencyData,
+        };
+        let dictionary = |title: &str, term: &str| {
+            FrequencyDictionary::new(
+                title.into(),
+                "1".into(),
+                vec![TermMetaBankV3 {
+                    term: term.into(),
+                    data_type: "freq".into(),
+                    data: Some(JsonFrequencyData::Nested {
+                        reading: "しろくま".into(),
+                        frequency: JsonFrequency::Number(500),
+                    }),
+                }],
+            )
+        };
+        let manager = FrequencyManager::from_dictionaries(vec![
+            dictionary("Enabled", "白くま"),
+            dictionary("Disabled", "白クマ"),
+        ]);
+        manager.set_dictionary_state("Disabled", 1.0, false).unwrap();
+        assert_eq!(manager.build_freq_map("白クマ", "しろくま", false)["HARMONIC"], 500);
     }
 
     #[test]

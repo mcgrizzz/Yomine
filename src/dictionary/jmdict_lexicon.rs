@@ -1,4 +1,4 @@
-//! Generated JMdict phrase forms and per-entry readings (research/lexical/compile_lexicon.py).
+//! Generated JMdict phrase forms, spellings with their readings, and per-entry readings (research/lexical/compile_lexicon.py).
 use super::{
     frequency_manager::fold_katakana,
     kana_preference::SortedIndex,
@@ -29,6 +29,16 @@ pub(crate) fn is_word(form: &str) -> bool {
     let form = &ascii_width(form);
     let word = |form: &str| lookup(format!("w\t{}", form.normalize_long_vowel())).is_some();
     word(form) || word(&fold_katakana(form))
+}
+
+/// The readings JMdict gives a spelling with kanji, in JMdict's order (明日: あした, あす).
+pub(crate) fn readings(form: &str) -> Vec<&'static str> {
+    let form = ascii_width(form);
+    lookup(format!("w\t{}", form.normalize_long_vowel()))
+        .into_iter()
+        .flat_map(|value| value.split(|&byte| byte == b'\t').skip(1))
+        .filter_map(|reading| std::str::from_utf8(reading).ok())
+        .collect()
 }
 
 /// The type JMdict's first sense gives `form` (本当に an adverb, お迎え a noun), when the
@@ -68,11 +78,6 @@ fn ascii_width(form: &str) -> String {
 /// JMdict lists `reading` as an i-adjective ending in ない (つまらない, くだらない).
 pub(crate) fn is_nai_adjective(reading: &str) -> bool {
     lookup(format!("a\t{}", reading.normalize_long_vowel())).is_some()
-}
-
-/// How many senses JMdict gives the phrase `form` across its entries; `None` when it isn't one.
-pub(crate) fn phrase_senses(form: &str) -> Option<u8> {
-    lookup(format!("p\t{}", form.normalize_long_vowel())).and_then(|value| value.first().copied())
 }
 
 /// One JMdict entry lists `spelling` under both readings (明日 as あした and あす).
@@ -134,10 +139,11 @@ mod tests {
     }
 
     #[test]
-    fn phrases_carry_their_sense_count() {
-        assert_eq!(phrase_senses("ことになる"), Some(3));
-        assert_eq!(phrase_senses("ではない"), Some(1));
-        assert_eq!(phrase_senses("あなたに"), None);
+    fn spellings_carry_their_readings() {
+        assert_eq!(readings("甘納豆"), ["あまなっとう"]);
+        assert_eq!(readings("通り")[0], "とおり");
+        assert!(readings("明日").starts_with(&["あした", "あす"]));
+        assert!(readings("もったいない").is_empty());
     }
 
     #[test]

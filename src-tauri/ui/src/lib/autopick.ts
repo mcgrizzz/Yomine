@@ -120,31 +120,59 @@ export function autoPick(
 		);
 
 	const used = new Set(opts.minedSentences);
-	const picks: AutoPick[] = [];
+	const chosen: {
+		term: Term;
+		occs: ReturnType<typeof occurrencesOf>;
+		keys: string[];
+		/** Occurrence indices, best comprehension first. */
+		order: number[];
+		occIdx: number;
+	}[] = [];
+	/** The chosen term each sentence went to. */
+	const holder = new Map<string, number>();
+	// A pick can move to another of its sentences to free one for a later term with no
+	// other (混沌 for 交わる), so every term that can have a sentence of its own gets one.
+	const place = (c: number, visited: Set<string>): boolean => {
+		const { keys, order } = chosen[c];
+		const open = order.filter((i) => !used.has(keys[i]) && !visited.has(keys[i]));
+		const take = (i: number) => {
+			holder.set(keys[i], c);
+			chosen[c].occIdx = i;
+			return true;
+		};
+		const free = open.find((i) => !holder.has(keys[i]));
+		if (free !== undefined) return take(free);
+		for (const i of open) {
+			visited.add(keys[i]);
+			if (place(holder.get(keys[i])!, visited)) return take(i);
+		}
+		return false;
+	};
 	const next: NextInLine[] = [];
 	const { stop, limit, min_score, max_cards } = opts.prefs;
 	const cap = stop === 'count' ? limit : (max_cards ?? Infinity);
 	for (const { term, points } of ranked) {
 		// Ranked best first: once one is under the minimum, the rest are too.
 		const low = stop === 'min_score' && points < min_score;
-		if (low || picks.length >= cap) {
+		if (low || chosen.length >= cap) {
 			if (next.length >= NEXT_IN_LINE) break;
 			next.push({ term, reason: low ? 'min_score' : 'limit' });
 			continue;
 		}
 		const occs = occurrencesOf(term, sentences);
-		let best = -1;
-		occs.forEach((o, i) => {
-			if (used.has(opts.normalize(o.sentence.text))) return;
-			if (best < 0 || o.sentence.comprehension > occs[best].sentence.comprehension) best = i;
-		});
-		if (best < 0) {
+		const order = [...occs.keys()].sort(
+			(a, b) => occs[b].sentence.comprehension - occs[a].sentence.comprehension
+		);
+		const keys = occs.map((o) => opts.normalize(o.sentence.text));
+		chosen.push({ term, occs, keys, order, occIdx: -1 });
+		if (!place(chosen.length - 1, new Set())) {
+			chosen.pop();
 			if (next.length < NEXT_IN_LINE) next.push({ term, reason: 'sentence_used' });
-			continue;
 		}
-		const occ = occs[best];
-		used.add(opts.normalize(occ.sentence.text));
-		picks.push({
+	}
+	const picks = chosen.map(({ term, occs, occIdx }): AutoPick => {
+		const occ = occs[occIdx];
+		return {
 			item: {
 				lemma: term.lemma_form,
 				key: termKey(term),
@@ -152,8 +180,8 @@ export function autoPick(
 				sentence: occ.sentence.text,
 				timestamp: occ.sentence.timestamp
 			},
-			occIdx: best
-		});
-	}
+			occIdx
+		};
+	});
 	return { picks, next };
 }

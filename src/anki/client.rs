@@ -368,9 +368,9 @@ impl Anki {
         }
     }
 
-    /// Opens Anki's browser on recent adds with the note's card selected.
+    /// Opens Anki's browser on the note with its card selected.
     pub async fn open_note(&self, note_id: u64) -> Result<(), AnkiError> {
-        self.browse(&format!("added:1 OR nid:{note_id}")).await?;
+        self.browse(&format!("nid:{note_id}")).await?;
         if let Ok(notes) = self.notes(&[note_id]).await {
             if let Some(&card) = notes.first().and_then(|n| n.cards.first()) {
                 let _ = self.select_card(card).await;

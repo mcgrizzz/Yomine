@@ -8,7 +8,16 @@ frequencies = [
 	{ term = "静かさ", reading = "しずかさ", rank = 9000 },
 	{ term = "高い", reading = "たかい", rank = 300 },
 	{ term = "何気", reading = "なにげ", rank = 9000 },
+	{ term = "何気に", reading = "なにげに", rank = 17928 },
+	{ term = "わたしたち", reading = "わたしたち", rank = 4853, kana = true },
 	{ term = "説得", reading = "せっとく", rank = 2000 },
+	{ term = "自動化", reading = "じどうか", rank = 42422 },
+	{ term = "最適化", reading = "さいてきか", rank = 30250 },
+	{ term = "化する", reading = "かする", rank = 1726 },
+	{ term = "忘れ物", reading = "わすれもの", rank = 5606 },
+	{ term = "忘れる", reading = "わすれる", rank = 226 },
+	{ term = "物", reading = "もの", rank = 100 },
+	{ term = "物する", reading = "ものする", rank = 29821 },
 	{ term = "安心", reading = "あんしん", rank = 1100 },
 	{ term = "おぼろげ", reading = "おぼろげ", rank = 12000, kana = true },
 	{ term = "楽しげ", reading = "たのしげ", rank = 15000 },
@@ -38,14 +47,32 @@ text = "北部高原の標高の高さが成せる業だ"
 terms = [{ surface = "高さ", lemma = "高い", reading = "たかい" }]
 
 [[case]]
-name = "何気 binds the suffix to the pronoun"
+name = "何気に is the adverb JMdict lists, not the unlisted 何気"
 text = "私何気にお昼からフェリー乗るの初めてな気がします"
-terms = [{ surface = "何気", lemma = "何気", reading = "なにげ" }]
+terms = [{ surface = "何気に", lemma = "何気に", reading = "なにげに", pos = "Adverb" }]
 
 [[case]]
 name = "説得する keeps 説得 as the mineable term"
 text = "私は君を説得するだけの言葉を持ち合わせていない"
 terms = [{ surface = "説得する", lemma = "説得", reading = "せっとく", pos = "SuruVerb" }]
+
+[[case]]
+name = "自動化して is the suru verb of 自動化, which JMdict lists, not 自動 + 化する"
+text = "自動化して効率を上げる"
+terms = [{ surface = "自動化して", lemma = "自動化", reading = "じどうか", pos = "SuruVerb" }]
+absent = ["化する"]
+
+[[case]]
+name = "最適化されて joins an adjectival noun with 化, as JMdict lists 最適化"
+text = "むしろ最適化されて絶好調だぜ"
+terms = [{ surface = "最適化されて", lemma = "最適化", reading = "さいてきか", pos = "SuruVerb" }]
+absent = ["化する"]
+
+[[case]]
+name = "忘れ物した is 忘れ物, not 忘れ + the verb 物する JMdict lists"
+text = "父さんが忘れ物したから、門まで届けに行くの"
+terms = [{ surface = "忘れ物した", lemma = "忘れ物" }]
+absent = ["物する"]
 
 [[case]]
 name = "安心しました is the suru verb 安心, though UniDic also tags 安心 as a na-adjective"
@@ -64,3 +91,36 @@ name = "楽しげ merges the suffix and keeps the い-form lemma"
 text = "彼は楽しげに笑った"
 terms = [{ surface = "楽しげ", lemma = "楽しい", reading = "たのしい", pos = "Adjective" }]
 absent = ["げ"]
+
+[[case]]
+name = "者たち is 者 plus the suffix: JMdict doesn't list 者たち"
+text = "あの者たちを捕らえよ"
+terms = [{ surface = "者", lemma = "者" }]
+absent = ["者たち"]
+
+[[case]]
+name = "全マップ is the prefix plus マップ"
+text = "全マップ探査の魔法を使った"
+terms = [{ surface = "マップ", lemma = "マップ" }]
+absent = ["全マップ"]
+
+[[case]]
+name = "JMdict-listed 子供たち keeps its suffix"
+text = "子供たちが遊んでいる"
+terms = [{ surface = "子供たち" }]
+
+[[case]]
+name = "a ranked kana pronoun keeps its suffix: the lexicon lists few kana spellings"
+text = "わたしたちの番だ"
+terms = [{ surface = "わたしたち" }]
+
+[[case]]
+name = "an unknown katakana name isn't cut at a katakana suffix (フラン + メ)"
+text = "フランメの魔法は人知を超えます"
+terms = [{ surface = "フランメ" }]
+absent = ["フラン"]
+
+[[case]]
+name = "大ガエル is 大 plus カエル, not the voiced ガエル it takes after the prefix"
+text = "大ガエルの皮を手に巻いたのか"
+terms = [{ surface = "ガエル", lemma = "カエル", reading = "カエル" }]
