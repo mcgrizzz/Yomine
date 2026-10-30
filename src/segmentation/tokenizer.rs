@@ -78,6 +78,15 @@ pub(super) fn resolve_citation(word: &mut Word, manager: &FrequencyManager) {
             let form = format!("{}ない", word.surface_form.strip_suffix('ん')?);
             (kana && jmdict_lexicon::is_nai_adjective(&form)).then(|| (form.clone(), form))
         });
+    // An honorific verb's imperative, the only one ending in い, is a word of its own rather
+    // than a form of the verb (下さい "please", なさい, いらっしゃいませ).
+    let surface_reading = fold_katakana(&word.surface_hatsuon);
+    let honorific_imperative = surface_reading
+        .strip_suffix("ませ")
+        .unwrap_or(&surface_reading)
+        .strip_suffix('い')
+        .is_some_and(|stem| fold_katakana(&word.lemma_hatsuon).strip_suffix('る') == Some(stem))
+        .then(|| (word.surface_form.clone(), surface_reading.clone()));
     let lemma = (word.lemma_form.clone(), word.lemma_hatsuon.clone());
     // UniDic's form wins when the deinflector agrees; otherwise it only competes on frequency,
     // so the deinflector's gaps (すん for する) don't lose it, but ください stays ください.
@@ -120,7 +129,9 @@ pub(super) fn resolve_citation(word: &mut Word, manager: &FrequencyManager) {
         }
         _ => {}
     }
+    let nai_adjective = exception.is_some();
     let selected = exception
+        .or(honorific_imperative)
         .map(|pair| (pair, CitationProvenance::LexicalException))
         .or_else(|| {
             potential_of
@@ -147,7 +158,7 @@ pub(super) fn resolve_citation(word: &mut Word, manager: &FrequencyManager) {
             })
         });
     if let Some(((form, reading), provenance)) = selected {
-        if matches!(provenance, CitationProvenance::LexicalException) {
+        if nai_adjective {
             word.part_of_speech = POS::Adjective;
         }
         word.lemma_form = form.clone();
