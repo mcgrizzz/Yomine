@@ -67,8 +67,12 @@ pub async fn load_language_tools(
         return Ok(());
     }
 
-    // `known_interval` comes from settings; set on the tools once built (egui parity).
-    let known_interval = state.lock().unwrap().settings.anki_interval;
+    // `known_interval` and `term_options` come from settings; set on the tools once built
+    // (egui parity).
+    let (known_interval, term_options) = {
+        let guard = state.lock().unwrap();
+        (guard.settings.anki_interval, guard.settings.term_options.clone())
+    };
 
     // The loaders block (dictionary download + parse), so run them off the async
     // runtime; the `Channel` is `Send`/`Sync` and carries progress out.
@@ -94,7 +98,14 @@ pub async fn load_language_tools(
 
         let jlpt = Arc::new(JlptDatabase::load());
 
-        Ok(LanguageTools { tokenizer, frequency_manager, ignore_list, jlpt, known_interval })
+        Ok(LanguageTools {
+            tokenizer,
+            frequency_manager,
+            ignore_list,
+            jlpt,
+            known_interval,
+            term_options,
+        })
     })
     .await
     .map_err(|e| e.to_string())?;
@@ -270,6 +281,7 @@ pub fn save_settings(
     // may have been started before that command returned its updated settings.
     settings.frequency_weights = guard.settings.frequency_weights.clone();
     let summary_changed = guard.settings.anki_interval != settings.anki_interval;
+    let terms_changed = guard.settings.term_options != settings.term_options;
     let connection_changed = guard.settings.anki_connection != settings.anki_connection;
     if guard.settings.mining_mode != settings.mining_mode {
         player.set_mode(settings.mining_mode);
@@ -284,6 +296,14 @@ pub fn save_settings(
     guard.settings = settings.clone();
     if let Some(tools) = guard.language_tools.as_mut() {
         tools.known_interval = settings.anki_interval;
+        tools.term_options = settings.term_options.clone();
+    }
+    if terms_changed {
+        guard.invalidate_dictionary_evidence();
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            let _ = super::dictionary::refresh_loaded_file(&app).await;
+        });
     }
     if matching_changed {
         guard.invalidate_anki_cache();

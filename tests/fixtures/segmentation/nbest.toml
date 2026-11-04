@@ -21,6 +21,8 @@ frequencies = [
 	{ term = "受ける", reading = "うける", rank = 219 },
 	{ term = "お", reading = "お", rank = 72, kana = true },
 	{ term = "おつもり", reading = "おつもり", rank = 15337, kana = true },
+	{ term = "勝つ", reading = "かつ", rank = 400 },
+	{ term = "勝る", reading = "まさる", rank = 7000 },
 ]
 
 # A bad 口約+束 split could never promote 口約束, so the phrase's presence
@@ -62,9 +64,9 @@ text = "犬なの？"
 terms = [{ surface = "犬", reading = "いぬ" }]
 
 [[case]]
-name = "値する keeps its reading"
+name = "値する is the verb JMdict lists, not the noun 値"
 text = "万死に値する"
-terms = [{ surface = "値する", reading = "あたい" }]
+terms = [{ surface = "値する", lemma = "値する", reading = "あたいする", pos = "Verb" }]
 
 [[case]]
 name = "imperative 待て deinflects to 待つ"
@@ -94,3 +96,9 @@ name = "おつもりです is the noun つもり, not 積もる"
 text = "一級試験を 受けられるおつもりですか？"
 terms = [{ surface = "つもり", lemma = "つもり" }]
 absent = ["つもる", "おつもり"]
+
+# UniDic nearly ties 勝る and 勝つ here and takes the rarer one.
+[[case]]
+name = "a near-tied verb reading goes to the commoner verb"
+text = "私の全部をベットしてでも勝ってやる"
+terms = [{ surface = "勝って", lemma = "勝つ", reading = "かつ" }]

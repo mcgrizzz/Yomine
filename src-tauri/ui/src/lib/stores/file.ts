@@ -149,6 +149,12 @@ export function goToQueued(index: number): Promise<void> {
 
 export const closeQueue = (): void => videoQueue.set(null);
 
+/** Whether `advanceQueue` would move on from the loaded video. */
+export function queueMovesOn(skipped = false): boolean {
+	const queue = get(currentQueue);
+	return !!queue && !(skipped && queue.manual) && queue.index + 1 < queue.videos.length;
+}
+
 /** Moves on once auto mode is done with the video `fingerprint`. A processed video it
  * `skipped` is kept when the user moved to it. */
 export async function advanceQueue(fingerprint: string, skipped = false): Promise<void> {
@@ -170,6 +176,11 @@ export async function loadAndStore(
 	await load(path, epubChapters, epubLabel);
 }
 
+export function minedBeforeSummary({ notes, last_note }: ipc.MinedBefore): string {
+	const date = new Date(last_note).toLocaleDateString(undefined, { dateStyle: 'medium' });
+	return `${notes} cards already in Anki, the latest from ${date}`;
+}
+
 /** Whether `path` was loaded. */
 async function load(
 	path: string,
@@ -188,8 +199,14 @@ async function load(
 			? await ipc.openVideo(path, null, (msg) => overlay.set(msg.message))
 			: await ipc.processFile(path, (msg) => overlay.set(msg.message), epubChapters, epubLabel);
 		fileResult.set(result);
+		const minedBefore = result.mined_before;
 		// Dynamic for the same import cycle as switchMode.
-		if (result.local_video) void import('./auto').then((auto) => auto.onLocalVideo());
+		void import('./auto').then((auto) => {
+			// Auto mode asks about it instead.
+			if (minedBefore && get(auto.autoMode) === 'off')
+				showNotice(`Mined before: ${minedBeforeSummary(minedBefore)}`);
+			if (result.local_video) auto.onLocalVideo();
+		});
 		void refreshMinedState(true);
 		recentFiles.set(await ipc.getRecentFiles());
 		return true;
@@ -221,8 +238,10 @@ export async function openFolder(): Promise<void> {
 	}
 }
 
-/** In the mode it was loaded in; a book in the current one. */
+/** In the mode it was loaded in; a book in the current one. A local video opens as its
+ * folder's queue. */
 export async function openRecentFile(entry: ipc.RecentFileEntry): Promise<void> {
+	if (isVideoPath(entry.file_path)) return openFound(entry.file_path);
 	if (entry.mode) {
 		const { miningMode } = await import('./settings');
 		if (get(miningMode) !== entry.mode && !(await switchMode(entry.mode, false))) return;

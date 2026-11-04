@@ -38,7 +38,10 @@ use std::{
 
 use serde::Deserialize;
 use yomine::{
-    core::models::Sentence,
+    core::{
+        models::Sentence,
+        TermOptions,
+    },
     dictionary::{
         frequency_dict::FrequencyDictionary,
         frequency_manager::FrequencyManager,
@@ -49,6 +52,7 @@ use yomine::{
     },
     segmentation::tokenizer::{
         extract_words,
+        extract_words_with,
         init_vibrato,
     },
     vibrato::Tokenizer,
@@ -86,6 +90,9 @@ struct Case {
     terms: Vec<TermExpectation>,
     #[serde(default)]
     absent: Vec<String>,
+    /// Mining options other than the defaults.
+    #[serde(default)]
+    options: TermOptions,
 }
 
 #[derive(Deserialize)]
@@ -244,7 +251,7 @@ fn run_case(tok: &Tokenizer, manager: &FrequencyManager, case: &Case) -> Vec<Str
         timestamp: None,
         comprehension: 0.0,
     }];
-    let terms = extract_words(tok.new_worker(), &mut sentences, manager);
+    let terms = extract_words_with(tok.new_worker(), &mut sentences, manager, &case.options);
 
     // (surface slice, reading, pos-key) actually produced for the sentence.
     let actual_segments: Vec<(String, String, String)> = sentences[0]

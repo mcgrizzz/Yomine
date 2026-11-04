@@ -81,12 +81,15 @@
 	}
 
 	let mined = $state<MinedEpisode[]>([]);
-	$effect(() => {
-		if (!$browseModalOpen || view !== 'shows') return;
-		void scan();
-		void getMinedEpisodes()
+	const readMined = () =>
+		getMinedEpisodes()
 			.then((episodes) => (mined = episodes))
 			.catch(() => {});
+	$effect(() => {
+		if (!$browseModalOpen || view !== 'shows') return;
+		// Again after the scan, which records notes opened episodes were mined in before.
+		void scan().then(readMined);
+		void readMined();
 	});
 	const foundFor = (tmdbId: number) =>
 		filter === 'asbplayer' ? [] : Object.values(found).filter((f) => f.work.tmdb_id === tmdbId);
@@ -123,7 +126,7 @@
 				class="rescan"
 				disabled={checking.size > 0}
 				title="Match and check every file in the folders of opened episodes again"
-				onclick={() => void scan(true)}
+				onclick={() => void scan(true).then(readMined)}
 				>{checking.size > 0 ? 'Checking folders…' : '⟳ Rescan folders'}</button
 			>
 		{/if}
@@ -170,7 +173,7 @@
 						show={selected}
 						found={foundFor(selected.work.tmdb_id)}
 						checking={selected.work.kind === 'tv' && checking.has(selected.work.tmdb_id)}
-						mined={minedIn(mined, selected.work.tmdb_id)}
+						mined={minedIn(mined, selected.work.tmdb_id, foundFor(selected.work.tmdb_id))}
 						onopen={open}
 						onopenepisode={openShowEpisode}
 					/>

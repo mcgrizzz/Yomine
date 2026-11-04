@@ -75,8 +75,19 @@ text = "50年に一度の流星群"
 terms = [{ surface = "一度", lemma = "一度", reading = "いちど", pos = "Noun" }]
 absent = ["度"]
 
-# 一日 is ついたち or いちにち; UniDic reads it from the sentence.
+# 一日 is ついたち or いちにち; UniDic reads it from the sentence, but ついたち is the 1st only
+# after a month.
 [[case]]
 name = "a listed number + counter keeps UniDic's reading in context"
 text = "一日頑張った"
 terms = [{ surface = "一日", reading = "いちにち" }]
+
+[[case]]
+name = "一日 after 今日 is いちにち"
+text = "今日一日は観察に使うよ"
+terms = [{ surface = "一日", reading = "いちにち" }]
+
+[[case]]
+name = "一日 after a month is ついたち"
+text = "四月一日に会おう"
+terms = [{ surface = "一日", reading = "ついたち" }]

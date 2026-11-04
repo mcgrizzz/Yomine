@@ -25,7 +25,11 @@
     "corpus": [
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "english_loanword": false,
+          "grammar": false,
+          "kanji_fragment": false,
+          "made_in_japan_loanword": false,
+          "other_loanword": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -47,7 +51,11 @@
       },
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "english_loanword": false,
+          "grammar": false,
+          "kanji_fragment": false,
+          "made_in_japan_loanword": false,
+          "other_loanword": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -75,7 +83,11 @@
     "production": [
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "english_loanword": false,
+          "grammar": false,
+          "kanji_fragment": false,
+          "made_in_japan_loanword": false,
+          "other_loanword": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -105,7 +117,11 @@
       },
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "english_loanword": false,
+          "grammar": false,
+          "kanji_fragment": false,
+          "made_in_japan_loanword": false,
+          "other_loanword": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -166,7 +182,11 @@
     "corpus": [
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "english_loanword": false,
+          "grammar": false,
+          "kanji_fragment": false,
+          "made_in_japan_loanword": false,
+          "other_loanword": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -193,7 +213,11 @@
     "production": [
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "english_loanword": false,
+          "grammar": false,
+          "kanji_fragment": false,
+          "made_in_japan_loanword": false,
+          "other_loanword": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -248,7 +272,11 @@
     "corpus": [
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "english_loanword": false,
+          "grammar": false,
+          "kanji_fragment": false,
+          "made_in_japan_loanword": false,
+          "other_loanword": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -275,7 +303,11 @@
     "production": [
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "english_loanword": false,
+          "grammar": false,
+          "kanji_fragment": false,
+          "made_in_japan_loanword": false,
+          "other_loanword": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -330,7 +362,11 @@
     "corpus": [
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "english_loanword": false,
+          "grammar": false,
+          "kanji_fragment": false,
+          "made_in_japan_loanword": false,
+          "other_loanword": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -357,7 +393,11 @@
     "production": [
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "english_loanword": false,
+          "grammar": false,
+          "kanji_fragment": false,
+          "made_in_japan_loanword": false,
+          "other_loanword": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -412,7 +452,11 @@
     "corpus": [
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "english_loanword": false,
+          "grammar": false,
+          "kanji_fragment": false,
+          "made_in_japan_loanword": false,
+          "other_loanword": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -439,7 +483,11 @@
     "production": [
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "english_loanword": false,
+          "grammar": false,
+          "kanji_fragment": false,
+          "made_in_japan_loanword": false,
+          "other_loanword": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -514,7 +562,11 @@
     "corpus": [
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "english_loanword": false,
+          "grammar": false,
+          "kanji_fragment": false,
+          "made_in_japan_loanword": false,
+          "other_loanword": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -536,7 +588,11 @@
       },
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "english_loanword": false,
+          "grammar": false,
+          "kanji_fragment": false,
+          "made_in_japan_loanword": false,
+          "other_loanword": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -558,7 +614,11 @@
       },
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "english_loanword": false,
+          "grammar": false,
+          "kanji_fragment": false,
+          "made_in_japan_loanword": false,
+          "other_loanword": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -588,7 +648,11 @@
     "production": [
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "english_loanword": false,
+          "grammar": false,
+          "kanji_fragment": false,
+          "made_in_japan_loanword": false,
+          "other_loanword": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -705,7 +769,11 @@
     "corpus": [
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "english_loanword": false,
+          "grammar": false,
+          "kanji_fragment": false,
+          "made_in_japan_loanword": false,
+          "other_loanword": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -727,7 +795,11 @@
       },
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "english_loanword": false,
+          "grammar": false,
+          "kanji_fragment": false,
+          "made_in_japan_loanword": false,
+          "other_loanword": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -749,7 +821,11 @@
       },
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "english_loanword": false,
+          "grammar": false,
+          "kanji_fragment": false,
+          "made_in_japan_loanword": false,
+          "other_loanword": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -771,7 +847,11 @@
       },
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "english_loanword": false,
+          "grammar": false,
+          "kanji_fragment": false,
+          "made_in_japan_loanword": false,
+          "other_loanword": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -793,7 +873,11 @@
       },
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "english_loanword": false,
+          "grammar": false,
+          "kanji_fragment": false,
+          "made_in_japan_loanword": false,
+          "other_loanword": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -815,7 +899,11 @@
       },
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "english_loanword": false,
+          "grammar": false,
+          "kanji_fragment": false,
+          "made_in_japan_loanword": false,
+          "other_loanword": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -844,7 +932,11 @@
     "production": [
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "english_loanword": false,
+          "grammar": false,
+          "kanji_fragment": false,
+          "made_in_japan_loanword": false,
+          "other_loanword": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -873,7 +965,11 @@
       },
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "english_loanword": false,
+          "grammar": false,
+          "kanji_fragment": false,
+          "made_in_japan_loanword": false,
+          "other_loanword": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },
@@ -903,7 +999,11 @@
       },
       {
         "auto_skip": {
-          "ambiguous_grammar": false,
+          "english_loanword": false,
+          "grammar": false,
+          "kanji_fragment": false,
+          "made_in_japan_loanword": false,
+          "other_loanword": false,
           "speaker_name": false,
           "spelling_in_anki": false
         },

@@ -10,10 +10,17 @@ class LexiconTests(unittest.TestCase):
     def setUp(self):
         self.db = sqlite3.connect(":memory:")
         self.addCleanup(self.db.close)
-        self.db.execute("CREATE TABLE pairs(entry_id,reading,spelling,pos,misc)")
+        self.db.execute("CREATE TABLE pairs(entry_id,reading,spelling,pos,misc,spelling_info,"
+                        "reading_info)")
+        self.db.execute("CREATE TABLE loan_sources(entry_id,lang,wasei)")
 
-    def pair(self, entry, reading, spelling, pos='["n"]', misc="[]"):
-        self.db.execute("INSERT INTO pairs VALUES(?,?,?,?,?)", (entry, reading, spelling, pos, misc))
+    def loan(self, entry, lang, wasei=0):
+        self.db.execute("INSERT INTO loan_sources VALUES(?,?,?)", (entry, lang, wasei))
+
+    def pair(self, entry, reading, spelling, pos='["n"]', misc="[]", spelling_info="[]",
+             reading_info="[]"):
+        self.db.execute("INSERT INTO pairs VALUES(?,?,?,?,?,?,?)",
+                        (entry, reading, spelling, pos, misc, spelling_info, reading_info))
 
     def rows(self):
         return dict(compile_rows(self.db))
@@ -53,10 +60,10 @@ class LexiconTests(unittest.TestCase):
         self.assertEqual(rows["p\t本当に".encode()][1:], b"d")
         self.assertEqual(rows["p\tそれとも".encode()][1:], b"c")
         self.assertEqual(rows["p\t事になる".encode()][1:], b"e")
-        self.assertEqual(rows["w\tお迎え".encode()], b"n")
-        self.assertEqual(rows["w\t大丈夫".encode()], b"a")
+        self.assertEqual(rows["w\tお迎え".encode()][:1], b"n")
+        self.assertEqual(rows["w\t大丈夫".encode()][:1], b"a")
         self.assertEqual(rows["w\tはいはい".encode()], b"j")
-        self.assertEqual(rows["p\tどうだい".encode()][1:], b"e")
+        self.assertEqual(rows["p\tどうだい".encode()][1:], b"x")
 
     def test_readings_of_one_entry_share_it_and_separate_entries_do_not(self):
         for reading in ["あした", "あす"]:
@@ -68,6 +75,34 @@ class LexiconTests(unittest.TestCase):
         self.assertEqual(rows["e\t明日\tあす".encode()], struct.pack("<I", 1))
         self.assertFalse([k for k in rows if k.startswith("e\t表".encode())])
 
+    def test_spellings_list_their_readings_in_order_without_search_only_ones(self):
+        self.pair(1, "あまなっとう", "甘納豆")
+        self.pair(2, "ふんいき", "雰囲気")
+        self.pair(2, "ふいんき", "雰囲気", reading_info='["sk"]')
+        self.pair(3, "あした", "明日")
+        self.pair(3, "あした", "明日", '["adv"]')
+        self.pair(4, "あす", "明日")
+        self.pair(5, "とおり", "通り")
+        rows = self.rows()
+        self.assertEqual(rows["w\t甘納豆".encode()], "n\tあまなっとう".encode())
+        self.assertEqual(rows["w\t雰囲気".encode()], "n\tふんいき".encode())
+        self.assertEqual(rows["w\t明日".encode()], "n\tあした\tあす".encode())
+        self.assertEqual(rows["w\t通り".encode()], "n\tとおり".encode())
+
+    def test_loanwords_not_from_english_are_tagged(self):
+        for entry, reading in [(1, "あるばいと"), (2, "さらりーまん"), (3, "げーむ"), (4, "ぱん"),
+                               (5, "ぱん")]:
+            self.pair(entry, reading, reading)
+        self.loan(1, "ger")
+        self.loan(2, "eng", wasei=1)
+        self.loan(4, "eng")
+        self.loan(5, "por")
+        rows = self.rows()
+        self.assertEqual(rows["l\tあるばいと".encode()], b"o")
+        self.assertEqual(rows["l\tさらりーまん".encode()], b"w")
+        self.assertEqual(rows["l\tぱん".encode()], b"o")
+        self.assertNotIn("l\tげーむ".encode(), rows)
+
     def test_usually_kana_content_words_are_words(self):
         self.pair(1, "もったいない", "勿体無い", '["adj-i"]', '["uk"]')
         self.pair(2, "おすすめ", "お勧め", '["n","vs","adj-no"]', '["uk"]')
@@ -78,6 +113,16 @@ class LexiconTests(unittest.TestCase):
         for form in ["もったいない", "おすすめ"]:
             self.assertIn(("w\t" + form).encode(), rows)
         for form in ["こういう", "なんだって", "しょくにん"]:
+            self.assertNotIn(("w\t" + form).encode(), rows)
+
+    def test_kana_words_spelled_only_with_rare_kanji_are_words(self):
+        self.pair(1, "こたび", "此度", '["n","adv"]', spelling_info='["rK"]')
+        self.pair(2, "このたび", "此度", '["n","adv"]', spelling_info='["rK"]')
+        self.pair(2, "このたび", "この度", '["n","adv"]')
+        self.pair(3, "でもない", "でも無い", '["exp","adj-i"]', spelling_info='["rK"]')
+        rows = self.rows()
+        self.assertIn("w\tこたび".encode(), rows)
+        for form in ["このたび", "でもない"]:
             self.assertNotIn(("w\t" + form).encode(), rows)
 
     def test_output_is_sorted_and_deterministic(self):

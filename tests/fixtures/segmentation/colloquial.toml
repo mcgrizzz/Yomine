@@ -42,3 +42,27 @@ terms = [{ surface = "キレちゃった", lemma = "キレる", reading = "き�
 name = "ボケた is ボケる, not ぼく"
 text = "まだ ボケたふり 続けているの？"
 terms = [{ surface = "ボケた", lemma = "ボケる", reading = "ぼける" }]
+
+# UniDic reads んな as そんな everywhere; after a verb it is るな with る contracted.
+[[case]]
+name = "んな after a verb is the prohibitive な"
+text = "あのな 何度も言わせんな"
+terms = [{ surface = "んな", lemma = "な", pos = "Postposition" }]
+
+[[case]]
+name = "んな before a noun is still そんな"
+text = "んなもん 俺だって用意してねえよ"
+terms = [{ surface = "んな", lemma = "んな" }]
+
+# UniDic's best parse is か + い, two sentence-final particles, before が.
+[[case]]
+name = "かい before が is 甲斐, not か + い"
+text = "待ったかいがありました"
+absent = ["い"]
+
+# UniDic splits どうしたんだい as し + たんだい (短大); the 1-best path joining a kana noun to a
+# verb stem is a misparse (Apothecary Diaries S01E05).
+[[case]]
+name = "a kana noun after a verb stem takes another path"
+text = "今日は どうしたんだい？"
+absent = ["たんだい"]

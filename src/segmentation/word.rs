@@ -180,6 +180,8 @@ pub enum CitationProvenance {
     ValidatedDeinflection,
     AuxiliaryHead,
     LexicalException,
+    /// A derived verb the user mines as its own term (読める, not 読む).
+    DerivedForm,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -220,6 +222,10 @@ impl Word {
 
 impl From<Word> for Term {
     fn from(mut word: Word) -> Term {
+        let derived = word
+            .citation
+            .as_ref()
+            .is_some_and(|citation| citation.provenance == CitationProvenance::DerivedForm);
         if let Some(citation) = &word.citation {
             word.lemma_form = citation.form.clone();
             word.lemma_hatsuon = citation.reading.clone();
@@ -247,11 +253,13 @@ impl From<Word> for Term {
             }
         } else {
             let is_kana = word.surface_form.as_str().is_kana();
-            // Only a citation taken from the head token identifies that token's lexeme.
+            // Only a citation taken from the head token identifies that token's lexeme. A
+            // derived form's lexeme is its base verb's (読む for 読める), whose card mustn't
+            // cover it.
             let lexeme = word
                 .tokens
                 .first()
-                .filter(|head| head.lemma_form == word.lemma_form)
+                .filter(|head| head.lemma_form == word.lemma_form && !derived)
                 .and_then(written_lexeme);
             Term {
                 possible_known_match: None,

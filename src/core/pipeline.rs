@@ -38,7 +38,7 @@ use crate::{
         Term,
     },
     parser,
-    segmentation::tokenizer::extract_words,
+    segmentation::tokenizer::extract_words_with,
 };
 
 pub async fn process_source_file(
@@ -78,10 +78,11 @@ pub async fn process_sentences(
     }
 
     // Extract and deduplicate terms
-    let mut terms = extract_words(
+    let mut terms = extract_words_with(
         language_tools.tokenizer.new_worker(),
         &mut sentences,
         &language_tools.frequency_manager,
+        &language_tools.term_options,
     );
 
     terms.sort_by(|a, b| {

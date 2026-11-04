@@ -22,6 +22,10 @@ use tauri::{
     Manager,
 };
 use yomine::{
+    anki::mined::{
+        self,
+        Unrecorded,
+    },
     catalog::{
         self,
         signature::Signature,
@@ -37,11 +41,18 @@ use yomine::{
         Query,
         Reference,
     },
-    core::YomineError,
+    core::{
+        models::{
+            SourceFile,
+            SourceFileType,
+        },
+        YomineError,
+    },
     media::{
         ffmpeg,
         subtitles,
     },
+    parser,
     persistence::db::{
         self,
         works::{
@@ -308,13 +319,16 @@ pub struct FoundEpisode {
     pub found: Match,
     /// Whether it has Japanese or untagged subtitles to mine; `None` while that's checked.
     pub subtitles: Option<bool>,
+    /// Whether its subtitles show it was mined before outside Yomine.
+    pub mined_before: bool,
 }
 
 /// The episodes in the folders of these opened files, as `(path, show)`, of the shows each
 /// folder's opened files are matched to: its videos, and subtitle files no video pairs with.
 /// What a file is stays known until it changes, and `rescan` looks at every file again.
 /// Each is sent as soon as it's matched, then again once its subtitles are checked. Nothing
-/// found is added to the history.
+/// found is added to the history. Notes the opened files' subtitles show were mined before
+/// outside Yomine are recorded as mined from them.
 #[tauri::command]
 pub async fn find_episodes(
     app: AppHandle,
@@ -343,11 +357,13 @@ pub async fn find_episodes(
     .map_err(|e| e.to_string())?;
     let opened: HashSet<String> = opened.into_iter().map(|(path, _)| path).collect();
     let mut matched = Vec::new();
+    let mut reopened = Vec::new();
     let mut offline = false;
     for (files, dir) in listed {
         for (file, meta) in files {
             let path = file.display().to_string();
             if opened.contains(&path) {
+                reopened.push(file);
                 continue;
             }
             let stamp = store::FileStamp {
@@ -403,11 +419,10 @@ pub async fn find_episodes(
                 path,
                 found: catalog::displayed(matched_to),
                 subtitles: (checked == Checked::Subtitles).then_some(true),
+                mined_before: false,
             };
             send(episode.clone());
-            if checked != Checked::Subtitles {
-                matched.push((file, episode, checked));
-            }
+            matched.push((file, episode, checked));
         }
     }
     let configured = app.state::<Mutex<AppState>>().lock().unwrap().settings.ffmpeg_path.clone();
@@ -415,13 +430,53 @@ pub async fn find_episodes(
         let configured = Some(configured.trim()).filter(|p| !p.is_empty()).map(Path::new);
         let probing = matched.iter().any(|(.., checked)| *checked == Checked::Unknown);
         let ffmpeg = probing.then(|| ffmpeg::find(configured)).flatten();
+        let unrecorded = Unrecorded::load();
         for (file, episode, checked) in matched {
-            let subtitles = has_minable(&file, &episode.path, checked, ffmpeg.as_ref());
-            send(FoundEpisode { subtitles: Some(subtitles), ..episode });
+            let known = checked == Checked::Subtitles;
+            let subtitles = known || has_minable(&file, &episode.path, checked, ffmpeg.as_ref());
+            let lines = if subtitles { subtitle_lines(&file) } else { Vec::new() };
+            let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
+            let mined_before = !unrecorded.mined_from(&lines).is_empty();
+            if !known || mined_before {
+                send(FoundEpisode { subtitles: Some(subtitles), mined_before, ..episode });
+            }
+        }
+        for file in reopened {
+            let lines = subtitle_lines(&file);
+            let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
+            if unrecorded.mined_from(&lines).is_empty() {
+                continue;
+            }
+            let path = file.display().to_string();
+            match db::with(|conn| db::sources::opened_from(conn, &path)) {
+                Ok(Some(fingerprint)) => {
+                    mined::mined_before(&fingerprint, &lines);
+                }
+                Ok(None) => {}
+                Err(e) => eprintln!("[catalog] {e}"),
+            }
         }
     })
     .await
     .map_err(|e| e.to_string())
+}
+
+/// The lines of a subtitle file, or of the one a video opens with from beside it. Tracks
+/// inside a video aren't read, since that reads the whole video.
+fn subtitle_lines(file: &Path) -> Vec<String> {
+    let subtitle = if subtitles::is_video(file) {
+        subtitles::default_choice(&subtitles::sidecars(file)).and_then(|c| c.path.clone())
+    } else {
+        Some(file.to_path_buf())
+    };
+    let Some(subtitle) = subtitle else { return Vec::new() };
+    let path = subtitle.display().to_string();
+    let source = SourceFile {
+        file_type: SourceFileType::from_extension(&path),
+        original_file: path,
+        ..Default::default()
+    };
+    parser::read(&source).map(|s| s.into_iter().map(|s| s.text).collect()).unwrap_or_default()
 }
 
 /// What's known of a found file's subtitles.

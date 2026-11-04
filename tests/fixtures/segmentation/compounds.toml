@@ -1,5 +1,5 @@
-# Proper+common compound merges are kept only when a frequency dictionary
-# corroborates the merged pair; otherwise the proper noun splits back off.
+# Proper+common compound merges are kept only when JMdict lists the compound or a frequency
+# dictionary corroborates the merged pair; otherwise the proper noun splits back off.
 
 frequencies = [
 	{ term = "京都駅", reading = "きょうとえき", rank = 3000 },
@@ -21,3 +21,14 @@ absent = ["夏子おばさん", "夏子おば"]
 name = "dictionary-backed compound stays merged"
 text = "京都駅に行った"
 terms = [{ surface = "京都駅", pos = "CompoundNoun" }]
+
+[[case]]
+name = "JMdict-listed 薄馬鹿 stays merged instead of splitting off 薄 read うすき"
+text = "逃げ廻ってばかりいる薄馬鹿の自分"
+terms = [{ surface = "薄馬鹿", pos = "CompoundNoun", reading = "うすばか" }]
+absent = ["薄"]
+
+[[case]]
+name = "JMdict-listed 大正解 takes JMdict's reading over UniDic's たいしょうかい"
+text = "メルローを信じて大正解"
+terms = [{ surface = "大正解", reading = "だいせいかい" }]

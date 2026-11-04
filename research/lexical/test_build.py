@@ -38,6 +38,13 @@ class LexicalIndexTests(unittest.TestCase):
         self.assertEqual(rows[0][2], "こう")
         self.assertEqual(rows[0][6], 1)
 
+    def test_loan_sources_default_to_english_and_keep_wasei(self):
+        record = entry_record(ET.fromstring(
+            '<entry><ent_seq>1</ent_seq><r_ele><reb>ナイター</reb></r_ele>'
+            '<sense><lsource ls_wasei="y">night game</lsource></sense>'
+            '<sense><lsource xml:lang="ger">Arbeit</lsource></sense></entry>'))
+        self.assertEqual(record["sources"], [("eng", True), ("ger", False)])
+
     def test_pos_inheritance_is_preserved(self):
         rows = self.pairs("<r_ele><reb>こう</reb></r_ele><sense><pos>v1</pos><misc>uk</misc></sense><sense/>")
         self.assertEqual(rows[0][3], rows[1][3])

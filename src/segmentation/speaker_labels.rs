@@ -112,7 +112,7 @@ mod tests {
             terms.iter().find(|t| t.surface_form == form).map(|t| t.auto_skip.speaker_name)
         };
         assert_eq!(flagged("善"), Some(true));
-        assert_eq!(flagged("黒さん"), Some(true));
+        assert_eq!(flagged("黒"), Some(true));
         assert_eq!(flagged("待っ").or(flagged("待って")), Some(false));
     }
 }

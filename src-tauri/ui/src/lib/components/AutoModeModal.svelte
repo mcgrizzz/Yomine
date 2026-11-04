@@ -14,6 +14,20 @@
 	} from '$lib/stores';
 
 	const JLPT_LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
+	const SKIP_REASONS: { key: keyof AutoMine['skip']; label: string; example: string }[] = [
+		{
+			key: 'grammar',
+			label: 'Grammar',
+			example: 'ことになる, きれる of 覚えきれる, lone affixes like たち and さん'
+		},
+		{ key: 'kanji_fragment', label: 'Kanji fragments', example: '氏 of 壬氏' },
+		{ key: 'speaker_name', label: 'Speaker names', example: '善 of 善逸 in （善逸）' }
+	];
+	const LOANWORD_REASONS: typeof SKIP_REASONS = [
+		{ key: 'english_loanword', label: 'From English', example: 'ゲーム, テーブル' },
+		{ key: 'made_in_japan_loanword', label: 'Made-in-Japan English', example: 'サラリーマン' },
+		{ key: 'other_loanword', label: 'From other languages', example: 'アルバイト, パン' }
+	];
 
 	const copy = (a: AutoMine): AutoMine => ({
 		stop: a.stop,
@@ -23,7 +37,8 @@
 		pos_points: Object.fromEntries(
 			Object.entries(a.pos_points).filter(([key]) => !(key in POS_ALIASES))
 		),
-		jlpt_points: Object.fromEntries(JLPT_LEVELS.map((l) => [l, a.jlpt_points[l] ?? 0]))
+		jlpt_points: Object.fromEntries(JLPT_LEVELS.map((l) => [l, a.jlpt_points[l] ?? 0])),
+		skip: { ...a.skip }
 	});
 
 	// Replaced from the saved settings each time the dialog opens.
@@ -35,7 +50,15 @@
 			min_score: 0,
 			max_cards: null,
 			pos_points: {},
-			jlpt_points: {}
+			jlpt_points: {},
+			skip: {
+				grammar: true,
+				kanji_fragment: true,
+				speaker_name: true,
+				english_loanword: false,
+				made_in_japan_loanword: false,
+				other_loanword: false
+			}
 		},
 		load: () => {
 			const saved = $settings?.auto_mine ?? $defaultSettings?.auto_mine;
@@ -259,6 +282,32 @@
 				</div>
 			</details>
 		</section>
+
+		<section>
+			<div class="section-head">
+				<h3>Skip</h3>
+				<span class="hint">The table still lists skipped terms.</span>
+			</div>
+			<div class="skips">
+				{#each SKIP_REASONS as reason (reason.key)}
+					<label class="skip">
+						<input type="checkbox" bind:checked={draft.skip[reason.key]} />
+						{reason.label}
+						<span class="hint">{reason.example}</span>
+					</label>
+				{/each}
+			</div>
+			<div class="group-head">Katakana loanwords</div>
+			<div class="skips">
+				{#each LOANWORD_REASONS as reason (reason.key)}
+					<label class="skip">
+						<input type="checkbox" bind:checked={draft.skip[reason.key]} />
+						{reason.label}
+						<span class="hint">{reason.example}</span>
+					</label>
+				{/each}
+			</div>
+		</section>
 		{#if !valid}
 			<p class="invalid">
 				⚠ Cards per video must be 1–50, the cap at least 1, and points between -50 and 50
@@ -274,7 +323,7 @@
 			oncancel={form.revert}
 			restore={{
 				label: 'Reset Auto Mode Settings',
-				title: 'Restore cards per video and scoring to their defaults.',
+				title: 'Restore cards per video, scoring and skipping to their defaults.',
 				run: restoreDefault
 			}}
 		/>
@@ -352,6 +401,17 @@
 		gap: 0.4rem;
 		padding-left: 1.55rem;
 		font-size: 0.875rem;
+	}
+	.skips {
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
+	}
+	.skip {
+		display: flex;
+		align-items: baseline;
+		gap: 0.4rem;
+		cursor: pointer;
 	}
 	.check {
 		display: inline-flex;

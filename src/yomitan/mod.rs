@@ -6,7 +6,10 @@ use std::collections::HashMap;
 use serde::Deserialize;
 use wana_kana::ConvertJapanese;
 
-use crate::core::errors::YomineError;
+use crate::core::{
+    errors::YomineError,
+    utils::is_kanji_char,
+};
 
 /// Markers Yomitan can't render without the source sentence.
 const SENTENCE_MARKER: &str = "sentence";
@@ -61,6 +64,9 @@ struct TermEntries {
 struct TermDictionaryEntry {
     #[serde(default)]
     headwords: Vec<Headword>,
+    /// The entry's dictionary's place in the user's Yomitan order.
+    #[serde(default, rename = "dictionaryIndex")]
+    dictionary_index: usize,
 }
 
 #[derive(Debug, Deserialize)]
@@ -118,10 +124,13 @@ pub async fn entry_index_for(
     Some(choose_entry(&entries.dictionary_entries, text, term, reading, lexeme))
 }
 
-/// The entry for our word, preferring UniDic's lexeme at our reading (染みる over a
-/// kana-headword しみる entry without Jitendex's glosses), then `term` at our reading, then the
-/// lexeme at any reading (成る for the potential なれる), then any entry at our reading, then
-/// the first. A lookup of the term alone needs an entry matching all of it.
+/// The entry for our word, from the first dictionary in the user's order that has one: a
+/// later dictionary's kana-headword entry (三省堂's きる) lacks the glosses card formats show
+/// from the first (Jitendex's 切る). Within a dictionary it prefers UniDic's lexeme at our
+/// reading, then `term` at our reading, then a spelling sharing a kanji with the lexeme at our
+/// reading, then the lexeme at any reading (成る for the potential なれる), then any entry at
+/// our reading; failing all, the first. A lookup of the term alone needs an entry matching all
+/// of it.
 fn choose_entry(
     entries: &[TermDictionaryEntry],
     text: &str,
@@ -154,10 +163,27 @@ fn choose_entry(
     let reading = reading.to_hiragana();
     let reads = |h: &Headword| h.reading.to_hiragana() == reading;
     let is_lexeme = |h: &Headword| lexeme.is_some_and(|l| h.term == l);
-    let tiers: [&dyn Fn(&Headword) -> bool; 4] =
-        [&|h| is_lexeme(h) && reads(h), &|h| h.term == term && reads(h), &is_lexeme, &reads];
-    let chosen = tiers.iter().find_map(|tier| {
-        candidates.iter().find(|(_, e)| e.headwords.iter().any(tier)).map(|&(i, _)| i)
+    // UniDic and JMdict spell some words differently (仕甲斐, し甲斐).
+    let shares_kanji = |h: &Headword| {
+        lexeme.is_some_and(|l| h.term.chars().any(|c| is_kanji_char(c) && l.contains(c)))
+    };
+    let tiers: [&dyn Fn(&Headword) -> bool; 5] = [
+        &|h| is_lexeme(h) && reads(h),
+        &|h| h.term == term && reads(h),
+        &|h| shares_kanji(h) && reads(h),
+        &is_lexeme,
+        &reads,
+    ];
+    let mut dictionaries: Vec<usize> = candidates.iter().map(|(_, e)| e.dictionary_index).collect();
+    dictionaries.sort_unstable();
+    dictionaries.dedup();
+    let chosen = dictionaries.iter().find_map(|&dictionary| {
+        tiers.iter().find_map(|tier| {
+            candidates
+                .iter()
+                .find(|(_, e)| e.dictionary_index == dictionary && e.headwords.iter().any(tier))
+                .map(|&(i, _)| i)
+        })
     });
     EntryChoice::Entry(chosen.unwrap_or(first))
 }
@@ -329,7 +355,21 @@ mod tests {
                 reading: reading.into(),
                 sources: vec![HeadwordSource { original_text: matched.into() }],
             }],
+            dictionary_index: 0,
         }
+    }
+
+    #[test]
+    fn the_first_dictionary_with_the_word_gives_the_entry() {
+        // Yomitan lists 三省堂's kana-headword きる (dictionary 2) before Jitendex's 切る and 着る.
+        let mut kana = entry("きる", "きる", "きる");
+        kana.dictionary_index = 2;
+        let entries = [kana, entry("切る", "きる", "きる"), entry("着る", "きる", "きる")];
+        assert_eq!(choose_entry(&entries, "きる", "きる", "きる", None), EntryChoice::Entry(1));
+        assert_eq!(
+            choose_entry(&entries, "きる", "きる", "きる", Some("着る")),
+            EntryChoice::Entry(2)
+        );
     }
 
     #[test]
@@ -350,6 +390,20 @@ mod tests {
         assert_eq!(
             choose_entry(&partial, "ハイターが", "ハイター", "はいた", None),
             EntryChoice::Entry(0)
+        );
+    }
+
+    #[test]
+    fn a_lexeme_spelled_differently_still_picks_its_entry() {
+        // Yomitan's answers for しがい in 買い出しのしがいがある; UniDic's lexeme is 仕甲斐.
+        let entries = [
+            entry("死骸", "しがい", "しがい"),
+            entry("市街", "しがい", "しがい"),
+            entry("し甲斐", "しがい", "しがい"),
+        ];
+        assert_eq!(
+            choose_entry(&entries, "しがい", "しがい", "しがい", Some("仕甲斐")),
+            EntryChoice::Entry(2)
         );
     }
 

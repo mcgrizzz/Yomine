@@ -1,10 +1,13 @@
-//! Generated JMdict phrase forms and per-entry readings (research/lexical/compile_lexicon.py).
+//! Generated JMdict phrase forms, spellings with their readings, and per-entry readings (research/lexical/compile_lexicon.py).
 use super::{
     frequency_manager::fold_katakana,
     kana_preference::SortedIndex,
 };
 use crate::{
-    core::utils::NormalizeLongVowel,
+    core::{
+        models::LoanSource,
+        utils::NormalizeLongVowel,
+    },
     segmentation::word::POS,
 };
 
@@ -31,15 +34,20 @@ pub(crate) fn is_word(form: &str) -> bool {
     word(form) || word(&fold_katakana(form))
 }
 
+/// The readings JMdict gives a spelling with kanji, in JMdict's order (明日: あした, あす).
+pub(crate) fn readings(form: &str) -> Vec<&'static str> {
+    let form = ascii_width(form);
+    lookup(format!("w\t{}", form.normalize_long_vowel()))
+        .into_iter()
+        .flat_map(|value| value.split(|&byte| byte == b'\t').skip(1))
+        .filter_map(|reading| std::str::from_utf8(reading).ok())
+        .collect()
+}
+
 /// The type JMdict's first sense gives `form` (本当に an adverb, お迎え a noun), when the
 /// lexicon lists it as a word or phrase.
 pub(crate) fn word_type(form: &str) -> Option<POS> {
-    let form = ascii_width(form);
-    let form = form.normalize_long_vowel();
-    let code = lookup(format!("w\t{form}"))
-        .and_then(|value| value.first())
-        .or_else(|| lookup(format!("p\t{form}")).and_then(|value| value.get(1)))?;
-    Some(match code {
+    Some(match type_code(form)? {
         b'v' => POS::Verb,
         b'i' => POS::Adjective,
         b'a' => POS::AdjectivalNoun,
@@ -49,9 +57,24 @@ pub(crate) fn word_type(form: &str) -> Option<POS> {
         b'c' => POS::Conjunction,
         b'j' => POS::Interjection,
         b'p' => POS::Determiner,
-        b'e' => POS::Expression,
+        b'e' | b'x' => POS::Expression,
         _ => return None,
     })
+}
+
+/// JMdict lists `form` as an expression that conjugates like a verb or adjective (気が引ける,
+/// ほうがいい), rather than one used as a fixed phrase (これから, 目の前).
+pub(crate) fn is_verb_expression(form: &str) -> bool {
+    type_code(form) == Some(b'e')
+}
+
+fn type_code(form: &str) -> Option<u8> {
+    let form = ascii_width(form);
+    let form = form.normalize_long_vowel();
+    lookup(format!("w\t{form}"))
+        .and_then(|value| value.first())
+        .or_else(|| lookup(format!("p\t{form}")).and_then(|value| value.get(1)))
+        .copied()
 }
 
 /// The lexicon keys spellings in NFKC, which writes full-width letters and digits as ASCII
@@ -65,14 +88,21 @@ fn ascii_width(form: &str) -> String {
         .collect()
 }
 
+/// Where the loanword `form` comes from. JMdict tags only sources other than English, so an
+/// untagged form is English.
+pub(crate) fn loan_source(form: &str) -> LoanSource {
+    match lookup(format!("l\t{}", fold_katakana(form).normalize_long_vowel()))
+        .and_then(|v| v.first())
+    {
+        Some(b'o') => LoanSource::Other,
+        Some(b'w') => LoanSource::MadeInJapan,
+        _ => LoanSource::English,
+    }
+}
+
 /// JMdict lists `reading` as an i-adjective ending in ない (つまらない, くだらない).
 pub(crate) fn is_nai_adjective(reading: &str) -> bool {
     lookup(format!("a\t{}", reading.normalize_long_vowel())).is_some()
-}
-
-/// How many senses JMdict gives the phrase `form` across its entries; `None` when it isn't one.
-pub(crate) fn phrase_senses(form: &str) -> Option<u8> {
-    lookup(format!("p\t{}", form.normalize_long_vowel())).and_then(|value| value.first().copied())
 }
 
 /// One JMdict entry lists `spelling` under both readings (明日 as あした and あす).
@@ -127,17 +157,29 @@ mod tests {
             ("お迎え", POS::Noun),
             ("大丈夫", POS::AdjectivalNoun),
             ("ことになる", POS::Expression),
+            ("これから", POS::Expression),
         ] {
             assert_eq!(word_type(form), Some(pos), "{form}");
         }
+        assert!(is_verb_expression("気が引ける") && is_verb_expression("ほうがいい"));
+        assert!(!is_verb_expression("これから") && !is_verb_expression("目の前"));
         assert_eq!(word_type("あなたに"), None);
     }
 
     #[test]
-    fn phrases_carry_their_sense_count() {
-        assert_eq!(phrase_senses("ことになる"), Some(3));
-        assert_eq!(phrase_senses("ではない"), Some(1));
-        assert_eq!(phrase_senses("あなたに"), None);
+    fn spellings_carry_their_readings() {
+        assert_eq!(readings("甘納豆"), ["あまなっとう"]);
+        assert_eq!(readings("通り")[0], "とおり");
+        assert!(readings("明日").starts_with(&["あした", "あす"]));
+        assert!(readings("もったいない").is_empty());
+    }
+
+    #[test]
+    fn loanwords_carry_their_source() {
+        assert_eq!(loan_source("アルバイト"), LoanSource::Other);
+        assert_eq!(loan_source("パン"), LoanSource::Other);
+        assert_eq!(loan_source("サラリーマン"), LoanSource::MadeInJapan);
+        assert_eq!(loan_source("ゲーム"), LoanSource::English);
     }
 
     #[test]

@@ -153,8 +153,44 @@ pub struct AutoSkip {
     pub spelling_in_anki: bool,
     /// Every occurrence sits inside a name the file's speaker labels use (善 of 善逸).
     pub speaker_name: bool,
-    /// A phrase of grammatical words only that JMdict gives several senses (ことになる).
-    pub ambiguous_grammar: bool,
+    /// A phrase of grammatical words only (ことになる, ありそう), a bound verb after a verb
+    /// stem (きれる of 覚えきれる), a subsidiary verb after a て-form (下さい of 横になって下さい),
+    /// or a lone prefix or suffix (たち, さん), in most of its occurrences: grammar rather than
+    /// vocabulary.
+    pub grammar: bool,
+    /// A single kanji that only appears inside a longer kanji run (氏 of 壬氏).
+    pub kanji_fragment: bool,
+    /// A katakana loanword from English (ゲーム).
+    pub english_loanword: bool,
+    /// A katakana loanword in made-in-Japan English (サラリーマン).
+    pub made_in_japan_loanword: bool,
+    /// A katakana loanword from another language (アルバイト, パン).
+    pub other_loanword: bool,
+}
+
+/// Where a loanword comes from, ordered by how unlike English it is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum LoanSource {
+    English,
+    MadeInJapan,
+    Other,
+}
+
+impl AutoSkip {
+    pub fn loan_source(&self) -> Option<LoanSource> {
+        match (self.english_loanword, self.made_in_japan_loanword, self.other_loanword) {
+            (_, _, true) => Some(LoanSource::Other),
+            (_, true, _) => Some(LoanSource::MadeInJapan),
+            (true, _, _) => Some(LoanSource::English),
+            _ => None,
+        }
+    }
+
+    pub fn set_loan_source(&mut self, source: LoanSource) {
+        self.english_loanword = source == LoanSource::English;
+        self.made_in_japan_loanword = source == LoanSource::MadeInJapan;
+        self.other_loanword = source == LoanSource::Other;
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

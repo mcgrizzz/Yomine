@@ -1,8 +1,12 @@
 //! Already-mined detection (issue #3): terms Yomine mined from the loaded source and
 //! sentences that already exist in the user's notes.
 
-use std::collections::HashSet;
+use std::collections::{
+    HashMap,
+    HashSet,
+};
 
+use rusqlite::Connection;
 use wana_kana::IsJapaneseStr;
 
 use crate::{
@@ -95,6 +99,95 @@ pub fn mined_sentences() -> Vec<String> {
     sentences.into_iter().collect()
 }
 
+/// Fewest of a source's lines in notes Yomine has no record of for it to count as mined
+/// before; a line or two can be in a card mined from another episode.
+const MINED_BEFORE_LINES: usize = 3;
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct MinedBefore {
+    pub notes: usize,
+    /// The newest note's id, which Anki makes its creation time in ms.
+    pub last_note: u64,
+}
+
+/// The notes of the latest synced collection Yomine has no record of, by sentence: what
+/// mining outside Yomine left.
+pub struct Unrecorded(HashMap<String, Vec<u64>>);
+
+impl Unrecorded {
+    pub fn load() -> Self {
+        db::with(|conn| Self::load_in(conn, &db::anki::active_collection(conn)?)).unwrap_or_else(
+            |e| {
+                eprintln!("{e}");
+                Self(HashMap::new())
+            },
+        )
+    }
+
+    fn load_in(conn: &Connection, collection: &str) -> rusqlite::Result<Self> {
+        let recorded: HashSet<u64> = db::notes::ids(conn)?.into_iter().collect();
+        let mut notes: HashMap<String, Vec<u64>> = HashMap::new();
+        for note in db::anki::live_sentences(conn, collection)? {
+            if !recorded.contains(&note.note_id) {
+                notes.entry(note.sentence).or_default().push(note.note_id);
+            }
+        }
+        Ok(Self(notes))
+    }
+
+    /// The notes holding one of a source's `lines`, when enough lines are in them to say it
+    /// was mined before; none otherwise.
+    pub fn mined_from<'a>(&'a self, lines: &[&str]) -> Vec<(&'a str, u64)> {
+        let lines: HashSet<String> =
+            lines.iter().map(|s| normalize_sentence(s)).filter(|s| !s.is_empty()).collect();
+        let found: Vec<(&str, &Vec<u64>)> = self
+            .0
+            .iter()
+            .filter(|(sentence, _)| lines.contains(*sentence))
+            .map(|(sentence, ids)| (sentence.as_str(), ids))
+            .collect();
+        if found.len() < MINED_BEFORE_LINES {
+            return Vec::new();
+        }
+        found
+            .into_iter()
+            .flat_map(|(sentence, ids)| ids.iter().map(move |&id| (sentence, id)))
+            .collect()
+    }
+}
+
+/// The notes found already mined from the source `fingerprint` outside Yomine, recording
+/// first the ones its `lines` show it was.
+pub fn mined_before(fingerprint: &str, lines: &[&str]) -> Option<MinedBefore> {
+    let found = db::with(|conn| {
+        let collection = db::anki::active_collection(conn)?;
+        let unrecorded = Unrecorded::load_in(conn, &collection)?;
+        let tx = conn.transaction()?;
+        let source = db::sources::id(&tx, fingerprint)?;
+        for (sentence, note_id) in unrecorded.mined_from(lines) {
+            db::notes::insert(
+                &tx,
+                &db::notes::NewNote {
+                    note_id,
+                    sentence,
+                    term: None,
+                    source: Some(source),
+                    batch_id: None,
+                    collection: Some(&collection),
+                    deleted_at: None,
+                },
+            )?;
+        }
+        let found = db::notes::found_mined(&tx, &collection, source)?;
+        tx.commit()?;
+        Ok(found.map(|(notes, last_note)| MinedBefore { notes, last_note }))
+    });
+    found.unwrap_or_else(|e| {
+        eprintln!("Failed to check for notes mined before: {e}");
+        None
+    })
+}
+
 /// Terms Yomine mined from a source into the latest synced collection, minus notes seen
 /// deleted.
 pub fn mined_terms(fingerprint: &str) -> Vec<String> {
@@ -172,5 +265,19 @@ mod tests {
     fn ruby_furigana_readings_survive() {
         // Anki sentence fields often carry ruby markup; tags go, text stays.
         assert_eq!(normalize_sentence("<ruby>食<rt>た</rt></ruby>べる"), "食たべる");
+    }
+
+    #[test]
+    fn a_source_is_mined_before_from_three_lines_in_notes() {
+        let unrecorded = Unrecorded(HashMap::from([
+            ("猫だ".to_string(), vec![1]),
+            ("犬だ".to_string(), vec![2, 3]),
+            ("鳥だ".to_string(), vec![4]),
+        ]));
+        assert!(unrecorded.mined_from(&["猫だ", "犬 だ", "魚だ"]).is_empty());
+        let mut notes: Vec<u64> =
+            unrecorded.mined_from(&["猫だ", "犬 だ", "<b>鳥</b>だ"]).iter().map(|n| n.1).collect();
+        notes.sort();
+        assert_eq!(notes, [1, 2, 3, 4]);
     }
 }

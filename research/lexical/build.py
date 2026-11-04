@@ -14,7 +14,7 @@ from pathlib import Path
 
 from source_policy import include_source, policy_manifest
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 SOURCE_URLS = {
     "jmdict": "https://www.edrdg.org/pub/Nihongo/JMdict_e.gz",
     "jitendex": "https://github.com/stephenmk/stephenmk.github.io/releases/latest/download/jitendex-yomitan.zip",
@@ -35,6 +35,9 @@ def values(node, tag):
     return [x.text or "" for x in node.findall(tag)]
 
 
+XML_LANG = "{http://www.w3.org/XML/1998/namespace}lang"
+
+
 def entry_record(entry):
     spellings = [{"text": k.findtext("keb"), "info": values(k, "ke_inf")}
                  for k in entry.findall("k_ele")]
@@ -47,8 +50,11 @@ def entry_record(entry):
         inherited_pos = values(sense, "pos") or inherited_pos
         senses.append({"pos": inherited_pos, "spellings": values(sense, "stagk"),
                        "readings": values(sense, "stagr"), "misc": values(sense, "misc")})
+    # A loanword's source language (English when untagged) and whether it's made-in-Japan.
+    sources = sorted({(s.get(XML_LANG, "eng"), s.get("ls_wasei") == "y")
+                      for s in entry.iter("lsource")})
     return {"id": int(entry.findtext("ent_seq")), "spellings": spellings,
-            "readings": readings, "senses": senses}
+            "readings": readings, "senses": senses, "sources": sources}
 
 
 def legal_pairs(record):
@@ -106,6 +112,7 @@ def build(jmdict, jitendex, frequency_dir, output):
     CREATE TABLE jitendex(sequence INTEGER, term TEXT, reading TEXT);
     CREATE TABLE frequencies(dictionary TEXT, term TEXT, reading TEXT, rank INTEGER,
         kana_marker INTEGER, source_bank TEXT, source_row INTEGER);
+    CREATE TABLE loan_sources(entry_id INTEGER, lang TEXT, wasei INTEGER);
     """)
     metadata, records = parse_jmdict(jmdict)
     manifest = {"schema_version": SCHEMA_VERSION, "builder_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(), "jmdict": manifest_file(jmdict, SOURCE_URLS["jmdict"]),
@@ -117,6 +124,8 @@ def build(jmdict, jitendex, frequency_dir, output):
     count = 0
     for record in records:
         db.executemany("INSERT INTO pairs VALUES (?,?,?,?,?,?,?,?)", legal_pairs(record))
+        db.executemany("INSERT INTO loan_sources VALUES (?,?,?)",
+                       [(record["id"], lang, int(wasei)) for lang, wasei in record["sources"]])
         count += 1
     db.commit()
     print(f"JMdict: {count} entries", flush=True)

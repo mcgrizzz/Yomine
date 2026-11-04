@@ -231,7 +231,7 @@ pub(crate) async fn reload_and_swap(
 /// Recompute from the in-memory, already-cleaned sentence text. This also works
 /// for unsaved asbplayer subtitles and does not reapply non-idempotent text
 /// filters, query live Anki, or write the user's Anki snapshot.
-async fn refresh_loaded_file(app: &AppHandle) -> Result<(), String> {
+pub(crate) async fn refresh_loaded_file(app: &AppHandle) -> Result<(), String> {
     let state = app.state::<Mutex<AppState>>();
     let (tools, sentences, anki, file_revision, input_revision) = {
         let mut guard = state.lock().unwrap();

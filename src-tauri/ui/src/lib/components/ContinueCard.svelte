@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { findEpisodes, getMinedEpisodes, type FoundEpisode, type MinedEpisode } from '$lib/ipc';
 	import { formatOpened, inMode } from '$lib/recents';
-	import { firstUnmined, groupShows, minedIn, openedEpisodes } from '$lib/shows';
+	import { groupShows, minedIn, nextUnmined, openedEpisodes } from '$lib/shows';
 	import { openEpisode, recentFiles } from '$lib/stores';
 
 	/** The show of the episode opened last in Local mode. */
@@ -21,14 +21,16 @@
 		const scanId = ++scans;
 		const episodes: FoundEpisode[] = [];
 		checking = true;
-		void Promise.all([
-			findEpisodes(openedEpisodes(show.files), false, (episode) => {
-				const at = episodes.findIndex((e) => e.path === episode.path);
-				if (at < 0) episodes.push(episode);
-				else episodes[at] = episode;
-			}),
-			getMinedEpisodes().then((episodes) => (mined = episodes))
-		])
+		// The scan records notes the opened episodes were mined in before, so mined ones are
+		// read after it.
+		void findEpisodes(openedEpisodes(show.files), false, (episode) => {
+			const at = episodes.findIndex((e) => e.path === episode.path);
+			if (at < 0) episodes.push(episode);
+			else episodes[at] = episode;
+		})
+			.catch(() => {})
+			.then(() => getMinedEpisodes())
+			.then((episodes) => (mined = episodes))
 			.catch(() => {})
 			.finally(() => {
 				if (scanId !== scans) return;
@@ -38,7 +40,7 @@
 	});
 
 	const next = $derived(
-		show && !checking ? firstUnmined(show, found, minedIn(mined, show.work.tmdb_id)) : null
+		show && !checking ? nextUnmined(show, found, minedIn(mined, show.work.tmdb_id, found)) : null
 	);
 	const label = (season: number | null, number: number | null) =>
 		season === null ? `E${number}` : `S${season}E${number}`;
@@ -59,7 +61,7 @@
 			<span class="heading">▶ Continue where you left off</span>
 			<span class="title" lang="ja">{title} · {label(target.season, target.number)}</span>
 			{#if name}<span class="secondary">{name}</span>{/if}
-			<span class="meta">First unmined · {last}</span>
+			<span class="meta">Next unmined · {last}</span>
 		</button>
 	{:else}
 		<div class="continue waiting">
