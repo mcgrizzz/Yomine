@@ -107,3 +107,8 @@ terms = [{ surface = "掛けられて", lemma = "掛ける", reading = "かけ�
 name = "a run starting with a small kana is not a word"
 text = "用事で、すぐ外出しなけれゃいけないんですから"
 terms = [{ surface = "ゃいけないんですから", pos = "Unknown" }]
+
+[[case]]
+name = "a lone kana beside a split-off small kana is part of a sound, not a word"
+text = "ふぃゆ～ 疲れましたわ"
+terms = [{ surface = "ふ", pos = "Unknown" }, { surface = "ゆ", pos = "Unknown" }]

@@ -266,14 +266,27 @@ fn unvoice_first(reading: &mut String) {
 }
 
 /// No word starts with a small kana or ー; UniDic leaves such a run when it splits a
-/// syllable it can't read (しなけれ + ゃいけないんですから).
+/// syllable it can't read (しなけれ + ゃいけないんですから). A lone kana beside a split-off
+/// small kana is a piece of the same sound (ふ + ぃ + ゆ in ふぃゆ～).
 fn tag_split_syllables(words: &mut [Word]) {
-    const SPLIT_STARTS: &[char] = &[
+    const SMALL_KANA: &[char] = &[
         'ゃ', 'ゅ', 'ょ', 'ぁ', 'ぃ', 'ぅ', 'ぇ', 'ぉ', 'ゎ', 'ャ', 'ュ', 'ョ', 'ァ', 'ィ', 'ゥ',
-        'ェ', 'ォ', 'ー',
+        'ェ', 'ォ',
     ];
-    for word in words {
-        if word.surface_form.starts_with(SPLIT_STARTS)
+    let small_start =
+        |i: usize| words.get(i).is_some_and(|w| w.surface_form.starts_with(SMALL_KANA));
+    let piece_of_sound: Vec<bool> = (0..words.len())
+        .map(|i| {
+            let mut chars = words[i].surface_form.chars();
+            let lone_kana = chars.next().is_some_and(|c| c.to_string().as_str().is_kana())
+                && chars.next().is_none();
+            lone_kana && ((i > 0 && small_start(i - 1)) || small_start(i + 1))
+        })
+        .collect();
+    for (word, piece_of_sound) in words.iter_mut().zip(piece_of_sound) {
+        let split_start =
+            word.surface_form.starts_with(SMALL_KANA) || word.surface_form.starts_with('ー');
+        if (split_start || piece_of_sound)
             && matches!(
                 word.part_of_speech,
                 POS::Noun | POS::Verb | POS::Adjective | POS::AdjectivalNoun | POS::Adverb
