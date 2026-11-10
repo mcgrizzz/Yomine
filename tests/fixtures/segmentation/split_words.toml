@@ -112,3 +112,8 @@ terms = [{ surface = "ゃいけないんですから", pos = "Unknown" }]
 name = "a lone kana beside a split-off small kana is part of a sound, not a word"
 text = "ふぃゆ～ 疲れましたわ"
 terms = [{ surface = "ふ", pos = "Unknown" }, { surface = "ゆ", pos = "Unknown" }]
+
+[[case]]
+name = "a lone kana あん is no bean paste in speech"
+text = "セッちゃんを悩ませるあんにゃろうを"
+terms = [{ surface = "あん", pos = "Unknown" }]

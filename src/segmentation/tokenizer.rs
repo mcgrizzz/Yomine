@@ -204,6 +204,7 @@ fn analyze_sentence(worker: &mut Worker, text: &str, manager: &FrequencyManager)
     tag_katakana_interjections(worker, &mut words);
     read_contracted_prohibitive(&mut words);
     tag_split_syllables(&mut words);
+    tag_kana_an(&mut words);
     words
 }
 
@@ -292,6 +293,17 @@ fn tag_split_syllables(words: &mut [Word]) {
                 POS::Noun | POS::Verb | POS::Adjective | POS::AdjectivalNoun | POS::Adverb
             )
         {
+            word.part_of_speech = POS::Unknown;
+        }
+    }
+}
+
+/// UniDic reads a lone kana あん as 餡, bean paste, but in speech it is mostly あの
+/// (あんにゃろう), ある (そんなあんの？) or "huh?" (あん？), and nothing tells these apart.
+/// Bean paste in kana mostly comes inside a longer word (あんパン, こしあん).
+fn tag_kana_an(words: &mut [Word]) {
+    for word in words {
+        if word.surface_form == "あん" && word.tokens.first().is_some_and(|t| t.lexeme == "餡") {
             word.part_of_speech = POS::Unknown;
         }
     }
